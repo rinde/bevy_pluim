@@ -1,0 +1,11 @@
+[package]
+name = "ui"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+bevy.workspace = true
+derive_more.workspace = true
