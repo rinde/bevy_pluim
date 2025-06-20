@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use derive_more::Add;
 use derive_more::AddAssign;
 
-#[allow(clippy::wildcard_imports)]
+#[expect(clippy::wildcard_imports, reason = "ease of use of colors")]
 use crate::colors::*;
 
 /// Plugin that adds all combobox systems to the app.
@@ -45,7 +45,7 @@ pub struct Combo {
 
 impl Combo {
     #[must_use]
-    fn new(id: ComboId, options: Vec<String>) -> Self {
+    const fn new(id: ComboId, options: Vec<String>) -> Self {
         Self {
             id,
             options,
@@ -61,13 +61,13 @@ impl Combo {
             .map(String::as_str)
     }
 
-    pub fn select_index(&mut self, index: usize) {
+    pub const fn select_index(&mut self, index: usize) {
         if index < self.options.len() {
             self.selected_index = Some(index);
         }
     }
 
-    pub fn clear_selection(&mut self) {
+    pub const fn clear_selection(&mut self) {
         self.selected_index = None;
     }
 }
@@ -248,6 +248,7 @@ fn selectable_items(combo_id: ComboId, options: Vec<String>) -> impl Bundle {
 }
 
 /// System that handles clicking the combobox button to toggle the dropdown.
+#[expect(clippy::type_complexity, reason = "bevy")]
 pub(crate) fn toggle_combo_visibility(
     interaction_query: Query<(&Interaction, &ComboId), (Changed<Interaction>, With<ComboButton>)>,
     mut combobox_query: Query<&mut Combo>,
@@ -293,7 +294,7 @@ pub(crate) fn toggle_combo_visibility(
 }
 
 /// System that handles selecting items from the dropdown.
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity, reason = "bevy")]
 pub(crate) fn select_combo_item_system(
     interaction_query: Query<
         (&Interaction, &SelectableItem),
@@ -405,7 +406,7 @@ pub(crate) fn close_combobox_on_outside_click_system(
 }
 
 /// System that provides hover effects for the main combobox button.
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity, reason = "bevy")]
 pub(crate) fn hover_combobox_button_system(
     mut interaction_query: Query<
         (
