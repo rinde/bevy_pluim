@@ -81,6 +81,6 @@ struct ContinentComboBox;
 
 fn events(country_query: Query<&Combo, (With<CountryComboBox>, Changed<Combo>)>) {
     for x in country_query {
-        println!("Country selected: {:?} {:?}", x.id, x.selected_text());
+        println!("Country selected: {:?}", x.selected_text());
     }
 }

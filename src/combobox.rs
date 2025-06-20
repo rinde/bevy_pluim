@@ -33,11 +33,11 @@ pub struct Widgets {
 #[derive(
     Deref, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Add, AddAssign, Component,
 )]
-pub struct ComboId(u8);
+struct ComboId(u8);
 
 #[derive(Component, Debug, Clone)]
 pub struct Combo {
-    pub id: ComboId,
+    id: ComboId,
     pub options: Vec<String>,
     pub selected_index: Option<usize>,
     pub is_open: bool,
@@ -249,7 +249,7 @@ fn selectable_items(combo_id: ComboId, options: Vec<String>) -> impl Bundle {
 
 /// System that handles clicking the combobox button to toggle the dropdown.
 #[expect(clippy::type_complexity, reason = "bevy")]
-pub(crate) fn toggle_combo_visibility(
+fn toggle_combo_visibility(
     interaction_query: Query<(&Interaction, &ComboId), (Changed<Interaction>, With<ComboButton>)>,
     mut combobox_query: Query<&mut Combo>,
     mut select_items_query: Query<(&mut Node, &ComboId), With<SelectableItems>>,
@@ -295,7 +295,7 @@ pub(crate) fn toggle_combo_visibility(
 
 /// System that handles selecting items from the dropdown.
 #[expect(clippy::type_complexity, reason = "bevy")]
-pub(crate) fn select_combo_item_system(
+fn select_combo_item_system(
     interaction_query: Query<
         (&Interaction, &SelectableItem),
         (Changed<Interaction>, With<SelectableItem>),
@@ -332,7 +332,7 @@ pub(crate) fn select_combo_item_system(
     }
 }
 
-pub(crate) fn selectable_items_hover(
+fn selectable_items_hover(
     mut interaction_query: Query<
         (&Interaction, &mut BackgroundColor, &mut SelectableItem),
         Changed<Interaction>,
@@ -366,7 +366,7 @@ pub(crate) fn selectable_items_hover(
 }
 
 /// System that closes the dropdown when clicking outside of it.
-pub(crate) fn close_combobox_on_outside_click_system(
+fn close_combobox_on_outside_click_system(
     mouse_button: Res<ButtonInput<MouseButton>>,
     mut combobox_query: Query<&mut Combo>,
     mut dropdown_query: Query<&mut Node, With<SelectableItems>>,
@@ -407,7 +407,7 @@ pub(crate) fn close_combobox_on_outside_click_system(
 
 /// System that provides hover effects for the main combobox button.
 #[expect(clippy::type_complexity, reason = "bevy")]
-pub(crate) fn hover_combobox_button_system(
+fn hover_combobox_button_system(
     mut interaction_query: Query<
         (
             &Interaction,
