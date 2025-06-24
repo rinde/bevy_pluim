@@ -3,6 +3,7 @@ use bevy::color::palettes::tailwind::BLUE_200;
 use bevy::color::palettes::tailwind::BLUE_500;
 use bevy::color::palettes::tailwind::BLUE_600;
 use bevy::color::palettes::tailwind::GRAY_200;
+use bevy::color::palettes::tailwind::GRAY_900;
 use bevy::ecs::change_detection::DetectChanges;
 use bevy::ecs::resource::Resource;
 use bevy::ecs::system::Res;
@@ -20,11 +21,12 @@ pub struct Theme {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ThemeColors {
-    pub background_primary_color: Color,
-    pub selected_item_color: Color,
-    pub hovered_item_color: Color,
-    pub selected_hovered_item_color: Color,
-    pub border_color: Color,
+    pub background_primary: Color,
+    pub selected_item: Color,
+    pub hovered_item: Color,
+    pub selected_hovered_item: Color,
+    pub border: Color,
+    pub text_primary: Color,
 }
 
 impl Default for ThemeColors {
@@ -34,11 +36,12 @@ impl Default for ThemeColors {
 }
 
 const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
-    background_primary_color: Color::WHITE,
-    selected_item_color: Color::Srgba(BLUE_500),
-    hovered_item_color: Color::Srgba(BLUE_200),
-    selected_hovered_item_color: Color::Srgba(BLUE_600),
-    border_color: Color::Srgba(GRAY_200),
+    background_primary: Color::WHITE,
+    selected_item: Color::Srgba(BLUE_500),
+    hovered_item: Color::Srgba(BLUE_200),
+    selected_hovered_item: Color::Srgba(BLUE_600),
+    border: Color::Srgba(GRAY_200),
+    text_primary: Color::Srgba(GRAY_900),
 };
 
 pub(crate) fn on_theme_change(theme: Res<Theme>) {

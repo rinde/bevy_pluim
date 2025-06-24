@@ -1,7 +1,6 @@
 use bevy::app::App;
 use bevy::app::Plugin;
 use bevy::app::Update;
-use bevy::color::palettes::tailwind::TEAL_500;
 use bevy::ecs::bundle::Bundle;
 use bevy::ecs::children;
 use bevy::ecs::component::Component;
@@ -14,7 +13,6 @@ use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::spawn::SpawnRelated;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
-use bevy::ecs::system::ResMut;
 use bevy::ecs::world::DeferredWorld;
 use bevy::ecs::world::FromWorld;
 use bevy::ecs::world::World;
@@ -39,7 +37,6 @@ use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
 
-use crate::colors::GRAY_900;
 use crate::theme::Theme;
 use crate::theme::on_theme_change;
 
@@ -134,7 +131,7 @@ impl SelectableItems {
                             font_size: 14.0,
                             ..default()
                         },
-                        TextColor(GRAY_900),
+                        TextColor(theme.colors.text_primary),
                     )],
                 )
             })
@@ -155,8 +152,8 @@ impl SelectableItems {
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme.colors.background_primary_color),
-            BorderColor(theme.colors.border_color),
+            BackgroundColor(theme.colors.background_primary),
+            BorderColor(theme.colors.border),
             BorderRadius::all(theme.corner_radius),
             children,
         );
@@ -216,16 +213,16 @@ fn selectable_items_hover(
 
         match (*interaction, selectable_items.selected_index) {
             (Interaction::Hovered, Some(x)) if x == item.index => {
-                *background_color = BackgroundColor(theme.colors.selected_hovered_item_color);
+                *background_color = BackgroundColor(theme.colors.selected_hovered_item);
             }
             (Interaction::Hovered, _) => {
-                *background_color = BackgroundColor(theme.colors.hovered_item_color);
+                *background_color = BackgroundColor(theme.colors.hovered_item);
             }
             (Interaction::None, Some(x)) if x == item.index => {
-                *background_color = BackgroundColor(theme.colors.selected_item_color);
+                *background_color = BackgroundColor(theme.colors.selected_item);
             }
             (Interaction::None, _) => {
-                *background_color = BackgroundColor(theme.colors.background_primary_color);
+                *background_color = BackgroundColor(theme.colors.background_primary);
             }
             (Interaction::Pressed, _) => {
                 selectable_items.selected_index = Some(item.index);
@@ -237,7 +234,7 @@ fn selectable_items_hover(
 fn on_selection_change(
     changed_si_query: Query<(&SelectableItems, &WidgetId), Changed<SelectableItems>>,
     mut all_selectable_items_query: Query<(&SelectableItem, &mut BackgroundColor, &WidgetId)>,
-    mut theme: ResMut<Theme>,
+    theme: Res<Theme>,
 ) {
     for (selectable_items, widget_id) in changed_si_query {
         for (item, mut bg, _) in &mut all_selectable_items_query
@@ -245,10 +242,9 @@ fn on_selection_change(
             .filter(|(_, _, id)| *id == widget_id)
         {
             if selectable_items.selected_index == Some(item.index) {
-                *bg = BackgroundColor(theme.colors.hovered_item_color);
-                theme.colors.hovered_item_color = TEAL_500.into();
+                *bg = BackgroundColor(theme.colors.hovered_item);
             } else {
-                *bg = BackgroundColor(theme.colors.background_primary_color);
+                *bg = BackgroundColor(theme.colors.background_primary);
             }
         }
     }
