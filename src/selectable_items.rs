@@ -190,16 +190,16 @@ fn selectable_items_hover(
 
         match (*interaction, selection.0) {
             (Interaction::Hovered, Some(x)) if x == item.index => {
-                *background_color = BackgroundColor(theme.colors.selected_hovered_item);
+                background_color.0 = theme.colors.selected_hovered_item;
             }
             (Interaction::Hovered, _) => {
-                *background_color = BackgroundColor(theme.colors.hovered_item);
+                background_color.0 = theme.colors.hovered_item;
             }
             (Interaction::None, Some(x)) if x == item.index => {
-                *background_color = BackgroundColor(theme.colors.selected_item);
+                background_color.0 = theme.colors.selected_item;
             }
             (Interaction::None, _) => {
-                *background_color = BackgroundColor(theme.colors.background_primary);
+                background_color.0 = theme.colors.background_primary;
             }
             (Interaction::Pressed, _) => {
                 selection.0 = Some(item.index);
@@ -219,9 +219,9 @@ fn on_selection_change(
             .filter(|(_, _, id)| *id == widget_id)
         {
             if selection.0 == Some(item.index) {
-                *bg = BackgroundColor(theme.colors.selected_item);
+                bg.0 = theme.colors.selected_item;
             } else {
-                *bg = BackgroundColor(theme.colors.background_primary);
+                bg.0 = theme.colors.background_primary;
             }
         }
     }
@@ -257,9 +257,9 @@ fn theme_item(
     for (mut node, mut bg, mut br, id, item) in &mut items {
         let items_state = map.get(id).unwrap();
         if items_state.selection == Some(item.index) {
-            *bg = BackgroundColor(theme.colors.selected_item);
+            bg.0 = theme.colors.selected_item;
         } else {
-            *bg = BackgroundColor(theme.colors.background_primary);
+            bg.0 = theme.colors.background_primary;
         }
 
         let last = items_state.num_items - 1;
@@ -288,8 +288,8 @@ fn theme_selectable_items(
 ) {
     for (mut node, mut bg, mut bc, mut br) in &mut selectable_items_container {
         node.border = UiRect::all(theme.border_thickness);
-        *bg = BackgroundColor(theme.colors.background_primary);
-        *bc = BorderColor(theme.colors.border);
+        bg.0 = theme.colors.background_primary;
+        bc.0 = theme.colors.border;
         *br = BorderRadius::all(theme.corner_radius);
     }
 }

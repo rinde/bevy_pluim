@@ -7,7 +7,7 @@ use bevy::color::palettes::tailwind::BLUE_800;
 use bevy::color::palettes::tailwind::BLUE_900;
 use bevy::color::palettes::tailwind::GRAY_100;
 use bevy::color::palettes::tailwind::GRAY_200;
-use bevy::color::palettes::tailwind::GRAY_800;
+use bevy::color::palettes::tailwind::GRAY_600;
 use bevy::color::palettes::tailwind::GRAY_900;
 use bevy::color::palettes::tailwind::GRAY_950;
 use bevy::ecs::change_detection::DetectChanges;
@@ -103,12 +103,12 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     small_shadow: SHADOW_SM,
 };
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
-    background_primary: Color::BLACK,
-    background_secondary: Color::Srgba(GRAY_950),
+    background_primary: Color::Srgba(GRAY_950),
+    background_secondary: Color::Srgba(GRAY_900),
     selected_item: Color::Srgba(BLUE_800),
     hovered_item: Color::Srgba(BLUE_900),
     selected_hovered_item: Color::Srgba(BLUE_700),
-    border: Color::Srgba(GRAY_800),
+    border: Color::Srgba(GRAY_600),
     text_primary: Color::Srgba(GRAY_100),
     large_shadow: SHADOW_LG,
     small_shadow: SHADOW_SM,

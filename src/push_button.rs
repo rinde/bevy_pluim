@@ -2,8 +2,9 @@ use bevy::app::Plugin;
 use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::hierarchy::Children;
+use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
+use bevy::ecs::query::With;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
@@ -15,27 +16,32 @@ use bevy::ui::BorderRadius;
 use bevy::ui::BoxShadow;
 use bevy::ui::Interaction;
 use bevy::ui::Node;
-use bevy::ui::PositionType;
 use bevy::ui::UiRect;
-use bevy::ui::Val;
 use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
 
 use crate::theme::Theme;
+use crate::theme::ThemeChangedEvent;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PushButtonPlugin;
 
 impl Plugin for PushButtonPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_systems(Update, on_hover);
+        app.add_systems(Update, on_hover)
+            .add_observer(theme_push_button)
+            .add_observer(theme_push_button_label);
     }
 }
 
 #[derive(Component, Clone, Debug, Eq, PartialEq)]
 #[component(on_add = Self::on_add)]
+#[require(BoxShadow::default(), Node::default())]
 pub struct PushButton(String);
+
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PushButtonLabel;
 
 impl PushButton {
     pub fn new(label: impl Into<String>) -> Self {
@@ -43,36 +49,9 @@ impl PushButton {
     }
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        if let Some(children) = world.entity(context.entity).get::<Children>() {
-            println!("{children:?}");
-        }
-
         let button = world.entity(context.entity).get::<PushButton>().unwrap();
-
-        let theme = world.resource::<Theme>();
-        let bundle = (
-            Button,
-            BackgroundColor(theme.colors.background_primary),
-            BorderColor(theme.colors.border),
-            BorderRadius::all(theme.corner_radius),
-            BoxShadow::from(theme.small_shadow()),
-            Node {
-                position_type: PositionType::Relative,
-                border: UiRect::all(theme.border_thickness),
-                padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
-                ..default()
-            },
-        );
-        let child_bundle = (
-            Text::new(&button.0),
-            TextColor(theme.colors.text_primary),
-            TextFont {
-                font_size: 14.0,
-                ..default()
-            },
-        );
-        world.commands().entity(context.entity).insert(bundle);
-
+        let child_bundle = (Text::new(&button.0), PushButtonLabel);
+        world.commands().entity(context.entity).insert(Button);
         world
             .commands()
             .entity(context.entity)
@@ -96,5 +75,45 @@ fn on_hover(
                 *background_color = BackgroundColor(theme.colors.selected_item);
             }
         }
+    }
+}
+
+fn theme_push_button(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut query: Query<
+        (
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &mut BorderRadius,
+            &mut BoxShadow,
+            &mut Node,
+        ),
+        With<PushButton>,
+    >,
+) {
+    for (mut background_color, mut border_color, mut border_radius, mut box_shadow, mut node) in
+        &mut query
+    {
+        background_color.0 = theme.colors.background_primary;
+        border_color.0 = theme.colors.border;
+        *border_radius = BorderRadius::all(theme.corner_radius);
+        *box_shadow = theme.small_shadow().into();
+        node.border = UiRect::all(theme.border_thickness);
+        node.padding = theme.item_padding;
+    }
+}
+
+fn theme_push_button_label(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut query: Query<(&mut TextColor, &mut TextFont), With<PushButtonLabel>>,
+) {
+    for (mut text_color, mut text_font) in &mut query {
+        *text_color = TextColor(theme.colors.text_primary);
+        *text_font = TextFont {
+            font_size: 14.0,
+            ..default()
+        };
     }
 }

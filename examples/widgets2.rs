@@ -11,6 +11,7 @@ use ui::push_button::PushButton;
 use ui::selectable_items::SelectableItems;
 use ui::selectable_items::Selection;
 use ui::theme::Theme;
+use ui::theme::ThemeChangedEvent;
 
 fn main() {
     App::new()
@@ -24,6 +25,7 @@ fn main() {
         })
         .add_systems(Update, on_press)
         .add_systems(Startup, setup)
+        .add_observer(update_theme)
         .run();
 }
 
@@ -41,6 +43,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             ..default()
         },
         BackgroundColor(theme.colors.background_primary),
+        Root,
         children![
             (
                 combo2::Combo,
@@ -56,7 +59,8 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             ),
             (
                 Text::new("Hello, World!"),
-                TextColor(theme.colors.text_primary)
+                TextColor(theme.colors.text_primary),
+                HelloWorldLabel
             ),
             (PushButton::new("Change theme"), ThemeButton)
         ],
@@ -74,5 +78,25 @@ fn on_press(
 ) {
     if button.is_some_and(|b| **b == Interaction::Pressed) {
         theme.light_dark_toggle();
+    }
+}
+
+#[derive(Component)]
+struct Root;
+
+#[derive(Component)]
+struct HelloWorldLabel;
+
+fn update_theme(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut background: Query<&mut BackgroundColor, With<Root>>,
+    mut hello_world: Query<&mut TextColor, With<HelloWorldLabel>>,
+) {
+    for mut background_color in &mut background {
+        background_color.0 = theme.colors.background_primary;
+    }
+    for mut text_color in &mut hello_world {
+        text_color.0 = theme.colors.text_primary;
     }
 }
