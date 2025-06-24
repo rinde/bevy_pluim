@@ -53,7 +53,7 @@ pub struct SelectableItems {
 
 impl SelectableItems {
     #[must_use]
-    pub fn new(options: Vec<impl Into<String>>) -> Self {
+    pub fn new(options: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             items: options.into_iter().map(Into::into).collect(),
         }

@@ -45,9 +45,9 @@ fn setup(mut commands: Commands) {
                 //    combo2::ComboButton
                 ]
             ),
-            SelectableItems::new(vec!["hello", "who", "is", "there"]),
+            SelectableItems::new(["hello", "who", "is", "there"]),
             (
-                SelectableItems::new(vec!["Netherlands", "Canada", "Indonesia", "Portugal"]),
+                SelectableItems::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
                 Selection(Some(1))
             ),
         ],
