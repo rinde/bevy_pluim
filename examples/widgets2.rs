@@ -4,10 +4,11 @@ use bevy::app::Startup;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
+use ui::WidgetsPlugin;
 use ui::colors::BG_SECONDARY;
 use ui::combo2;
-use ui::selectable_items::WidgetsPlugin;
-use ui::selectable_items::selectable_items;
+use ui::selectable_items::SelectableItems;
+use ui::selectable_items::Selection;
 
 fn main() {
     App::new()
@@ -34,7 +35,6 @@ fn setup(mut commands: Commands) {
             justify_content: JustifyContent::SpaceEvenly,
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Column,
-
             ..default()
         },
         BackgroundColor(BG_SECONDARY),
@@ -45,8 +45,11 @@ fn setup(mut commands: Commands) {
                 //    combo2::ComboButton
                 ]
             ),
-            selectable_items(vec!["hello", "who", "is", "there"]),
-            selectable_items(vec!["Netherlands", "Canada", "Indonesia", "Portugal"]),
+            SelectableItems::new(vec!["hello", "who", "is", "there"]),
+            (
+                SelectableItems::new(vec!["Netherlands", "Canada", "Indonesia", "Portugal"]),
+                Selection(Some(1))
+            ),
         ],
     ));
 }
