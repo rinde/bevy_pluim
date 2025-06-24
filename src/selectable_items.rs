@@ -14,17 +14,14 @@ use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
 use bevy::text::TextColor;
 use bevy::text::TextFont;
-use bevy::ui::AlignContent;
 use bevy::ui::AlignItems;
 use bevy::ui::BackgroundColor;
 use bevy::ui::BorderColor;
 use bevy::ui::BorderRadius;
 use bevy::ui::Display;
-use bevy::ui::FlexDirection;
-use bevy::ui::FlexWrap;
+use bevy::ui::GridAutoFlow;
 use bevy::ui::Interaction;
 use bevy::ui::JustifyContent;
-use bevy::ui::JustifyItems;
 use bevy::ui::Node;
 use bevy::ui::PositionType;
 use bevy::ui::UiRect;
@@ -35,6 +32,7 @@ use bevy::utils::default;
 
 use crate::WidgetId;
 use crate::Widgets;
+use crate::float::Float;
 use crate::theme::Theme;
 
 pub(crate) struct SelectableItemsPlugin;
@@ -79,6 +77,8 @@ impl SelectableItems {
                 id
             });
 
+        println!("Add SelectableItems component {id:?}");
+
         // use existing selection if it exists, or query it from any of its parents or
         // default to None
         let selection = world
@@ -105,16 +105,25 @@ impl SelectableItems {
                 })
             });
 
-        let Some(selectable_items) = world.entity(context.entity).get::<SelectableItems>() else {
+        let Some(selectable_items) = world
+            .entity(context.entity)
+            .get::<SelectableItems>()
+            .cloned()
+        else {
             panic!("SelectableItems is in an invalid state");
         };
 
-        let theme = world.resource::<Theme>();
+        let theme = *world.resource::<Theme>();
+
+        assert!(
+            world.entity(context.entity).get::<Node>().is_none(),
+            "Cannot override Node for SelectableItems"
+        );
 
         let last = selectable_items.items.len() - 1;
         let children = selectable_items
             .items
-            .iter()
+            .into_iter()
             .enumerate()
             .map(move |(idx, option)| {
                 let bg_color = if selection.0 == Some(idx) {
@@ -141,7 +150,7 @@ impl SelectableItems {
                     bg_color,
                     SelectableItem { index: idx },
                     children![(
-                        Text(option.clone()),
+                        Text(option),
                         TextFont {
                             font_size: 14.0,
                             ..default()
@@ -153,20 +162,21 @@ impl SelectableItems {
             .collect::<Vec<_>>();
         let children = Children::spawn(SpawnIter(children.into_iter()));
 
+        let mut node = Node {
+            position_type: PositionType::Relative,
+            border: UiRect::all(theme.border_thickness),
+            display: Display::Grid,
+            grid_auto_flow: GridAutoFlow::RowDense,
+            ..default()
+        };
+
+        if let Some(float) = world.entity(context.entity).get::<Float>() {
+            let float_bundle = float.apply(&mut node, &theme);
+            world.commands().entity(context.entity).insert(float_bundle);
+        }
+
         let styling_bundle = (
-            Node {
-                // width: Val::Px(300.0),
-                flex_direction: FlexDirection::Column,
-                flex_wrap: FlexWrap::Wrap,
-                position_type: PositionType::Relative,
-                border: UiRect::all(Val::Px(1.0)),
-                display: Display::Flex,
-                align_items: AlignItems::Center,
-                justify_items: JustifyItems::Start,
-                align_content: AlignContent::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
+            node,
             BackgroundColor(theme.colors.background_primary),
             BorderColor(theme.colors.border),
             BorderRadius::all(theme.corner_radius),

@@ -5,10 +5,11 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use ui::WidgetsPlugin;
-use ui::colors::BG_SECONDARY;
 use ui::combo2;
+use ui::float::Float;
 use ui::selectable_items::SelectableItems;
 use ui::selectable_items::Selection;
+use ui::theme::Theme;
 
 fn main() {
     App::new()
@@ -24,7 +25,7 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, theme: Res<Theme>) {
     commands.spawn(Camera2d);
 
     // Root container
@@ -37,7 +38,7 @@ fn setup(mut commands: Commands) {
             flex_direction: FlexDirection::Column,
             ..default()
         },
-        BackgroundColor(BG_SECONDARY),
+        BackgroundColor(theme.colors.background_primary),
         children![
             (
                 combo2::Combo,
@@ -48,7 +49,8 @@ fn setup(mut commands: Commands) {
             SelectableItems::new(["hello", "who", "is", "there"]),
             (
                 SelectableItems::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
-                Selection(Some(1))
+                Selection(Some(1)),
+                Float
             ),
         ],
     ));
