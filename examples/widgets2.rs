@@ -7,6 +7,7 @@ use bevy::ui::UiDebugOptions;
 use ui::WidgetsPlugin;
 use ui::combo2;
 use ui::float::Float;
+use ui::push_button::PushButton;
 use ui::selectable_items::SelectableItems;
 use ui::selectable_items::Selection;
 use ui::theme::Theme;
@@ -21,6 +22,7 @@ fn main() {
             show_hidden: false,
             show_clipped: false,
         })
+        .add_systems(Update, on_press)
         .add_systems(Startup, setup)
         .run();
 }
@@ -52,6 +54,20 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 Selection(Some(1)),
                 Float
             ),
+            (
+                Text::new("Hello, World!"),
+                TextColor(theme.colors.text_primary)
+            ),
+            (PushButton::new("Change theme"), ThemeButton)
         ],
     ));
+}
+
+#[derive(Component)]
+struct ThemeButton;
+
+fn on_press(button: Option<Single<&Interaction, (Changed<Interaction>, With<ThemeButton>)>>) {
+    if button.is_some_and(|b| **b == Interaction::Pressed) {
+        println!("pressed!");
+    }
 }

@@ -1,10 +1,8 @@
-//! Playground crate demonstrating Bevy UI components with TailwindCSS-inspired
-//! styling.
-
 pub mod colors;
 pub mod combo2;
 pub mod combobox;
 pub mod float;
+pub mod push_button;
 pub mod selectable_items;
 pub mod theme;
 
@@ -17,6 +15,7 @@ use bevy::ecs::world::FromWorld;
 use bevy::ecs::world::World;
 pub use combobox::*;
 
+use crate::push_button::PushButtonPlugin;
 use crate::selectable_items::SelectableItemsPlugin;
 use crate::theme::Theme;
 use crate::theme::on_theme_change;
@@ -29,6 +28,7 @@ impl Plugin for WidgetsPlugin {
         app.init_resource::<Widgets>()
             .init_resource::<Theme>()
             .add_plugins(SelectableItemsPlugin)
+            .add_plugins(PushButtonPlugin)
             .add_systems(Update, on_theme_change);
     }
 }

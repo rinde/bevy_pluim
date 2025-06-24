@@ -2,7 +2,6 @@ use bevy::color::Color;
 use bevy::color::palettes::tailwind::BLUE_200;
 use bevy::color::palettes::tailwind::BLUE_500;
 use bevy::color::palettes::tailwind::BLUE_600;
-use bevy::color::palettes::tailwind::GRAY_50;
 use bevy::color::palettes::tailwind::GRAY_200;
 use bevy::color::palettes::tailwind::GRAY_900;
 use bevy::ecs::change_detection::DetectChanges;
@@ -34,9 +33,15 @@ pub struct Theme {
 
 impl Theme {
     #[must_use]
-    pub const fn shadow_style(&self) -> ShadowStyle {
+    pub const fn large_shadow(&self) -> ShadowStyle {
         let mut s = self.shadow_style;
-        s.color = self.colors.shadow;
+        s.color = self.colors.large_shadow;
+        s
+    }
+    #[must_use]
+    pub const fn small_shadow(&self) -> ShadowStyle {
+        let mut s = self.shadow_style;
+        s.color = self.colors.small_shadow;
         s
     }
 }
@@ -50,7 +55,8 @@ pub struct ThemeColors {
     pub selected_hovered_item: Color,
     pub border: Color,
     pub text_primary: Color,
-    pub shadow: Color,
+    pub large_shadow: Color,
+    pub small_shadow: Color,
 }
 
 impl Default for ThemeColors {
@@ -61,13 +67,14 @@ impl Default for ThemeColors {
 
 const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::WHITE,
-    background_secondary: Color::Srgba(GRAY_50),
+    background_secondary: Color::Srgba(GRAY_200),
     selected_item: Color::Srgba(BLUE_500),
     hovered_item: Color::Srgba(BLUE_200),
     selected_hovered_item: Color::Srgba(BLUE_600),
     border: Color::Srgba(GRAY_200),
     text_primary: Color::Srgba(GRAY_900),
-    shadow: SHADOW_LG,
+    large_shadow: SHADOW_LG,
+    small_shadow: SHADOW_SM,
 };
 
 pub(crate) fn on_theme_change(theme: Res<Theme>) {

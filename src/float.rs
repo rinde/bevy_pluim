@@ -15,6 +15,6 @@ pub struct Float;
 impl Float {
     pub fn apply(&self, node: &mut Node, theme: &Theme) -> impl Bundle {
         node.position_type = PositionType::Absolute;
-        (GlobalZIndex(1000), BoxShadow::from(theme.shadow_style()))
+        (GlobalZIndex(1000), BoxShadow::from(theme.large_shadow()))
     }
 }
