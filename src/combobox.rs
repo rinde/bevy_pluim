@@ -43,6 +43,16 @@ pub struct Combo {
     pub is_open: bool,
 }
 
+// TODO ComboId could be required for Combo. Could implement FromWorld to get
+// correct id from Widgets
+//
+// Combo requires ComboButton
+// TODO implement FloatingPane that takes a child, Combo requires FloatingPane
+// TODO implement SelectableItems as a Widget
+//
+// (Combo, SelectableItems(vec!["opt 1", "opt 2", "opt 3"]))
+// (Combo, ColorPalette(vec![Color::RED, Color::GREEN, Color::BLUE]))
+
 impl Combo {
     #[must_use]
     const fn new(id: ComboId, options: Vec<String>) -> Self {

@@ -1,0 +1,49 @@
+use bevy::color::Color;
+use bevy::color::palettes::tailwind::BLUE_200;
+use bevy::color::palettes::tailwind::BLUE_500;
+use bevy::color::palettes::tailwind::BLUE_600;
+use bevy::color::palettes::tailwind::GRAY_200;
+use bevy::ecs::change_detection::DetectChanges;
+use bevy::ecs::resource::Resource;
+use bevy::ecs::system::Res;
+use bevy::ui::Val;
+use educe::Educe;
+
+#[derive(Resource, Clone, Copy, Debug, Educe)]
+#[educe(Default)]
+pub struct Theme {
+    #[educe(Default = Val::Px(10.0))]
+    pub corner_radius: Val,
+
+    pub colors: ThemeColors,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ThemeColors {
+    pub background_primary_color: Color,
+    pub selected_item_color: Color,
+    pub hovered_item_color: Color,
+    pub selected_hovered_item_color: Color,
+    pub border_color: Color,
+}
+
+impl Default for ThemeColors {
+    fn default() -> Self {
+        DEFAULT_LIGHT_THEME_COLORS
+    }
+}
+
+const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
+    background_primary_color: Color::WHITE,
+    selected_item_color: Color::Srgba(BLUE_500),
+    hovered_item_color: Color::Srgba(BLUE_200),
+    selected_hovered_item_color: Color::Srgba(BLUE_600),
+    border_color: Color::Srgba(GRAY_200),
+};
+
+pub(crate) fn on_theme_change(theme: Res<Theme>) {
+    if theme.is_changed() {
+        println!("theme changed");
+        // TODO dispatch event
+    }
+}

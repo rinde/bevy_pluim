@@ -9,3 +9,4 @@ workspace = true
 [dependencies]
 bevy.workspace = true
 derive_more.workspace = true
+educe.workspace = true

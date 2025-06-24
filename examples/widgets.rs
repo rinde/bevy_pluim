@@ -9,6 +9,11 @@ use ui::combobox::Widgets;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .insert_resource(UiDebugOptions {
+            enabled: false,
+            // `UiDebugOptions` has a few new options, but for now we'll leave the defaults.
+            ..default()
+        })
         .add_plugins(ComboBoxPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, events)
