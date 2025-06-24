@@ -53,7 +53,7 @@ impl Plugin for SelectableItemsPlugin {
 #[derive(Component, Debug, Clone)]
 #[component(on_add = Self::on_add)]
 pub struct SelectableItems {
-    items: Vec<String>,
+    pub(crate) items: Vec<String>,
 }
 
 impl SelectableItems {
@@ -65,7 +65,7 @@ impl SelectableItems {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 pub struct Selection(pub Option<usize>);
 
 #[derive(Component, Debug, Clone, Copy)]

@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use ui::WidgetsPlugin;
 use ui::combo2;
+use ui::combo3;
 use ui::float::Float;
 use ui::push_button::PushButton;
 use ui::selectable_items::SelectableItems;
@@ -53,15 +54,23 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             ),
             SelectableItems::new(["hello", "who", "is", "there"]),
             (
-                SelectableItems::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
-                Selection(Some(1)),
-                Float
+                Node {
+                    width: Val::Px(200.0),
+                    ..default()
+                },
+                children![(
+                    SelectableItems::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
+                    Selection(Some(1)),
+                    Float
+                )]
             ),
             (
                 Text::new("Hello, World!"),
                 TextColor(theme.colors.text_primary),
                 HelloWorldLabel
             ),
+            combo3::Combo::new(["hello", "who", "is", "there"]),
+            combo3::Combo::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
             (PushButton::new("Change theme"), ThemeButton)
         ],
     ));

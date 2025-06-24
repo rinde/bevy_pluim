@@ -9,6 +9,7 @@ use bevy::ui::BoxShadow;
 use bevy::ui::GlobalZIndex;
 use bevy::ui::Node;
 use bevy::ui::PositionType;
+use bevy::ui::Val;
 
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
@@ -31,6 +32,7 @@ pub struct Float;
 impl Float {
     pub const fn apply(&self, node: &mut Node) {
         node.position_type = PositionType::Absolute;
+        node.width = Val::Percent(100.0);
     }
 }
 

@@ -21,6 +21,7 @@ use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
 
+use crate::WidgetId;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
 
@@ -49,13 +50,20 @@ impl PushButton {
     }
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let button = world.entity(context.entity).get::<PushButton>().unwrap();
-        let child_bundle = (Text::new(&button.0), PushButtonLabel);
+        let entity = world.entity(context.entity);
+        let button = entity.get::<PushButton>().unwrap();
+
+        let child = (Text::new(&button.0), PushButtonLabel);
+
         world.commands().entity(context.entity).insert(Button);
-        world
-            .commands()
-            .entity(context.entity)
-            .with_child(child_bundle);
+        if let Some(&id) = world.entity(context.entity).get::<WidgetId>() {
+            world
+                .commands()
+                .entity(context.entity)
+                .with_child((id, child));
+        } else {
+            world.commands().entity(context.entity).with_child(child);
+        }
     }
 }
 

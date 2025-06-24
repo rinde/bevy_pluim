@@ -1,5 +1,6 @@
 pub mod colors;
 pub mod combo2;
+pub mod combo3;
 pub mod combobox;
 pub mod float;
 pub mod push_button;
@@ -15,6 +16,7 @@ use bevy::ecs::world::FromWorld;
 use bevy::ecs::world::World;
 pub use combobox::*;
 
+use crate::combo3::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::selectable_items::SelectableItemsPlugin;
@@ -33,6 +35,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(SelectableItemsPlugin)
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
+            .add_plugins(ComboPlugin)
             .add_systems(Update, on_theme_change);
     }
 }
