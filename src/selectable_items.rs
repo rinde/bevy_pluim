@@ -6,12 +6,15 @@ use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::hierarchy::Children;
+use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
+use bevy::ecs::query::With;
 use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::spawn::SpawnRelated;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::platform::collections::HashMap;
 use bevy::text::TextColor;
 use bevy::text::TextFont;
 use bevy::ui::AlignItems;
@@ -34,12 +37,16 @@ use crate::WidgetId;
 use crate::Widgets;
 use crate::float::Float;
 use crate::theme::Theme;
+use crate::theme::ThemeChangedEvent;
 
 pub(crate) struct SelectableItemsPlugin;
 
 impl Plugin for SelectableItemsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (selectable_items_hover, on_selection_change));
+        app.add_systems(Update, (selectable_items_hover, on_selection_change))
+            .add_observer(theme_item)
+            .add_observer(theme_selectable_items)
+            .add_observer(theme_item_label);
     }
 }
 
@@ -61,6 +68,9 @@ impl SelectableItems {
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Selection(pub Option<usize>);
 
+#[derive(Component, Debug, Clone, Copy)]
+struct ItemLabel;
+
 impl SelectableItems {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         // insert WidgetId if it doesn't exist
@@ -81,29 +91,18 @@ impl SelectableItems {
 
         // use existing selection if it exists, or query it from any of its parents or
         // default to None
-        let selection = world
-            .entity(context.entity)
-            .get::<Selection>()
-            .copied()
-            .unwrap_or_else(|| {
-                let state = world.try_query_filtered::<(&Selection, &WidgetId), ()>();
-                let select = state.and_then(|mut s| {
-                    s.iter(&world)
-                        .find_map(|(selection, selection_id)| {
-                            (selection_id == &id).then_some(selection)
-                        })
-                        .copied()
-                });
+        if world.entity(context.entity).get::<Selection>().is_none() {
+            let state = world.try_query_filtered::<&WidgetId, With<Selection>>();
+            let has_selection =
+                state.is_some_and(|mut s| s.iter(&world).any(|selection_id| (selection_id == &id)));
 
-                select.unwrap_or_else(|| {
-                    let new_selection = Selection(None);
-                    world
-                        .commands()
-                        .entity(context.entity)
-                        .insert(new_selection);
-                    new_selection
-                })
-            });
+            if !has_selection {
+                world
+                    .commands()
+                    .entity(context.entity)
+                    .insert(Selection(None));
+            }
+        }
 
         let Some(selectable_items) = world
             .entity(context.entity)
@@ -113,29 +112,16 @@ impl SelectableItems {
             panic!("SelectableItems is in an invalid state");
         };
 
-        let theme = *world.resource::<Theme>();
-
         assert!(
             world.entity(context.entity).get::<Node>().is_none(),
             "Cannot override Node for SelectableItems"
         );
 
-        let last = selectable_items.items.len() - 1;
         let children = selectable_items
             .items
             .into_iter()
             .enumerate()
             .map(move |(idx, option)| {
-                let bg_color = if selection.0 == Some(idx) {
-                    BackgroundColor(theme.colors.selected_item)
-                } else {
-                    BackgroundColor(theme.colors.background_primary)
-                };
-                let border_radius = match idx {
-                    0 => BorderRadius::top(theme.corner_radius),
-                    n if n == last => BorderRadius::bottom(theme.corner_radius),
-                    _ => BorderRadius::ZERO,
-                };
                 (
                     Button,
                     Node {
@@ -143,20 +129,10 @@ impl SelectableItems {
                         height: Val::Px(36.0),
                         justify_content: JustifyContent::FlexStart,
                         align_items: AlignItems::Center,
-                        padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
                         ..default()
                     },
-                    border_radius,
-                    bg_color,
-                    SelectableItem { index: idx },
-                    children![(
-                        Text(option),
-                        TextFont {
-                            font_size: 14.0,
-                            ..default()
-                        },
-                        TextColor(theme.colors.text_primary),
-                    )],
+                    Item { index: idx },
+                    children![(Text(option), ItemLabel)],
                 )
             })
             .collect::<Vec<_>>();
@@ -164,38 +140,27 @@ impl SelectableItems {
 
         let mut node = Node {
             position_type: PositionType::Relative,
-            border: UiRect::all(theme.border_thickness),
             display: Display::Grid,
             grid_auto_flow: GridAutoFlow::RowDense,
             ..default()
         };
-
         if let Some(float) = world.entity(context.entity).get::<Float>() {
-            let float_bundle = float.apply(&mut node, &theme);
-            world.commands().entity(context.entity).insert(float_bundle);
+            float.apply(&mut node);
         }
-
-        let styling_bundle = (
-            node,
-            BackgroundColor(theme.colors.background_primary),
-            BorderColor(theme.colors.border),
-            BorderRadius::all(theme.corner_radius),
-            children,
-        );
         world
             .commands()
             .entity(context.entity)
-            .insert(styling_bundle);
+            .insert((node, children));
     }
 }
 
 #[derive(Component, Debug, Copy, Clone)]
 #[component(on_add = Self::on_add)]
-pub(crate) struct SelectableItem {
+pub(crate) struct Item {
     index: usize,
 }
 
-impl SelectableItem {
+impl Item {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let Some(parent) = world.entity(context.entity).get::<ChildOf>() else {
             panic!("SelectableItem must be a child of an entity");
@@ -209,12 +174,7 @@ impl SelectableItem {
 
 fn selectable_items_hover(
     mut interaction_query: Query<
-        (
-            &Interaction,
-            &mut BackgroundColor,
-            &mut SelectableItem,
-            &WidgetId,
-        ),
+        (&Interaction, &mut BackgroundColor, &mut Item, &WidgetId),
         Changed<Interaction>,
     >,
     mut selectable_items_query: Query<(&mut Selection, &WidgetId)>,
@@ -250,7 +210,7 @@ fn selectable_items_hover(
 
 fn on_selection_change(
     changed_si_query: Query<(&Selection, &WidgetId), Changed<Selection>>,
-    mut all_selectable_items_query: Query<(&SelectableItem, &mut BackgroundColor, &WidgetId)>,
+    mut all_selectable_items_query: Query<(&Item, &mut BackgroundColor, &WidgetId)>,
     theme: Res<Theme>,
 ) {
     for (selection, widget_id) in changed_si_query {
@@ -264,5 +224,83 @@ fn on_selection_change(
                 *bg = BackgroundColor(theme.colors.background_primary);
             }
         }
+    }
+}
+
+fn theme_item(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut items: Query<(
+        &mut Node,
+        &mut BackgroundColor,
+        &mut BorderRadius,
+        &WidgetId,
+        &Item,
+    )>,
+    containers: Query<(&WidgetId, &Selection, &SelectableItems)>,
+) {
+    struct State {
+        selection: Option<usize>,
+        num_items: usize,
+    }
+    let mut map = HashMap::new();
+    containers.iter().for_each(|(id, selection, items)| {
+        map.insert(
+            *id,
+            State {
+                selection: selection.0,
+                num_items: items.items.len(),
+            },
+        );
+    });
+
+    for (mut node, mut bg, mut br, id, item) in &mut items {
+        let items_state = map.get(id).unwrap();
+        if items_state.selection == Some(item.index) {
+            *bg = BackgroundColor(theme.colors.selected_item);
+        } else {
+            *bg = BackgroundColor(theme.colors.background_primary);
+        }
+
+        let last = items_state.num_items - 1;
+        *br = match item.index {
+            0 => BorderRadius::top(theme.corner_radius),
+            n if n == last => BorderRadius::bottom(theme.corner_radius),
+            _ => BorderRadius::ZERO,
+        };
+
+        node.padding = theme.item_padding;
+    }
+}
+
+fn theme_selectable_items(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut selectable_items_container: Query<
+        (
+            &mut Node,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &mut BorderRadius,
+        ),
+        With<SelectableItems>,
+    >,
+) {
+    for (mut node, mut bg, mut bc, mut br) in &mut selectable_items_container {
+        node.border = UiRect::all(theme.border_thickness);
+        *bg = BackgroundColor(theme.colors.background_primary);
+        *bc = BorderColor(theme.colors.border);
+        *br = BorderRadius::all(theme.corner_radius);
+    }
+}
+
+fn theme_item_label(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut selectable_items_container: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
+) {
+    for (mut text_color, mut text_font) in &mut selectable_items_container {
+        text_color.0 = theme.colors.text_primary;
+        text_font.font_size = theme.font_size;
     }
 }

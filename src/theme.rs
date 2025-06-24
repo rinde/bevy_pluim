@@ -2,12 +2,21 @@ use bevy::color::Color;
 use bevy::color::palettes::tailwind::BLUE_200;
 use bevy::color::palettes::tailwind::BLUE_500;
 use bevy::color::palettes::tailwind::BLUE_600;
+use bevy::color::palettes::tailwind::BLUE_700;
+use bevy::color::palettes::tailwind::BLUE_800;
+use bevy::color::palettes::tailwind::BLUE_900;
+use bevy::color::palettes::tailwind::GRAY_100;
 use bevy::color::palettes::tailwind::GRAY_200;
+use bevy::color::palettes::tailwind::GRAY_800;
 use bevy::color::palettes::tailwind::GRAY_900;
+use bevy::color::palettes::tailwind::GRAY_950;
 use bevy::ecs::change_detection::DetectChanges;
+use bevy::ecs::event::Event;
 use bevy::ecs::resource::Resource;
+use bevy::ecs::system::Commands;
 use bevy::ecs::system::Res;
 use bevy::ui::ShadowStyle;
+use bevy::ui::UiRect;
 use bevy::ui::Val;
 use educe::Educe;
 
@@ -21,6 +30,9 @@ pub struct Theme {
 
     pub colors: ThemeColors,
 
+    #[educe(Default = 14.0)]
+    pub font_size: f32,
+
     #[educe(Default = ShadowStyle {
         color: Color::BLACK,
         x_offset: Val::Px(2.0),
@@ -29,6 +41,9 @@ pub struct Theme {
         blur_radius:Val::Px(8.0),}
     ,)]
     shadow_style: ShadowStyle,
+
+    #[educe(Default = UiRect::axes(Val::Px(12.0), Val::Px(8.0)))]
+    pub item_padding: UiRect,
 }
 
 impl Theme {
@@ -44,7 +59,18 @@ impl Theme {
         s.color = self.colors.small_shadow;
         s
     }
+
+    pub fn light_dark_toggle(&mut self) {
+        self.colors = if self.colors == DEFAULT_LIGHT_THEME_COLORS {
+            DEFAULT_DARK_THEME_COLORS
+        } else {
+            DEFAULT_LIGHT_THEME_COLORS
+        };
+    }
 }
+
+#[derive(Event, Debug, Copy, Clone)]
+pub struct ThemeChangedEvent;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ThemeColors {
@@ -65,7 +91,7 @@ impl Default for ThemeColors {
     }
 }
 
-const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
+pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::WHITE,
     background_secondary: Color::Srgba(GRAY_200),
     selected_item: Color::Srgba(BLUE_500),
@@ -76,11 +102,21 @@ const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     large_shadow: SHADOW_LG,
     small_shadow: SHADOW_SM,
 };
+pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
+    background_primary: Color::BLACK,
+    background_secondary: Color::Srgba(GRAY_950),
+    selected_item: Color::Srgba(BLUE_800),
+    hovered_item: Color::Srgba(BLUE_900),
+    selected_hovered_item: Color::Srgba(BLUE_700),
+    border: Color::Srgba(GRAY_800),
+    text_primary: Color::Srgba(GRAY_100),
+    large_shadow: SHADOW_LG,
+    small_shadow: SHADOW_SM,
+};
 
-pub(crate) fn on_theme_change(theme: Res<Theme>) {
+pub(crate) fn on_theme_change(theme: Res<Theme>, mut commands: Commands) {
     if theme.is_changed() {
-        println!("theme changed");
-        // TODO dispatch event
+        commands.trigger(ThemeChangedEvent);
     }
 }
 

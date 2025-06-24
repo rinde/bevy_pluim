@@ -66,8 +66,13 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 #[derive(Component)]
 struct ThemeButton;
 
-fn on_press(button: Option<Single<&Interaction, (Changed<Interaction>, With<ThemeButton>)>>) {
+type ExactlyOne<'w, D, F = ()> = Option<Single<'w, D, F>>;
+
+fn on_press(
+    button: ExactlyOne<&Interaction, (Changed<Interaction>, With<ThemeButton>)>,
+    mut theme: ResMut<Theme>,
+) {
     if button.is_some_and(|b| **b == Interaction::Pressed) {
-        println!("pressed!");
+        theme.light_dark_toggle();
     }
 }

@@ -15,9 +15,11 @@ use bevy::ecs::world::FromWorld;
 use bevy::ecs::world::World;
 pub use combobox::*;
 
+use crate::float::FloatPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::selectable_items::SelectableItemsPlugin;
 use crate::theme::Theme;
+use crate::theme::ThemeChangedEvent;
 use crate::theme::on_theme_change;
 
 #[derive(Debug, Copy, Clone)]
@@ -27,8 +29,10 @@ impl Plugin for WidgetsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Widgets>()
             .init_resource::<Theme>()
+            .add_event::<ThemeChangedEvent>()
             .add_plugins(SelectableItemsPlugin)
             .add_plugins(PushButtonPlugin)
+            .add_plugins(FloatPlugin)
             .add_systems(Update, on_theme_change);
     }
 }
@@ -46,7 +50,7 @@ impl Widgets {
     }
 }
 
-#[derive(Component, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Component, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(u32);
 
 impl FromWorld for WidgetId {
