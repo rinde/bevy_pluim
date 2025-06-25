@@ -5,6 +5,7 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
@@ -44,6 +45,10 @@ pub struct PushButton(String);
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonLabel;
 
+/// Marker component that disables the default hover effect for `PushButton`s.
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NoDefaultHover;
+
 impl PushButton {
     pub fn new(label: impl Into<String>) -> Self {
         Self(label.into())
@@ -68,7 +73,10 @@ impl PushButton {
 }
 
 fn on_hover(
-    mut query: Query<(&Interaction, &mut BackgroundColor, &PushButton), Changed<Interaction>>,
+    mut query: Query<
+        (&Interaction, &mut BackgroundColor, &PushButton),
+        (Changed<Interaction>, Without<NoDefaultHover>),
+    >,
     theme: Res<Theme>,
 ) {
     for (interaction, mut background_color, _) in &mut query {

@@ -1,10 +1,12 @@
 use bevy::color::Color;
 use bevy::color::palettes::tailwind::BLUE_200;
+use bevy::color::palettes::tailwind::BLUE_400;
 use bevy::color::palettes::tailwind::BLUE_500;
 use bevy::color::palettes::tailwind::BLUE_600;
 use bevy::color::palettes::tailwind::BLUE_700;
 use bevy::color::palettes::tailwind::BLUE_800;
 use bevy::color::palettes::tailwind::BLUE_900;
+use bevy::color::palettes::tailwind::GRAY_50;
 use bevy::color::palettes::tailwind::GRAY_100;
 use bevy::color::palettes::tailwind::GRAY_200;
 use bevy::color::palettes::tailwind::GRAY_600;
@@ -80,6 +82,7 @@ pub struct ThemeColors {
     pub hovered_item: Color,
     pub selected_hovered_item: Color,
     pub border: Color,
+    pub border_highlight: Color,
     pub text_primary: Color,
     pub large_shadow: Color,
     pub small_shadow: Color,
@@ -93,11 +96,12 @@ impl Default for ThemeColors {
 
 pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::WHITE,
-    background_secondary: Color::Srgba(GRAY_200),
+    background_secondary: Color::Srgba(GRAY_50),
     selected_item: Color::Srgba(BLUE_500),
     hovered_item: Color::Srgba(BLUE_200),
     selected_hovered_item: Color::Srgba(BLUE_600),
     border: Color::Srgba(GRAY_200),
+    border_highlight: Color::Srgba(BLUE_400),
     text_primary: Color::Srgba(GRAY_900),
     large_shadow: SHADOW_LG,
     small_shadow: SHADOW_SM,
@@ -109,6 +113,7 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     hovered_item: Color::Srgba(BLUE_900),
     selected_hovered_item: Color::Srgba(BLUE_700),
     border: Color::Srgba(GRAY_600),
+    border_highlight: Color::Srgba(BLUE_800),
     text_primary: Color::Srgba(GRAY_100),
     large_shadow: SHADOW_LG,
     small_shadow: SHADOW_SM,

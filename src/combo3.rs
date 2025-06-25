@@ -14,6 +14,8 @@ use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use bevy::prelude::SpawnRelated;
 use bevy::render::view::Visibility;
+use bevy::ui::BackgroundColor;
+use bevy::ui::BorderColor;
 use bevy::ui::FlexDirection;
 use bevy::ui::Interaction;
 use bevy::ui::Node;
@@ -27,17 +29,24 @@ use crate::float::Float;
 use crate::get_or_insert_id;
 use crate::list::Item;
 use crate::list::List;
+use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
 use crate::push_button::PushButtonLabel;
 use crate::select::Select;
 use crate::select::Selection;
+use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
 pub struct ComboPlugin;
 
+// TODO ensure list is visible within window
+// TODO allow specifying placeholder text
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (on_press, on_change, close_combos_on_outside_click));
+        app.add_systems(
+            Update,
+            (on_press, on_change, on_hover, close_combos_on_outside_click),
+        );
     }
 }
 
@@ -66,7 +75,7 @@ impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let id = get_or_insert_id(&mut world, &context);
         world.commands().entity(context.entity).with_children(|x| {
-            x.spawn((id, PushButton::new("Select.."), ComboButton));
+            x.spawn((id, PushButton::new("Select.."), ComboButton, NoDefaultHover));
             x.spawn((
                 Node { ..default() },
                 children![(id, List, Float, Visibility::Hidden, ComboList)],
@@ -127,6 +136,39 @@ fn close_combos_on_outside_click(
     if !clicked_on_combobox {
         for mut visibility in &mut combo_lists {
             *visibility = Visibility::Hidden;
+        }
+    }
+}
+
+fn on_hover(
+    mut query: Query<
+        (
+            &WidgetId,
+            &Interaction,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (Changed<Interaction>, With<ComboButton>),
+    >,
+    combo_lists: Query<(&WidgetId, &Visibility), With<ComboList>>,
+    theme: Res<Theme>,
+) {
+    for (id, interaction, mut background_color, mut border_color) in &mut query {
+        let (_, visibility) = combo_lists
+            .iter()
+            .find(|(list_id, _)| id == *list_id)
+            .unwrap();
+
+        match (interaction, matches!(visibility, Visibility::Visible)) {
+            (Interaction::Hovered, _) | (_, true) => {
+                *background_color = BackgroundColor(theme.colors.background_secondary);
+                *border_color = BorderColor(theme.colors.border_highlight);
+            }
+            (Interaction::None, false) => {
+                *background_color = BackgroundColor(theme.colors.background_primary);
+                *border_color = BorderColor(theme.colors.border);
+            }
+            (Interaction::Pressed, false) => {}
         }
     }
 }
