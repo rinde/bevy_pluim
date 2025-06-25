@@ -4,6 +4,7 @@ use bevy::app::Update;
 use bevy::ecs::children;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
+use bevy::ecs::event::EventReader;
 use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::hierarchy::Children;
 use bevy::ecs::observer::Trigger;
@@ -14,6 +15,12 @@ use bevy::ecs::spawn::SpawnRelated;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::ButtonInput;
+use bevy::input::keyboard::KeyCode;
+use bevy::input::mouse::MouseScrollUnit;
+use bevy::input::mouse::MouseWheel;
+use bevy::picking::Pickable;
+use bevy::picking::hover::HoverMap;
 use bevy::platform::collections::HashMap;
 use bevy::text::TextColor;
 use bevy::text::TextFont;
@@ -26,7 +33,10 @@ use bevy::ui::GridAutoFlow;
 use bevy::ui::Interaction;
 use bevy::ui::JustifyContent;
 use bevy::ui::Node;
+use bevy::ui::Overflow;
+use bevy::ui::OverflowClipMargin;
 use bevy::ui::PositionType;
+use bevy::ui::ScrollPosition;
 use bevy::ui::UiRect;
 use bevy::ui::Val;
 use bevy::ui::widget::Button;
@@ -45,10 +55,17 @@ pub(crate) struct ListPlugin;
 
 impl Plugin for ListPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (selectable_items_hover, on_selection_change))
-            .add_observer(theme_items)
-            .add_observer(theme_lists)
-            .add_observer(theme_item_labels);
+        app.add_systems(
+            Update,
+            (
+                selectable_items_hover,
+                on_selection_change,
+                update_scroll_position,
+            ),
+        )
+        .add_observer(theme_items)
+        .add_observer(theme_lists)
+        .add_observer(theme_item_labels);
     }
 }
 
@@ -82,6 +99,11 @@ impl List {
             .map(move |(idx, option)| {
                 (
                     Button,
+                    // Allow scrolling
+                    Pickable {
+                        should_block_lower: false,
+                        ..default()
+                    },
                     Node {
                         width: Val::Percent(100.0),
                         height: Val::Px(36.0),
@@ -101,6 +123,8 @@ impl List {
             position_type: PositionType::Relative,
             display: Display::Grid,
             grid_auto_flow: GridAutoFlow::RowDense,
+            overflow: Overflow::scroll(),
+            overflow_clip_margin: OverflowClipMargin::padding_box(),
             ..default()
         };
         world
@@ -261,5 +285,35 @@ fn theme_item_labels(
     for (mut text_color, mut text_font) in &mut selectable_items_container {
         text_color.0 = theme.colors.text_primary;
         text_font.font_size = theme.font_size;
+    }
+}
+
+/// Updates the scroll position of scrollable nodes in response to mouse input
+pub fn update_scroll_position(
+    mut mouse_wheel_events: EventReader<MouseWheel>,
+    hover_map: Res<HoverMap>,
+    mut scrolled_node_query: Query<&mut ScrollPosition>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
+    for mouse_wheel_event in mouse_wheel_events.read() {
+        let (mut dx, mut dy) = match mouse_wheel_event.unit {
+            MouseScrollUnit::Line => (mouse_wheel_event.x * 21., mouse_wheel_event.y * 21.),
+            MouseScrollUnit::Pixel => (mouse_wheel_event.x, mouse_wheel_event.y),
+        };
+
+        if keyboard_input.pressed(KeyCode::ControlLeft)
+            || keyboard_input.pressed(KeyCode::ControlRight)
+        {
+            std::mem::swap(&mut dx, &mut dy);
+        }
+
+        for (_pointer, pointer_map) in hover_map.iter() {
+            for (entity, _hit) in pointer_map {
+                if let Ok(mut scroll_position) = scrolled_node_query.get_mut(*entity) {
+                    scroll_position.offset_x -= dx;
+                    scroll_position.offset_y -= dy;
+                }
+            }
+        }
     }
 }
