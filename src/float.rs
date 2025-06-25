@@ -29,19 +29,14 @@ impl Plugin for FloatPlugin {
 #[require(GlobalZIndex(1000), BoxShadow::default())]
 pub struct Float;
 
-impl Float {
-    pub const fn apply(&self, node: &mut Node) {
-        node.position_type = PositionType::Absolute;
-        node.width = Val::Percent(100.0);
-    }
-}
-
 fn on_theme_change(
     _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
-    mut query: Query<&mut BoxShadow, With<Float>>,
+    mut query: Query<(&mut Node, &mut BoxShadow), With<Float>>,
 ) {
-    for mut bs in &mut query {
+    for (mut node, mut bs) in &mut query {
+        node.position_type = PositionType::Absolute;
+        node.width = Val::Percent(100.0);
         *bs = BoxShadow::from(theme.large_shadow());
     }
 }

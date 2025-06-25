@@ -35,7 +35,6 @@ use bevy::utils::default;
 
 use crate::WidgetId;
 use crate::Widgets;
-use crate::float::Float;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
 
@@ -138,15 +137,12 @@ impl SelectableItems {
             .collect::<Vec<_>>();
         let children = Children::spawn(SpawnIter(children.into_iter()));
 
-        let mut node = Node {
+        let node = Node {
             position_type: PositionType::Relative,
             display: Display::Grid,
             grid_auto_flow: GridAutoFlow::RowDense,
             ..default()
         };
-        if let Some(float) = world.entity(context.entity).get::<Float>() {
-            float.apply(&mut node);
-        }
         world
             .commands()
             .entity(context.entity)
