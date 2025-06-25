@@ -8,7 +8,10 @@ use bevy::ecs::query::Changed;
 use bevy::ecs::query::Or;
 use bevy::ecs::query::With;
 use bevy::ecs::system::Query;
+use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::ButtonInput;
+use bevy::input::mouse::MouseButton;
 use bevy::prelude::SpawnRelated;
 use bevy::render::view::Visibility;
 use bevy::ui::FlexDirection;
@@ -34,8 +37,7 @@ pub struct ComboPlugin;
 
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
-        // TODO add detection for press outside
-        app.add_systems(Update, (on_press, on_change));
+        app.add_systems(Update, (on_press, on_change, close_combos_on_outside_click));
     }
 }
 
@@ -57,6 +59,9 @@ pub struct Combo;
 #[derive(Component, Debug, Copy, Clone)]
 pub struct ComboButton;
 
+#[derive(Component, Debug, Copy, Clone)]
+pub struct ComboList;
+
 impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let id = get_or_insert_id(&mut world, &context);
@@ -64,7 +69,7 @@ impl Combo {
             x.spawn((id, PushButton::new("Select.."), ComboButton));
             x.spawn((
                 Node { ..default() },
-                children![(id, List, Float, Visibility::Hidden,)],
+                children![(id, List, Float, Visibility::Hidden, ComboList)],
             ));
         });
     }
@@ -101,6 +106,27 @@ fn on_change(
                 }
                 break;
             }
+        }
+    }
+}
+
+/// System that closes the combo when clicking outside of it.
+fn close_combos_on_outside_click(
+    mouse_button: Res<ButtonInput<MouseButton>>,
+    combo_interactions: Query<&Interaction, Or<(With<ComboButton>, With<Item>)>>,
+    mut combo_lists: Query<&mut Visibility, With<ComboList>>,
+) {
+    if !mouse_button.just_pressed(MouseButton::Left) {
+        return;
+    }
+    // Check if click was on any combo button or item
+    let clicked_on_combobox = combo_interactions
+        .iter()
+        .any(|&interaction| interaction == Interaction::Pressed);
+
+    if !clicked_on_combobox {
+        for mut visibility in &mut combo_lists {
+            *visibility = Visibility::Hidden;
         }
     }
 }
