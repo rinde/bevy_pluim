@@ -8,9 +8,10 @@ use ui::WidgetsPlugin;
 use ui::combo2;
 use ui::combo3;
 use ui::float::Float;
+use ui::list::List;
 use ui::push_button::PushButton;
-use ui::selectable_items::SelectableItems;
-use ui::selectable_items::Selection;
+use ui::select::Select;
+use ui::select::Selection;
 use ui::theme::Theme;
 use ui::theme::ThemeChangedEvent;
 
@@ -52,15 +53,17 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 //    combo2::ComboButton
                 ]
             ),
-            SelectableItems::new(["hello", "who", "is", "there"]),
+            (Select::new(["hello", "who", "is", "there"]), List),
             (
                 Node {
                     width: Val::Px(200.0),
+                    left: Val::Px(-300.0),
                     ..default()
                 },
                 children![(
-                    SelectableItems::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
+                    Select::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
                     Selection(Some(1)),
+                    List,
                     Float
                 )]
             ),
@@ -69,8 +72,11 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 TextColor(theme.colors.text_primary),
                 HelloWorldLabel
             ),
-            combo3::Combo::new(["hello", "who", "is", "there"]),
-            combo3::Combo::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
+            (combo3::Combo, Select::new(["hello", "who", "is", "there"])),
+            (
+                combo3::Combo,
+                Select::new(["Netherlands", "Canada", "Indonesia", "Portugal"])
+            ),
             (PushButton::new("Change theme"), ThemeButton)
         ],
     ));

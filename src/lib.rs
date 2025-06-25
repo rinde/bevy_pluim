@@ -3,23 +3,25 @@ pub mod combo2;
 pub mod combo3;
 pub mod combobox;
 pub mod float;
+pub mod list;
 pub mod push_button;
-pub mod selectable_items;
+pub mod select;
 pub mod theme;
 
 use bevy::app::App;
 use bevy::app::Plugin;
 use bevy::app::Update;
 use bevy::ecs::component::Component;
+use bevy::ecs::component::HookContext;
+use bevy::ecs::query::With;
 use bevy::ecs::resource::Resource;
-use bevy::ecs::world::FromWorld;
-use bevy::ecs::world::World;
+use bevy::ecs::world::DeferredWorld;
 pub use combobox::*;
 
 use crate::combo3::ComboPlugin;
 use crate::float::FloatPlugin;
+use crate::list::ListPlugin;
 use crate::push_button::PushButtonPlugin;
-use crate::selectable_items::SelectableItemsPlugin;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
 use crate::theme::on_theme_change;
@@ -32,7 +34,7 @@ impl Plugin for WidgetsPlugin {
         app.init_resource::<Widgets>()
             .init_resource::<Theme>()
             .add_event::<ThemeChangedEvent>()
-            .add_plugins(SelectableItemsPlugin)
+            .add_plugins(ListPlugin)
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
@@ -56,11 +58,38 @@ impl Widgets {
 #[derive(Component, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(u32);
 
-impl FromWorld for WidgetId {
-    fn from_world(world: &mut World) -> Self {
-        let mut widgets = world
-            .get_resource_mut::<Widgets>()
-            .expect("No Widgets resource found");
-        widgets.next_id()
+/// Checks for the existence of a component on an entity or a another entity
+/// with the same `WidgetId`
+#[must_use]
+pub fn get_anywhere<'a, T: Component>(
+    world: &'a DeferredWorld,
+    context: &HookContext,
+    id: WidgetId,
+) -> Option<&'a T> {
+    let same = world.entity(context.entity).get::<T>();
+    if same.is_some() {
+        return same;
     }
+    let state = world.try_query_filtered::<(&WidgetId, &T), With<T>>();
+    state
+        .and_then(|mut s| {
+            s.iter(world)
+                .find(|(component_id, _)| (**component_id == id))
+        })
+        .map(|(_, comp)| comp)
+}
+
+pub fn get_or_insert_id(world: &mut DeferredWorld, context: &HookContext) -> WidgetId {
+    world
+        .entity(context.entity)
+        .get::<WidgetId>()
+        .copied()
+        .unwrap_or_else(|| {
+            let mut widgets = world
+                .get_resource_mut::<Widgets>()
+                .expect("Missing Widgets resource, make sure the WidgetsPlugin is added");
+            let id = widgets.next_id();
+            world.commands().entity(context.entity).insert(id);
+            id
+        })
 }

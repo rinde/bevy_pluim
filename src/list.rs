@@ -34,91 +34,50 @@ use bevy::ui::widget::Text;
 use bevy::utils::default;
 
 use crate::WidgetId;
-use crate::Widgets;
+use crate::get_anywhere;
+use crate::get_or_insert_id;
+use crate::select::Select;
+use crate::select::Selection;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
 
-pub(crate) struct SelectableItemsPlugin;
+pub(crate) struct ListPlugin;
 
-impl Plugin for SelectableItemsPlugin {
+impl Plugin for ListPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (selectable_items_hover, on_selection_change))
-            .add_observer(theme_item)
-            .add_observer(theme_selectable_items)
-            .add_observer(theme_item_label);
+            .add_observer(theme_items)
+            .add_observer(theme_lists)
+            .add_observer(theme_item_labels);
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Copy, Clone)]
 #[component(on_add = Self::on_add)]
-pub struct SelectableItems {
-    pub(crate) items: Vec<String>,
-}
-
-impl SelectableItems {
-    #[must_use]
-    pub fn new(options: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        Self {
-            items: options.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct Selection(pub Option<usize>);
+pub struct List;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct ItemLabel;
 
-impl SelectableItems {
+impl List {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        // insert WidgetId if it doesn't exist
-        let id = world
-            .entity(context.entity)
-            .get::<WidgetId>()
-            .copied()
-            .unwrap_or_else(|| {
-                let mut widgets = world
-                    .get_resource_mut::<Widgets>()
-                    .expect("SelectableItems requires Widgets resource");
-                let id = widgets.next_id();
-                world.commands().entity(context.entity).insert(id);
-                id
-            });
+        let id = get_or_insert_id(&mut world, &context);
 
-        println!("Add SelectableItems component {id:?}");
-
-        // use existing selection if it exists, or query it from any of its parents or
-        // default to None
-        if world.entity(context.entity).get::<Selection>().is_none() {
-            let state = world.try_query_filtered::<&WidgetId, With<Selection>>();
-            let has_selection =
-                state.is_some_and(|mut s| s.iter(&world).any(|selection_id| (selection_id == &id)));
-
-            if !has_selection {
-                world
-                    .commands()
-                    .entity(context.entity)
-                    .insert(Selection(None));
-            }
-        }
-
-        let Some(selectable_items) = world
-            .entity(context.entity)
-            .get::<SelectableItems>()
-            .cloned()
-        else {
-            panic!("SelectableItems is in an invalid state");
+        let items = if let Some(existing_select) = get_anywhere::<Select>(&world, &context, id) {
+            existing_select.items.as_slice()
+        } else {
+            let new_select = Select { items: Vec::new() };
+            world.commands().entity(context.entity).insert(new_select);
+            &[]
         };
 
         assert!(
             world.entity(context.entity).get::<Node>().is_none(),
-            "Cannot override Node for SelectableItems"
+            "Cannot override Node for List"
         );
 
-        let children = selectable_items
-            .items
-            .into_iter()
+        let children = items
+            .iter()
             .enumerate()
             .map(move |(idx, option)| {
                 (
@@ -131,12 +90,13 @@ impl SelectableItems {
                         ..default()
                     },
                     Item { index: idx },
-                    children![(Text(option), ItemLabel)],
+                    children![(Text(option.clone()), ItemLabel)],
                 )
             })
             .collect::<Vec<_>>();
         let children = Children::spawn(SpawnIter(children.into_iter()));
 
+        // TODO allow options to set max size and scroll if contents don't fit
         let node = Node {
             position_type: PositionType::Relative,
             display: Display::Grid,
@@ -159,10 +119,10 @@ pub(crate) struct Item {
 impl Item {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let Some(parent) = world.entity(context.entity).get::<ChildOf>() else {
-            panic!("SelectableItem must be a child of an entity");
+            panic!("Item must be a child of an entity");
         };
         let Some(&parent_id) = world.entity(parent.0).get::<WidgetId>() else {
-            panic!("SelectableItem must be a child of an entity with a WidgetId");
+            panic!("Item must be a child of an entity with a WidgetId");
         };
         world.commands().entity(context.entity).insert(parent_id);
     }
@@ -181,7 +141,7 @@ fn selectable_items_hover(
             .iter_mut()
             .find_map(|(sc, id)| (id == widget_id).then_some(sc))
         else {
-            panic!("Found a SelectableItem without a SelectableItems");
+            panic!("Found a Item {item:?} {widget_id:?} without a Selection");
         };
 
         match (*interaction, selection.0) {
@@ -223,7 +183,7 @@ fn on_selection_change(
     }
 }
 
-fn theme_item(
+fn theme_items(
     _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
     mut items: Query<(
@@ -233,25 +193,28 @@ fn theme_item(
         &WidgetId,
         &Item,
     )>,
-    containers: Query<(&WidgetId, &Selection, &SelectableItems)>,
+    model: Query<(&WidgetId, &Selection, &Select)>,
 ) {
+    #[derive(Debug)]
     struct State {
         selection: Option<usize>,
         num_items: usize,
     }
     let mut map = HashMap::new();
-    containers.iter().for_each(|(id, selection, items)| {
+    model.iter().for_each(|(id, selection, select)| {
         map.insert(
             *id,
             State {
                 selection: selection.0,
-                num_items: items.items.len(),
+                num_items: select.items.len(),
             },
         );
     });
 
     for (mut node, mut bg, mut br, id, item) in &mut items {
-        let items_state = map.get(id).unwrap();
+        let items_state = map.get(id).unwrap_or_else(|| {
+            panic!("Found a Item {item:?} {id:?} without a state");
+        });
         if items_state.selection == Some(item.index) {
             bg.0 = theme.colors.selected_item;
         } else {
@@ -269,20 +232,20 @@ fn theme_item(
     }
 }
 
-fn theme_selectable_items(
+fn theme_lists(
     _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
-    mut selectable_items_container: Query<
+    mut lists: Query<
         (
             &mut Node,
             &mut BackgroundColor,
             &mut BorderColor,
             &mut BorderRadius,
         ),
-        With<SelectableItems>,
+        With<List>,
     >,
 ) {
-    for (mut node, mut bg, mut bc, mut br) in &mut selectable_items_container {
+    for (mut node, mut bg, mut bc, mut br) in &mut lists {
         node.border = UiRect::all(theme.border_thickness);
         bg.0 = theme.colors.background_primary;
         bc.0 = theme.colors.border;
@@ -290,7 +253,7 @@ fn theme_selectable_items(
     }
 }
 
-fn theme_item_label(
+fn theme_item_labels(
     _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
     mut selectable_items_container: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,

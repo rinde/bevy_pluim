@@ -20,17 +20,14 @@ use bevy::ui::widget::Text;
 use bevy::utils::default;
 
 use crate::WidgetId;
-use crate::Widgets;
 use crate::float::Float;
+use crate::get_or_insert_id;
+use crate::list::Item;
+use crate::list::List;
 use crate::push_button::PushButton;
 use crate::push_button::PushButtonLabel;
-use crate::selectable_items::Item;
-use crate::selectable_items::SelectableItems;
-use crate::selectable_items::Selection;
-
-// TODO distinguish between
-// (Select::new(["opt1", "opt2", "opt3"]), Combo)
-// (Select::new(["opt1", "opt2", "opt3"]), List)
+use crate::select::Select;
+use crate::select::Selection;
 
 #[derive(Debug, Copy, Clone)]
 pub struct ComboPlugin;
@@ -42,7 +39,7 @@ impl Plugin for ComboPlugin {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Copy)]
 #[component(on_add=Self::on_add)]
 #[require(
     Node {
@@ -51,46 +48,23 @@ impl Plugin for ComboPlugin {
         position_type: PositionType::Relative,
         ..default()
     },
-    // Selection::default(),
+    Selection::default(),
+    Select::default(),
 )
 ]
-// TODO can we avoid state duplication?
-pub struct Combo(Vec<String>);
-
-impl Combo {
-    pub fn new(items: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        Self(items.into_iter().map(Into::into).collect())
-    }
-}
+pub struct Combo;
 
 #[derive(Component, Debug, Copy, Clone)]
 pub struct ComboButton;
 
 impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        // insert WidgetId if it doesn't exist
-        let id = world
-            .entity(context.entity)
-            .get::<WidgetId>()
-            .copied()
-            .unwrap_or_else(|| {
-                let mut widgets = world
-                    .get_resource_mut::<Widgets>()
-                    .expect("SelectableItems requires Widgets resource");
-                let id = widgets.next_id();
-                world.commands().entity(context.entity).insert(id);
-                id
-            });
-
-        let Some(Combo(items)) = world.entity(context.entity).get::<Combo>().cloned() else {
-            panic!("Combo requires Combo component");
-        };
-
+        let id = get_or_insert_id(&mut world, &context);
         world.commands().entity(context.entity).with_children(|x| {
             x.spawn((id, PushButton::new("Select.."), ComboButton));
             x.spawn((
                 Node { ..default() },
-                children![(id, SelectableItems::new(items), Float, Visibility::Hidden,)],
+                children![(id, List, Float, Visibility::Hidden,)],
             ));
         });
     }
@@ -101,7 +75,7 @@ fn on_press(
         (&Interaction, &WidgetId),
         (Changed<Interaction>, Or<(With<ComboButton>, With<Item>)>),
     >,
-    mut items: Query<(&WidgetId, &mut Visibility), (With<SelectableItems>, With<Float>)>,
+    mut items: Query<(&WidgetId, &mut Visibility), (With<List>, With<Float>)>,
 ) {
     for (inter, id) in combo_buttons {
         if let Interaction::Pressed = inter {
@@ -116,7 +90,7 @@ fn on_press(
 }
 
 fn on_change(
-    changed_selections: Query<(&Selection, &WidgetId, &SelectableItems), Changed<Selection>>,
+    changed_selections: Query<(&Selection, &WidgetId, &Select), Changed<Selection>>,
     mut labels: Query<(&WidgetId, &mut Text), With<PushButtonLabel>>,
 ) {
     for (selection, id, items) in changed_selections {
