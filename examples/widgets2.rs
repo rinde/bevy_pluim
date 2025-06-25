@@ -77,7 +77,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 combo3::Combo,
                 Select::new(["Netherlands", "Canada", "Indonesia", "Portugal"])
             ),
-            (PushButton::new("Change theme"), ThemeButton)
+            (PushButton::from_label("Change theme"), ThemeButton)
         ],
     ));
 }

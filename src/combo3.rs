@@ -75,7 +75,12 @@ impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let id = get_or_insert_id(&mut world, &context);
         world.commands().entity(context.entity).with_children(|x| {
-            x.spawn((id, PushButton::new("Select.."), ComboButton, NoDefaultHover));
+            x.spawn((
+                id,
+                PushButton::new("Select..", "\\/"),
+                ComboButton,
+                NoDefaultHover,
+            ));
             x.spawn((
                 Node { ..default() },
                 children![(id, List, Float, Visibility::Hidden, ComboList)],
@@ -106,6 +111,8 @@ fn on_press(
 fn on_change(
     changed_selections: Query<(&Selection, &WidgetId, &Select), Changed<Selection>>,
     mut labels: Query<(&WidgetId, &mut Text), With<PushButtonLabel>>,
+    mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
+    theme: Res<Theme>,
 ) {
     for (selection, id, items) in changed_selections {
         for (item_id, mut text) in &mut labels {
@@ -115,6 +122,12 @@ fn on_change(
                 }
                 break;
             }
+        }
+    }
+    if !changed_selections.is_empty() {
+        for (mut background_color, mut border_color) in &mut combo_buttons {
+            *background_color = BackgroundColor(theme.colors.background_primary);
+            *border_color = BorderColor(theme.colors.border);
         }
     }
 }
@@ -141,7 +154,7 @@ fn close_combos_on_outside_click(
 }
 
 fn on_hover(
-    mut query: Query<
+    mut combo_buttons: Query<
         (
             &WidgetId,
             &Interaction,
@@ -153,7 +166,7 @@ fn on_hover(
     combo_lists: Query<(&WidgetId, &Visibility), With<ComboList>>,
     theme: Res<Theme>,
 ) {
-    for (id, interaction, mut background_color, mut border_color) in &mut query {
+    for (id, interaction, mut background_color, mut border_color) in &mut combo_buttons {
         let (_, visibility) = combo_lists
             .iter()
             .find(|(list_id, _)| id == *list_id)

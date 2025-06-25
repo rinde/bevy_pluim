@@ -115,8 +115,8 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     border: Color::Srgba(GRAY_600),
     border_highlight: Color::Srgba(BLUE_800),
     text_primary: Color::Srgba(GRAY_100),
-    large_shadow: SHADOW_LG,
-    small_shadow: SHADOW_SM,
+    large_shadow: SHADOW_LG_DARK_MODE,
+    small_shadow: SHADOW_SM_DARK_MODE,
 };
 
 pub(crate) fn on_theme_change(theme: Res<Theme>, mut commands: Commands) {
@@ -129,3 +129,6 @@ pub const SHADOW_SM: Color = Color::srgba(0.0, 0.0, 0.0, 0.05);
 pub const SHADOW_MD: Color = Color::srgba(0.0, 0.0, 0.0, 0.1);
 pub const SHADOW_LG: Color = Color::srgba(0.0, 0.0, 0.0, 0.15);
 pub const SHADOW_XL: Color = Color::srgba(0.0, 0.0, 0.0, 0.25);
+
+pub const SHADOW_SM_DARK_MODE: Color = Color::srgba(1.0, 1.0, 1.0, 0.03);
+pub const SHADOW_LG_DARK_MODE: Color = Color::srgba(1.0, 1.0, 1.0, 0.05);
