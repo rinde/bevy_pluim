@@ -1,7 +1,8 @@
-pub mod colors;
-pub mod combo2;
-pub mod combo3;
-pub mod combobox;
+#![expect(
+    clippy::type_complexity,
+    reason = "Query types can be complex without being difficult to understand"
+)]
+pub mod combo;
 pub mod float;
 pub mod list;
 pub mod push_button;
@@ -16,9 +17,8 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::query::With;
 use bevy::ecs::resource::Resource;
 use bevy::ecs::world::DeferredWorld;
-pub use combobox::*;
 
-use crate::combo3::ComboPlugin;
+use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::list::ListPlugin;
 use crate::push_button::PushButtonPlugin;

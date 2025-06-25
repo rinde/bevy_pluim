@@ -1,27 +1,36 @@
+use bevy::DefaultPlugins;
+use bevy::app::App;
+use bevy::app::Startup;
+use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use ui::colors::BG_SECONDARY;
-use ui::colors::TEXT_PRIMARY;
-use ui::combobox::Combo;
-use ui::combobox::ComboBoxConfig;
-use ui::combobox::ComboBoxPlugin;
-use ui::combobox::Widgets;
+use bevy::ui::UiDebugOptions;
+use ui::WidgetsPlugin;
+use ui::combo::Combo;
+use ui::float::Float;
+use ui::list::List;
+use ui::push_button::PushButton;
+use ui::select::Select;
+use ui::select::Selection;
+use ui::theme::Theme;
+use ui::theme::ThemeChangedEvent;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(WidgetsPlugin)
         .insert_resource(UiDebugOptions {
             enabled: false,
-            // `UiDebugOptions` has a few new options, but for now we'll leave the defaults.
-            ..default()
+            line_width: 1.0,
+            show_hidden: false,
+            show_clipped: false,
         })
-        .add_plugins(ComboBoxPlugin)
+        .add_systems(Update, on_press)
         .add_systems(Startup, setup)
-        .add_systems(Update, events)
+        .add_observer(update_theme)
         .run();
 }
 
-fn setup(mut commands: Commands, mut widgets: ResMut<Widgets>) {
-    // Camera
+fn setup(mut commands: Commands, theme: Res<Theme>) {
     commands.spawn(Camera2d);
 
     // Root container
@@ -29,63 +38,73 @@ fn setup(mut commands: Commands, mut widgets: ResMut<Widgets>) {
         Node {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
-            justify_content: JustifyContent::Center,
+            justify_content: JustifyContent::SpaceEvenly,
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Column,
             ..default()
         },
-        BackgroundColor(BG_SECONDARY),
+        BackgroundColor(theme.colors.background_primary),
+        Root,
         children![
+            (Select::new(["hello", "who", "is", "there"]), List),
             (
-                Text("Select Component".to_string()),
-                TextFont {
-                    font_size: 28.0,
+                Node {
+                    width: Val::Px(200.0),
+                    left: Val::Px(-300.0),
                     ..default()
                 },
-                TextColor(TEXT_PRIMARY),
-            ),
-            // spacing
-            Node {
-                height: Val::Px(40.0),
-                ..default()
-            },
-            (
-                CountryComboBox,
-                widgets.combobox(ComboBoxConfig {
-                    label: Some("Country".to_string()),
-                    options: vec![
-                        "NL".to_string(),
-                        "PT".to_string(),
-                        "ID".to_string(),
-                        "CA".to_string(),
-                    ],
-                    ..default()
-                })
+                children![(
+                    Select::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
+                    Selection(Some(1)),
+                    List,
+                    Float
+                )]
             ),
             (
-                ContinentComboBox,
-                widgets.combobox(ComboBoxConfig {
-                    label: Some("Continent".to_string()),
-                    options: vec![
-                        "Europe".to_string(),
-                        "Asia".to_string(),
-                        "North-America".to_string(),
-                    ],
-                    ..default()
-                })
-            )
+                Text::new("Hello, World!"),
+                TextColor(theme.colors.text_primary),
+                HelloWorldLabel
+            ),
+            (Combo, Select::new(["hello", "who", "is", "there"])),
+            (
+                Combo,
+                Select::new(["Netherlands", "Canada", "Indonesia", "Portugal"])
+            ),
+            (PushButton::from_label("Change theme"), ThemeButton)
         ],
     ));
 }
 
 #[derive(Component)]
-struct CountryComboBox;
+struct ThemeButton;
+
+type ExactlyOne<'w, D, F = ()> = Option<Single<'w, D, F>>;
+
+fn on_press(
+    button: ExactlyOne<&Interaction, (Changed<Interaction>, With<ThemeButton>)>,
+    mut theme: ResMut<Theme>,
+) {
+    if button.is_some_and(|b| **b == Interaction::Pressed) {
+        theme.light_dark_toggle();
+    }
+}
 
 #[derive(Component)]
-struct ContinentComboBox;
+struct Root;
 
-fn events(country_query: Query<&Combo, (With<CountryComboBox>, Changed<Combo>)>) {
-    for x in country_query {
-        println!("Country selected: {:?}", x.selected_text());
+#[derive(Component)]
+struct HelloWorldLabel;
+
+fn update_theme(
+    _: Trigger<ThemeChangedEvent>,
+    theme: Res<Theme>,
+    mut background: Query<&mut BackgroundColor, With<Root>>,
+    mut hello_world: Query<&mut TextColor, With<HelloWorldLabel>>,
+) {
+    for mut background_color in &mut background {
+        background_color.0 = theme.colors.background_primary;
+    }
+    for mut text_color in &mut hello_world {
+        text_color.0 = theme.colors.text_primary;
     }
 }
