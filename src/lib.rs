@@ -21,6 +21,7 @@ use bevy::ecs::resource::Resource;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::EntityCommands;
 use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::world::EntityWorldMut;
 use bevy::picking::events::Out;
 use bevy::picking::events::Over;
 use bevy::picking::events::Pointer;
@@ -153,6 +154,16 @@ trait EntityCommandsExt {
 }
 
 impl EntityCommandsExt for EntityCommands<'_> {
+    fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
+        self.observe(observer_transformer::<Over>)
+            .observe(observer_transformer::<Pressed>)
+            .observe(observer_transformer::<Released>)
+            .observe(observer_transformer::<Out>);
+        self
+    }
+}
+
+impl EntityCommandsExt for EntityWorldMut<'_> {
     fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
         self.observe(observer_transformer::<Over>)
             .observe(observer_transformer::<Pressed>)

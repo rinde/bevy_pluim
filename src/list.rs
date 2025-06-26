@@ -10,8 +10,9 @@ use bevy::ecs::hierarchy::Children;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
 use bevy::ecs::query::With;
-use bevy::ecs::spawn::SpawnIter;
+use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnRelated;
+use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
@@ -30,7 +31,6 @@ use bevy::ui::BorderColor;
 use bevy::ui::BorderRadius;
 use bevy::ui::Display;
 use bevy::ui::GridAutoFlow;
-use bevy::ui::Interaction;
 use bevy::ui::JustifyContent;
 use bevy::ui::Node;
 use bevy::ui::Overflow;
@@ -43,6 +43,8 @@ use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
 
+use crate::EntityCommandsExt;
+use crate::MouseEvent;
 use crate::WidgetId;
 use crate::get_anywhere;
 use crate::get_or_insert_id;
@@ -55,17 +57,10 @@ pub(crate) struct ListPlugin;
 
 impl Plugin for ListPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                selectable_items_hover,
-                on_selection_change,
-                update_scroll_position,
-            ),
-        )
-        .add_observer(theme_items)
-        .add_observer(theme_lists)
-        .add_observer(theme_item_labels);
+        app.add_systems(Update, (on_selection_change, update_scroll_position))
+            .add_observer(theme_items)
+            .add_observer(theme_lists)
+            .add_observer(theme_item_labels);
     }
 }
 
@@ -81,11 +76,11 @@ impl List {
         let id = get_or_insert_id(&mut world, &context);
 
         let items = if let Some(existing_select) = get_anywhere::<Select>(&world, &context, id) {
-            existing_select.items.as_slice()
+            existing_select.items.clone()
         } else {
             let new_select = Select { items: Vec::new() };
             world.commands().entity(context.entity).insert(new_select);
-            &[]
+            vec![]
         };
 
         assert!(
@@ -93,30 +88,30 @@ impl List {
             "Cannot override Node for List"
         );
 
-        let children = items
-            .iter()
-            .enumerate()
-            .map(move |(idx, option)| {
-                (
-                    Button,
-                    // Allow scrolling
-                    Pickable {
-                        should_block_lower: false,
-                        ..default()
-                    },
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(36.0),
-                        justify_content: JustifyContent::FlexStart,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    Item { index: idx },
-                    children![(Text(option.clone()), ItemLabel)],
-                )
-            })
-            .collect::<Vec<_>>();
-        let children = Children::spawn(SpawnIter(children.into_iter()));
+        let children = Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<ChildOf>| {
+            for (i, option) in items.into_iter().enumerate() {
+                parent
+                    .spawn((
+                        Button,
+                        // Allow scrolling
+                        Pickable {
+                            should_block_lower: false,
+                            ..default()
+                        },
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(36.0),
+                            justify_content: JustifyContent::FlexStart,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        Item { index: i },
+                        children![(Text(option), ItemLabel, Pickable::IGNORE)],
+                    ))
+                    .observe_and_transform_mouse_events()
+                    .observe(hover);
+            }
+        }));
 
         // TODO allow options to set max size and scroll if contents don't fit
         let node = Node {
@@ -152,38 +147,42 @@ impl Item {
     }
 }
 
-fn selectable_items_hover(
-    mut interaction_query: Query<
-        (&Interaction, &mut BackgroundColor, &mut Item, &WidgetId),
-        Changed<Interaction>,
-    >,
-    mut selectable_items_query: Query<(&mut Selection, &WidgetId)>,
+fn hover(
+    t: Trigger<MouseEvent>,
+    mut selections: Query<&mut Selection>,
+    parents: Query<&ChildOf>,
+    mut items: Query<(&Item, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
-    for (interaction, mut background_color, item, widget_id) in &mut interaction_query {
-        let Some(mut selection) = selectable_items_query
-            .iter_mut()
-            .find_map(|(sc, id)| (id == widget_id).then_some(sc))
-        else {
-            panic!("Found a Item {item:?} {widget_id:?} without a Selection");
-        };
+    let (item, mut background_color) = items.get_mut(t.target()).unwrap();
+    let mut target = t.target();
+    // TODO this loop can be avoided by keeping track of the selection entity
+    loop {
+        if selections.contains(target) {
+            break;
+        }
+        target = parents.get(target).unwrap().0;
+    }
+    let mut selection = selections.get_mut(target).unwrap();
 
-        match (*interaction, selection.0) {
-            (Interaction::Hovered, Some(x)) if x == item.index => {
-                background_color.0 = theme.colors.selected_hovered_item;
-            }
-            (Interaction::Hovered, _) => {
-                background_color.0 = theme.colors.hovered_item;
-            }
-            (Interaction::None, Some(x)) if x == item.index => {
-                background_color.0 = theme.colors.selected_item;
-            }
-            (Interaction::None, _) => {
-                background_color.0 = theme.colors.background_primary;
-            }
-            (Interaction::Pressed, _) => {
-                selection.0 = Some(item.index);
-            }
+    match (t.event(), selection.0) {
+        (MouseEvent::Pressed, _) => {
+            background_color.0 = theme.colors.selected_hovered_item;
+        }
+        (MouseEvent::Over, Some(x)) if x == item.index => {
+            background_color.0 = theme.colors.selected_hovered_item;
+        }
+        (MouseEvent::Over, _) => {
+            background_color.0 = theme.colors.hovered_item;
+        }
+        (MouseEvent::Out, Some(x)) if x == item.index => {
+            background_color.0 = theme.colors.selected_item;
+        }
+        (MouseEvent::Out, _) => {
+            background_color.0 = theme.colors.background_primary;
+        }
+        (MouseEvent::Released, _) => {
+            selection.0 = Some(item.index);
         }
     }
 }
@@ -199,7 +198,7 @@ fn on_selection_change(
             .filter(|(_, _, id)| *id == widget_id)
         {
             if selection.0 == Some(item.index) {
-                bg.0 = theme.colors.selected_item;
+                bg.0 = theme.colors.selected_item; // TODO when this is the item that is actively being hovered than this is not the correct color
             } else {
                 bg.0 = theme.colors.background_primary;
             }

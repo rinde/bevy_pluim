@@ -136,6 +136,7 @@ fn close_combos_on_outside_click(
     combo_interactions: Query<&Interaction, Or<(With<ComboButton>, With<Item>)>>,
     mut combo_lists: Query<&mut Visibility, With<ComboList>>,
 ) {
+    // TODO fix this, it's not working correctly
     if !mouse_button.just_pressed(MouseButton::Left) {
         return;
     }
