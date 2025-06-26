@@ -1,14 +1,19 @@
 use bevy::app::Plugin;
-use bevy::app::Update;
+use bevy::color::Color;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::Changed;
 use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::picking::Pickable;
+use bevy::picking::events::Out;
+use bevy::picking::events::Over;
+use bevy::picking::events::Pointer;
+use bevy::picking::events::Pressed;
+use bevy::picking::events::Released;
+use bevy::reflect::Reflect;
 use bevy::text::TextColor;
 use bevy::text::TextFont;
 use bevy::ui::AlignItems;
@@ -16,7 +21,6 @@ use bevy::ui::BackgroundColor;
 use bevy::ui::BorderColor;
 use bevy::ui::BorderRadius;
 use bevy::ui::BoxShadow;
-use bevy::ui::Interaction;
 use bevy::ui::JustifyContent;
 use bevy::ui::Node;
 use bevy::ui::UiRect;
@@ -27,14 +31,14 @@ use bevy::utils::default;
 use crate::WidgetId;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
+use crate::theme::ThemeColors;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PushButtonPlugin;
 
 impl Plugin for PushButtonPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_systems(Update, on_hover)
-            .add_observer(theme_push_button)
+        app.add_observer(theme_push_button)
             .add_observer(theme_push_button_label)
             .add_observer(theme_push_button_icon);
     }
@@ -47,7 +51,8 @@ impl Plugin for PushButtonPlugin {
         justify_content: JustifyContent::SpaceBetween,
         align_items: AlignItems::Center,
         ..default()
-    })]
+    }
+)]
 pub struct PushButton {
     label: String,
     icon: Option<String>,
@@ -80,13 +85,28 @@ impl PushButton {
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let pb = world.entity(context.entity).get::<PushButton>().unwrap();
-        let icon = pb.icon.as_ref().map(|s| (Text::new(s), PushButtonIcon));
+        let icon = pb
+            .icon
+            .as_ref()
+            .map(|s| (Text::new(s), PushButtonIcon, Pickable::IGNORE));
 
         let entity = world.entity(context.entity);
         let button = entity.get::<PushButton>().unwrap();
-        let label = (Text::new(&button.label), PushButtonLabel);
+        let label = (Text::new(&button.label), PushButtonLabel, Pickable::IGNORE);
 
-        world.commands().entity(context.entity).insert(Button);
+        let default_hover = !entity.contains::<NoDefaultHover>();
+
+        let mut commands = world.commands();
+        let mut entity_commands = commands.entity(context.entity);
+        entity_commands.insert(Button); //.observe(observe_click);
+
+        if default_hover {
+            entity_commands
+                .observe(observer::<Over>(|colors| colors.hovered_item))
+                .observe(observer::<Pressed>(|colors| colors.selected_hovered_item))
+                .observe(observer::<Released>(|colors| colors.selected_item))
+                .observe(observer::<Out>(|colors| colors.background_primary));
+        }
         if let Some(&id) = world.entity(context.entity).get::<WidgetId>() {
             world
                 .commands()
@@ -111,24 +131,16 @@ impl PushButton {
     }
 }
 
-fn on_hover(
-    mut query: Query<
-        (&Interaction, &mut BackgroundColor, &PushButton),
-        (Changed<Interaction>, Without<NoDefaultHover>),
-    >,
-    theme: Res<Theme>,
-) {
-    for (interaction, mut background_color, _) in &mut query {
-        match interaction {
-            Interaction::Hovered => {
-                *background_color = BackgroundColor(theme.colors.hovered_item);
-            }
-            Interaction::None => {
-                *background_color = BackgroundColor(theme.colors.background_primary);
-            }
-            Interaction::Pressed => {
-                *background_color = BackgroundColor(theme.colors.selected_item);
-            }
+/// Creates an observer for a given event type that changes the background color
+/// of a widget.
+fn observer<E: std::fmt::Debug + Clone + Reflect>(
+    color: impl Fn(&ThemeColors) -> Color,
+) -> impl Fn(Trigger<Pointer<E>>, Res<Theme>, Query<&mut BackgroundColor>) {
+    move |trigger: Trigger<Pointer<E>>,
+          theme: Res<Theme>,
+          mut query: Query<&mut BackgroundColor>| {
+        if let Ok(mut background_color) = query.get_mut(trigger.target) {
+            *background_color = BackgroundColor(color(&theme.colors));
         }
     }
 }
