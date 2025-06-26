@@ -1,5 +1,4 @@
 use bevy::app::Plugin;
-use bevy::color::Color;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::observer::Trigger;
@@ -8,12 +7,6 @@ use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::Pickable;
-use bevy::picking::events::Out;
-use bevy::picking::events::Over;
-use bevy::picking::events::Pointer;
-use bevy::picking::events::Pressed;
-use bevy::picking::events::Released;
-use bevy::reflect::Reflect;
 use bevy::text::TextColor;
 use bevy::text::TextFont;
 use bevy::ui::AlignItems;
@@ -28,10 +21,11 @@ use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
 
+use crate::EntityCommandsExt;
+use crate::MouseEvent;
 use crate::WidgetId;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
-use crate::theme::ThemeColors;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PushButtonPlugin;
@@ -102,10 +96,8 @@ impl PushButton {
 
         if default_hover {
             entity_commands
-                .observe(observer::<Over>(|colors| colors.hovered_item))
-                .observe(observer::<Pressed>(|colors| colors.selected_hovered_item))
-                .observe(observer::<Released>(|colors| colors.selected_item))
-                .observe(observer::<Out>(|colors| colors.background_primary));
+                .observe_and_transform_mouse_events()
+                .observe(handle_hover);
         }
         if let Some(&id) = world.entity(context.entity).get::<WidgetId>() {
             world
@@ -131,18 +123,18 @@ impl PushButton {
     }
 }
 
-/// Creates an observer for a given event type that changes the background color
-/// of a widget.
-fn observer<E: std::fmt::Debug + Clone + Reflect>(
-    color: impl Fn(&ThemeColors) -> Color,
-) -> impl Fn(Trigger<Pointer<E>>, Res<Theme>, Query<&mut BackgroundColor>) {
-    move |trigger: Trigger<Pointer<E>>,
-          theme: Res<Theme>,
-          mut query: Query<&mut BackgroundColor>| {
-        if let Ok(mut background_color) = query.get_mut(trigger.target) {
-            *background_color = BackgroundColor(color(&theme.colors));
-        }
-    }
+fn handle_hover(
+    trigger: Trigger<MouseEvent>,
+    mut query: Query<&mut BackgroundColor>,
+    theme: Res<Theme>,
+) {
+    let color = match trigger.event() {
+        MouseEvent::Over => theme.colors.hovered_item,
+        MouseEvent::Pressed => theme.colors.selected_hovered_item,
+        MouseEvent::Released => theme.colors.selected_item,
+        MouseEvent::Out => theme.colors.background_primary,
+    };
+    *query.get_mut(trigger.target()).unwrap() = BackgroundColor(color);
 }
 
 fn theme_push_button(

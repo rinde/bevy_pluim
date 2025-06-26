@@ -4,6 +4,8 @@ use bevy::app::Startup;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
+use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use ui::WidgetsPlugin;
 use ui::combo::Combo;
 use ui::float::Float;
@@ -18,13 +20,17 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
+        .add_plugins(EguiPlugin {
+            enable_multipass_for_primary_context: false,
+        })
+        .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(UiDebugOptions {
             enabled: false,
             line_width: 1.0,
             show_hidden: false,
             show_clipped: false,
         })
-        .add_systems(Update, on_press)
+        .add_observer(on_press)
         .add_systems(Startup, setup)
         .add_observer(update_theme)
         .run();
@@ -70,7 +76,8 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 Combo,
                 Select::new(["Netherlands", "Canada", "Indonesia", "Portugal", "Belgium"])
             ),
-            (PushButton::from_label("Change theme"), ThemeButton)
+            (PushButton::from_label("Change theme"), ThemeButton),
+            PushButton::from_label("This does nothing")
         ],
     ));
 }
@@ -78,13 +85,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 #[derive(Component)]
 struct ThemeButton;
 
-type ExactlyOne<'w, D, F = ()> = Option<Single<'w, D, F>>;
-
 fn on_press(
-    button: ExactlyOne<&Interaction, (Changed<Interaction>, With<ThemeButton>)>,
+    trigger: Trigger<Pointer<Released>>,
+    button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.is_some_and(|b| **b == Interaction::Pressed) {
+    if button.get(trigger.target()).is_ok() {
         theme.light_dark_toggle();
     }
 }

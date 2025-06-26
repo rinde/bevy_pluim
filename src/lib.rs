@@ -14,9 +14,19 @@ use bevy::app::Plugin;
 use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
+use bevy::ecs::event::Event;
+use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::resource::Resource;
+use bevy::ecs::system::Commands;
+use bevy::ecs::system::EntityCommands;
 use bevy::ecs::world::DeferredWorld;
+use bevy::picking::events::Out;
+use bevy::picking::events::Over;
+use bevy::picking::events::Pointer;
+use bevy::picking::events::Pressed;
+use bevy::picking::events::Released;
+use bevy::reflect::Reflect;
 
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
@@ -92,4 +102,62 @@ pub fn get_or_insert_id(world: &mut DeferredWorld, context: &HookContext) -> Wid
             world.commands().entity(context.entity).insert(id);
             id
         })
+}
+
+#[derive(Event, Copy, Clone, Debug)]
+enum MouseEvent {
+    Over,
+    Pressed,
+    Released,
+    Out,
+}
+
+trait ToMouseEvent {
+    fn to_mouse_event(&self) -> MouseEvent;
+}
+
+impl ToMouseEvent for Over {
+    fn to_mouse_event(&self) -> MouseEvent {
+        MouseEvent::Over
+    }
+}
+
+impl ToMouseEvent for Pressed {
+    fn to_mouse_event(&self) -> MouseEvent {
+        MouseEvent::Pressed
+    }
+}
+
+impl ToMouseEvent for Released {
+    fn to_mouse_event(&self) -> MouseEvent {
+        MouseEvent::Released
+    }
+}
+
+impl ToMouseEvent for Out {
+    fn to_mouse_event(&self) -> MouseEvent {
+        MouseEvent::Out
+    }
+}
+
+fn observer_transformer<E>(trigger: Trigger<Pointer<E>>, mut commands: Commands)
+where
+    E: std::fmt::Debug + Clone + Reflect + ToMouseEvent,
+{
+    let e: MouseEvent = trigger.event().event.to_mouse_event();
+    commands.trigger_targets(e, trigger.target);
+}
+
+trait EntityCommandsExt {
+    fn observe_and_transform_mouse_events(&mut self) -> &mut Self;
+}
+
+impl EntityCommandsExt for EntityCommands<'_> {
+    fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
+        self.observe(observer_transformer::<Over>)
+            .observe(observer_transformer::<Pressed>)
+            .observe(observer_transformer::<Released>)
+            .observe(observer_transformer::<Out>);
+        self
+    }
 }

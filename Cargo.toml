@@ -11,3 +11,5 @@ workspace = true
 bevy.workspace = true
 derive_more.workspace = true
 educe.workspace = true
+bevy-inspector-egui.workspace = true
+bevy_egui.workspace = true
