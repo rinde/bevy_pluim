@@ -6,12 +6,12 @@ use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use smallvec::smallvec;
 use ui::WidgetsPlugin;
-use ui::combo::Combo;
-use ui::float::Float;
 use ui::list::List;
 use ui::push_button::PushButton;
-use ui::select::Select;
+use ui::select::Item;
+use ui::select::Items;
 use ui::select::Selection;
 use ui::theme::Theme;
 use ui::theme::ThemeChangedEvent;
@@ -52,32 +52,58 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         BackgroundColor(theme.colors.background_primary),
         Root,
         children![
-            (Select::new(["hello", "who", "is", "there"]), List),
+            // (Select::new(["hello", "who", "is", "there"]), List),
+            // (
+            //     Node {
+            //         width: Val::Px(200.0),
+            //         left: Val::Px(-300.0),
+            //         ..default()
+            //     },
+            //     children![(
+            //         // Selection(Some(1)),
+            //         List,
+            //         related!(Items[
+            //             Item::new("Netherlands"),
+            //             Item::new("Canada"),
+            //             Item::new("Indonesia"),
+            //             Item::new("Portugal"),
+            //             Item::new("Belgium")
+            //         ]),
+            //         Float
+            //     )]
+            // ),
             (
-                Node {
-                    width: Val::Px(200.0),
-                    left: Val::Px(-300.0),
-                    ..default()
+                List,
+                Selection {
+                    items: smallvec![],
+                    multi: true,
                 },
-                children![(
-                    Select::new(["Netherlands", "Canada", "Indonesia", "Portugal"]),
-                    Selection(Some(1)),
-                    List,
-                    Float
-                )]
+                related!(Items[
+                    Item::new("Netherlands"),
+                    Item::new("Canada"),
+                    Item::new("Indonesia"),
+                    Item::new("Portugal"),
+                    Item::new("Belgium")
+                ]),
             ),
-            (
-                Text::new("Hello, World!"),
-                TextColor(theme.colors.text_primary),
-                HelloWorldLabel
-            ),
-            (Combo, Select::new(["hello", "who", "is", "there"])),
-            (
-                Combo,
-                Select::new(["Netherlands", "Canada", "Indonesia", "Portugal", "Belgium"])
-            ),
+            // (
+            //     Text::new("Hello, World!"),
+            //     TextColor(theme.colors.text_primary),
+            //     HelloWorldLabel
+            // ),
+            // (Combo, Select::new(["hello", "who", "is", "there"])),
+            // (
+            //     Combo,
+            //     related!(Items[
+            //         Item::new("Netherlands"),
+            //         Item::new("Canada"),
+            //         Item::new("Indonesia"),
+            //         Item::new("Portugal"),
+            //         Item::new("Belgium")
+            //     ]),
+            // ),
             (PushButton::from_label("Change theme"), ThemeButton),
-            PushButton::from_label("This does nothing")
+            // PushButton::from_label("This does nothing")
         ],
     ));
 }

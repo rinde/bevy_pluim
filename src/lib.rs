@@ -14,6 +14,7 @@ use bevy::app::Plugin;
 use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
+use bevy::ecs::entity::Entity;
 use bevy::ecs::event::Event;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
@@ -76,18 +77,21 @@ pub fn get_anywhere<'a, T: Component>(
     world: &'a DeferredWorld,
     context: &HookContext,
     id: WidgetId,
-) -> Option<&'a T> {
-    let same = world.entity(context.entity).get::<T>();
+) -> Option<(Entity, &'a T)> {
+    let same = world
+        .entity(context.entity)
+        .get::<T>()
+        .map(|t| (context.entity, t));
     if same.is_some() {
         return same;
     }
-    let state = world.try_query_filtered::<(&WidgetId, &T), With<T>>();
+    let state = world.try_query_filtered::<(Entity, &WidgetId, &T), With<T>>();
     state
         .and_then(|mut s| {
             s.iter(world)
-                .find(|(component_id, _)| (**component_id == id))
+                .find(|(_, component_id, _)| (**component_id == id))
         })
-        .map(|(_, comp)| comp)
+        .map(|(entity, _, comp)| (entity, comp))
 }
 
 pub fn get_or_insert_id(world: &mut DeferredWorld, context: &HookContext) -> WidgetId {

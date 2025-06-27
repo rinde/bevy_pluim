@@ -4,6 +4,7 @@ use bevy::app::Update;
 use bevy::ecs::children;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
+use bevy::ecs::name::Name;
 use bevy::ecs::query::Changed;
 use bevy::ecs::query::Or;
 use bevy::ecs::query::With;
@@ -21,18 +22,16 @@ use bevy::ui::Interaction;
 use bevy::ui::Node;
 use bevy::ui::PositionType;
 use bevy::ui::Val;
-use bevy::ui::widget::Text;
 use bevy::utils::default;
 
 use crate::WidgetId;
 use crate::float::Float;
 use crate::get_or_insert_id;
-use crate::list::Item;
+use crate::list::ItemView;
 use crate::list::List;
 use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
-use crate::push_button::PushButtonLabel;
-use crate::select::Select;
+use crate::select::Items;
 use crate::select::Selection;
 use crate::theme::Theme;
 
@@ -43,7 +42,12 @@ impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (on_press, on_change, on_hover, close_combos_on_outside_click),
+            (
+                on_press,
+                // on_change,
+                on_hover,
+                close_combos_on_outside_click,
+            ),
         );
     }
 }
@@ -58,15 +62,18 @@ impl Plugin for ComboPlugin {
         ..default()
     },
     Selection::default(),
-    Select::default(),
+    Items::default(),
+    Name::new("Combo")
 )
 ]
 pub struct Combo;
 
 #[derive(Component, Debug, Copy, Clone)]
+#[require(Name::new("ComboButton"))]
 pub struct ComboButton;
 
 #[derive(Component, Debug, Copy, Clone)]
+#[require(Name::new("ComboList"))]
 pub struct ComboList;
 
 impl Combo {
@@ -90,7 +97,10 @@ impl Combo {
 fn on_press(
     combo_buttons: Query<
         (&Interaction, &WidgetId),
-        (Changed<Interaction>, Or<(With<ComboButton>, With<Item>)>),
+        (
+            Changed<Interaction>,
+            Or<(With<ComboButton>, With<ItemView>)>,
+        ),
     >,
     mut items: Query<(&WidgetId, &mut Visibility), (With<List>, With<Float>)>,
 ) {
@@ -106,34 +116,34 @@ fn on_press(
     }
 }
 
-fn on_change(
-    changed_selections: Query<(&Selection, &WidgetId, &Select), Changed<Selection>>,
-    mut labels: Query<(&WidgetId, &mut Text), With<PushButtonLabel>>,
-    mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
-    theme: Res<Theme>,
-) {
-    for (selection, id, items) in changed_selections {
-        for (item_id, mut text) in &mut labels {
-            if item_id == id {
-                if let Some(selection) = selection.0 {
-                    text.0 = items.items[selection].to_string();
-                }
-                break;
-            }
-        }
-    }
-    if !changed_selections.is_empty() {
-        for (mut background_color, mut border_color) in &mut combo_buttons {
-            *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor(theme.colors.border);
-        }
-    }
-}
+// fn on_change(
+//     changed_selections: Query<(&Selection, &WidgetId, &Select),
+// Changed<Selection>>,     mut labels: Query<(&WidgetId, &mut Text),
+// With<PushButtonLabel>>,     mut combo_buttons: Query<(&mut BackgroundColor,
+// &mut BorderColor), With<ComboButton>>,     theme: Res<Theme>,
+// ) {
+//     for (selection, id, items) in changed_selections {
+//         for (item_id, mut text) in &mut labels {
+//             if item_id == id {
+//                 if let Some(selection) = selection.0 {
+//                     text.0 = items.items[selection].to_string();
+//                 }
+//                 break;
+//             }
+//         }
+//     }
+//     if !changed_selections.is_empty() {
+//         for (mut background_color, mut border_color) in &mut combo_buttons {
+//             *background_color =
+// BackgroundColor(theme.colors.background_primary);             *border_color =
+// BorderColor(theme.colors.border);         }
+//     }
+// }
 
 /// System that closes the combo when clicking outside of it.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combo_interactions: Query<&Interaction, Or<(With<ComboButton>, With<Item>)>>,
+    combo_interactions: Query<&Interaction, Or<(With<ComboButton>, With<ItemView>)>>,
     mut combo_lists: Query<&mut Visibility, With<ComboList>>,
 ) {
     // TODO fix this, it's not working correctly
