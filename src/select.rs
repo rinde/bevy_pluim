@@ -17,17 +17,23 @@ impl Selection {
     }
 
     #[must_use]
-    pub fn with_selected(&self, item: Entity) -> Option<Self> {
-        (!self.is_selected(item)).then(|| {
-            let mut clone = self.clone();
-            if self.multi {
-                clone.items.push(item);
+    pub fn toggle_selected(&self, item: Entity) -> Option<Self> {
+        let mut clone = self.clone();
+        if self.multi {
+            if self.is_selected(item) {
+                clone.items.retain(|x| *x != item);
             } else {
-                clone.items.clear();
                 clone.items.push(item);
             }
-            clone
-        })
+        } else {
+            // selecting the same item twice is a no-op if only one selection is allowed
+            if self.is_selected(item) {
+                return None;
+            }
+            clone.items.clear();
+            clone.items.push(item);
+        }
+        Some(clone)
     }
 }
 

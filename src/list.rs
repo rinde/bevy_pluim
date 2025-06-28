@@ -253,7 +253,7 @@ fn handle_mouse_events(
             background_color.0 = theme.colors.background_primary;
         }
         (MouseEvent::Released, _) => {
-            if let Some(new_selection) = selection.with_selected(*target_item_entity) {
+            if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
                 commands.entity(*items_entity).insert(new_selection);
             }
         }
