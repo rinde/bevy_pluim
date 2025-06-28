@@ -220,6 +220,9 @@ fn on_add_item_of(
     });
 }
 
+#[derive(Component)]
+struct IsHovered;
+
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
     selections: Query<&Selection>,
@@ -242,15 +245,19 @@ fn handle_mouse_events(
     match (t.event(), is_selected) {
         (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => {
             background_color.0 = theme.colors.selected_hovered_item;
+            commands.entity(t.target()).insert_if_new(IsHovered);
         }
         (MouseEvent::Over, false) => {
             background_color.0 = theme.colors.hovered_item;
+            commands.entity(t.target()).insert_if_new(IsHovered);
         }
         (MouseEvent::Out, true) => {
             background_color.0 = theme.colors.selected_item;
+            commands.entity(t.target()).remove::<IsHovered>();
         }
         (MouseEvent::Out, false) => {
             background_color.0 = theme.colors.background_primary;
+            commands.entity(t.target()).remove::<IsHovered>();
         }
         (MouseEvent::Released, _) => {
             if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
@@ -267,19 +274,20 @@ fn on_selection_change(
     t: Trigger<OnInsert, Selection>,
     selections: Query<(&Selection, &ListRef)>,
     lists: Query<&Children, With<List>>,
-    mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
+    mut item_views: Query<(&ItemView, Option<&IsHovered>, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
     let Ok((selection, ListRef(list_ref))) = selections.get(t.target()) else {
         return;
     };
 
-    for item_view_id in lists.iter_descendants::<Children>(*list_ref) {
-        let (item_view, mut bg) = item_views.get_mut(item_view_id).unwrap();
-        if selection.is_selected(item_view.item) {
-            bg.0 = theme.colors.selected_item;
-        } else {
-            bg.0 = theme.colors.background_primary;
+    for item_view_id in lists.get(*list_ref).unwrap() {
+        let (item_view, is_hovered, mut bg) = item_views.get_mut(*item_view_id).unwrap();
+        match (selection.is_selected(item_view.item), is_hovered.is_some()) {
+            (true, true) => bg.0 = theme.colors.selected_hovered_item,
+            (true, false) => bg.0 = theme.colors.selected_item,
+            (false, true) => bg.0 = theme.colors.hovered_item,
+            (false, false) => bg.0 = theme.colors.background_primary,
         }
     }
 }
