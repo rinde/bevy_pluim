@@ -22,7 +22,6 @@ use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ecs::world::OnInsert;
 use bevy::input::ButtonInput;
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::MouseScrollUnit;
@@ -42,6 +41,7 @@ use bevy::ui::Node;
 use bevy::ui::Overflow;
 use bevy::ui::OverflowClipMargin;
 use bevy::ui::PositionType;
+use bevy::ui::RelativeCursorPosition;
 use bevy::ui::ScrollPosition;
 use bevy::ui::UiRect;
 use bevy::ui::Val;
@@ -58,6 +58,7 @@ use crate::select::Item;
 use crate::select::ItemOf;
 use crate::select::Items;
 use crate::select::OnAddItem;
+use crate::select::OnSelectionChange;
 use crate::select::Selection;
 use crate::select::ViewOf;
 use crate::theme::Theme;
@@ -175,6 +176,7 @@ impl List {
 }
 
 #[derive(Component, Debug, Copy, Clone)]
+#[require(RelativeCursorPosition::default())]
 #[component(on_add = Self::on_add)]
 pub(crate) struct ItemView {
     item_id: Entity,
@@ -240,10 +242,6 @@ fn on_add_item(
     commands.run_system_cached_with(theme_items, Some(list_id));
 }
 
-// TODO can this be replaced with https://taintedcoders.com/bevy/ui#relative-cursor-position
-#[derive(Component)]
-struct IsHovered;
-
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
     selections: Query<&Selection>,
@@ -266,19 +264,15 @@ fn handle_mouse_events(
     match (t.event(), is_selected) {
         (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => {
             background_color.0 = theme.colors.selected_hovered_item;
-            commands.entity(t.target()).insert_if_new(IsHovered);
         }
         (MouseEvent::Over, false) => {
             background_color.0 = theme.colors.hovered_item;
-            commands.entity(t.target()).insert_if_new(IsHovered);
         }
         (MouseEvent::Out, true) => {
             background_color.0 = theme.colors.selected_item;
-            commands.entity(t.target()).remove::<IsHovered>();
         }
         (MouseEvent::Out, false) => {
             background_color.0 = theme.colors.background_primary;
-            commands.entity(t.target()).remove::<IsHovered>();
         }
         (MouseEvent::Released, _) => {
             if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
@@ -288,26 +282,22 @@ fn handle_mouse_events(
     }
 }
 
-// TODO evaluate the relationship between Item and ItemView because these look
-// ups are error prone // maybe also a relationship between Item and ItemView,
-// each Item could have a Views(Vec<Entity>) <-> DataRef(Entity)
 fn on_selection_change(
-    t: Trigger<OnInsert, Selection>,
-    selections: Query<(&Selection, &ListRef)>,
+    t: Trigger<OnSelectionChange>,
+    selections: Query<&Selection>,
     lists: Query<&Children, With<List>>,
-    mut item_views: Query<(&ItemView, Option<&IsHovered>, &mut BackgroundColor)>,
+    mut item_views: Query<(&ItemView, &RelativeCursorPosition, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
-    let Ok((selection, ListRef(list_ref))) = selections.get(t.target()) else {
+    if !lists.contains(t.target()) {
         return;
-    };
+    }
+    let selection = selections.get(t.event().selection_id).unwrap();
 
-    for item_view_id in lists.get(*list_ref).unwrap() {
-        let (item_view, is_hovered, mut bg) = item_views.get_mut(*item_view_id).unwrap();
-        match (
-            selection.is_selected(item_view.item_id),
-            is_hovered.is_some(),
-        ) {
+    for item_view_id in lists.get(t.target()).unwrap() {
+        let (item_view, rcp, mut bg) = item_views.get_mut(*item_view_id).unwrap();
+
+        match (selection.is_selected(item_view.item_id), rcp.mouse_over()) {
             (true, true) => bg.0 = theme.colors.selected_hovered_item,
             (true, false) => bg.0 = theme.colors.selected_item,
             (false, true) => bg.0 = theme.colors.hovered_item,
@@ -315,29 +305,6 @@ fn on_selection_change(
         }
     }
 }
-
-// TODO use SelectionChanged event
-// fn on_selection_change(
-//     changed_si_query: Query<(&Selection, &WidgetId, &Items),
-// Changed<Selection>>,     sfasd: Query<(&List, &Children)>
-//     mut all_selectable_items_query: Query<(&ItemView, &mut BackgroundColor,
-// &WidgetId)>,     theme: Res<Theme>,
-// ) {
-// // TODO use query::iter_descendants()
-//     for (selection, widget_id) in changed_si_query {
-//         for (item, mut bg, _) in &mut all_selectable_items_query
-//             .iter_mut()
-//             .filter(|(_, _, id)| *id == widget_id)
-//         {
-//             if selection.0 == Some(item.item) {
-//                 bg.0 = theme.colors.selected_item; // TODO when this is the
-// item that is actively being hovered than this is not the correct color
-//             } else {
-//                 bg.0 = theme.colors.background_primary;
-//             }
-//         }
-//     }
-// }
 
 fn theme_items(
     list_id: In<Option<Entity>>,

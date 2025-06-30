@@ -9,6 +9,7 @@ use smallvec::SmallVec;
 
 #[derive(Component, Debug, Clone, Default)]
 #[component(immutable)]
+#[component(on_insert = Self::on_insert)]
 pub struct Selection {
     pub items: SmallVec<[Entity; 4]>,
     pub multi: bool,
@@ -39,6 +40,24 @@ impl Selection {
         }
         Some(clone)
     }
+
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let event = OnSelectionChange {
+            selection_id: context.entity,
+        };
+        if let Some(views) = world.entity(context.entity).get::<Views>().cloned() {
+            for view_id in views.iter() {
+                world.commands().trigger_targets(event, *view_id);
+            }
+        } else {
+            world.commands().trigger_targets(event, context.entity);
+        }
+    }
+}
+
+#[derive(Event, Copy, Clone, Debug)]
+pub struct OnSelectionChange {
+    pub selection_id: Entity,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
