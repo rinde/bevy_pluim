@@ -199,7 +199,15 @@ impl ItemView {
     }
 }
 
-fn on_add_item(t: Trigger<OnAddItem>, items: Query<&Item>, mut commands: Commands) {
+fn on_add_item(
+    t: Trigger<OnAddItem>,
+    items: Query<&Item>,
+    mut commands: Commands,
+    lists: Query<&List>,
+) {
+    if !lists.contains(t.target()) {
+        return;
+    }
     let item = items.get(t.event().item_id).unwrap();
     let list_id = t.target();
 

@@ -79,24 +79,17 @@ impl Item {
             .copied()
             .unwrap();
 
+        let event = OnAddItem {
+            item_id: context.entity,
+            items_id,
+        };
+
         if let Some(views) = world.entity(items_id).get::<Views>().cloned() {
             for view_id in views.iter() {
-                world.commands().trigger_targets(
-                    OnAddItem {
-                        item_id: context.entity,
-                        items_id,
-                    },
-                    *view_id,
-                );
+                world.commands().trigger_targets(event, *view_id);
             }
         } else {
-            world.commands().trigger_targets(
-                OnAddItem {
-                    item_id: context.entity,
-                    items_id,
-                },
-                items_id,
-            );
+            world.commands().trigger_targets(event, items_id);
         }
     }
 }
