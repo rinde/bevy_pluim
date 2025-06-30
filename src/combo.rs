@@ -95,13 +95,7 @@ impl Combo {
 }
 
 fn on_press(
-    combo_buttons: Query<
-        (&Interaction, &WidgetId),
-        (
-            Changed<Interaction>,
-            Or<(With<ComboButton>, With<ItemView>)>,
-        ),
-    >,
+    combo_buttons: Query<(&Interaction, &WidgetId), (Changed<Interaction>, With<ComboButton>)>,
     mut items: Query<(&WidgetId, &mut Visibility), (With<List>, With<Float>)>,
 ) {
     for (inter, id) in combo_buttons {
@@ -143,21 +137,22 @@ fn on_press(
 /// System that closes the combo when clicking outside of it.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combo_interactions: Query<&Interaction, Or<(With<ComboButton>, With<ItemView>)>>,
-    mut combo_lists: Query<&mut Visibility, With<ComboList>>,
+    combo_interactions: Query<(&WidgetId, &Interaction), Or<(With<ComboButton>, With<ItemView>)>>,
+    mut combo_lists: Query<(&WidgetId, &mut Visibility), With<ComboList>>,
 ) {
-    // TODO fix this, it's not working correctly
-    if !mouse_button.just_pressed(MouseButton::Left) {
-        return;
-    }
-    // Check if click was on any combo button or item
-    let clicked_on_combobox = combo_interactions
-        .iter()
-        .any(|&interaction| interaction == Interaction::Pressed);
+    // TODO fix this, it needs to auto-close when a SINGLE combo is open, and stay open when a MULTI combo is open
+    if mouse_button.just_pressed(MouseButton::Left) {
+        // Check if click was on any combo button or item
+        let clicked_on_combobox = combo_interactions
+            .iter()
+            .find_map(|(id, &interaction)| (interaction == Interaction::Pressed).then_some(*id));
 
-    if !clicked_on_combobox {
-        for mut visibility in &mut combo_lists {
-            *visibility = Visibility::Hidden;
+        for (id, mut visibility) in &mut combo_lists {
+            if clicked_on_combobox == Some(*id) {
+                *visibility = Visibility::Visible;
+            } else {
+                *visibility = Visibility::Hidden;
+            }
         }
     }
 }

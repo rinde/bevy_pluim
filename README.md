@@ -10,6 +10,7 @@
 - [ ] Combo: ensure List is visible within window
 - [ ] ClearColor: auto update ClearColor on Theme change
 
+
 # Open questions
 - How to ensure that an item is fully within the window? How to obtain the actual coordinates of the node? (`ComputedNode` only contains the size, not location). TODO try to get the GlobalTransform of the node. transform.compute_transform()
 

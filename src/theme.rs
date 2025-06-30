@@ -119,6 +119,7 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     small_shadow: SHADOW_SM_DARK_MODE,
 };
 
+// TODO change this to use https://taintedcoders.com/bevy/how-to/resource-change-detection
 pub(crate) fn on_theme_change(theme: Res<Theme>, mut commands: Commands) {
     if theme.is_changed() {
         commands.trigger(ThemeChangedEvent);
