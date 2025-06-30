@@ -1,11 +1,13 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::Startup;
+use bevy::dev_tools::fps_overlay::FpsOverlayConfig;
+use bevy::dev_tools::fps_overlay::FpsOverlayPlugin;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
+use bevy::text::FontSmoothing;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::combo::Combo;
@@ -21,10 +23,30 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
-        .add_plugins(EguiPlugin {
-            enable_multipass_for_primary_context: false,
-        })
-        .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins((
+            EguiPlugin {
+                enable_multipass_for_primary_context: false,
+            },
+            FpsOverlayPlugin {
+                config: FpsOverlayConfig {
+                    text_config: TextFont {
+                        // Here we define size of our overlay
+                        font_size: 42.0,
+                        // If we want, we can use a custom font
+                        font: default(),
+                        // We could also disable font smoothing,
+                        font_smoothing: FontSmoothing::default(),
+                        ..default()
+                    },
+                    // We can also change color of the overlay
+                    text_color: Color::srgb(0.0, 1.0, 0.0),
+                    // We can also set the refresh interval for the FPS counter
+                    refresh_interval: core::time::Duration::from_millis(100),
+                    enabled: true,
+                },
+            },
+        ))
+        // .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(UiDebugOptions {
             enabled: false,
             line_width: 1.0,
