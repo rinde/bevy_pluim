@@ -182,10 +182,6 @@ pub(crate) struct ItemView {
     item_id: Entity,
 }
 
-// TODO delete
-#[derive(Component, Debug, Copy, Clone)]
-pub struct ListRef(pub Entity);
-
 #[derive(Component, Debug, Clone, Copy)]
 struct ItemLabel;
 

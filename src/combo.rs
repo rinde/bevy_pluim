@@ -1,10 +1,11 @@
 use bevy::app::App;
 use bevy::app::Plugin;
 use bevy::app::Update;
-use bevy::ecs::children;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
+use bevy::ecs::entity::Entity;
 use bevy::ecs::name::Name;
+use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
 use bevy::ecs::query::Or;
 use bevy::ecs::query::With;
@@ -13,7 +14,6 @@ use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
-use bevy::prelude::SpawnRelated;
 use bevy::render::view::Visibility;
 use bevy::ui::BackgroundColor;
 use bevy::ui::BorderColor;
@@ -22,7 +22,9 @@ use bevy::ui::Interaction;
 use bevy::ui::Node;
 use bevy::ui::PositionType;
 use bevy::ui::Val;
+use bevy::ui::widget::Text;
 use bevy::utils::default;
+use itertools::Itertools;
 
 use crate::WidgetId;
 use crate::float::Float;
@@ -31,7 +33,11 @@ use crate::list::ItemView;
 use crate::list::List;
 use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
+use crate::push_button::PushButtonLabel;
+use crate::push_button::PushButtonLabelRef;
+use crate::select::Item;
 use crate::select::Items;
+use crate::select::OnSelectionChange;
 use crate::select::Selection;
 use crate::select::ViewOf;
 use crate::theme::Theme;
@@ -41,15 +47,8 @@ pub struct ComboPlugin;
 
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                on_press,
-                // on_change,
-                on_hover,
-                close_combos_on_outside_click,
-            ),
-        );
+        app.add_systems(Update, (on_press, on_hover, close_combos_on_outside_click))
+            .add_observer(on_selection_change);
     }
 }
 
@@ -74,31 +73,53 @@ pub struct Combo;
 pub struct ComboButton;
 
 #[derive(Component, Debug, Copy, Clone)]
+pub struct SubComponentsRef {
+    pub button: Entity,
+    pub list: Entity,
+}
+
+#[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("ComboList"))]
 pub struct ComboList;
+
+const PLACEHOLDER_TEXT: &str = "Select..";
 
 impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let id = get_or_insert_id(&mut world, &context);
+        let mut button_id = Entity::PLACEHOLDER;
+        let mut list_id = Entity::PLACEHOLDER;
         world.commands().entity(context.entity).with_children(|x| {
-            x.spawn((
-                id,
-                PushButton::new("Select..", "\\/"),
-                ComboButton,
-                NoDefaultHover,
-            ));
-            x.spawn((
-                Node { ..default() },
-                children![(
+            button_id = x
+                .spawn((
                     id,
-                    ViewOf(context.entity),
-                    List,
-                    Float,
-                    Visibility::Hidden,
-                    ComboList
-                )],
-            ));
+                    PushButton::new(PLACEHOLDER_TEXT, "\\/"),
+                    ComboButton,
+                    NoDefaultHover,
+                ))
+                .id();
+
+            x.spawn(Node::default()).with_children(|spawner| {
+                list_id = spawner
+                    .spawn((
+                        id,
+                        ViewOf(context.entity),
+                        List,
+                        Float,
+                        Visibility::Hidden,
+                        ComboList,
+                    ))
+                    .id();
+            });
         });
+
+        world
+            .commands()
+            .entity(context.entity)
+            .insert(SubComponentsRef {
+                button: button_id,
+                list: list_id,
+            });
     }
 }
 
@@ -118,29 +139,44 @@ fn on_press(
     }
 }
 
-// fn on_change(
-//     changed_selections: Query<(&Selection, &WidgetId, &Select),
-// Changed<Selection>>,     mut labels: Query<(&WidgetId, &mut Text),
-// With<PushButtonLabel>>,     mut combo_buttons: Query<(&mut BackgroundColor,
-// &mut BorderColor), With<ComboButton>>,     theme: Res<Theme>,
-// ) {
-//     for (selection, id, items) in changed_selections {
-//         for (item_id, mut text) in &mut labels {
-//             if item_id == id {
-//                 if let Some(selection) = selection.0 {
-//                     text.0 = items.items[selection].to_string();
-//                 }
-//                 break;
-//             }
-//         }
-//     }
-//     if !changed_selections.is_empty() {
-//         for (mut background_color, mut border_color) in &mut combo_buttons {
-//             *background_color =
-// BackgroundColor(theme.colors.background_primary);             *border_color =
-// BorderColor(theme.colors.border);         }
-//     }
-// }
+fn on_selection_change(
+    t: Trigger<OnSelectionChange>,
+    combos: Query<&SubComponentsRef, With<Combo>>,
+    pblr: Query<&PushButtonLabelRef>,
+    selections: Query<&Selection>,
+    items: Query<&Item>,
+    theme: Res<Theme>,
+    mut lists: Query<&mut Visibility, With<List>>,
+    mut labels: Query<&mut Text, With<PushButtonLabel>>,
+    mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
+) {
+    let Ok(SubComponentsRef { button, list }) = combos.get(t.target()) else {
+        return;
+    };
+
+    let PushButtonLabelRef(label_ref) = pblr.get(*button).unwrap();
+    let selection = selections.get(t.event().selection_id).unwrap();
+
+    let mut text = labels.get_mut(*label_ref).unwrap();
+    let label = if selection.items.is_empty() {
+        PLACEHOLDER_TEXT.to_string()
+    } else {
+        selection
+            .items
+            .iter()
+            .map(|item| &items.get(*item).unwrap().label)
+            .join(", ")
+    };
+    text.0 = label;
+
+    let mut list = lists.get_mut(*list).unwrap();
+    if !selection.multi {
+        *list = Visibility::Hidden;
+        let (mut background_color, mut border_color) = combo_buttons.get_mut(*button).unwrap();
+        *background_color = BackgroundColor(theme.colors.background_primary);
+        *border_color = BorderColor(theme.colors.border);
+    }
+}
 
 /// System that closes the combo when clicking outside of it.
 fn close_combos_on_outside_click(

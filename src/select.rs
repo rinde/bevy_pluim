@@ -49,9 +49,8 @@ impl Selection {
             for view_id in views.iter() {
                 world.commands().trigger_targets(event, *view_id);
             }
-        } else {
-            world.commands().trigger_targets(event, context.entity);
         }
+        world.commands().trigger_targets(event, context.entity);
     }
 }
 
@@ -107,9 +106,8 @@ impl Item {
             for view_id in views.iter() {
                 world.commands().trigger_targets(event, *view_id);
             }
-        } else {
-            world.commands().trigger_targets(event, items_id);
         }
+        world.commands().trigger_targets(event, items_id);
     }
 }
 

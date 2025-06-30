@@ -2,6 +2,7 @@ use bevy::app::Plugin;
 use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
+use bevy::ecs::entity::Entity;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::schedule::IntoScheduleConfigs;
@@ -63,6 +64,9 @@ pub struct PushButton {
 pub struct PushButtonLabel;
 
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PushButtonLabelRef(pub Entity);
+
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonIcon;
 
 /// Marker component that disables the default hover effect for `PushButton`s.
@@ -106,12 +110,13 @@ impl PushButton {
                 .observe_and_transform_mouse_events()
                 .observe(handle_hover);
         }
+        let mut label_ref = Entity::PLACEHOLDER;
         if let Some(&id) = world.entity(context.entity).get::<WidgetId>() {
             world
                 .commands()
                 .entity(context.entity)
                 .with_children(|spawner| {
-                    spawner.spawn((id, label));
+                    label_ref = spawner.spawn((id, label)).id();
                     if let Some(icon) = icon {
                         spawner.spawn((id, icon));
                     }
@@ -121,12 +126,16 @@ impl PushButton {
                 .commands()
                 .entity(context.entity)
                 .with_children(|spawner| {
-                    spawner.spawn(label);
+                    label_ref = spawner.spawn(label).id();
                     if let Some(icon) = icon {
                         spawner.spawn(icon);
                     }
                 });
         }
+        world
+            .commands()
+            .entity(context.entity)
+            .insert(PushButtonLabelRef(label_ref));
     }
 }
 

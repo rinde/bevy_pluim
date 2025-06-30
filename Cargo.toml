@@ -14,3 +14,4 @@ educe.workspace = true
 bevy-inspector-egui.workspace = true
 bevy_egui.workspace = true
 smallvec.workspace = true
+itertools.workspace = true
