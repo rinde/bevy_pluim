@@ -1,6 +1,10 @@
 use bevy::ecs::component::Component;
+use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
+use bevy::ecs::event::Event;
+use bevy::ecs::world::DeferredWorld;
 use bevy::reflect::Reflect;
+use derive_more::Deref;
 use smallvec::SmallVec;
 
 #[derive(Component, Debug, Clone, Default)]
@@ -38,32 +42,25 @@ impl Selection {
 }
 
 #[derive(Component, Debug, Clone, Copy)]
+#[relationship(relationship_target = Views)]
+pub struct ViewOf(pub Entity);
+
+#[derive(Component, Debug, Default, Clone, Reflect, Deref)]
+#[relationship_target(relationship = ViewOf, linked_spawn)]
+#[require(Selection::default())]
+pub struct Views(Vec<Entity>);
+
+#[derive(Component, Debug, Clone, Copy)]
 #[relationship(relationship_target = Items)]
-// #[component(immutable)]
 pub struct ItemOf(pub Entity);
 
-#[derive(Component, Debug, Default, Clone, Reflect)]
+#[derive(Component, Debug, Default, Clone, Reflect, Deref)]
 #[relationship_target(relationship = ItemOf, linked_spawn)]
 #[require(Selection::default())]
 pub struct Items(Vec<Entity>);
 
-impl<'a> IntoIterator for &'a Items {
-    type Item = Entity;
-
-    type IntoIter = std::iter::Copied<std::slice::Iter<'a, Entity>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter().copied()
-    }
-}
-
-impl Items {
-    pub const fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
 #[derive(Component, Debug, Clone)]
+#[component(on_insert = Self::on_insert)]
 pub struct Item {
     pub label: String,
 }
@@ -74,6 +71,40 @@ impl Item {
             label: label.into(),
         }
     }
+
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let ItemOf(items_id) = world
+            .entity(context.entity)
+            .get::<ItemOf>()
+            .copied()
+            .unwrap();
+
+        if let Some(views) = world.entity(items_id).get::<Views>().cloned() {
+            for view_id in views.iter() {
+                world.commands().trigger_targets(
+                    OnAddItem {
+                        item_id: context.entity,
+                        items_id,
+                    },
+                    *view_id,
+                );
+            }
+        } else {
+            world.commands().trigger_targets(
+                OnAddItem {
+                    item_id: context.entity,
+                    items_id,
+                },
+                items_id,
+            );
+        }
+    }
+}
+
+#[derive(Event, Copy, Clone, Debug)]
+pub struct OnAddItem {
+    pub item_id: Entity,
+    pub items_id: Entity,
 }
 
 impl<T: Into<String>> From<T> for Item {

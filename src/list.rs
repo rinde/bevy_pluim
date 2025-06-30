@@ -18,7 +18,6 @@ use bevy::ecs::system::Commands;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ecs::world::OnAdd;
 use bevy::ecs::world::OnInsert;
 use bevy::input::ButtonInput;
 use bevy::input::keyboard::KeyCode;
@@ -54,7 +53,9 @@ use crate::get_or_insert_id;
 use crate::select::Item;
 use crate::select::ItemOf;
 use crate::select::Items;
+use crate::select::OnAddItem;
 use crate::select::Selection;
+use crate::select::ViewOf;
 use crate::theme::Theme;
 use crate::theme::ThemeChangedEvent;
 
@@ -66,13 +67,14 @@ impl Plugin for ListPlugin {
             .add_observer(theme_items)
             .add_observer(theme_lists)
             .add_observer(theme_item_labels)
-            .add_observer(on_add_item_of)
+            .add_observer(on_add_item)
+            // .add_observer(on_add_item_of)
             .add_observer(on_selection_change);
     }
 }
 
 #[derive(Component, Debug, Copy, Clone)]
-#[component(on_insert = Self::on_add)]
+#[component(on_insert = Self::on_insert)]
 #[require(Name::new("List"))]
 pub struct List;
 
@@ -83,22 +85,24 @@ pub struct ListRef(pub Entity);
 struct ItemLabel;
 
 impl List {
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let id = get_or_insert_id(&mut world, &context);
 
         let (items_entity, items) = if let Some((items_entity, existing_items)) =
             get_anywhere::<Items>(&world, &context, id)
         {
-            (
-                items_entity,
-                existing_items
-                    .into_iter()
-                    .map(|item| {
-                        let e = world.entity(item).get::<Item>().unwrap();
-                        (item, e.label.clone())
-                    })
-                    .collect::<Vec<_>>(),
-            )
+            let items = existing_items
+                .iter()
+                .copied()
+                .map(|item| {
+                    let e = world.entity(item).get::<Item>().unwrap();
+                    (item, e.label.clone())
+                })
+                .collect::<Vec<_>>();
+
+            // world.commands().entity(items_entity).observe(observer);
+
+            (items_entity, items)
         } else {
             let new_items = Items::default();
             let items_entity = world
@@ -116,16 +120,19 @@ impl List {
         //         println!("Local handler for SelectionChanged {t:?}");
         //     });
 
-        world
-            .commands()
-            .entity(items_entity)
-            .insert(ListRef(context.entity));
+        if context.entity != items_entity {
+            world
+                .commands()
+                .entity(context.entity)
+                .insert(ViewOf(items_entity));
+        }
 
         assert!(
             world.entity(context.entity).get::<Node>().is_none(),
             "Cannot override Node for List"
         );
 
+        // TODO reuse event handle code
         let children = Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<ChildOf>| {
             for (item_ref, item_label) in items {
                 parent
@@ -143,7 +150,7 @@ impl List {
                             align_items: AlignItems::Center,
                             ..default()
                         },
-                        ItemView { item: item_ref },
+                        ItemView { item_id: item_ref },
                         children![(Text(item_label), ItemLabel, Pickable::IGNORE)],
                     ))
                     // TODO register observer once and reuse it for all items
@@ -171,7 +178,7 @@ impl List {
 #[derive(Component, Debug, Copy, Clone)]
 #[component(on_add = Self::on_add)]
 pub(crate) struct ItemView {
-    item: Entity,
+    item_id: Entity,
 }
 
 impl ItemView {
@@ -186,19 +193,14 @@ impl ItemView {
     }
 }
 
-fn on_add_item_of(
-    t: Trigger<OnAdd, ItemOf>,
-    items: Query<(&Item, &ItemOf)>,
-    lists: Query<&ListRef>,
-    mut commands: Commands,
-) {
-    let (item, ItemOf(item_of)) = items.get(t.target()).unwrap();
-    println!("Insert item {}", item.label);
-    let ListRef(list) = lists.get(*item_of).unwrap();
+fn on_add_item(t: Trigger<OnAddItem>, items: Query<&Item>, mut commands: Commands) {
+    let item = items.get(t.event().item_id).unwrap();
+    let list_id = t.target();
 
-    commands.entity(*list).with_children(|spawner| {
+    commands.entity(list_id).with_children(|spawner| {
         spawner
             .spawn((
+                Name::new("ItemView new"),
                 Button,
                 // Allow scrolling
                 Pickable {
@@ -212,13 +214,50 @@ fn on_add_item_of(
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                ItemView { item: t.target() },
+                ItemView {
+                    item_id: t.event().item_id,
+                },
                 children![(Text(item.label.clone()), ItemLabel, Pickable::IGNORE)],
             ))
             .observe_and_transform_mouse_events()
             .observe(handle_mouse_events);
     });
 }
+
+// fn on_add_item_of(
+//     t: Trigger<OnAdd, ItemOf>,
+//     items: Query<(&Item, &ItemOf)>,
+//     lists: Query<&ListRef>,
+//     mut commands: Commands,
+// ) {
+//     let (item, ItemOf(item_of)) = items.get(t.target()).unwrap();
+//     println!("Insert item {}", item.label);
+//     let ListRef(list) = lists.get(*item_of).unwrap();
+
+//     commands.entity(*list).with_children(|spawner| {
+//         spawner
+//             .spawn((
+//                 Name::new("ItemView old"),
+//                 Button,
+//                 // Allow scrolling
+//                 Pickable {
+//                     should_block_lower: false,
+//                     ..default()
+//                 },
+//                 Node {
+//                     width: Val::Percent(100.0),
+//                     height: Val::Px(36.0),
+//                     justify_content: JustifyContent::FlexStart,
+//                     align_items: AlignItems::Center,
+//                     ..default()
+//                 },
+//                 ItemView { item: t.target() },
+//                 children![(Text(item.label.clone()), ItemLabel,
+// Pickable::IGNORE)],             ))
+//             .observe_and_transform_mouse_events()
+//             .observe(handle_mouse_events);
+//     });
+// }
 
 // TODO can this be replaced with https://taintedcoders.com/bevy/ui#relative-cursor-position
 #[derive(Component)]
@@ -234,7 +273,7 @@ fn handle_mouse_events(
 ) {
     let (
         ItemView {
-            item: target_item_entity,
+            item_id: target_item_entity,
         },
         mut background_color,
     ) = item_views.get_mut(t.target()).unwrap();
@@ -284,7 +323,10 @@ fn on_selection_change(
 
     for item_view_id in lists.get(*list_ref).unwrap() {
         let (item_view, is_hovered, mut bg) = item_views.get_mut(*item_view_id).unwrap();
-        match (selection.is_selected(item_view.item), is_hovered.is_some()) {
+        match (
+            selection.is_selected(item_view.item_id),
+            is_hovered.is_some(),
+        ) {
             (true, true) => bg.0 = theme.colors.selected_hovered_item,
             (true, false) => bg.0 = theme.colors.selected_item,
             (false, true) => bg.0 = theme.colors.hovered_item,
@@ -319,23 +361,27 @@ fn on_selection_change(
 fn theme_items(
     _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
-    mut item_views: Query<(&mut Node, &mut BackgroundColor, &mut BorderRadius), With<ItemView>>,
-    lists: Query<&Children>,
-    model: Query<(&Selection, &Items, &ListRef)>,
+    mut item_views: Query<(
+        &ItemView,
+        &mut Node,
+        &mut BackgroundColor,
+        &mut BorderRadius,
+    )>,
+    selections: Query<&Selection>,
+    lists: Query<(&Children, Option<&ViewOf>, Entity), With<List>>,
 ) {
-    for (selection, items, ListRef(list_ref)) in model {
-        println!("{selection:?} {items:?}");
-        let last = items.len() - 1;
+    for (children, view_of, list_id) in lists {
+        let last = children.len() - 1;
+        // either this List is a view of some items defined elsewhere, or the items are
+        // define on the List entity.
+        let selection_id = view_of.map_or(list_id, |ViewOf(selection_id)| *selection_id);
+        let selection = selections.get(selection_id).unwrap();
 
-        for (i, (item_view_id, item_id)) in lists
-            .iter_descendants::<Children>(*list_ref)
-            .zip(items)
-            .enumerate()
-        {
-            println!("{i}");
-            let (mut node, mut bg, mut br) = item_views.get_mut(item_view_id).unwrap();
+        for (i, item_view_id) in children.iter().enumerate() {
+            let (ItemView { item_id }, mut node, mut bg, mut br) =
+                item_views.get_mut(*item_view_id).unwrap();
 
-            let is_selected = selection.is_selected(item_id);
+            let is_selected = selection.is_selected(*item_id);
 
             if is_selected {
                 bg.0 = theme.colors.selected_item;
@@ -352,6 +398,33 @@ fn theme_items(
             node.padding = theme.item_padding;
         }
     }
+
+    // for (selection, items, ListRef(list_ref)) in model {
+    //     println!("theme_items {selection:?} {items:?}");
+    //     let last = items.len() - 1;
+
+    //     for (i, item_view_id) in
+    // lists.iter_descendants::<Children>(*list_ref).enumerate() {
+    //         let (ItemView { item_id }, mut node, mut bg, mut br) =
+    //             item_views.get_mut(item_view_id).unwrap();
+
+    //         let is_selected = selection.is_selected(*item_id);
+
+    //         if is_selected {
+    //             bg.0 = theme.colors.selected_item;
+    //         } else {
+    //             bg.0 = theme.colors.background_primary;
+    //         }
+
+    //         *br = match i {
+    //             0 => BorderRadius::top(theme.corner_radius),
+    //             n if n == last => BorderRadius::bottom(theme.corner_radius),
+    //             _ => BorderRadius::ZERO,
+    //         };
+
+    //         node.padding = theme.item_padding;
+    //     }
+    // }
 
     // #[derive(Debug)]
     // struct State {
@@ -418,6 +491,7 @@ fn theme_item_labels(
     theme: Res<Theme>,
     mut selectable_items_container: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
 ) {
+    println!("theme item labels");
     for (mut text_color, mut text_font) in &mut selectable_items_container {
         text_color.0 = theme.colors.text_primary;
         text_font.font_size = theme.font_size;

@@ -33,6 +33,7 @@ use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
 use crate::select::Items;
 use crate::select::Selection;
+use crate::select::ViewOf;
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -88,7 +89,14 @@ impl Combo {
             ));
             x.spawn((
                 Node { ..default() },
-                children![(id, List, Float, Visibility::Hidden, ComboList)],
+                children![(
+                    id,
+                    ViewOf(context.entity),
+                    List,
+                    Float,
+                    Visibility::Hidden,
+                    ComboList
+                )],
             ));
         });
     }
@@ -140,7 +148,8 @@ fn close_combos_on_outside_click(
     combo_interactions: Query<(&WidgetId, &Interaction), Or<(With<ComboButton>, With<ItemView>)>>,
     mut combo_lists: Query<(&WidgetId, &mut Visibility), With<ComboList>>,
 ) {
-    // TODO fix this, it needs to auto-close when a SINGLE combo is open, and stay open when a MULTI combo is open
+    // TODO fix this, it needs to auto-close when a SINGLE combo is open, and stay
+    // open when a MULTI combo is open
     if mouse_button.just_pressed(MouseButton::Left) {
         // Check if click was on any combo button or item
         let clicked_on_combobox = combo_interactions
