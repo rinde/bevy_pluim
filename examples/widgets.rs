@@ -48,7 +48,8 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 height: Val::Percent(100.0),
                 justify_content: JustifyContent::SpaceEvenly,
                 align_items: AlignItems::Center,
-                flex_direction: FlexDirection::Column,
+                flex_direction: FlexDirection::Row,
+                flex_wrap: FlexWrap::Wrap,
                 ..default()
             },
             BackgroundColor(theme.colors.background_primary),
@@ -120,10 +121,24 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         .id();
 
     commands.entity(root).with_children(|spawner| {
-        spawner.spawn(PushButton::from_label("Add")).observe(
+        spawner.spawn(PushButton::from_label("Add List")).observe(
             move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
                 commands.entity(root).with_child((
                     List,
+                    related!(Items[
+                        Item::new("Netherlands"),
+                        Item::new("Canada"),
+                        Item::new("Indonesia"),
+                        Item::new("Portugal"),
+                        Item::new("Belgium")
+                    ]),
+                ));
+            },
+        );
+        spawner.spawn(PushButton::from_label("Add Combo")).observe(
+            move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
+                commands.entity(root).with_child((
+                    Combo,
                     related!(Items[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
