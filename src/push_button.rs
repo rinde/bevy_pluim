@@ -1,8 +1,11 @@
 use bevy::app::Plugin;
+use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
@@ -25,16 +28,20 @@ use crate::EntityCommandsExt;
 use crate::MouseEvent;
 use crate::WidgetId;
 use crate::theme::Theme;
-use crate::theme::ThemeChangedEvent;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PushButtonPlugin;
 
 impl Plugin for PushButtonPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_observer(theme_push_button)
-            .add_observer(theme_push_button_label)
-            .add_observer(theme_push_button_icon);
+        app.add_systems(
+            Update,
+            (
+                theme_push_button_icon.run_if(resource_changed::<Theme>),
+                theme_push_button_label.run_if(resource_changed::<Theme>),
+                theme_push_button.run_if(resource_changed::<Theme>),
+            ),
+        );
     }
 }
 
@@ -138,7 +145,6 @@ fn handle_hover(
 }
 
 fn theme_push_button(
-    _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
     mut query: Query<
         (
@@ -164,7 +170,6 @@ fn theme_push_button(
 }
 
 fn theme_push_button_label(
-    _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
     mut query: Query<(&mut TextColor, &mut TextFont), With<PushButtonLabel>>,
 ) {
@@ -178,7 +183,6 @@ fn theme_push_button_label(
 }
 
 fn theme_push_button_icon(
-    _: Trigger<ThemeChangedEvent>,
     theme: Res<Theme>,
     mut query: Query<(&mut TextColor, &mut TextFont), With<PushButtonIcon>>,
 ) {

@@ -12,9 +12,13 @@ use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::relationship::RelatedSpawner;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::spawn::SpawnRelated;
 use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::Commands;
+use bevy::ecs::system::In;
+use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
@@ -57,18 +61,24 @@ use crate::select::OnAddItem;
 use crate::select::Selection;
 use crate::select::ViewOf;
 use crate::theme::Theme;
-use crate::theme::ThemeChangedEvent;
 
 pub(crate) struct ListPlugin;
 
 impl Plugin for ListPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, update_scroll_position)
-            .add_observer(theme_items)
-            .add_observer(theme_lists)
-            .add_observer(theme_item_labels)
+            .add_systems(
+                Update,
+                (
+                    (|| None::<Entity>)
+                        .pipe(theme_items)
+                        .run_if(resource_changed::<Theme>),
+                    (|| None::<Entity>)
+                        .pipe(theme_lists)
+                        .run_if(resource_changed::<Theme>),
+                ),
+            )
             .add_observer(on_add_item)
-            // .add_observer(on_add_item_of)
             .add_observer(on_selection_change);
     }
 }
@@ -77,12 +87,6 @@ impl Plugin for ListPlugin {
 #[component(on_insert = Self::on_insert)]
 #[require(Name::new("List"))]
 pub struct List;
-
-#[derive(Component, Debug, Copy, Clone)]
-pub struct ListRef(pub Entity);
-
-#[derive(Component, Debug, Clone, Copy)]
-struct ItemLabel;
 
 impl List {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -100,8 +104,6 @@ impl List {
                 })
                 .collect::<Vec<_>>();
 
-            // world.commands().entity(items_entity).observe(observer);
-
             (items_entity, items)
         } else {
             let new_items = Items::default();
@@ -112,13 +114,6 @@ impl List {
                 .id();
             (items_entity, vec![])
         };
-
-        // world
-        //     .commands()
-        //     .entity(items_entity)
-        //     .observe(|t: Trigger<OnReplace>| {
-        //         println!("Local handler for SelectionChanged {t:?}");
-        //     });
 
         if context.entity != items_entity {
             world
@@ -172,6 +167,10 @@ impl List {
             .commands()
             .entity(context.entity)
             .insert((node, children));
+
+        world
+            .commands()
+            .run_system_cached_with(theme_lists, Some(context.entity));
     }
 }
 
@@ -180,6 +179,13 @@ impl List {
 pub(crate) struct ItemView {
     item_id: Entity,
 }
+
+// TODO delete
+#[derive(Component, Debug, Copy, Clone)]
+pub struct ListRef(pub Entity);
+
+#[derive(Component, Debug, Clone, Copy)]
+struct ItemLabel;
 
 impl ItemView {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
@@ -222,42 +228,9 @@ fn on_add_item(t: Trigger<OnAddItem>, items: Query<&Item>, mut commands: Command
             .observe_and_transform_mouse_events()
             .observe(handle_mouse_events);
     });
+
+    commands.run_system_cached_with(theme_items, Some(list_id));
 }
-
-// fn on_add_item_of(
-//     t: Trigger<OnAdd, ItemOf>,
-//     items: Query<(&Item, &ItemOf)>,
-//     lists: Query<&ListRef>,
-//     mut commands: Commands,
-// ) {
-//     let (item, ItemOf(item_of)) = items.get(t.target()).unwrap();
-//     println!("Insert item {}", item.label);
-//     let ListRef(list) = lists.get(*item_of).unwrap();
-
-//     commands.entity(*list).with_children(|spawner| {
-//         spawner
-//             .spawn((
-//                 Name::new("ItemView old"),
-//                 Button,
-//                 // Allow scrolling
-//                 Pickable {
-//                     should_block_lower: false,
-//                     ..default()
-//                 },
-//                 Node {
-//                     width: Val::Percent(100.0),
-//                     height: Val::Px(36.0),
-//                     justify_content: JustifyContent::FlexStart,
-//                     align_items: AlignItems::Center,
-//                     ..default()
-//                 },
-//                 ItemView { item: t.target() },
-//                 children![(Text(item.label.clone()), ItemLabel,
-// Pickable::IGNORE)],             ))
-//             .observe_and_transform_mouse_events()
-//             .observe(handle_mouse_events);
-//     });
-// }
 
 // TODO can this be replaced with https://taintedcoders.com/bevy/ui#relative-cursor-position
 #[derive(Component)]
@@ -359,7 +332,7 @@ fn on_selection_change(
 // }
 
 fn theme_items(
-    _: Trigger<ThemeChangedEvent>,
+    list_id: In<Option<Entity>>,
     theme: Res<Theme>,
     mut item_views: Query<(
         &ItemView,
@@ -369,8 +342,13 @@ fn theme_items(
     )>,
     selections: Query<&Selection>,
     lists: Query<(&Children, Option<&ViewOf>, Entity), With<List>>,
+    mut item_labels: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
+    all_children: Query<&Children>,
 ) {
-    for (children, view_of, list_id) in lists {
+    let mut theme_item = |children: &Children, view_of: Option<&ViewOf>, list_id: Entity| {
+        if children.is_empty() {
+            return;
+        }
         let last = children.len() - 1;
         // either this List is a view of some items defined elsewhere, or the items are
         // define on the List entity.
@@ -396,77 +374,28 @@ fn theme_items(
             };
 
             node.padding = theme.item_padding;
+
+            for c in all_children.get(*item_view_id).unwrap() {
+                let (mut text_color, mut text_font) = item_labels.get_mut(*c).unwrap();
+                text_color.0 = theme.colors.text_primary;
+                text_font.font_size = theme.font_size;
+            }
+        }
+    };
+    let list_id = list_id.0;
+
+    if let Some(list_id) = list_id {
+        let (children, view_of, list_id) = lists.get(list_id).unwrap();
+        theme_item(children, view_of, list_id);
+    } else {
+        for (children, view_of, list_id) in lists {
+            theme_item(children, view_of, list_id);
         }
     }
-
-    // for (selection, items, ListRef(list_ref)) in model {
-    //     println!("theme_items {selection:?} {items:?}");
-    //     let last = items.len() - 1;
-
-    //     for (i, item_view_id) in
-    // lists.iter_descendants::<Children>(*list_ref).enumerate() {
-    //         let (ItemView { item_id }, mut node, mut bg, mut br) =
-    //             item_views.get_mut(item_view_id).unwrap();
-
-    //         let is_selected = selection.is_selected(*item_id);
-
-    //         if is_selected {
-    //             bg.0 = theme.colors.selected_item;
-    //         } else {
-    //             bg.0 = theme.colors.background_primary;
-    //         }
-
-    //         *br = match i {
-    //             0 => BorderRadius::top(theme.corner_radius),
-    //             n if n == last => BorderRadius::bottom(theme.corner_radius),
-    //             _ => BorderRadius::ZERO,
-    //         };
-
-    //         node.padding = theme.item_padding;
-    //     }
-    // }
-
-    // #[derive(Debug)]
-    // struct State {
-    //     selection: Option<usize>,
-    //     num_items: usize,
-    // }
-    // let mut map = HashMap::new();
-    // model.iter().for_each(|(id, selection, items)| {
-    //     map.insert(
-    //         *id,
-    //         State {
-    //             selection: None, //selection.0,
-    //             num_items: items.len(),
-    //         },
-    //     );
-    // });
-
-    // println!("Theme items");
-    // for (mut node, mut bg, mut br, id, item) in &mut items {
-    //     println!("{item:?}");
-    //     let items_state = map.get(id).unwrap_or_else(|| {
-    //         panic!("Found a Item {item:?} {id:?} without a state");
-    //     });
-    //     // if items_state.selection == Some(item.item) {
-    //     //     bg.0 = theme.colors.selected_item;
-    //     // } else {
-    //     bg.0 = theme.colors.background_primary;
-    //     // }
-
-    //     let last = items_state.num_items - 1;
-    //     // *br = match item.item {
-    //     //     0 => BorderRadius::top(theme.corner_radius),
-    //     //     n if n == last => BorderRadius::bottom(theme.corner_radius),
-    //     //     _ => BorderRadius::ZERO,
-    //     // };
-
-    //     node.padding = theme.item_padding;
-    // }
 }
 
 fn theme_lists(
-    _: Trigger<ThemeChangedEvent>,
+    list: In<Option<Entity>>,
     theme: Res<Theme>,
     mut lists: Query<
         (
@@ -478,23 +407,21 @@ fn theme_lists(
         With<List>,
     >,
 ) {
-    for (mut node, mut bg, mut bc, mut br) in &mut lists {
-        node.border = UiRect::all(theme.border_thickness);
-        bg.0 = theme.colors.background_primary;
-        bc.0 = theme.colors.border;
-        *br = BorderRadius::all(theme.corner_radius);
-    }
-}
+    let theme_list =
+        |node: &mut Node, bg: &mut BackgroundColor, bc: &mut BorderColor, br: &mut BorderRadius| {
+            node.border = UiRect::all(theme.border_thickness);
+            bg.0 = theme.colors.background_primary;
+            bc.0 = theme.colors.border;
+            *br = BorderRadius::all(theme.corner_radius);
+        };
 
-fn theme_item_labels(
-    _: Trigger<ThemeChangedEvent>,
-    theme: Res<Theme>,
-    mut selectable_items_container: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
-) {
-    println!("theme item labels");
-    for (mut text_color, mut text_font) in &mut selectable_items_container {
-        text_color.0 = theme.colors.text_primary;
-        text_font.font_size = theme.font_size;
+    if let Some(list_id) = *list {
+        let (mut node, mut bg, mut bc, mut br) = lists.get_mut(list_id).unwrap();
+        theme_list(&mut node, &mut bg, &mut bc, &mut br);
+    } else {
+        for (mut node, mut bg, mut bc, mut br) in &mut lists {
+            theme_list(&mut node, &mut bg, &mut bc, &mut br);
+        }
     }
 }
 

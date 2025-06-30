@@ -12,11 +12,7 @@ use bevy::color::palettes::tailwind::GRAY_200;
 use bevy::color::palettes::tailwind::GRAY_600;
 use bevy::color::palettes::tailwind::GRAY_900;
 use bevy::color::palettes::tailwind::GRAY_950;
-use bevy::ecs::change_detection::DetectChanges;
-use bevy::ecs::event::Event;
 use bevy::ecs::resource::Resource;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::Res;
 use bevy::ui::ShadowStyle;
 use bevy::ui::UiRect;
 use bevy::ui::Val;
@@ -71,9 +67,6 @@ impl Theme {
     }
 }
 
-#[derive(Event, Debug, Copy, Clone)]
-pub struct ThemeChangedEvent;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ThemeColors {
     pub background_primary: Color,
@@ -118,13 +111,6 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     large_shadow: SHADOW_LG_DARK_MODE,
     small_shadow: SHADOW_SM_DARK_MODE,
 };
-
-// TODO change this to use https://taintedcoders.com/bevy/how-to/resource-change-detection
-pub(crate) fn on_theme_change(theme: Res<Theme>, mut commands: Commands) {
-    if theme.is_changed() {
-        commands.trigger(ThemeChangedEvent);
-    }
-}
 
 pub const SHADOW_SM: Color = Color::srgba(0.0, 0.0, 0.0, 0.05);
 pub const SHADOW_MD: Color = Color::srgba(0.0, 0.0, 0.0, 0.1);

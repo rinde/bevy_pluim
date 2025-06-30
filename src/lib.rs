@@ -11,7 +11,6 @@ pub mod theme;
 
 use bevy::app::App;
 use bevy::app::Plugin;
-use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
@@ -35,8 +34,6 @@ use crate::float::FloatPlugin;
 use crate::list::ListPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::theme::Theme;
-use crate::theme::ThemeChangedEvent;
-use crate::theme::on_theme_change;
 
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
@@ -45,12 +42,10 @@ impl Plugin for WidgetsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Widgets>()
             .init_resource::<Theme>()
-            .add_event::<ThemeChangedEvent>()
             .add_plugins(ListPlugin)
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
-            .add_plugins(ComboPlugin)
-            .add_systems(Update, on_theme_change);
+            .add_plugins(ComboPlugin);
     }
 }
 
