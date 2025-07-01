@@ -29,7 +29,6 @@ use bevy::ui::widget::Text;
 use bevy::utils::default;
 use itertools::Either;
 
-use crate::EntityCommandsExt;
 use crate::MouseEvent;
 use crate::WidgetId;
 use crate::theme::Theme;
@@ -108,12 +107,10 @@ impl PushButton {
 
         let mut commands = world.commands();
         let mut entity_commands = commands.entity(context.entity);
-        entity_commands.insert(Button); //.observe(observe_click);
+        entity_commands.insert(Button);
 
         if default_hover {
-            entity_commands
-                .observe_and_transform_mouse_events()
-                .observe(handle_hover);
+            entity_commands.observe(handle_hover);
         }
         let mut label_id = Entity::PLACEHOLDER;
         let mut icon_id = None;

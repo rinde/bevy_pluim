@@ -11,15 +11,19 @@ pub mod theme;
 
 use bevy::app::App;
 use bevy::app::Plugin;
+use bevy::app::PostStartup;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::event::Event;
+use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::resource::Resource;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::EntityCommands;
+use bevy::ecs::system::Query;
 use bevy::ecs::world::DeferredWorld;
 use bevy::ecs::world::EntityWorldMut;
 use bevy::picking::events::Out;
@@ -28,6 +32,7 @@ use bevy::picking::events::Pointer;
 use bevy::picking::events::Pressed;
 use bevy::picking::events::Released;
 use bevy::reflect::Reflect;
+use bevy::ui::Node;
 
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
@@ -45,8 +50,17 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ListPlugin)
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
-            .add_plugins(ComboPlugin);
+            .add_plugins(ComboPlugin)
+            .add_systems(PostStartup, setup);
     }
+}
+
+fn setup(mut commands: Commands, root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
+    let Ok(root) = root_node.single() else {
+        panic!("A root node is required");
+    };
+
+    commands.entity(root).observe_and_transform_mouse_events();
 }
 
 #[derive(Resource, Default, Copy, Clone, Debug)]

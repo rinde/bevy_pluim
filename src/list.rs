@@ -49,7 +49,6 @@ use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
 
-use crate::EntityCommandsExt;
 use crate::MouseEvent;
 use crate::WidgetId;
 use crate::get_anywhere;
@@ -149,8 +148,6 @@ impl List {
                         ItemView { item_id: item_ref },
                         children![(Text(item_label), ItemLabel, Pickable::IGNORE)],
                     ))
-                    // TODO register observer once and reuse it for all items
-                    .observe_and_transform_mouse_events()
                     .observe(handle_mouse_events);
             }
         }));
@@ -212,7 +209,7 @@ fn on_add_item(
     commands.entity(list_id).with_children(|spawner| {
         spawner
             .spawn((
-                Name::new("ItemView new"),
+                Name::new("ItemView"),
                 Button,
                 // Allow scrolling
                 Pickable {
@@ -231,7 +228,6 @@ fn on_add_item(
                 },
                 children![(Text(item.label.clone()), ItemLabel, Pickable::IGNORE)],
             ))
-            .observe_and_transform_mouse_events()
             .observe(handle_mouse_events);
     });
 
