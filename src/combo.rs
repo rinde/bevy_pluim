@@ -34,7 +34,7 @@ use crate::list::List;
 use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
 use crate::push_button::PushButtonLabel;
-use crate::push_button::PushButtonLabelRef;
+use crate::push_button::PushButtonRefs;
 use crate::select::Item;
 use crate::select::Items;
 use crate::select::OnSelectionChange;
@@ -142,7 +142,7 @@ fn on_press(
 fn on_selection_change(
     t: Trigger<OnSelectionChange>,
     combos: Query<&SubComponentsRef, With<Combo>>,
-    pblr: Query<&PushButtonLabelRef>,
+    pblr: Query<&PushButtonRefs>,
     selections: Query<&Selection>,
     items: Query<&Item>,
     theme: Res<Theme>,
@@ -154,10 +154,10 @@ fn on_selection_change(
         return;
     };
 
-    let PushButtonLabelRef(label_ref) = pblr.get(*button).unwrap();
+    let PushButtonRefs { label_id, .. } = pblr.get(*button).unwrap();
     let selection = selections.get(t.event().selection_id).unwrap();
 
-    let mut text = labels.get_mut(*label_ref).unwrap();
+    let mut text = labels.get_mut(*label_id).unwrap();
     let label = if selection.items.is_empty() {
         PLACEHOLDER_TEXT.to_string()
     } else {

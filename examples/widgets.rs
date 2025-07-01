@@ -171,6 +171,15 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ));
             },
         );
+        spawner
+            .spawn(PushButton::from_label("Add PushButton"))
+            .observe(
+                move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
+                    commands
+                        .entity(root)
+                        .with_child(PushButton::from_label("Hello"));
+                },
+            );
     });
 }
 

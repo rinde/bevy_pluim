@@ -5,8 +5,11 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::schedule::common_conditions::resource_changed;
+use bevy::ecs::system::In;
+use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
@@ -24,6 +27,7 @@ use bevy::ui::UiRect;
 use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
+use itertools::Either;
 
 use crate::EntityCommandsExt;
 use crate::MouseEvent;
@@ -37,11 +41,9 @@ impl Plugin for PushButtonPlugin {
     fn build(&self, app: &mut bevy::app::App) {
         app.add_systems(
             Update,
-            (
-                theme_push_button_icon.run_if(resource_changed::<Theme>),
-                theme_push_button_label.run_if(resource_changed::<Theme>),
-                theme_push_button.run_if(resource_changed::<Theme>),
-            ),
+            (|| None::<Entity>)
+                .pipe(theme_push_button)
+                .run_if(resource_changed::<Theme>),
         );
     }
 }
@@ -64,7 +66,10 @@ pub struct PushButton {
 pub struct PushButtonLabel;
 
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PushButtonLabelRef(pub Entity);
+pub struct PushButtonRefs {
+    pub label_id: Entity,
+    pub icon_id: Option<Entity>,
+}
 
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonIcon;
@@ -110,15 +115,16 @@ impl PushButton {
                 .observe_and_transform_mouse_events()
                 .observe(handle_hover);
         }
-        let mut label_ref = Entity::PLACEHOLDER;
+        let mut label_id = Entity::PLACEHOLDER;
+        let mut icon_id = None;
         if let Some(&id) = world.entity(context.entity).get::<WidgetId>() {
             world
                 .commands()
                 .entity(context.entity)
                 .with_children(|spawner| {
-                    label_ref = spawner.spawn((id, label)).id();
+                    label_id = spawner.spawn((id, label)).id();
                     if let Some(icon) = icon {
-                        spawner.spawn((id, icon));
+                        icon_id = Some(spawner.spawn((id, icon)).id());
                     }
                 });
         } else {
@@ -126,16 +132,20 @@ impl PushButton {
                 .commands()
                 .entity(context.entity)
                 .with_children(|spawner| {
-                    label_ref = spawner.spawn(label).id();
+                    label_id = spawner.spawn(label).id();
                     if let Some(icon) = icon {
-                        spawner.spawn(icon);
+                        icon_id = Some(spawner.spawn(icon).id());
                     }
                 });
         }
         world
             .commands()
             .entity(context.entity)
-            .insert(PushButtonLabelRef(label_ref));
+            .insert(PushButtonRefs { label_id, icon_id });
+
+        world
+            .commands()
+            .run_system_cached_with(theme_push_button, Some(context.entity));
     }
 }
 
@@ -154,20 +164,41 @@ fn handle_hover(
 }
 
 fn theme_push_button(
+    button_id: In<Option<Entity>>,
     theme: Res<Theme>,
-    mut query: Query<
+    mut buttons: Query<
         (
             &mut BackgroundColor,
             &mut BorderColor,
             &mut BorderRadius,
             &mut BoxShadow,
             &mut Node,
+            &PushButtonRefs,
         ),
         With<PushButton>,
     >,
+    mut labels: Query<
+        (&mut TextColor, &mut TextFont),
+        (With<PushButtonLabel>, Without<PushButtonIcon>),
+    >,
+    mut icons: Query<
+        (&mut TextColor, &mut TextFont),
+        (With<PushButtonIcon>, Without<PushButtonLabel>),
+    >,
 ) {
-    for (mut background_color, mut border_color, mut border_radius, mut box_shadow, mut node) in
-        &mut query
+    let it = if let Some(button_id) = button_id.as_ref() {
+        Either::Left([buttons.get_mut(*button_id).unwrap()].into_iter())
+    } else {
+        Either::Right(buttons.iter_mut())
+    };
+    for (
+        mut background_color,
+        mut border_color,
+        mut border_radius,
+        mut box_shadow,
+        mut node,
+        refs,
+    ) in it
     {
         background_color.0 = theme.colors.background_primary;
         border_color.0 = theme.colors.border;
@@ -175,31 +206,23 @@ fn theme_push_button(
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
         node.padding = theme.item_padding;
-    }
-}
 
-fn theme_push_button_label(
-    theme: Res<Theme>,
-    mut query: Query<(&mut TextColor, &mut TextFont), With<PushButtonLabel>>,
-) {
-    for (mut text_color, mut text_font) in &mut query {
+        // label
+        let (mut text_color, mut text_font) = labels.get_mut(refs.label_id).unwrap();
         *text_color = TextColor(theme.colors.text_primary);
         *text_font = TextFont {
             font_size: 14.0,
             ..default()
         };
-    }
-}
 
-fn theme_push_button_icon(
-    theme: Res<Theme>,
-    mut query: Query<(&mut TextColor, &mut TextFont), With<PushButtonIcon>>,
-) {
-    for (mut text_color, mut text_font) in &mut query {
-        *text_color = TextColor(theme.colors.border);
-        *text_font = TextFont {
-            font_size: 14.0,
-            ..default()
-        };
+        // icon
+        if let Some(icon_id) = refs.icon_id {
+            let (mut text_color, mut text_font) = icons.get_mut(icon_id).unwrap();
+            *text_color = TextColor(theme.colors.border);
+            *text_font = TextFont {
+                font_size: 14.0,
+                ..default()
+            };
+        }
     }
 }
