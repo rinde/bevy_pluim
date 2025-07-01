@@ -1,11 +1,12 @@
 
 
 # Todo
-- [ ] Combo: fix bug in unhighlighting label when deselecting
-- [ ] explore using <query>.get(entity_id) e.g. for finding combos etc
-- [ ] List: allow optionally setting maximum height
+- [ ] Tabs
+- [ ] ScrollBar
+- [ ] TabPane
+- [ ] Card
 - [ ] Create separate scroll component?
-- [ ] Refactor: use observers for mouse interaction. EntityCommands::observe(). See bevy scroll example.
+- [ ] List: allow optionally setting maximum height
 - [ ] Combo: allow specifying placeholder text
 - [ ] Combo: ensure List is visible within window
 - [ ] ClearColor: auto update ClearColor on Theme change
