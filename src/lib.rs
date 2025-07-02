@@ -6,6 +6,7 @@ pub mod combo;
 pub mod float;
 pub mod list;
 pub mod push_button;
+pub mod scroll_area;
 pub mod select;
 pub mod theme;
 
