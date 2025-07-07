@@ -16,7 +16,6 @@ use bevy::color::palettes::tailwind::ROSE_600;
 use bevy::color::palettes::tailwind::SKY_600;
 use bevy::color::palettes::tailwind::YELLOW_600;
 use bevy::ecs::relationship::RelatedSpawner;
-use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
@@ -26,10 +25,7 @@ use ui::WidgetsPlugin;
 use ui::combo::Combo;
 use ui::list::List;
 use ui::push_button::PushButton;
-use ui::scroll_area::Orientation;
 use ui::scroll_area::ScrollArea;
-use ui::scroll_area::ScrollBar;
-use ui::scroll_area::ScrollContainer;
 use ui::select::Item;
 use ui::select::Items;
 use ui::select::Selection;
@@ -58,6 +54,23 @@ fn main() {
 fn setup(mut commands: Commands, theme: Res<Theme>) {
     println!("Setup in app");
     commands.spawn(Camera2d);
+
+    const COLORS: [Srgba; 14] = [
+        YELLOW_600,
+        SKY_600,
+        ROSE_600,
+        PURPLE_600,
+        PINK_600,
+        ORANGE_600,
+        LIME_600,
+        INDIGO_600,
+        FUCHSIA_600,
+        EMERALD_600,
+        CYAN_600,
+        BLUE_600,
+        GREEN_600,
+        AMBER_600,
+    ];
 
     // Root container
     let root = commands
@@ -94,49 +107,25 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 //         Float
                 //     )]
                 // ),
-                (
-                    ScrollContainer,
-                    children![
-                        (
-                            ScrollArea,
-                            Children::spawn((SpawnWith(|parent: &mut RelatedSpawner<ChildOf>| {
-                                //
-                                let colors = [
-                                    YELLOW_600,
-                                    SKY_600,
-                                    ROSE_600,
-                                    PURPLE_600,
-                                    PINK_600,
-                                    ORANGE_600,
-                                    LIME_600,
-                                    INDIGO_600,
-                                    FUCHSIA_600,
-                                    EMERALD_600,
-                                    CYAN_600,
-                                    BLUE_600,
-                                    GREEN_600,
-                                    AMBER_600,
-                                ];
-                                for i in 0..300 {
-                                    parent.spawn((
-                                        Node {
-                                            width: Val::Px(50.0),
-                                            height: Val::Px(50.0),
-                                            ..default()
-                                        },
-                                        Pickable {
-                                            should_block_lower: false,
-                                            ..default()
-                                        },
-                                        BackgroundColor(Color::Srgba(colors[i % colors.len()])),
-                                    ));
-                                }
-                                parent.spawn(Text::new("Hello World"));
-                            }),)),
-                        ),
-                        ScrollBar(Orientation::Vertical),
-                        ScrollBar(Orientation::Horizontal)
-                    ]
+                ScrollArea::new(
+                    |parent: &mut RelatedSpawner<ChildOf>| {
+                        for i in 0..300 {
+                            parent.spawn((
+                                Node {
+                                    width: Val::Px(50.0),
+                                    height: Val::Px(50.0),
+                                    ..default()
+                                },
+                                Pickable {
+                                    should_block_lower: false,
+                                    ..default()
+                                },
+                                BackgroundColor(Color::Srgba(COLORS[i % COLORS.len()])),
+                            ));
+                        }
+                    },
+                    true,
+                    false
                 ),
                 (
                     List,
