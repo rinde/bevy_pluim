@@ -39,6 +39,7 @@ use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::list::ListPlugin;
 use crate::push_button::PushButtonPlugin;
+use crate::scroll_area::ScrollAreaPlugin;
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -52,6 +53,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
+            .add_plugins(ScrollAreaPlugin)
             .add_systems(PostStartup, setup);
     }
 }
