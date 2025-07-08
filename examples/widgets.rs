@@ -52,9 +52,6 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, theme: Res<Theme>) {
-    println!("Setup in app");
-    commands.spawn(Camera2d);
-
     const COLORS: [Srgba; 14] = [
         YELLOW_600,
         SKY_600,
@@ -71,6 +68,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         GREEN_600,
         AMBER_600,
     ];
+    commands.spawn(Camera2d);
 
     // Root container
     let root = commands
@@ -107,7 +105,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 //         Float
                 //     )]
                 // ),
-                ScrollArea::new(
+                ScrollArea::bundle(
                     |parent: &mut RelatedSpawner<ChildOf>| {
                         for i in 0..300 {
                             parent.spawn((

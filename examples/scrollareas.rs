@@ -47,19 +47,28 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         Node {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
-            justify_content: JustifyContent::SpaceEvenly,
-            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Start,
+            align_items: AlignItems::Start,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
+            row_gap: Val::Px(10.0),
+            column_gap: Val::Px(10.0),
             ..default()
         },
         BackgroundColor(theme.colors.background_primary),
         Root,
         children![
-            ScrollArea::new(create_squares(300, GridAutoFlow::Row), true, false),
-            ScrollArea::new(create_squares(50, GridAutoFlow::Row), true, false),
+            (
+                Node {
+                    width: Val::Px(200.0),
+                    height: Val::Px(200.0),
+                    ..default()
+                },
+                ScrollArea::bundle(create_squares(300, GridAutoFlow::Row), true, true)
+            ),
+            ScrollArea::bundle(create_squares(50, GridAutoFlow::Row), true, false),
             // ScrollArea::new(create_squares(1000), true, false),
-            ScrollArea::new(create_squares(200, GridAutoFlow::Column), true, true),
+            ScrollArea::bundle(create_squares(200, GridAutoFlow::Column), true, true),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));

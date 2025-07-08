@@ -1,10 +1,6 @@
 use bevy::app::Plugin;
 use bevy::app::PostUpdate;
 use bevy::app::Update;
-use bevy::color::Color;
-use bevy::color::palettes::tailwind::GRAY_200;
-use bevy::color::palettes::tailwind::RED_400;
-use bevy::color::palettes::tailwind::TEAL_400;
 use bevy::ecs::bundle::Bundle;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
@@ -33,18 +29,13 @@ use bevy::ui::BorderColor;
 use bevy::ui::BorderRadius;
 use bevy::ui::ComputedNode;
 use bevy::ui::Display;
-use bevy::ui::FlexDirection;
-use bevy::ui::FlexWrap;
-use bevy::ui::JustifyContent;
 use bevy::ui::Node;
 use bevy::ui::Overflow;
 use bevy::ui::PositionType;
 use bevy::ui::RepeatedGridTrack;
 use bevy::ui::ScrollPosition;
-use bevy::ui::UiRect;
 use bevy::ui::Val;
 use bevy::utils::default;
-use educe::Educe;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -66,11 +57,6 @@ impl Plugin for ScrollAreaPlugin {
 
 #[derive(Component, Clone, Copy, Debug)]
 #[require(Node {
-    // ensure these options are always set
-    // display: Display::Grid,
-    // grid_template_columns: vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)],
-    // grid_template_rows: vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)],
-    // allow below to change
     width: Val::Px(400.0),
     height: Val::Px(600.0),
     row_gap: Val::Px(2.0),
@@ -78,15 +64,10 @@ impl Plugin for ScrollAreaPlugin {
     ..default()
 })]
 #[component(on_insert=Self::on_insert)]
-pub struct ScrollArea {
-    v_scroll: bool,
-    h_scroll: bool,
-}
+pub struct ScrollArea;
 
 impl ScrollArea {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        // world.commands().ru
-
         let mut entity = world.entity_mut(context.entity);
         let mut node = entity.get_mut::<Node>().unwrap();
 
@@ -94,54 +75,17 @@ impl ScrollArea {
         node.grid_template_columns =
             vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)];
         node.grid_template_rows = vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)];
-
-        // world
-        //     .commands()
-        //     .run_system_cached_with(scroll_system, context.entity);
-
-        // let refs = *world
-        //     .entity(context.entity)
-        //     .get::<ScrollAreaRefs>()
-        //     .unwrap();
-
-        // world.commands().entity(refs.contents).insert(refs);
     }
 }
 
 #[derive(Component, Clone, Copy, Debug)]
 #[require(Node {
-    // display: Display::Flex,
-    // flex_direction: FlexDirection::Row,
-    // flex_wrap: FlexWrap::Wrap,
-    // justify_content: JustifyContent::SpaceBetween,
-    // align_content: bevy::ui::AlignContent::FlexStart,
-    // row_gap: Val::Px(2.0),
-    // column_gap: Val::Px(2.0),
-    // padding: UiRect::all(Val::Px(4.0)),
     width : Val::Percent(100.0),
     height: Val::Percent(100.0),
     overflow: Overflow::scroll(),
     ..default()
 })]
-#[component(on_insert=Self::on_insert)]
-pub struct ScrollContents {}
-
-impl ScrollContents {
-    fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        // world.commands().ru
-
-        // world
-        //     .commands()
-        //     .run_system_cached_with(scroll_system, context.entity);
-
-        // let refs = *world
-        //     .entity(context.entity)
-        //     .get::<ScrollAreaRefs>()
-        //     .unwrap();
-
-        // world.commands().entity(refs.contents).insert(refs);
-    }
-}
+pub struct ScrollContents;
 
 #[derive(Component, Clone, Copy, Debug)]
 struct ScrollAreaRefs {
@@ -150,18 +94,15 @@ struct ScrollAreaRefs {
 }
 
 impl ScrollArea {
-    pub fn new<F>(contents_spawner: F, v_scroll: bool, h_scroll: bool) -> impl Bundle
+    pub fn bundle<F>(contents_spawner: F, v_scroll: bool, h_scroll: bool) -> impl Bundle
     where
         F: FnOnce(&mut RelatedSpawner<ChildOf>) + Send + Sync + 'static,
     {
-        let bundle = (
-            ScrollArea { v_scroll, h_scroll },
+        (
+            ScrollArea,
             Children::spawn(SpawnWith(move |s: &mut RelatedSpawner<ChildOf>| {
                 let contents_ref = s
-                    .spawn((
-                        ScrollContents {},
-                        Children::spawn(SpawnWith(contents_spawner)),
-                    ))
+                    .spawn((ScrollContents, Children::spawn(SpawnWith(contents_spawner))))
                     .id();
 
                 let refs = ScrollAreaRefs {
@@ -169,9 +110,11 @@ impl ScrollArea {
                     h_scrollbar: h_scroll.then(|| s.spawn(ScrollBar(Orientation::Horizontal)).id()),
                 };
                 s.world_mut().entity_mut(contents_ref).insert(refs);
+                s.world_mut()
+                    .commands()
+                    .run_system_cached_with(theme_scroll_area, Some(contents_ref));
             })),
-        );
-        bundle
+        )
     }
 }
 
@@ -188,26 +131,10 @@ pub enum Orientation {
 
 impl ScrollBar {
     pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        // let x = world.get::<ScrollBar>(context.entity).unwrap();
-
-        // let node = match x.0 {
-        //     Orientation::Horizontal => Node {
-        //         min_height: Val::Px(8.0),
-        //         ..default()
-        //     },
-        //     Orientation::Vertical => Node {
-        //         min_width: Val::Px(8.0),
-        //         ..default()
-        //     },
-        // };
-
-        // world.commands().entity(context.entity).insert(node);
-
         world
             .commands()
             .entity(context.entity)
             .with_children(|spawner| {
-                //
                 spawner.spawn(ScrollThumb);
             });
     }
@@ -241,10 +168,6 @@ fn scroll_system(
     mut scroll_bars: Query<(&ComputedNode, &Children, &mut Visibility), With<ScrollBar>>,
     mut scroll_thumbs: Query<&mut Node, With<ScrollThumb>>,
 ) {
-    println!(
-        "changed_scroll_contents_entity {:?}",
-        changed_scroll_contents_entity
-    );
     let (scroll_pos, contents_dims, refs) = scroll_contents
         .get(*changed_scroll_contents_entity)
         .unwrap();
@@ -292,12 +215,12 @@ fn scroll_system(
         match orientation {
             Orientation::Horizontal => {
                 thumb_node.width = Val::Px(thumb_length);
-                (*thumb_node).left =
+                thumb_node.left =
                     Val::Px((ratio * (visible_length - thumb_length)).clamp(0.0, visible_length));
             }
             Orientation::Vertical => {
                 thumb_node.height = Val::Px(thumb_length);
-                (*thumb_node).top =
+                thumb_node.top =
                     Val::Px((ratio * (visible_length - thumb_length)).clamp(0.0, visible_length));
             }
         }
