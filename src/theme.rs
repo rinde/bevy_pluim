@@ -9,7 +9,11 @@ use bevy::color::palettes::tailwind::BLUE_900;
 use bevy::color::palettes::tailwind::GRAY_50;
 use bevy::color::palettes::tailwind::GRAY_100;
 use bevy::color::palettes::tailwind::GRAY_200;
+use bevy::color::palettes::tailwind::GRAY_300;
+use bevy::color::palettes::tailwind::GRAY_400;
 use bevy::color::palettes::tailwind::GRAY_600;
+use bevy::color::palettes::tailwind::GRAY_700;
+use bevy::color::palettes::tailwind::GRAY_800;
 use bevy::color::palettes::tailwind::GRAY_900;
 use bevy::color::palettes::tailwind::GRAY_950;
 use bevy::ecs::resource::Resource;
@@ -27,6 +31,9 @@ pub struct Theme {
     pub border_thickness: Val,
 
     pub colors: ThemeColors,
+
+    #[educe(Default = Val::Px(8.0))]
+    pub scroll_bar_width: Val,
 
     #[educe(Default = 14.0)]
     pub font_size: f32,
@@ -79,6 +86,7 @@ pub struct ThemeColors {
     pub text_primary: Color,
     pub large_shadow: Color,
     pub small_shadow: Color,
+    pub scroll_thumb_background: Color,
 }
 
 impl Default for ThemeColors {
@@ -88,8 +96,8 @@ impl Default for ThemeColors {
 }
 
 pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
-    background_primary: Color::WHITE,
-    background_secondary: Color::Srgba(GRAY_50),
+    background_primary: Color::Srgba(GRAY_50),
+    background_secondary: Color::Srgba(GRAY_200),
     selected_item: Color::Srgba(BLUE_500),
     hovered_item: Color::Srgba(BLUE_200),
     selected_hovered_item: Color::Srgba(BLUE_600),
@@ -98,18 +106,20 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     text_primary: Color::Srgba(GRAY_900),
     large_shadow: SHADOW_LG,
     small_shadow: SHADOW_SM,
+    scroll_thumb_background: Color::Srgba(GRAY_400),
 };
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::Srgba(GRAY_950),
-    background_secondary: Color::Srgba(GRAY_900),
+    background_secondary: Color::Srgba(GRAY_800),
     selected_item: Color::Srgba(BLUE_800),
     hovered_item: Color::Srgba(BLUE_900),
     selected_hovered_item: Color::Srgba(BLUE_700),
-    border: Color::Srgba(GRAY_600),
+    border: Color::Srgba(GRAY_800),
     border_highlight: Color::Srgba(BLUE_800),
     text_primary: Color::Srgba(GRAY_100),
     large_shadow: SHADOW_LG_DARK_MODE,
     small_shadow: SHADOW_SM_DARK_MODE,
+    scroll_thumb_background: Color::Srgba(GRAY_600),
 };
 
 pub const SHADOW_SM: Color = Color::srgba(0.0, 0.0, 0.0, 0.05);
