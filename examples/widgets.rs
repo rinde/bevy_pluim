@@ -107,20 +107,39 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 // ),
                 ScrollArea::bundle(
                     |parent: &mut RelatedSpawner<ChildOf>| {
-                        for i in 0..300 {
-                            parent.spawn((
-                                Node {
-                                    width: Val::Px(50.0),
-                                    height: Val::Px(50.0),
-                                    ..default()
-                                },
+                        parent
+                            .spawn((
                                 Pickable {
                                     should_block_lower: false,
                                     ..default()
                                 },
-                                BackgroundColor(Color::Srgba(COLORS[i % COLORS.len()])),
-                            ));
-                        }
+                                Node {
+                                    // width: Val::Px(200.0),
+                                    // height: Val::Px(300.0),
+                                    display: Display::Flex,
+                                    flex_wrap: FlexWrap::Wrap,
+                                    flex_direction: FlexDirection::Row,
+                                    row_gap: Val::Px(10.0),
+                                    column_gap: Val::Px(10.0),
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|parent| {
+                                for i in 0..300 {
+                                    parent.spawn((
+                                        Node {
+                                            width: Val::Px(50.0),
+                                            height: Val::Px(50.0),
+                                            ..default()
+                                        },
+                                        Pickable {
+                                            should_block_lower: false,
+                                            ..default()
+                                        },
+                                        BackgroundColor(Color::Srgba(COLORS[i % COLORS.len()])),
+                                    ));
+                                }
+                            });
                     },
                     true,
                     false
