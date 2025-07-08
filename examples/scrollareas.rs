@@ -53,6 +53,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             flex_wrap: FlexWrap::Wrap,
             row_gap: Val::Px(10.0),
             column_gap: Val::Px(10.0),
+            padding: UiRect::all(Val::Px(10.0)),
             ..default()
         },
         BackgroundColor(theme.colors.background_primary),

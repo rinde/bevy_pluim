@@ -7,6 +7,7 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::hierarchy::Children;
+use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
 use bevy::ecs::query::Or;
 use bevy::ecs::query::With;
@@ -22,6 +23,7 @@ use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
 use bevy::math::Vec2;
+use bevy::prelude::Button;
 use bevy::prelude::SpawnRelated;
 use bevy::render::view::Visibility;
 use bevy::ui::BackgroundColor;
@@ -38,6 +40,7 @@ use bevy::ui::Val;
 use bevy::utils::default;
 use itertools::Either;
 
+use crate::MouseEvent;
 use crate::theme::Theme;
 
 #[derive(Copy, Clone, Debug)]
@@ -135,17 +138,35 @@ impl ScrollBar {
             .commands()
             .entity(context.entity)
             .with_children(|spawner| {
-                spawner.spawn(ScrollThumb);
+                spawner.spawn(ScrollThumb).observe(handle_hover);
             });
     }
 }
 
 #[derive(Component, Clone, Copy, Debug)]
-#[require(Node{
-    position_type: PositionType::Absolute,
-..default()
-})]
+#[require(
+    Button,
+    Node {
+        position_type: PositionType::Absolute,
+        ..default()
+    }
+)]
 struct ScrollThumb;
+
+// TODO wait for 0.17 to implement dragging thumb
+fn handle_hover(
+    trigger: Trigger<MouseEvent>,
+    mut query: Query<&mut BackgroundColor>,
+    theme: Res<Theme>,
+) {
+    let color = match trigger.event() {
+        MouseEvent::Over => theme.colors.hovered_item,
+        MouseEvent::Pressed => theme.colors.selected_hovered_item,
+        MouseEvent::Released => theme.colors.selected_item,
+        MouseEvent::Out => theme.colors.scroll_thumb_background,
+    };
+    *query.get_mut(trigger.target()).unwrap() = BackgroundColor(color);
+}
 
 fn handle_scroll_change(
     scroll_contents: Query<
