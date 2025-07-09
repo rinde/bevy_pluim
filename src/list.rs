@@ -37,11 +37,13 @@ use bevy::ui::BorderRadius;
 use bevy::ui::Display;
 use bevy::ui::GridAutoFlow;
 use bevy::ui::JustifyContent;
+use bevy::ui::JustifySelf;
 use bevy::ui::Node;
 use bevy::ui::Overflow;
 use bevy::ui::OverflowClipMargin;
 use bevy::ui::PositionType;
 use bevy::ui::RelativeCursorPosition;
+use bevy::ui::RepeatedGridTrack;
 use bevy::ui::ScrollPosition;
 use bevy::ui::UiRect;
 use bevy::ui::Val;
@@ -85,8 +87,20 @@ impl Plugin for ListPlugin {
 
 #[derive(Component, Debug, Copy, Clone)]
 #[component(on_insert = Self::on_insert)]
-#[require(Name::new("List"))]
+#[require(Name::new("List"), ListLayout::Vertical, CornerStyle::FollowLayout)]
 pub struct List;
+
+#[derive(Component, Debug, Copy, Clone)]
+pub enum ListLayout {
+    Vertical,
+    Horizontal,
+    VerticalGrid { columns: u16 },
+}
+#[derive(Component, Debug, Copy, Clone)]
+pub enum CornerStyle {
+    FollowLayout,
+    Tabs,
+}
 
 impl List {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -152,12 +166,26 @@ impl List {
             }
         }));
 
+        let layout = world.entity(context.entity).get::<ListLayout>().unwrap();
+
+        let grid_auto_flow = match layout {
+            ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => {
+                GridAutoFlow::RowDense
+            }
+            ListLayout::Horizontal => GridAutoFlow::ColumnDense,
+        };
+        let grid_template_columns = match layout {
+            ListLayout::Vertical | ListLayout::Horizontal => vec![],
+            ListLayout::VerticalGrid { columns } => vec![RepeatedGridTrack::auto(*columns)],
+        };
+
         // TODO allow options to set max size and scroll if contents don't fit
         let node = Node {
             position_type: PositionType::Relative,
             display: Display::Grid,
-            grid_auto_flow: GridAutoFlow::RowDense,
-            overflow: Overflow::scroll(),
+            grid_auto_flow,
+            grid_template_columns,
+            overflow: Overflow::clip(),
             overflow_clip_margin: OverflowClipMargin::padding_box(),
             ..default()
         };
@@ -198,13 +226,18 @@ fn on_add_item(
     t: Trigger<OnAddItem>,
     items: Query<&Item>,
     mut commands: Commands,
-    lists: Query<&List>,
+    lists: Query<&ListLayout, With<List>>,
 ) {
-    if !lists.contains(t.target()) {
+    let Ok(layout) = lists.get(t.target()) else {
         return;
-    }
+    };
     let item = items.get(t.event().item_id).unwrap();
     let list_id = t.target();
+
+    let width = match layout {
+        ListLayout::Horizontal | ListLayout::VerticalGrid { .. } => Val::Auto,
+        ListLayout::Vertical => Val::Percent(100.0),
+    };
 
     commands.entity(list_id).with_children(|spawner| {
         spawner
@@ -217,9 +250,12 @@ fn on_add_item(
                     ..default()
                 },
                 Node {
-                    width: Val::Percent(100.0),
+                    display: Display::Flex,
+                    width,
                     height: Val::Px(36.0),
-                    justify_content: JustifyContent::FlexStart,
+                    justify_self: JustifySelf::Stretch,
+                    flex_grow: 1.0,
+                    justify_content: JustifyContent::Stretch,
                     align_items: AlignItems::Center,
                     ..default()
                 },
@@ -306,13 +342,27 @@ fn theme_items(
         &mut Node,
         &mut BackgroundColor,
         &mut BorderRadius,
+        &mut BorderColor,
     )>,
     selections: Query<&Selection>,
-    lists: Query<(&Children, Option<&ViewOf>, Entity), With<List>>,
+    lists: Query<
+        (
+            &Children,
+            Option<&ViewOf>,
+            Entity,
+            &ListLayout,
+            &CornerStyle,
+        ),
+        With<List>,
+    >,
     mut item_labels: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
     all_children: Query<&Children>,
 ) {
-    let mut theme_item = |children: &Children, view_of: Option<&ViewOf>, list_id: Entity| {
+    let mut theme_item = |children: &Children,
+                          view_of: Option<&ViewOf>,
+                          list_id: Entity,
+                          layout: ListLayout,
+                          corner_style: CornerStyle| {
         if children.is_empty() {
             return;
         }
@@ -323,22 +373,65 @@ fn theme_items(
         let selection = selections.get(selection_id).unwrap();
 
         for (i, item_view_id) in children.iter().enumerate() {
-            let (ItemView { item_id }, mut node, mut bg, mut br) =
+            let (ItemView { item_id }, mut node, mut bg, mut br, mut border_color) =
                 item_views.get_mut(*item_view_id).unwrap();
 
             let is_selected = selection.is_selected(*item_id);
 
             if is_selected {
                 bg.0 = theme.colors.selected_item;
+                border_color.0 = theme.colors.border_highlight;
             } else {
                 bg.0 = theme.colors.background_primary;
+                border_color.0 = theme.colors.border;
             }
 
-            *br = match i {
-                0 => BorderRadius::top(theme.corner_radius),
-                n if n == last => BorderRadius::bottom(theme.corner_radius),
-                _ => BorderRadius::ZERO,
-            };
+            match corner_style {
+                CornerStyle::Tabs => {
+                    *br = match layout {
+                        ListLayout::Vertical | ListLayout::VerticalGrid { .. } => {
+                            BorderRadius::left(theme.corner_radius)
+                        }
+                        ListLayout::Horizontal => BorderRadius::top(theme.corner_radius),
+                    };
+                    node.border = UiRect::all(Val::Px(1.0));
+                }
+                CornerStyle::FollowLayout => {
+                    node.border = UiRect::ZERO;
+                    match layout {
+                        ListLayout::Vertical => {
+                            *br = match i {
+                                0 => BorderRadius::top(theme.corner_radius),
+                                n if n == last => BorderRadius::bottom(theme.corner_radius),
+                                _ => BorderRadius::ZERO,
+                            }
+                        }
+                        ListLayout::Horizontal => {
+                            *br = match i {
+                                0 => BorderRadius::left(theme.corner_radius),
+                                n if n == last => BorderRadius::right(theme.corner_radius),
+                                _ => BorderRadius::ZERO,
+                            }
+                        }
+                        ListLayout::VerticalGrid { columns } => {
+                            let columns = columns as usize;
+                            *br = match i {
+                                0 => BorderRadius::top_left(theme.corner_radius),
+                                n if n == columns - 1 => {
+                                    BorderRadius::top_right(theme.corner_radius)
+                                }
+                                n if n % columns == 0 && last.abs_diff(n) < columns => {
+                                    BorderRadius::bottom_left(theme.corner_radius)
+                                }
+                                n if n == last && last % columns == 0 => {
+                                    BorderRadius::bottom_right(theme.corner_radius)
+                                }
+                                _ => BorderRadius::ZERO,
+                            }
+                        }
+                    }
+                }
+            }
 
             node.padding = theme.item_padding;
 
@@ -352,11 +445,11 @@ fn theme_items(
     let list_id = list_id.0;
 
     if let Some(list_id) = list_id {
-        let (children, view_of, list_id) = lists.get(list_id).unwrap();
-        theme_item(children, view_of, list_id);
+        let (children, view_of, list_id, layout, corner_style) = lists.get(list_id).unwrap();
+        theme_item(children, view_of, list_id, *layout, *corner_style);
     } else {
-        for (children, view_of, list_id) in lists {
-            theme_item(children, view_of, list_id);
+        for (children, view_of, list_id, layout, corner_style) in lists {
+            theme_item(children, view_of, list_id, *layout, *corner_style);
         }
     }
 }
@@ -370,24 +463,44 @@ fn theme_lists(
             &mut BackgroundColor,
             &mut BorderColor,
             &mut BorderRadius,
+            &ListLayout,
+            &CornerStyle,
         ),
         With<List>,
     >,
 ) {
-    let theme_list =
-        |node: &mut Node, bg: &mut BackgroundColor, bc: &mut BorderColor, br: &mut BorderRadius| {
-            node.border = UiRect::all(theme.border_thickness);
-            bg.0 = theme.colors.background_primary;
-            bc.0 = theme.colors.border;
-            *br = BorderRadius::all(theme.corner_radius);
+    let theme_list = |node: &mut Node,
+                      bg: &mut BackgroundColor,
+                      bc: &mut BorderColor,
+                      br: &mut BorderRadius,
+                      layout: ListLayout,
+                      corner_style: CornerStyle| {
+        node.border = match corner_style {
+            CornerStyle::FollowLayout => UiRect::all(theme.border_thickness),
+            CornerStyle::Tabs => UiRect::ZERO,
         };
+        bg.0 = theme.colors.background_primary;
+        bc.0 = theme.colors.border;
+
+        let radius = match corner_style {
+            CornerStyle::FollowLayout => BorderRadius::all(theme.corner_radius),
+            CornerStyle::Tabs => match layout {
+                ListLayout::Vertical | ListLayout::VerticalGrid { .. } => {
+                    BorderRadius::left(theme.corner_radius)
+                }
+                ListLayout::Horizontal => BorderRadius::top(theme.corner_radius),
+            },
+        };
+        *br = radius;
+    };
 
     if let Some(list_id) = *list {
-        let (mut node, mut bg, mut bc, mut br) = lists.get_mut(list_id).unwrap();
-        theme_list(&mut node, &mut bg, &mut bc, &mut br);
+        let (mut node, mut bg, mut bc, mut br, layout, corner_style) =
+            lists.get_mut(list_id).unwrap();
+        theme_list(&mut node, &mut bg, &mut bc, &mut br, *layout, *corner_style);
     } else {
-        for (mut node, mut bg, mut bc, mut br) in &mut lists {
-            theme_list(&mut node, &mut bg, &mut bc, &mut br);
+        for (mut node, mut bg, mut bc, mut br, layout, corner_style) in &mut lists {
+            theme_list(&mut node, &mut bg, &mut bc, &mut br, *layout, *corner_style);
         }
     }
 }

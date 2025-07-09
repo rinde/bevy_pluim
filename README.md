@@ -1,15 +1,19 @@
 
 
 # Todo
+- [v] ScrollBar
+- [v] List as 2D grid + List horizontal
+- [ ] Custom item bundle (color square)
+- [ ] Customizable List bundle to show tooltip
 - [ ] Tabs
-- [ ] ScrollBar
 - [ ] TabPane
 - [ ] Card
+- [ ] ClearColor: auto update ClearColor on Theme change
 - [ ] Create separate scroll component?
 - [ ] List: allow optionally setting maximum height
 - [ ] Combo: allow specifying placeholder text
 - [ ] Combo: ensure List is visible within window
-- [ ] ClearColor: auto update ClearColor on Theme change
+- [ ] ScrollArea: allow dragging thumb
 
 
 # Open questions
