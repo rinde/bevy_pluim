@@ -12,6 +12,7 @@ use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::relationship::RelatedSpawner;
+use bevy::ecs::relationship::RelatedSpawnerCommands;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::spawn::SpawnRelated;
@@ -22,6 +23,7 @@ use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::world::World;
 use bevy::input::ButtonInput;
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::MouseScrollUnit;
@@ -37,6 +39,7 @@ use bevy::ui::BorderRadius;
 use bevy::ui::Display;
 use bevy::ui::GridAutoFlow;
 use bevy::ui::JustifyContent;
+use bevy::ui::JustifyItems;
 use bevy::ui::JustifySelf;
 use bevy::ui::Node;
 use bevy::ui::Overflow;
@@ -91,7 +94,12 @@ impl Plugin for ListPlugin {
 
 #[derive(Component, Debug, Copy, Clone)]
 #[component(on_insert = Self::on_insert)]
-#[require(Name::new("List"), ListLayout::Vertical, CornerStyle::FollowLayout)]
+#[require(
+    Name::new("List"),
+    ListLayout::Vertical,
+    CornerStyle::FollowLayout,
+    ItemViewFactory(Box::new(ItemLabel::create))
+)]
 pub struct List;
 
 #[derive(Component, Debug, Copy, Clone)]
@@ -100,10 +108,24 @@ pub enum ListLayout {
     Horizontal,
     VerticalGrid { columns: u16 },
 }
+
 #[derive(Component, Debug, Copy, Clone)]
 pub enum CornerStyle {
     FollowLayout,
     Tabs,
+}
+
+#[derive(Component)]
+pub struct ItemViewFactory(
+    pub  Box<
+        dyn Fn(&mut RelatedSpawnerCommands<ChildOf>, &World, Entity, &Item) -> Entity + Send + Sync,
+    >,
+);
+
+impl std::fmt::Debug for ItemViewFactory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ItemViewFactory").finish()
+    }
 }
 
 impl List {
@@ -233,15 +255,25 @@ impl ItemLabel {
             .commands()
             .run_system_cached_with(theme_item_labels, Some(context.entity));
     }
+
+    fn create(
+        parent: &mut RelatedSpawnerCommands<ChildOf>,
+        _world: &World,
+        _item_ref: Entity,
+        item: &Item,
+    ) -> Entity {
+        parent.spawn((Text(item.label.clone()), ItemLabel)).id()
+    }
 }
 
 fn on_add_item(
     t: Trigger<OnAddItem>,
     items: Query<&Item>,
     mut commands: Commands,
-    lists: Query<&ListLayout, With<List>>,
+    lists: Query<&ItemViewFactory, With<List>>,
+    world: &World,
 ) {
-    let Ok(_layout) = lists.get(t.target()) else {
+    let Ok(factory) = lists.get(t.target()) else {
         return;
     };
     let item = items.get(t.event().item_id).unwrap();
@@ -260,17 +292,23 @@ fn on_add_item(
                 Node {
                     display: Display::Flex,
                     justify_self: JustifySelf::Stretch,
-                    flex_grow: 1.0,
+                    // flex_grow: 1.0,
                     justify_content: JustifyContent::Stretch,
-                    align_items: AlignItems::Center,
+                    align_items: AlignItems::Stretch,
+                    padding: UiRect::ZERO,
                     ..default()
                 },
                 ItemView {
                     item_id: t.event().item_id,
                 },
-                children![(Text(item.label.clone()), ItemLabel, Pickable::IGNORE)],
+                // children![(Text(item.label.clone()), ItemLabel, Pickable::IGNORE)],
             ))
-            .observe(handle_mouse_events);
+            .observe(handle_mouse_events)
+            .with_children(|parent| {
+                let id = factory.0(parent, world, t.event().item_id, item);
+
+                parent.commands().entity(id).insert(Pickable::IGNORE);
+            });
     });
 
     commands.run_system_cached_with(theme_items, Some(list_id));
@@ -513,7 +551,7 @@ pub fn update_scroll_position(
     }
 }
 
-fn theme_item_border(
+const fn theme_item_border(
     node: &mut Node,
     border_radius: &mut BorderRadius,
     corner_style: CornerStyle,

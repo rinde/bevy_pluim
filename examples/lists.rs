@@ -1,6 +1,11 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::Startup;
+use bevy::color::palettes::css::BLUE;
+use bevy::color::palettes::css::GREEN;
+use bevy::color::palettes::css::ORANGE;
+use bevy::color::palettes::css::RED;
+use bevy::color::palettes::css::YELLOW;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
@@ -8,6 +13,7 @@ use bevy_egui::EguiPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::list::CornerStyle;
+use ui::list::ItemViewFactory;
 use ui::list::List;
 use ui::list::ListLayout;
 use ui::push_button::PushButton;
@@ -144,10 +150,41 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     Item::new("Belgium")
                 ]),
             ),
+            (
+                List,
+                ListLayout::VerticalGrid { columns: 3 },
+                Selection {
+                    items: smallvec![],
+                    multi: false,
+                },
+                ItemViewFactory(Box::new(|parent, world, item_id, _item| {
+                    let color = world.entity(item_id).get::<MyColor>().unwrap();
+                    parent
+                        .spawn((
+                            Node {
+                                width: Val::Px(30.0),
+                                height: Val::Px(30.0),
+                                ..default()
+                            },
+                            BackgroundColor(color.0),
+                        ))
+                        .id()
+                })),
+                related!(Items[
+                    (Item::new("Orange"), MyColor(ORANGE.into())),
+                    (Item::new("Red"), MyColor(RED.into())),
+                    (Item::new("Blue"), MyColor(BLUE.into())),
+                    (Item::new("Green"), MyColor(GREEN.into())),
+                    (Item::new("Yellow"), MyColor(YELLOW.into())),
+                ]),
+            ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));
 }
+
+#[derive(Component)]
+struct MyColor(Color);
 
 #[derive(Component)]
 struct ThemeButton;
