@@ -50,6 +50,7 @@ use bevy::ui::Val;
 use bevy::ui::widget::Button;
 use bevy::ui::widget::Text;
 use bevy::utils::default;
+use itertools::Either;
 
 use crate::MouseEvent;
 use crate::WidgetId;
@@ -77,6 +78,9 @@ impl Plugin for ListPlugin {
                         .run_if(resource_changed::<Theme>),
                     (|| None::<Entity>)
                         .pipe(theme_lists)
+                        .run_if(resource_changed::<Theme>),
+                    (|| None::<Entity>)
+                        .pipe(theme_item_labels)
                         .run_if(resource_changed::<Theme>),
                 ),
             )
@@ -207,9 +211,6 @@ pub(crate) struct ItemView {
     item_id: Entity,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
-struct ItemLabel;
-
 impl ItemView {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let Some(parent) = world.entity(context.entity).get::<ChildOf>() else {
@@ -219,6 +220,18 @@ impl ItemView {
             panic!("ItemView must be a child of an entity with a WidgetId");
         };
         world.commands().entity(context.entity).insert(parent_id);
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy)]
+#[component(on_insert=Self::on_insert)]
+struct ItemLabel;
+
+impl ItemLabel {
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        world
+            .commands()
+            .run_system_cached_with(theme_item_labels, Some(context.entity));
     }
 }
 
@@ -348,8 +361,6 @@ fn theme_items(
         ),
         With<List>,
     >,
-    mut item_labels: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
-    all_children: Query<&Children>,
 ) {
     let mut theme_item = |children: &Children,
                           view_of: Option<&ViewOf>,
@@ -390,12 +401,6 @@ fn theme_items(
             );
 
             node.padding = theme.item_padding;
-
-            for c in all_children.get(*item_view_id).unwrap() {
-                let (mut text_color, mut text_font) = item_labels.get_mut(*c).unwrap();
-                text_color.0 = theme.colors.text_primary;
-                text_font.font_size = theme.font_size;
-            }
         }
     };
     let list_id = list_id.0;
@@ -407,6 +412,23 @@ fn theme_items(
         for (children, view_of, list_id, layout, corner_style) in lists {
             theme_item(children, view_of, list_id, *layout, *corner_style);
         }
+    }
+}
+
+fn theme_item_labels(
+    item_label: In<Option<Entity>>,
+    mut item_labels: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
+    theme: Res<Theme>,
+) {
+    let it = if let Some(item_label_ref) = item_label.as_ref() {
+        Either::Left([item_labels.get_mut(*item_label_ref).unwrap()].into_iter())
+    } else {
+        Either::Right(item_labels.iter_mut())
+    };
+
+    for (mut text_color, mut text_font) in it {
+        text_color.0 = theme.colors.text_primary;
+        text_font.font_size = theme.font_size;
     }
 }
 
