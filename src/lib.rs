@@ -8,6 +8,7 @@ pub mod list;
 pub mod push_button;
 pub mod scroll_area;
 pub mod select;
+pub mod tailwind;
 pub mod theme;
 
 use bevy::app::App;

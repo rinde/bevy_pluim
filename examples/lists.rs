@@ -1,11 +1,8 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::Startup;
-use bevy::color::palettes::css::BLUE;
-use bevy::color::palettes::css::GREEN;
-use bevy::color::palettes::css::ORANGE;
-use bevy::color::palettes::css::RED;
-use bevy::color::palettes::css::YELLOW;
+use bevy::color::palettes::tailwind::GRAY_300;
+use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
@@ -20,6 +17,7 @@ use ui::push_button::PushButton;
 use ui::select::Item;
 use ui::select::Items;
 use ui::select::Selection;
+use ui::tailwind::COLORS;
 use ui::theme::Theme;
 
 fn main() {
@@ -152,7 +150,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             ),
             (
                 List,
-                ListLayout::VerticalGrid { columns: 3 },
+                ListLayout::VerticalGrid { columns: 11 },
                 Selection {
                     items: smallvec![],
                     multi: false,
@@ -162,25 +160,34 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     parent
                         .spawn((
                             Node {
-                                width: Val::Px(30.0),
-                                height: Val::Px(30.0),
+                                border: UiRect::all(Val::Px(1.0)),
+                                width: Val::Px(35.0),
+                                height: Val::Px(35.0),
                                 ..default()
                             },
+                            BorderRadius::all(Val::Px(5.0)),
+                            BorderColor(GRAY_300.into()),
                             BackgroundColor(color.0),
                         ))
                         .id()
                 })),
-                related!(Items[
-                    (Item::new("Orange"), MyColor(ORANGE.into())),
-                    (Item::new("Red"), MyColor(RED.into())),
-                    (Item::new("Blue"), MyColor(BLUE.into())),
-                    (Item::new("Green"), MyColor(GREEN.into())),
-                    (Item::new("Yellow"), MyColor(YELLOW.into())),
-                ]),
+                Items::spawn(SpawnIter(color_palette().into_iter()))
             ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));
+}
+
+fn color_palette() -> Vec<impl Bundle> {
+    COLORS
+        .iter()
+        .map(|c| {
+            (
+                Item::new(format!("{:?}{:?}", c.class, c.variant)),
+                MyColor(c.color),
+            )
+        })
+        .collect()
 }
 
 #[derive(Component)]

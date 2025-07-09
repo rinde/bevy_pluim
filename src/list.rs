@@ -39,7 +39,6 @@ use bevy::ui::BorderRadius;
 use bevy::ui::Display;
 use bevy::ui::GridAutoFlow;
 use bevy::ui::JustifyContent;
-use bevy::ui::JustifyItems;
 use bevy::ui::JustifySelf;
 use bevy::ui::Node;
 use bevy::ui::Overflow;
