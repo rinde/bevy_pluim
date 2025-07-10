@@ -2,6 +2,7 @@ use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::Startup;
 use bevy::color::palettes::tailwind::GRAY_300;
+use bevy::color::palettes::tailwind::GRAY_700;
 use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
@@ -10,13 +11,16 @@ use bevy_egui::EguiPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::list::CornerStyle;
+use ui::list::ItemView;
 use ui::list::ItemViewFactory;
+use ui::list::ItemsThemerInput;
 use ui::list::List;
 use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::select::Item;
 use ui::select::Items;
 use ui::select::Selection;
+use ui::select::ViewOf;
 use ui::tailwind::COLORS;
 use ui::theme::Theme;
 
@@ -155,27 +159,88 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     items: smallvec![],
                     multi: false,
                 },
-                ItemViewFactory(Box::new(|parent, world, item_id, _item| {
-                    let color = world.entity(item_id).get::<MyColor>().unwrap();
-                    parent
-                        .spawn((
-                            Node {
-                                border: UiRect::all(Val::Px(1.0)),
-                                width: Val::Px(35.0),
-                                height: Val::Px(35.0),
-                                ..default()
-                            },
-                            BorderRadius::all(Val::Px(5.0)),
-                            BorderColor(GRAY_300.into()),
-                            BackgroundColor(color.0),
-                        ))
-                        .id()
-                })),
+                ItemViewFactory {
+                    item_creator: Box::new(|parent, world, item_id, _item| {
+                        let color = world.entity(item_id).get::<MyColor>().unwrap();
+                        parent
+                            .spawn((
+                                Node {
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    width: Val::Px(35.0),
+                                    height: Val::Px(35.0),
+                                    ..default()
+                                },
+                                BorderRadius::all(Val::Px(5.0)),
+                                BackgroundColor(color.0),
+                            ))
+                            .id()
+                    }),
+                    item_themer: &|reg| {
+                        reg.register_item_theme_system(theme_system);
+                    }
+                },
                 Items::spawn(SpawnIter(color_palette().into_iter()))
             ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));
+}
+
+fn theme_system(
+    inp: In<ItemsThemerInput>,
+    theme: Res<Theme>,
+    mut item_views: Query<(
+        &Children,
+        &ItemView,
+        &mut Node,
+        &mut BackgroundColor,
+        &mut BorderRadius,
+        &mut BorderColor,
+    )>,
+    selections: Query<&Selection>,
+    mut color_items: Query<(&mut Node, &mut BorderRadius, &mut BorderColor), Without<ItemView>>,
+) {
+    let ItemsThemerInput {
+        children,
+        view_of,
+        list_id,
+        layout: _,
+        corner_style: _,
+    } = inp.0;
+
+    if children.is_empty() {
+        println!("No items to theme");
+        return;
+    }
+    // either this List is a view of some items defined elsewhere, or the items are
+    // define on the List entity.
+    let selection_id = view_of.map_or(list_id, |ViewOf(selection_id)| selection_id);
+    let selection = selections.get(selection_id).unwrap();
+
+    for item_view_id in &children {
+        let (children, ItemView { item_id }, mut node, mut bg, mut br, mut _bc) =
+            item_views.get_mut(*item_view_id).unwrap();
+        *br = BorderRadius::all(Val::Px(5.0));
+        let is_selected = selection.is_selected(*item_id);
+
+        if is_selected {
+            bg.0 = GRAY_700.into();
+        } else {
+            bg.0 = theme.colors.background_primary;
+        }
+        node.padding = UiRect::all(Val::Px(1.0));
+
+        let (mut _color_node, mut border_radius, mut border_color) =
+            color_items.get_mut(*children.first().unwrap()).unwrap();
+
+        if is_selected {
+            border_color.0 = GRAY_300.into(); //theme.colors.border_highlight;
+        } else {
+            border_color.0 = theme.colors.background_primary; //theme.colors.border;
+        }
+        // color_node.border = UiRect::all(theme.border_thickness);
+        *border_radius = BorderRadius::all(Val::Px(5.0));
+    }
 }
 
 fn color_palette() -> Vec<impl Bundle> {

@@ -3,8 +3,11 @@
 # Todo
 - [v] ScrollBar
 - [v] List as 2D grid + List horizontal
-- [ ] Custom item bundle (color square)
-- [ ] Customizable List bundle to show tooltip
+- [v] Custom item bundle (color square)
+- [ ] Theming of custom items
+- [ ] Customizable List bundle to show tooltip (needed or not?)
+- [ ] Color palette (with scrollbars)
+- [ ] Color picker
 - [ ] Tabs
 - [ ] TabPane
 - [ ] Card
