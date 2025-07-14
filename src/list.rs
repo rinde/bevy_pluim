@@ -106,6 +106,7 @@ pub enum ListLayout {
 pub enum CornerStyle {
     FollowLayout,
     Tabs,
+    None,
 }
 
 #[derive(Component, Copy, Clone, Default, Debug)]
@@ -455,7 +456,7 @@ fn theme_lists(
                       layout: ListLayout,
                       corner_style: CornerStyle| {
         node.border = match corner_style {
-            CornerStyle::FollowLayout => UiRect::all(theme.border_thickness),
+            CornerStyle::FollowLayout | CornerStyle::None => UiRect::all(theme.border_thickness),
             CornerStyle::Tabs => UiRect::ZERO,
         };
         bg.0 = theme.colors.background_primary;
@@ -469,6 +470,7 @@ fn theme_lists(
                 }
                 ListLayout::Horizontal => BorderRadius::top(theme.corner_radius),
             },
+            CornerStyle::None => BorderRadius::all(Val::Px(0.0)),
         };
         *br = radius;
     };
@@ -565,6 +567,10 @@ const fn theme_item_border(
                     }
                 }
             }
+        }
+        CornerStyle::None => {
+            node.border = UiRect::ZERO;
+            *border_radius = BorderRadius::ZERO;
         }
     }
 }

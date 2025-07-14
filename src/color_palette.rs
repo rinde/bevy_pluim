@@ -34,6 +34,7 @@ use bevy::utils::default;
 use itertools::Either;
 
 use crate::MouseEvent;
+use crate::list::CornerStyle;
 use crate::list::ItemView;
 use crate::list::List;
 use crate::list::ListLayout;
@@ -69,7 +70,13 @@ impl Plugin for ColorPalettePlugin {
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[require(List,ListLayout::VerticalGrid { columns: 6 }, Selection::default(), NoDefaultItems)]
+#[require(
+    List,
+    ListLayout::VerticalGrid { columns: 6 },
+    CornerStyle::None,
+    Selection::default(),
+    NoDefaultItems
+)]
 pub struct ColorPalette;
 
 fn on_add_item(
