@@ -40,8 +40,6 @@ use bevy::ui::GridAutoFlow;
 use bevy::ui::JustifyContent;
 use bevy::ui::JustifySelf;
 use bevy::ui::Node;
-use bevy::ui::Overflow;
-use bevy::ui::OverflowClipMargin;
 use bevy::ui::PositionType;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::RepeatedGridTrack;
@@ -146,10 +144,11 @@ impl List {
                 .insert(ViewOf(items_entity));
         }
 
-        assert!(
-            world.entity(context.entity).get::<Node>().is_none(),
-            "Cannot override Node for List"
-        );
+        // TODO change this assert
+        // assert!(
+        //     world.entity(context.entity).get::<Node>().is_none(),
+        //     "Cannot override Node for List"
+        // );
 
         // TODO reuse event handle code
         let children = Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<ChildOf>| {
@@ -196,8 +195,6 @@ impl List {
             display: Display::Grid,
             grid_auto_flow,
             grid_template_columns,
-            overflow: Overflow::clip(),
-            overflow_clip_margin: OverflowClipMargin::padding_box(),
             ..default()
         };
         world

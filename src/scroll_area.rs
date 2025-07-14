@@ -7,6 +7,7 @@ use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::hierarchy::Children;
+use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::Changed;
 use bevy::ecs::query::Or;
@@ -65,7 +66,7 @@ impl Plugin for ScrollAreaPlugin {
     row_gap: Val::Px(2.0),
     column_gap: Val::Px(2.0),
     ..default()
-})]
+}, Name::new("ScrollArea"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollArea;
 
@@ -122,7 +123,7 @@ impl ScrollArea {
 }
 
 #[derive(Component, Clone, Copy, Debug)]
-#[require(Node::default())]
+#[require(Node::default(), Visibility::Inherited, Name::new("ScrollBar"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollBar(pub Orientation);
 
@@ -213,7 +214,7 @@ fn scroll_system(
             *scrollbar_visibility = Visibility::Hidden;
             visible_length
         } else {
-            *scrollbar_visibility = Visibility::Visible;
+            *scrollbar_visibility = Visibility::Inherited;
             (visible_length / contents_length) * visible_length
         };
 

@@ -3,6 +3,7 @@
     reason = "Query types can be complex without being difficult to understand"
 )]
 pub mod color_palette;
+pub mod color_palette_combo;
 pub mod combo;
 pub mod float;
 pub mod list;
@@ -38,6 +39,7 @@ use bevy::reflect::Reflect;
 use bevy::ui::Node;
 
 use crate::color_palette::ColorPalettePlugin;
+use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::list::ListPlugin;
@@ -58,6 +60,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(ColorPalettePlugin)
+            .add_plugins(ColorPaletteComboPlugin)
             .add_systems(PostStartup, setup);
     }
 }

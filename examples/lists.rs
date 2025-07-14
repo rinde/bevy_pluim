@@ -1,14 +1,12 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::Startup;
-use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
-use ui::color_palette::ColorPalette;
 use ui::list::CornerStyle;
 use ui::list::List;
 use ui::list::ListLayout;
@@ -16,7 +14,6 @@ use ui::push_button::PushButton;
 use ui::select::Item;
 use ui::select::Items;
 use ui::select::Selection;
-use ui::tailwind::COLORS;
 use ui::theme::Theme;
 
 fn main() {
@@ -147,18 +144,9 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     Item::new("Belgium")
                 ]),
             ),
-            (
-                ColorPalette,
-                ListLayout::VerticalGrid { columns: 11 },
-                Items::spawn(SpawnIter(color_palette().into_iter()))
-            ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));
-}
-
-fn color_palette() -> Vec<impl Bundle> {
-    COLORS.iter().map(|c| (Item { data: c.color })).collect()
 }
 
 #[derive(Component)]

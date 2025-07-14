@@ -64,8 +64,7 @@ impl Plugin for ComboPlugin {
     Items::default(),
     Name::new("Combo"),
     RelativeCursorPosition::default()
-)
-]
+)]
 pub struct Combo;
 
 #[derive(Component, Debug, Copy, Clone)]

@@ -166,15 +166,7 @@ fn handle_mouse_events(
 fn theme_items(
     list_id: In<Option<Entity>>,
     theme: Res<Theme>,
-    lists: Query<
-        (
-            // &ListSystemIds,
-            &Children,
-            Option<&ViewOf>,
-            Entity,
-        ),
-        (With<List>, With<ColorPalette>),
-    >,
+    lists: Query<(&Children, Option<&ViewOf>, Entity), (With<List>, With<ColorPalette>)>,
     selections: Query<&Selection>,
     mut item_views: Query<(
         &Children,

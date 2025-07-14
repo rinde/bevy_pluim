@@ -3,6 +3,7 @@ use bevy::app::Update;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
+use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::query::Without;
@@ -54,7 +55,8 @@ impl Plugin for PushButtonPlugin {
         justify_content: JustifyContent::SpaceBetween,
         align_items: AlignItems::Center,
         ..default()
-    }
+    },
+    Name::new("PushButton"),
 )]
 pub struct PushButton {
     label: String,

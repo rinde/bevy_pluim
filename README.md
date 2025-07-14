@@ -4,7 +4,7 @@
 - [v] ScrollBar
 - [v] List as 2D grid + List horizontal
 - [v] Custom item bundle (color square)
-- [ ] Theming of custom items
+- [v] Theming of custom items
 - [ ] Customizable List bundle to show tooltip (needed or not?)
 - [ ] Color palette (with scrollbars)
 - [ ] Color picker
