@@ -161,7 +161,7 @@ fn on_selection_change(
     combos: Query<&ComboSubRefs, With<Combo>>,
     pblr: Query<&PushButtonRefs>,
     selections: Query<&Selection>,
-    items: Query<&Item>,
+    items: Query<&Item<String>>,
     mut labels: Query<&mut Text, With<PushButtonLabel>>,
 ) {
     let Ok(ComboSubRefs {
@@ -181,7 +181,7 @@ fn on_selection_change(
         selection
             .items
             .iter()
-            .map(|item| &items.get(*item).unwrap().label)
+            .map(|item| &items.get(*item).unwrap().data)
             .join(", ")
     };
     text.0 = label;

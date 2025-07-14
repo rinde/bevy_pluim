@@ -79,17 +79,17 @@ pub struct Items(Vec<Entity>);
 
 #[derive(Component, Debug, Clone)]
 #[component(on_insert = Self::on_insert)]
-pub struct Item {
-    pub label: String,
+pub struct Item<T> {
+    pub data: T,
 }
 
-impl Item {
-    pub fn new(label: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-        }
+impl Item<String> {
+    pub fn new(label: impl Into<String>) -> Item<String> {
+        Self { data: label.into() }
     }
+}
 
+impl<T> Item<T> {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let ItemOf(items_id) = world
             .entity(context.entity)
@@ -117,10 +117,8 @@ pub struct OnAddItem {
     pub items_id: Entity,
 }
 
-impl<T: Into<String>> From<T> for Item {
+impl<T: Into<String>> From<T> for Item<String> {
     fn from(value: T) -> Self {
-        Self {
-            label: value.into(),
-        }
+        Self { data: value.into() }
     }
 }

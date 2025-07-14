@@ -9,7 +9,6 @@ use bevy_egui::EguiPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::color_palette::ColorPalette;
-use ui::color_palette::MyColor;
 use ui::list::CornerStyle;
 use ui::list::List;
 use ui::list::ListLayout;
@@ -159,15 +158,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 }
 
 fn color_palette() -> Vec<impl Bundle> {
-    COLORS
-        .iter()
-        .map(|c| {
-            (
-                Item::new(format!("{:?}{:?}", c.class, c.variant)),
-                MyColor(c.color),
-            )
-        })
-        .collect()
+    COLORS.iter().map(|c| (Item { data: c.color })).collect()
 }
 
 #[derive(Component)]

@@ -18,7 +18,6 @@ use bevy::ecs::system::In;
 use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
-use bevy::ecs::world::World;
 use bevy::picking::Pickable;
 use bevy::ui::AlignItems;
 use bevy::ui::BackgroundColor;
@@ -61,9 +60,6 @@ impl Plugin for ColorPalettePlugin {
                     // (|| None::<Entity>)
                     //     .pipe(theme_lists)
                     //     .run_if(resource_changed::<Theme>),
-                    // (|| None::<Entity>)
-                    //     .pipe(theme_item_labels)
-                    //     .run_if(resource_changed::<Theme>),
                 ),
             )
             .add_observer(on_add_item)
@@ -72,24 +68,20 @@ impl Plugin for ColorPalettePlugin {
     }
 }
 
-#[derive(Component, Copy, Clone, Debug)]
-pub struct MyColor(pub Color);
-
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[require(List,ListLayout::VerticalGrid { columns: 3 }, Selection::default(), NoDefaultItems)]
+#[require(List,ListLayout::VerticalGrid { columns: 6 }, Selection::default(), NoDefaultItems)]
 pub struct ColorPalette;
 
 fn on_add_item(
     t: Trigger<OnAddItem>,
-    items: Query<&Item>,
+    items: Query<&Item<Color>>,
     mut commands: Commands,
     lists: Query<(), With<ColorPalette>>,
-    world: &World,
 ) {
     if !lists.contains(t.target()) {
         return;
-    };
-    let item = items.get(t.event().item_id).unwrap();
+    }
+    let color_item = items.get(t.event().item_id).unwrap();
     let list_id = t.target();
 
     commands.entity(list_id).with_children(|spawner| {
@@ -117,20 +109,17 @@ fn on_add_item(
             ))
             .observe(handle_mouse_events)
             .with_children(|parent| {
-                let color = world.entity(t.event().item_id).get::<MyColor>().unwrap();
-                let id = parent
-                    .spawn((
-                        Node {
-                            border: UiRect::all(Val::Px(1.0)),
-                            width: Val::Px(35.0),
-                            height: Val::Px(35.0),
-                            ..default()
-                        },
-                        BorderRadius::all(Val::Px(5.0)),
-                        BackgroundColor(color.0),
-                    ))
-                    .id();
-                parent.commands().entity(id).insert(Pickable::IGNORE);
+                parent.spawn((
+                    Node {
+                        border: UiRect::all(Val::Px(1.0)),
+                        width: Val::Px(35.0),
+                        height: Val::Px(35.0),
+                        ..default()
+                    },
+                    BorderRadius::all(Val::Px(5.0)),
+                    BackgroundColor(color_item.data),
+                    Pickable::IGNORE,
+                ));
             });
     });
 

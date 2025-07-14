@@ -122,8 +122,8 @@ impl List {
                 .iter()
                 .copied()
                 .map(|item| {
-                    let e = world.entity(item).get::<Item>().unwrap();
-                    (item, e.label.clone())
+                    let e = world.entity(item).get::<Item<String>>().unwrap();
+                    (item, e.data.clone())
                 })
                 .collect::<Vec<_>>();
 
@@ -152,6 +152,7 @@ impl List {
 
         // TODO reuse event handle code
         let children = Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<ChildOf>| {
+            assert!(items.is_empty());
             for (item_ref, item_label) in items {
                 parent
                     .spawn((
@@ -242,13 +243,13 @@ impl ItemLabel {
 
 fn on_add_item(
     t: Trigger<OnAddItem>,
-    items: Query<&Item>,
+    items: Query<&Item<String>>,
     mut commands: Commands,
     lists: Query<(), (With<List>, Without<NoDefaultItems>)>,
 ) {
     if !lists.contains(t.target()) {
         return;
-    };
+    }
     let item = items.get(t.event().item_id).unwrap();
     let list_id = t.target();
 
@@ -277,7 +278,7 @@ fn on_add_item(
             ))
             .observe(handle_mouse_events)
             .with_children(|parent| {
-                parent.spawn((Text(item.label.clone()), ItemLabel, Pickable::IGNORE));
+                parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
             });
     });
 
