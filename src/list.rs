@@ -329,7 +329,7 @@ fn handle_mouse_events(
 fn on_selection_change(
     t: Trigger<OnSelectionChange>,
     selections: Query<&Selection>,
-    lists: Query<&Children, With<List>>,
+    lists: Query<&Children, (With<List>, Without<NoDefaultItems>)>,
     mut item_views: Query<(&ItemView, &RelativeCursorPosition, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
