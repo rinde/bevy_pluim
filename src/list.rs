@@ -11,9 +11,8 @@ use bevy::ecs::hierarchy::Children;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::relationship::RelatedSpawner;
-use bevy::ecs::relationship::RelatedSpawnerCommands;
-use bevy::ecs::resource::Resource;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::spawn::SpawnRelated;
@@ -23,10 +22,7 @@ use bevy::ecs::system::In;
 use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
-use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ecs::world::FromWorld;
-use bevy::ecs::world::World;
 use bevy::input::ButtonInput;
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::MouseScrollUnit;
@@ -90,32 +86,13 @@ impl Plugin for ListPlugin {
                 ),
             )
             .add_observer(on_add_item)
-            .add_observer(on_selection_change)
-            .init_resource::<ListDefaults>();
+            .add_observer(on_selection_change);
     }
 }
 
-#[derive(Resource)]
-struct ListDefaults {
-    items_themer: SystemId<In<ItemsThemerInput>>,
-}
-
-impl FromWorld for ListDefaults {
-    fn from_world(world: &mut World) -> Self {
-        ListDefaults {
-            items_themer: world.register_system(default_items_themer),
-        }
-    }
-}
-
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Default)]
 #[component(on_insert = Self::on_insert)]
-#[require(
-    Name::new("List"),
-    ListLayout::Vertical,
-    CornerStyle::FollowLayout,
-    ItemViewFactory { item_creator: Box::new(ItemLabel::create), item_themer: &|r| r.register_item_theme_system(default_items_themer) }
-)]
+#[require(Name::new("List"), ListLayout::Vertical, CornerStyle::FollowLayout)]
 pub struct List;
 
 #[derive(Component, Debug, Copy, Clone)]
@@ -131,72 +108,8 @@ pub enum CornerStyle {
     Tabs,
 }
 
-#[derive(Component)]
-#[component(on_insert = Self::on_insert)]
-pub struct ItemViewFactory {
-    pub item_creator: Box<
-        dyn Fn(&mut RelatedSpawnerCommands<ChildOf>, &World, Entity, &Item) -> Entity + Send + Sync,
-    >,
-
-    // pub item_themer: Box<dyn System<In = In<ItemsThemerInput>, Out = ()>>,
-    pub item_themer: &'static (dyn Fn(&mut ListSystemsRegister) + Send + Sync + 'static),
-}
-#[derive(Component, Debug)]
-struct ListSystemIds {
-    item_themer: SystemId<In<ItemsThemerInput>>,
-}
-pub struct ListSystemsRegister<'a, 'b> {
-    commands: Commands<'a, 'b>,
-    item_themer_id: Option<SystemId<In<ItemsThemerInput>>>,
-}
-
-impl ListSystemsRegister<'_, '_> {
-    pub fn register_item_theme_system<M>(
-        &mut self,
-        callback: impl IntoSystem<In<ItemsThemerInput>, (), M> + 'static,
-    ) {
-        assert!(self.item_themer_id.is_none());
-        self.item_themer_id = Some(self.commands.register_system(callback));
-    }
-}
-
-impl ItemViewFactory {
-    fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let func = world
-            .entity(context.entity)
-            .get::<ItemViewFactory>()
-            .unwrap()
-            .item_themer;
-
-        let mut register = ListSystemsRegister {
-            commands: world.commands(),
-            item_themer_id: None,
-        };
-        func(&mut register);
-
-        let id = register.item_themer_id.take();
-        let id = id.unwrap_or_else(|| world.resource::<ListDefaults>().items_themer);
-        world
-            .commands()
-            .entity(context.entity)
-            .insert(ListSystemIds { item_themer: id });
-    }
-}
-
-#[derive(Debug)]
-pub struct ItemsThemerInput {
-    pub children: Vec<Entity>,
-    pub view_of: Option<ViewOf>,
-    pub list_id: Entity,
-    pub layout: ListLayout,
-    pub corner_style: CornerStyle,
-}
-
-impl std::fmt::Debug for ItemViewFactory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("ItemViewFactory").finish()
-    }
-}
+#[derive(Component, Copy, Clone, Default, Debug)]
+pub struct NoDefaultItems;
 
 impl List {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -325,25 +238,15 @@ impl ItemLabel {
             .commands()
             .run_system_cached_with(theme_item_labels, Some(context.entity));
     }
-
-    fn create(
-        parent: &mut RelatedSpawnerCommands<ChildOf>,
-        _world: &World,
-        _item_ref: Entity,
-        item: &Item,
-    ) -> Entity {
-        parent.spawn((Text(item.label.clone()), ItemLabel)).id()
-    }
 }
 
 fn on_add_item(
     t: Trigger<OnAddItem>,
     items: Query<&Item>,
     mut commands: Commands,
-    lists: Query<&ItemViewFactory, With<List>>,
-    world: &World,
+    lists: Query<(), (With<List>, Without<NoDefaultItems>)>,
 ) {
-    let Ok(factory) = lists.get(t.target()) else {
+    if !lists.contains(t.target()) {
         return;
     };
     let item = items.get(t.event().item_id).unwrap();
@@ -374,9 +277,7 @@ fn on_add_item(
             ))
             .observe(handle_mouse_events)
             .with_children(|parent| {
-                let id = (factory.item_creator)(parent, world, t.event().item_id, item);
-
-                parent.commands().entity(id).insert(Pickable::IGNORE);
+                parent.spawn((Text(item.label.clone()), ItemLabel, Pickable::IGNORE));
             });
     });
 
@@ -451,37 +352,14 @@ fn theme_items(
     list_id: In<Option<Entity>>,
     lists: Query<
         (
-            &ListSystemIds,
             &Children,
             Option<&ViewOf>,
             Entity,
             &ListLayout,
             &CornerStyle,
         ),
-        With<List>,
+        (With<List>, Without<NoDefaultItems>),
     >,
-    mut commands: Commands,
-) {
-    let iter = if let Some(list_id) = list_id.0 {
-        Either::Left([lists.get(list_id).unwrap()].into_iter())
-    } else {
-        Either::Right(lists.into_iter())
-    };
-
-    for (ids, children, view_of, list_id, layout, corner_style) in iter {
-        let input = ItemsThemerInput {
-            children: children.into_iter().copied().collect(),
-            view_of: view_of.copied(),
-            list_id,
-            layout: *layout,
-            corner_style: *corner_style,
-        };
-        commands.run_system_with(ids.item_themer, input);
-    }
-}
-
-fn default_items_themer(
-    input: In<ItemsThemerInput>,
     theme: Res<Theme>,
     mut item_views: Query<(
         &ItemView,
@@ -492,48 +370,48 @@ fn default_items_themer(
     )>,
     selections: Query<&Selection>,
 ) {
-    let ItemsThemerInput {
-        children,
-        view_of,
-        list_id,
-        layout,
-        corner_style,
-    } = input.0;
+    let iter = if let Some(list_id) = list_id.0 {
+        Either::Left([lists.get(list_id).unwrap()].into_iter())
+    } else {
+        Either::Right(lists.into_iter())
+    };
 
-    if children.is_empty() {
-        return;
-    }
-    let last = children.len() - 1;
-    // either this List is a view of some items defined elsewhere, or the items are
-    // define on the List entity.
-    let selection_id = view_of.map_or(list_id, |ViewOf(selection_id)| selection_id);
-    let selection = selections.get(selection_id).unwrap();
-
-    for (i, item_view_id) in children.iter().enumerate() {
-        let (ItemView { item_id }, mut node, mut bg, mut border_radius, mut border_color) =
-            item_views.get_mut(*item_view_id).unwrap();
-
-        let is_selected = selection.is_selected(*item_id);
-
-        if is_selected {
-            bg.0 = theme.colors.selected_item;
-            border_color.0 = theme.colors.border_highlight;
-        } else {
-            bg.0 = theme.colors.background_primary;
-            border_color.0 = theme.colors.border;
+    for (children, view_of, list_id, layout, corner_style) in iter {
+        if children.is_empty() {
+            continue;
         }
+        let last = children.len() - 1;
+        // either this List is a view of some items defined elsewhere, or the items are
+        // define on the List entity.
+        let selection_id = view_of.map_or(list_id, |ViewOf(selection_id)| *selection_id);
+        let selection = selections.get(selection_id).unwrap();
 
-        theme_item_border(
-            &mut node,
-            &mut border_radius,
-            corner_style,
-            layout,
-            i,
-            last,
-            &theme,
-        );
+        for (i, item_view_id) in children.iter().enumerate() {
+            let (ItemView { item_id }, mut node, mut bg, mut border_radius, mut border_color) =
+                item_views.get_mut(*item_view_id).unwrap();
 
-        node.padding = theme.item_padding;
+            let is_selected = selection.is_selected(*item_id);
+
+            if is_selected {
+                bg.0 = theme.colors.selected_item;
+                border_color.0 = theme.colors.border_highlight;
+            } else {
+                bg.0 = theme.colors.background_primary;
+                border_color.0 = theme.colors.border;
+            }
+
+            theme_item_border(
+                &mut node,
+                &mut border_radius,
+                *corner_style,
+                *layout,
+                i,
+                last,
+                &theme,
+            );
+
+            node.padding = theme.item_padding;
+        }
     }
 }
 

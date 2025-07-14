@@ -2,6 +2,7 @@
     clippy::type_complexity,
     reason = "Query types can be complex without being difficult to understand"
 )]
+pub mod color_palette;
 pub mod combo;
 pub mod float;
 pub mod list;
@@ -36,6 +37,7 @@ use bevy::picking::events::Released;
 use bevy::reflect::Reflect;
 use bevy::ui::Node;
 
+use crate::color_palette::ColorPalettePlugin;
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::list::ListPlugin;
@@ -55,6 +57,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
+            .add_plugins(ColorPalettePlugin)
             .add_systems(PostStartup, setup);
     }
 }
