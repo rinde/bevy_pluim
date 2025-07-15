@@ -1,5 +1,6 @@
 use bevy::app::App;
 use bevy::app::Plugin;
+use bevy::app::Update;
 use bevy::color::Color;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
@@ -9,8 +10,11 @@ use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::query::Without;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::In;
+use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::system::Single;
@@ -31,6 +35,7 @@ use bevy::ui::Val;
 use bevy::utils::default;
 use bevy::window::PrimaryWindow;
 use bevy::window::Window;
+use itertools::Either;
 
 use crate::MouseEvent;
 use crate::color_palette::ColorPalette;
@@ -48,13 +53,13 @@ use crate::theme::Theme;
 pub struct ColorPaletteComboPlugin;
 
 impl Plugin for ColorPaletteComboPlugin {
-    fn build(&self, _app: &mut App) {
-        // app.add_systems(
-        //     Update,
-        //     ((|| None::<Entity>)
-        //         .pipe(theme_items)
-        //         .run_if(resource_changed::<Theme>),),
-        // )
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            ((|| None::<Entity>)
+                .pipe(theme_floats)
+                .run_if(resource_changed::<Theme>),),
+        );
         // .add_observer(on_add_item)
         // .add_observer(on_selection_change);
     }
@@ -79,6 +84,9 @@ pub struct ColorPaletteCombo;
 #[derive(Component, Debug, Copy, Clone)]
 struct ColorPaletteComboButton;
 
+#[derive(Component, Debug, Copy, Clone)]
+struct ColorPaletteComboFloat;
+
 impl ColorPaletteCombo {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let mut button_id = Entity::PLACEHOLDER;
@@ -101,6 +109,7 @@ impl ColorPaletteCombo {
             float_id = x
                 .spawn((
                     Float,
+                    ColorPaletteComboFloat,
                     Node {
                         left: Val::Px(0.0),
                         top: Val::Px(40.0),
@@ -186,8 +195,11 @@ impl State {
 fn position_float(
     float_id: In<Entity>,
     window: Single<&Window, With<PrimaryWindow>>,
-    mut dims: Query<(&mut Node, &ChildOf, &GlobalTransform, &ComputedNode), With<Float>>,
-    parent_dims: Query<&ComputedNode, Without<Float>>,
+    mut dims: Query<
+        (&mut Node, &ChildOf, &GlobalTransform, &ComputedNode),
+        With<ColorPaletteComboFloat>,
+    >,
+    parent_dims: Query<&ComputedNode, Without<ColorPaletteComboFloat>>,
 ) {
     const MARGIN: f32 = 10.0;
     const BUTTON_FLOAT_DIST: f32 = 3.0;
@@ -262,5 +274,21 @@ fn handle_combo_button_mouse_events(
             *border_color = BorderColor(theme.colors.border);
         }
         (MouseEvent::Released, State::Closed) => {}
+    }
+}
+
+fn theme_floats(
+    float_id: In<Option<Entity>>,
+    theme: Res<Theme>,
+    mut floats: Query<&mut BorderColor, With<ColorPaletteComboFloat>>,
+) {
+    let it = if let Some(float_id) = float_id.as_ref() {
+        Either::Left([floats.get_mut(*float_id).unwrap()].into_iter())
+    } else {
+        Either::Right(floats.iter_mut())
+    };
+
+    for mut border_color in it {
+        *border_color = BorderColor(theme.colors.border_highlight);
     }
 }
