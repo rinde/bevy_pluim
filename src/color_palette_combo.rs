@@ -19,6 +19,8 @@ use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::system::Single;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::ButtonInput;
+use bevy::input::mouse::MouseButton;
 use bevy::math::Vec2;
 use bevy::picking::Pickable;
 use bevy::render::view::Visibility;
@@ -32,10 +34,12 @@ use bevy::ui::PositionType;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::UiRect;
 use bevy::ui::Val;
+use bevy::ui::widget::Text;
 use bevy::utils::default;
 use bevy::window::PrimaryWindow;
 use bevy::window::Window;
 use itertools::Either;
+use itertools::Itertools;
 
 use crate::MouseEvent;
 use crate::color_palette::ColorPalette;
@@ -43,8 +47,12 @@ use crate::float::Float;
 use crate::list::ListLayout;
 use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
+use crate::push_button::PushButtonLabel;
+use crate::push_button::PushButtonRefs;
 use crate::scroll_area::ScrollArea;
+use crate::select::Item;
 use crate::select::Items;
+use crate::select::OnSelectionChange;
 use crate::select::Selection;
 use crate::select::ViewOf;
 use crate::theme::Theme;
@@ -56,12 +64,14 @@ impl Plugin for ColorPaletteComboPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            ((|| None::<Entity>)
-                .pipe(theme_floats)
-                .run_if(resource_changed::<Theme>),),
-        );
-        // .add_observer(on_add_item)
-        // .add_observer(on_selection_change);
+            (
+                (|| None::<Entity>)
+                    .pipe(theme_floats)
+                    .run_if(resource_changed::<Theme>),
+                close_combos_on_outside_click,
+            ),
+        )
+        .add_observer(on_selection_change);
     }
 }
 
@@ -243,6 +253,75 @@ fn position_float(
         intended_y = -size.y - BUTTON_FLOAT_DIST;
     }
     node.top = Val::Px(intended_y);
+}
+
+fn on_selection_change(
+    t: Trigger<OnSelectionChange>,
+    combos: Query<&SubRefs, With<ColorPaletteCombo>>,
+    pblr: Query<&PushButtonRefs>,
+    selections: Query<&Selection>,
+    items: Query<&Item<Color>>,
+    mut labels: Query<&mut Text, With<PushButtonLabel>>,
+) {
+    let Ok(SubRefs {
+        button_id: button, ..
+    }) = combos.get(t.target())
+    else {
+        return;
+    };
+
+    let PushButtonRefs { label_id, .. } = pblr.get(*button).unwrap();
+    let selection = selections.get(t.event().selection_id).unwrap();
+
+    let mut text = labels.get_mut(*label_id).unwrap();
+    let label = if selection.items.is_empty() {
+        "Select a color".to_string()
+    } else {
+        selection
+            .items
+            .iter()
+            .map(|item| format!("{:?}", items.get(*item).unwrap().data))
+            .join(", ")
+    };
+    text.0 = label;
+}
+
+/// System that closes the combo when clicking outside of it.
+fn close_combos_on_outside_click(
+    mouse_button: Res<ButtonInput<MouseButton>>,
+    combos: Query<
+        (
+            Entity,
+            &RelativeCursorPosition,
+            &State,
+            &SubRefs,
+            &Selection,
+        ),
+        With<ColorPaletteCombo>,
+    >,
+    mut combo_buttons: Query<
+        (&mut BackgroundColor, &mut BorderColor),
+        With<ColorPaletteComboButton>,
+    >,
+    floats: Query<&RelativeCursorPosition, With<ColorPaletteComboFloat>>,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    if mouse_button.just_released(MouseButton::Left) {
+        for (combo_id, rcp, &combo_state, subs, selection) in combos.iter() {
+            if combo_state == State::Open
+                && !rcp.mouse_over()
+                && !(selection.multi && floats.get(subs.float_id).unwrap().mouse_over())
+            {
+                let (mut background_color, mut border_color) =
+                    combo_buttons.get_mut(subs.button_id).unwrap();
+
+                *background_color = BackgroundColor(theme.colors.background_primary);
+                *border_color = BorderColor(theme.colors.border);
+                commands.entity(combo_id).insert(State::Closed);
+            }
+        }
+    }
 }
 
 fn handle_combo_button_mouse_events(
