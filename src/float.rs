@@ -16,7 +16,6 @@ use bevy::ui::BoxShadow;
 use bevy::ui::GlobalZIndex;
 use bevy::ui::Node;
 use bevy::ui::PositionType;
-use bevy::ui::Val;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -62,7 +61,7 @@ fn theme_float(
     };
     for (mut node, mut bs) in iter {
         node.position_type = PositionType::Absolute;
-        node.width = Val::Percent(100.0);
+        // node.width = Val::Percent(100.0);
         *bs = BoxShadow::from(theme.large_shadow());
     }
 }

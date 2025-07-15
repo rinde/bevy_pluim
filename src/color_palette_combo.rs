@@ -1,29 +1,41 @@
 use bevy::app::App;
 use bevy::app::Plugin;
+use bevy::color::Color;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
+use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::system::Commands;
+use bevy::ecs::system::In;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
+use bevy::ecs::system::Single;
 use bevy::ecs::world::DeferredWorld;
+use bevy::math::Vec2;
 use bevy::picking::Pickable;
 use bevy::render::view::Visibility;
+use bevy::transform::components::GlobalTransform;
 use bevy::ui::BackgroundColor;
 use bevy::ui::BorderColor;
+use bevy::ui::ComputedNode;
 use bevy::ui::FlexDirection;
 use bevy::ui::Node;
 use bevy::ui::PositionType;
 use bevy::ui::RelativeCursorPosition;
+use bevy::ui::UiRect;
 use bevy::ui::Val;
 use bevy::utils::default;
+use bevy::window::PrimaryWindow;
+use bevy::window::Window;
 
 use crate::MouseEvent;
 use crate::color_palette::ColorPalette;
 use crate::float::Float;
+use crate::list::ListLayout;
 use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
 use crate::scroll_area::ScrollArea;
@@ -70,7 +82,9 @@ struct ColorPaletteComboButton;
 impl ColorPaletteCombo {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let mut button_id = Entity::PLACEHOLDER;
-        let mut color_palette_id = Entity::PLACEHOLDER;
+        let mut float_id = Entity::PLACEHOLDER;
+        let list_layout = world.entity(context.entity).get::<ListLayout>().copied();
+
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((
@@ -84,16 +98,18 @@ impl ColorPaletteCombo {
                     },
                 ))
                 .id();
-            color_palette_id = x
+            float_id = x
                 .spawn((
                     Float,
                     Node {
-                        top: Val::Px(50.0),
+                        left: Val::Px(0.0),
+                        top: Val::Px(40.0),
                         position_type: PositionType::Absolute,
-                        width: Val::Px(800.0),
-                        height: Val::Px(200.0),
+                        height: Val::Px(250.0),
+                        border: UiRect::all(Val::Px(1.0)),
                         ..default()
                     },
+                    BorderColor(Color::BLACK),
                     Visibility::Hidden,
                     ScrollArea::bundle(
                         move |parent| {
@@ -104,6 +120,7 @@ impl ColorPaletteCombo {
                                     ..default()
                                 },
                                 ColorPalette,
+                                list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
                             ));
                         },
                         true,
@@ -112,35 +129,6 @@ impl ColorPaletteCombo {
                     RelativeCursorPosition::default(),
                 ))
                 .id();
-            // x.spawn(Node::default()).with_children(|spawner| {
-            //     color_palette_id = spawner
-            //         .spawn((
-            //             Float,
-            //             Node {
-            //                 position_type: PositionType::Absolute,
-            //                 width: Val::Px(800.0),
-            //                 height: Val::Px(200.0),
-            //                 ..default()
-            //             },
-            //             Visibility::Hidden,
-            //             ScrollArea::bundle(
-            //                 move |parent| {
-            //                     parent.spawn((
-            //                         ViewOf(context.entity),
-            //                         Pickable {
-            //                             should_block_lower: false,
-            //                             ..default()
-            //                         },
-            //                         ColorPalette,
-            //                     ));
-            //                 },
-            //                 true,
-            //                 false,
-            //             ),
-            //             RelativeCursorPosition::default(),
-            //         ))
-            //         .id();
-            // });
         });
 
         world
@@ -150,7 +138,7 @@ impl ColorPaletteCombo {
                 State::Closed,
                 SubRefs {
                     button_id,
-                    color_palette_id,
+                    float_id,
                 },
             ))
             .observe(handle_combo_button_mouse_events);
@@ -160,7 +148,7 @@ impl ColorPaletteCombo {
 #[derive(Component, Debug, Copy, Clone)]
 struct SubRefs {
     button_id: Entity,
-    color_palette_id: Entity,
+    float_id: Entity,
 }
 
 #[derive(Component, Debug, Copy, Clone, Eq, PartialEq)]
@@ -180,12 +168,7 @@ impl State {
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let (
-            state,
-            &SubRefs {
-                color_palette_id, ..
-            },
-        ) = world
+        let (state, &SubRefs { float_id, .. }) = world
             .entity(context.entity)
             .components::<(&State, &SubRefs)>();
 
@@ -193,8 +176,61 @@ impl State {
             State::Open => Visibility::Visible,
             State::Closed => Visibility::Hidden,
         };
-        world.commands().entity(color_palette_id).insert(visibility);
+        world.commands().entity(float_id).insert(visibility);
+        world
+            .commands()
+            .run_system_cached_with(position_float, float_id);
     }
+}
+
+fn position_float(
+    float_id: In<Entity>,
+    window: Single<&Window, With<PrimaryWindow>>,
+    mut dims: Query<(&mut Node, &ChildOf, &GlobalTransform, &ComputedNode), With<Float>>,
+    parent_dims: Query<&ComputedNode, Without<Float>>,
+) {
+    const MARGIN: f32 = 10.0;
+    const BUTTON_FLOAT_DIST: f32 = 3.0;
+
+    let (mut node, ChildOf(parent), global_transform, computed_node) =
+        dims.get_mut(*float_id).unwrap();
+    let parent_computed_node = parent_dims.get(*parent).unwrap();
+
+    let parent_size = parent_computed_node.size() * parent_computed_node.inverse_scale_factor();
+
+    let size = computed_node.content_size() * computed_node.inverse_scale_factor();
+    let translation = Vec2::new(
+        global_transform.translation().x,
+        global_transform.translation().y,
+    ) * computed_node.inverse_scale_factor();
+    let max_coord = translation + (size / 2.0);
+
+    // set x position
+    let Val::Px(current_x) = node.left else {
+        panic!("Unexpected value type for node.left")
+    };
+    let mut intended_x = -size.x / 2.0 + (parent_size.x / 2.0);
+    let delta_x = intended_x - current_x;
+    let global_max_x = max_coord.x + delta_x;
+
+    if global_max_x + MARGIN > window.width() {
+        let excess_x = global_max_x + MARGIN - window.width();
+        intended_x -= excess_x;
+    }
+    node.left = Val::Px(intended_x);
+
+    // set y position
+    let Val::Px(current_y) = node.top else {
+        panic!("Unexpected value type for node.top")
+    };
+    let mut intended_y = parent_size.y + BUTTON_FLOAT_DIST;
+    let delta_y = intended_y - current_y;
+    let global_max_y = max_coord.y + delta_y;
+
+    if global_max_y + MARGIN > window.height() {
+        intended_y = -size.y - BUTTON_FLOAT_DIST;
+    }
+    node.top = Val::Px(intended_y);
 }
 
 fn handle_combo_button_mouse_events(
