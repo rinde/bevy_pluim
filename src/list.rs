@@ -90,7 +90,10 @@ impl Plugin for ListPlugin {
 
 #[derive(Component, Debug, Copy, Clone, Default)]
 #[component(on_insert = Self::on_insert)]
-#[require(Name::new("List"), ListLayout::Vertical, CornerStyle::FollowLayout)]
+#[require(Name::new("List"), ListLayout::Vertical, CornerStyle::FollowLayout,  Pickable {
+    should_block_lower: false,
+    ..default()
+},)]
 pub struct List;
 
 #[derive(Component, Debug, Copy, Clone)]

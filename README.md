@@ -5,18 +5,18 @@
 - [v] List as 2D grid + List horizontal
 - [v] Custom item bundle (color square)
 - [v] Theming of custom items
-- [ ] Customizable List bundle to show tooltip (needed or not?)
-- [ ] Color palette (with scrollbars)
-- [ ] Color picker
+- [v] Color palette (with scrollbars)
+- [v] Color palette combo
 - [ ] Tabs
-- [ ] TabPane
+- [ ] TabPane (stack?)
 - [ ] Card
 - [ ] ClearColor: auto update ClearColor on Theme change
-- [ ] Create separate scroll component?
+- [ ] Customizable List bundle to show tooltip (needed or not?)
 - [ ] List: allow optionally setting maximum height
 - [ ] Combo: allow specifying placeholder text
 - [ ] Combo: ensure List is visible within window
 - [ ] ScrollArea: allow dragging thumb
+- [ ] Give Floats their own window so they can get out of the main window
 
 
 # Open questions

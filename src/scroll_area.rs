@@ -60,13 +60,7 @@ impl Plugin for ScrollAreaPlugin {
 }
 
 #[derive(Component, Clone, Copy, Debug)]
-#[require(Node {
-    width: Val::Px(400.0),
-    height: Val::Px(600.0),
-    row_gap: Val::Px(2.0),
-    column_gap: Val::Px(2.0),
-    ..default()
-}, Name::new("ScrollArea"))]
+#[require(Node::default(), Name::new("ScrollArea"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollArea;
 

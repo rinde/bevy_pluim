@@ -1,20 +1,20 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::Startup;
-use bevy::color::palettes::tailwind::AMBER_600;
-use bevy::color::palettes::tailwind::BLUE_600;
-use bevy::color::palettes::tailwind::CYAN_600;
-use bevy::color::palettes::tailwind::EMERALD_600;
-use bevy::color::palettes::tailwind::FUCHSIA_600;
-use bevy::color::palettes::tailwind::GREEN_600;
-use bevy::color::palettes::tailwind::INDIGO_600;
-use bevy::color::palettes::tailwind::LIME_600;
-use bevy::color::palettes::tailwind::ORANGE_600;
-use bevy::color::palettes::tailwind::PINK_600;
-use bevy::color::palettes::tailwind::PURPLE_600;
-use bevy::color::palettes::tailwind::ROSE_600;
-use bevy::color::palettes::tailwind::SKY_600;
-use bevy::color::palettes::tailwind::YELLOW_600;
+use bevy::color::palettes::tailwind::AMBER_300;
+use bevy::color::palettes::tailwind::BLUE_300;
+use bevy::color::palettes::tailwind::CYAN_300;
+use bevy::color::palettes::tailwind::EMERALD_300;
+use bevy::color::palettes::tailwind::FUCHSIA_300;
+use bevy::color::palettes::tailwind::GREEN_300;
+use bevy::color::palettes::tailwind::INDIGO_300;
+use bevy::color::palettes::tailwind::LIME_300;
+use bevy::color::palettes::tailwind::ORANGE_300;
+use bevy::color::palettes::tailwind::PINK_300;
+use bevy::color::palettes::tailwind::PURPLE_300;
+use bevy::color::palettes::tailwind::ROSE_300;
+use bevy::color::palettes::tailwind::SKY_300;
+use bevy::color::palettes::tailwind::YELLOW_300;
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
@@ -53,20 +53,20 @@ fn main() {
 
 fn setup(mut commands: Commands, theme: Res<Theme>) {
     const COLORS: [Srgba; 14] = [
-        YELLOW_600,
-        SKY_600,
-        ROSE_600,
-        PURPLE_600,
-        PINK_600,
-        ORANGE_600,
-        LIME_600,
-        INDIGO_600,
-        FUCHSIA_600,
-        EMERALD_600,
-        CYAN_600,
-        BLUE_600,
-        GREEN_600,
-        AMBER_600,
+        YELLOW_300,
+        SKY_300,
+        ROSE_300,
+        PURPLE_300,
+        PINK_300,
+        ORANGE_300,
+        LIME_300,
+        INDIGO_300,
+        FUCHSIA_300,
+        EMERALD_300,
+        CYAN_300,
+        BLUE_300,
+        GREEN_300,
+        AMBER_300,
     ];
     commands.spawn(Camera2d);
 
@@ -85,64 +85,49 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             BackgroundColor(theme.colors.background_primary),
             Root,
             children![
-                // (Select::new(["hello", "who", "is", "there"]), List),
-                // (
-                //     Node {
-                //         width: Val::Px(200.0),
-                //         left: Val::Px(-300.0),
-                //         ..default()
-                //     },
-                //     children![(
-                //         // Selection(Some(1)),
-                //         List,
-                //         related!(Items[
-                //             Item::new("Netherlands"),
-                //             Item::new("Canada"),
-                //             Item::new("Indonesia"),
-                //             Item::new("Portugal"),
-                //             Item::new("Belgium")
-                //         ]),
-                //         Float
-                //     )]
-                // ),
-                ScrollArea::bundle(
-                    |parent: &mut RelatedSpawner<ChildOf>| {
-                        parent
-                            .spawn((
-                                Pickable {
-                                    should_block_lower: false,
-                                    ..default()
-                                },
-                                Node {
-                                    // width: Val::Px(200.0),
-                                    // height: Val::Px(300.0),
-                                    display: Display::Flex,
-                                    flex_wrap: FlexWrap::Wrap,
-                                    flex_direction: FlexDirection::Row,
-                                    row_gap: Val::Px(10.0),
-                                    column_gap: Val::Px(10.0),
-                                    ..default()
-                                },
-                            ))
-                            .with_children(|parent| {
-                                for i in 0..300 {
-                                    parent.spawn((
-                                        Node {
-                                            width: Val::Px(50.0),
-                                            height: Val::Px(50.0),
-                                            ..default()
-                                        },
-                                        Pickable {
-                                            should_block_lower: false,
-                                            ..default()
-                                        },
-                                        BackgroundColor(Color::Srgba(COLORS[i % COLORS.len()])),
-                                    ));
-                                }
-                            });
+                (
+                    Node {
+                        width: Val::Px(400.0),
+                        height: Val::Px(600.0),
+                        ..default()
                     },
-                    true,
-                    false
+                    ScrollArea::bundle(
+                        |parent: &mut RelatedSpawner<ChildOf>| {
+                            parent
+                                .spawn((
+                                    Pickable {
+                                        should_block_lower: false,
+                                        ..default()
+                                    },
+                                    Node {
+                                        display: Display::Flex,
+                                        flex_wrap: FlexWrap::Wrap,
+                                        flex_direction: FlexDirection::Row,
+                                        row_gap: Val::Px(10.0),
+                                        column_gap: Val::Px(10.0),
+                                        ..default()
+                                    },
+                                ))
+                                .with_children(|parent| {
+                                    for i in 0..300 {
+                                        parent.spawn((
+                                            Node {
+                                                width: Val::Px(50.0),
+                                                height: Val::Px(50.0),
+                                                ..default()
+                                            },
+                                            Pickable {
+                                                should_block_lower: false,
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::Srgba(COLORS[i % COLORS.len()])),
+                                        ));
+                                    }
+                                });
+                        },
+                        true,
+                        false
+                    )
                 ),
                 (
                     List,
@@ -158,12 +143,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                         Item::new("Belgium")
                     ]),
                 ),
-                // (
-                //     Text::new("Hello, World!"),
-                //     TextColor(theme.colors.text_primary),
-                //     HelloWorldLabel
-                // ),
-                // (Combo, Select::new(["hello", "who", "is", "there"])),
                 (
                     Combo,
                     related!(Items[
