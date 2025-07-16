@@ -47,6 +47,9 @@ pub struct Theme {
 
     #[educe(Default = UiRect::axes(Val::Px(12.0), Val::Px(8.0)))]
     pub item_padding: UiRect,
+
+    #[educe(Default = UiRect::axes(Val::Px(6.0), Val::Px(4.0)))]
+    pub color_button_padding: UiRect,
 }
 
 impl Theme {

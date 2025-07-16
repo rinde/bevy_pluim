@@ -2,6 +2,7 @@ use bevy::app::App;
 use bevy::app::Plugin;
 use bevy::app::Update;
 use bevy::color::Color;
+use bevy::color::Srgba;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
@@ -34,21 +35,20 @@ use bevy::ui::PositionType;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::UiRect;
 use bevy::ui::Val;
-use bevy::ui::widget::Text;
 use bevy::utils::default;
 use bevy::window::PrimaryWindow;
 use bevy::window::Window;
 use itertools::Either;
-use itertools::Itertools;
 
 use crate::MouseEvent;
 use crate::color_palette::ColorPalette;
+use crate::color_push_button;
+use crate::color_push_button::ColorPushButton;
+use crate::color_push_button::ColorSquare;
+use crate::color_push_button::ColorSquareRef;
 use crate::float::Float;
 use crate::list::ListLayout;
 use crate::push_button::NoDefaultHover;
-use crate::push_button::PushButton;
-use crate::push_button::PushButtonLabel;
-use crate::push_button::PushButtonRefs;
 use crate::scroll_area::ScrollArea;
 use crate::select::Item;
 use crate::select::Items;
@@ -79,7 +79,6 @@ impl Plugin for ColorPaletteComboPlugin {
 #[component(on_insert=Self::on_insert)]
 #[require(
     Node {
-        width: Val::Px(200.0),
         flex_direction: FlexDirection::Column,
         position_type: PositionType::Relative,
         ..default()
@@ -107,7 +106,7 @@ impl ColorPaletteCombo {
             button_id = x
                 .spawn((
                     ColorPaletteComboButton,
-                    PushButton::new("color", "\\/"),
+                    ColorPushButton,
                     NoDefaultHover,
                     // allow mouse events to pass through to parent
                     Pickable {
@@ -258,10 +257,11 @@ fn position_float(
 fn on_selection_change(
     t: Trigger<OnSelectionChange>,
     combos: Query<&SubRefs, With<ColorPaletteCombo>>,
-    pblr: Query<&PushButtonRefs>,
+    color_square_refs: Query<&ColorSquareRef>,
+    mut color_squares: Query<&mut BackgroundColor, With<ColorSquare>>,
     selections: Query<&Selection>,
     items: Query<&Item<Color>>,
-    mut labels: Query<&mut Text, With<PushButtonLabel>>,
+    mut commands: Commands,
 ) {
     let Ok(SubRefs {
         button_id: button, ..
@@ -270,20 +270,18 @@ fn on_selection_change(
         return;
     };
 
-    let PushButtonRefs { label_id, .. } = pblr.get(*button).unwrap();
+    let ColorSquareRef(color_square_id) = color_square_refs.get(*button).unwrap();
+    let mut color_square_background = color_squares.get_mut(*color_square_id).unwrap();
     let selection = selections.get(t.event().selection_id).unwrap();
 
-    let mut text = labels.get_mut(*label_id).unwrap();
-    let label = if selection.items.is_empty() {
-        "Select a color".to_string()
+    assert!(selection.items.len() <= 1, "Multi selection not supported");
+    let color = if let Some(selected) = selection.items.first() {
+        items.get(*selected).unwrap().data
     } else {
-        selection
-            .items
-            .iter()
-            .map(|item| format!("{:?}", items.get(*item).unwrap().data))
-            .join(", ")
+        Color::Srgba(Srgba::NONE)
     };
-    text.0 = label;
+    color_square_background.0 = color;
+    commands.run_system_cached_with(color_push_button::update_theme, Some(*button));
 }
 
 /// System that closes the combo when clicking outside of it.

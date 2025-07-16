@@ -1,0 +1,160 @@
+use bevy::app::Plugin;
+use bevy::app::Update;
+use bevy::color::Luminance;
+use bevy::ecs::component::Component;
+use bevy::ecs::component::HookContext;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::name::Name;
+use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::ecs::schedule::common_conditions::resource_changed;
+use bevy::ecs::system::In;
+use bevy::ecs::system::IntoSystem;
+use bevy::ecs::system::Query;
+use bevy::ecs::system::Res;
+use bevy::ecs::world::DeferredWorld;
+use bevy::picking::Pickable;
+use bevy::ui::AlignItems;
+use bevy::ui::BackgroundColor;
+use bevy::ui::BorderColor;
+use bevy::ui::BorderRadius;
+use bevy::ui::BoxShadow;
+use bevy::ui::JustifyContent;
+use bevy::ui::Node;
+use bevy::ui::UiRect;
+use bevy::ui::Val;
+use bevy::ui::widget::Button;
+use bevy::utils::default;
+use itertools::Either;
+
+use crate::theme::Theme;
+
+#[derive(Debug, Copy, Clone)]
+pub struct ColorPushButtonPlugin;
+
+impl Plugin for ColorPushButtonPlugin {
+    fn build(&self, app: &mut bevy::app::App) {
+        app.add_systems(
+            Update,
+            (|| None::<Entity>)
+                .pipe(update_theme)
+                .run_if(resource_changed::<Theme>),
+        );
+    }
+}
+
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[component(on_add = Self::on_add)]
+#[require(BoxShadow::default(),
+    Node{
+        justify_content: JustifyContent::SpaceBetween,
+        align_items: AlignItems::Center,
+        ..default()
+    },
+    Name::new("ColorPushButton"),Button,
+)]
+pub struct ColorPushButton;
+
+#[derive(Component, Clone, Copy, Debug)]
+pub struct ColorSquare;
+
+#[derive(Component, Clone, Copy, Debug)]
+pub struct ColorSquareRef(pub Entity);
+
+/// Marker component that disables the default hover effect for `PushButton`s.
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NoDefaultHover;
+
+const SQUARE_SIZE: f32 = 25.0;
+
+impl ColorPushButton {
+    fn on_add(mut world: DeferredWorld, context: HookContext) {
+        let mut commands = world.commands();
+        let mut entity_commands = commands.entity(context.entity);
+
+        let mut square_id = Entity::PLACEHOLDER;
+        entity_commands.with_children(|parent| {
+            square_id = parent
+                .spawn((
+                    Node {
+                        width: Val::Px(SQUARE_SIZE),
+                        height: Val::Px(SQUARE_SIZE),
+                        ..default()
+                    },
+                    BackgroundColor::default(),
+                    BorderRadius::default(),
+                    ColorSquare,
+                    Pickable {
+                        should_block_lower: false,
+                        ..default()
+                    },
+                ))
+                .id();
+        });
+        entity_commands.insert(ColorSquareRef(square_id));
+
+        world
+            .commands()
+            .run_system_cached_with(update_theme, Some(context.entity));
+    }
+}
+
+pub(crate) fn update_theme(
+    button_id: In<Option<Entity>>,
+    theme: Res<Theme>,
+    mut buttons: Query<
+        (
+            &ColorSquareRef,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &mut BorderRadius,
+            &mut BoxShadow,
+            &mut Node,
+        ),
+        With<ColorPushButton>,
+    >,
+    mut squares: Query<
+        (
+            &mut Node,
+            &mut BorderRadius,
+            &mut BorderColor,
+            &BackgroundColor,
+        ),
+        (With<ColorSquare>, Without<ColorPushButton>),
+    >,
+) {
+    let it = if let Some(button_id) = button_id.as_ref() {
+        Either::Left([buttons.get_mut(*button_id).unwrap()].into_iter())
+    } else {
+        Either::Right(buttons.iter_mut())
+    };
+    for (
+        ColorSquareRef(square_ref),
+        mut background_color,
+        mut border_color,
+        mut border_radius,
+        mut box_shadow,
+        mut node,
+    ) in it
+    {
+        background_color.0 = theme.colors.background_primary;
+        border_color.0 = theme.colors.border;
+        *border_radius = BorderRadius::all(theme.corner_radius);
+        *box_shadow = theme.small_shadow().into();
+        node.border = UiRect::all(theme.border_thickness);
+        node.padding = theme.color_button_padding;
+
+        let (mut square_node, mut square_border_radius, mut square_border_color, square_color) =
+            squares.get_mut(*square_ref).unwrap();
+
+        if square_color.0.luminance() < 0.5 {
+            square_border_color.0 = square_color.0.lighter(0.1);
+        } else {
+            square_border_color.0 = square_color.0.darker(0.1);
+        }
+
+        square_node.border = UiRect::all(Val::Px(1.0));
+        *square_border_radius = BorderRadius::all(Val::Px(5.0));
+    }
+}
