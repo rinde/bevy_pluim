@@ -6,7 +6,6 @@ use bevy::color::Srgba;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
@@ -186,7 +185,7 @@ impl State {
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let (state, &SubRefs { float_id, .. }) = world
+        let (state, &sub_refs) = world
             .entity(context.entity)
             .components::<(&State, &SubRefs)>();
 
@@ -194,49 +193,61 @@ impl State {
             State::Open => Visibility::Visible,
             State::Closed => Visibility::Hidden,
         };
-        world.commands().entity(float_id).insert(visibility);
         world
             .commands()
-            .run_system_cached_with(position_float, float_id);
+            .entity(sub_refs.float_id)
+            .insert(visibility);
+        world
+            .commands()
+            .run_system_cached_with(position_float, sub_refs);
     }
 }
 
 fn position_float(
-    float_id: In<Entity>,
+    sub_refs: In<SubRefs>,
     window: Single<&Window, With<PrimaryWindow>>,
-    mut dims: Query<
-        (&mut Node, &ChildOf, &GlobalTransform, &ComputedNode),
-        With<ColorPaletteComboFloat>,
+    mut dims: Query<(&mut Node, &GlobalTransform, &ComputedNode), With<ColorPaletteComboFloat>>,
+    parent_dims: Query<
+        &ComputedNode,
+        (
+            With<ColorPaletteComboButton>,
+            Without<ColorPaletteComboFloat>,
+        ),
     >,
-    parent_dims: Query<&ComputedNode, Without<ColorPaletteComboFloat>>,
 ) {
     const MARGIN: f32 = 10.0;
     const BUTTON_FLOAT_DIST: f32 = 3.0;
 
-    let (mut node, ChildOf(parent), global_transform, computed_node) =
-        dims.get_mut(*float_id).unwrap();
-    let parent_computed_node = parent_dims.get(*parent).unwrap();
+    let (mut node, global_transform, computed_node) = dims.get_mut(sub_refs.float_id).unwrap();
+    let button_computed_node = parent_dims.get(sub_refs.button_id).unwrap();
 
-    let parent_size = parent_computed_node.size() * parent_computed_node.inverse_scale_factor();
-
+    let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let size = computed_node.content_size() * computed_node.inverse_scale_factor();
     let translation = Vec2::new(
         global_transform.translation().x,
         global_transform.translation().y,
     ) * computed_node.inverse_scale_factor();
+    let min_coord = translation - (size / 2.0);
     let max_coord = translation + (size / 2.0);
+
+    let mut intended_x = -size.x / 2.0 + (button_size.x / 2.0);
+    let mut intended_y = button_size.y + BUTTON_FLOAT_DIST;
 
     // set x position
     let Val::Px(current_x) = node.left else {
         panic!("Unexpected value type for node.left")
     };
-    let mut intended_x = -size.x / 2.0 + (parent_size.x / 2.0);
+
     let delta_x = intended_x - current_x;
     let global_max_x = max_coord.x + delta_x;
+    let global_min_x = min_coord.x + delta_x;
 
     if global_max_x + MARGIN > window.width() {
         let excess_x = global_max_x + MARGIN - window.width();
         intended_x -= excess_x;
+    } else if global_min_x < MARGIN {
+        let excess_x = MARGIN - global_min_x;
+        intended_x += excess_x;
     }
     node.left = Val::Px(intended_x);
 
@@ -244,7 +255,7 @@ fn position_float(
     let Val::Px(current_y) = node.top else {
         panic!("Unexpected value type for node.top")
     };
-    let mut intended_y = parent_size.y + BUTTON_FLOAT_DIST;
+
     let delta_y = intended_y - current_y;
     let global_max_y = max_coord.y + delta_y;
 
