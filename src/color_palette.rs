@@ -17,6 +17,7 @@ use bevy::ecs::system::In;
 use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
+use bevy::ecs::world::OnInsert;
 use bevy::picking::Pickable;
 use bevy::ui::AlignItems;
 use bevy::ui::BackgroundColor;
@@ -36,15 +37,18 @@ use itertools::Either;
 use crate::MouseEvent;
 use crate::list::CornerStyle;
 use crate::list::ItemView;
+use crate::list::ItemsChangedInput;
 use crate::list::List;
 use crate::list::ListLayout;
 use crate::list::NoDefaultItems;
 use crate::select::Item;
 use crate::select::ItemOf;
-use crate::select::OnAddItem;
+use crate::select::Items;
+use crate::select::ItemsChanged;
+use crate::select::ItemsRef;
 use crate::select::OnSelectionChange;
 use crate::select::Selection;
-use crate::select::ViewOf;
+use crate::select::SelectionRef;
 use crate::theme::Theme;
 
 const COLOR_SQUARE_SIZE: f32 = 35.0;
@@ -60,7 +64,7 @@ impl Plugin for ColorPalettePlugin {
                 .pipe(theme_items)
                 .run_if(resource_changed::<Theme>),),
         )
-        .add_observer(on_add_item)
+        .add_observer(on_add_items_ref)
         .add_observer(on_selection_change);
     }
 }
@@ -75,58 +79,166 @@ impl Plugin for ColorPalettePlugin {
 )]
 pub struct ColorPalette;
 
-fn on_add_item(
-    t: Trigger<OnAddItem>,
-    items: Query<&Item<Color>>,
-    mut commands: Commands,
-    lists: Query<(), With<ColorPalette>>,
-) {
-    if !lists.contains(t.target()) {
-        return;
-    }
-    let color_item = items.get(t.event().item_id).unwrap();
-    let list_id = t.target();
+// fn on_add_item(
+//     t: Trigger<OnAddItem>,
+//     items: Query<&Item<Color>>,
+//     mut commands: Commands,
+//     lists: Query<(), With<ColorPalette>>,
+// ) {
+//     if !lists.contains(t.target()) {
+//         return;
+//     }
+//     let color_item = items.get(t.event().item_id).unwrap();
+//     let list_id = t.target();
 
-    commands.entity(list_id).with_children(|spawner| {
-        spawner
-            .spawn((
-                Name::new("ItemView"),
-                Button,
-                // Allow scrolling
-                Pickable {
-                    should_block_lower: false,
-                    ..default()
-                },
-                Node {
-                    display: Display::Flex,
-                    justify_self: JustifySelf::Stretch,
-                    // flex_grow: 1.0,
-                    justify_content: JustifyContent::Stretch,
-                    align_items: AlignItems::Stretch,
-                    padding: UiRect::ZERO,
-                    ..default()
-                },
-                ItemView {
-                    item_id: t.event().item_id,
-                },
-            ))
-            .observe(handle_mouse_events)
-            .with_children(|parent| {
-                parent.spawn((
-                    Node {
-                        border: UiRect::all(Val::Px(1.0)),
-                        width: Val::Px(COLOR_SQUARE_SIZE),
-                        height: Val::Px(COLOR_SQUARE_SIZE),
+//     commands.entity(list_id).with_children(|spawner| {
+//         spawner
+//             .spawn((
+//                 Name::new("ItemView"),
+//                 Button,
+//                 // Allow scrolling
+//                 Pickable {
+//                     should_block_lower: false,
+//                     ..default()
+//                 },
+//                 Node {
+//                     display: Display::Flex,
+//                     justify_self: JustifySelf::Stretch,
+//                     // flex_grow: 1.0,
+//                     justify_content: JustifyContent::Stretch,
+//                     align_items: AlignItems::Stretch,
+//                     padding: UiRect::ZERO,
+//                     ..default()
+//                 },
+//                 ItemView {
+//                     item_id: t.event().item_id,
+//                 },
+//             ))
+//             .observe(handle_mouse_events)
+//             .with_children(|parent| {
+//                 parent.spawn((
+//                     Node {
+//                         border: UiRect::all(Val::Px(1.0)),
+//                         width: Val::Px(COLOR_SQUARE_SIZE),
+//                         height: Val::Px(COLOR_SQUARE_SIZE),
+//                         ..default()
+//                     },
+//                     BorderRadius::all(Val::Px(5.0)),
+//                     BackgroundColor(color_item.data),
+//                     Pickable::IGNORE,
+//                 ));
+//             });
+//     });
+
+//     commands.run_system_cached_with(theme_items, Some(list_id));
+// }
+
+fn on_items_changed(
+    input: In<ItemsChangedInput>,
+    items_query: Query<&Item<Color>>,
+    mut commands: Commands,
+    lists: Query<Option<&Children>, With<ColorPalette>>,
+    item_views: Query<(Entity, &ItemView)>,
+) {
+    let ItemsChangedInput { list_ref, items } = &*input;
+    let Ok(children) = lists.get(*list_ref) else {
+        return;
+    };
+
+    let existing = children
+        .map(|c| {
+            c.iter()
+                .map(|c| item_views.get(*c).unwrap())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let mut items = items.clone();
+    for (view_ref, ItemView { item_id }) in existing {
+        let len_before = items.len();
+        items.retain(|x| x != item_id);
+        if len_before == items.len() {
+            // a view was found without a corresponding item
+            commands.entity(view_ref).despawn();
+        }
+    }
+
+    for item_id in items {
+        let item = items_query.get(item_id).unwrap();
+        commands.entity(*list_ref).with_children(|spawner| {
+            spawner
+                .spawn((
+                    Name::new("ItemView"),
+                    Button,
+                    // Allow scrolling
+                    Pickable {
+                        should_block_lower: false,
                         ..default()
                     },
-                    BorderRadius::all(Val::Px(5.0)),
-                    BackgroundColor(color_item.data),
-                    Pickable::IGNORE,
-                ));
-            });
-    });
+                    Node {
+                        display: Display::Flex,
+                        justify_self: JustifySelf::Stretch,
+                        // flex_grow: 1.0,
+                        justify_content: JustifyContent::Stretch,
+                        align_items: AlignItems::Stretch,
+                        padding: UiRect::ZERO,
+                        ..default()
+                    },
+                    ItemView { item_id },
+                ))
+                .observe(handle_mouse_events)
+                .with_children(|parent| {
+                    parent.spawn((
+                        Node {
+                            border: UiRect::all(Val::Px(1.0)),
+                            width: Val::Px(COLOR_SQUARE_SIZE),
+                            height: Val::Px(COLOR_SQUARE_SIZE),
+                            ..default()
+                        },
+                        BorderRadius::all(Val::Px(5.0)),
+                        BackgroundColor(item.data),
+                        Pickable::IGNORE,
+                    ));
+                });
+        });
+    }
 
-    commands.run_system_cached_with(theme_items, Some(list_id));
+    commands.run_system_cached_with(theme_items, Some(*list_ref));
+}
+
+fn on_add_items_ref(
+    t: Trigger<OnInsert, ItemsRef>,
+    lists: Query<&ItemsRef, With<ColorPalette>>,
+    items: Query<&Items>,
+    mut commands: Commands,
+) {
+    let Ok(ItemsRef(items_ref)) = lists.get(t.target()).copied() else {
+        return;
+    };
+    let list_ref = t.target();
+
+    // register observer for items change event
+    commands
+        .entity(items_ref)
+        .observe(move |t: Trigger<ItemsChanged>, mut commands: Commands| {
+            commands.run_system_cached_with(
+                on_items_changed,
+                ItemsChangedInput {
+                    list_ref,
+                    items: t.event().0.iter().copied().collect(),
+                },
+            );
+        });
+
+    // update all items now
+    let all_items = items.get(items_ref).unwrap().iter().copied().collect();
+    commands.run_system_cached_with(
+        on_items_changed,
+        ItemsChangedInput {
+            list_ref,
+            items: all_items,
+        },
+    );
 }
 
 fn handle_mouse_events(
@@ -166,7 +278,7 @@ fn handle_mouse_events(
 fn theme_items(
     list_id: In<Option<Entity>>,
     theme: Res<Theme>,
-    lists: Query<(&Children, Option<&ViewOf>, Entity), (With<List>, With<ColorPalette>)>,
+    lists: Query<(Option<&Children>, Option<&SelectionRef>), (With<List>, With<ColorPalette>)>,
     selections: Query<&Selection>,
     mut item_views: Query<(
         &Children,
@@ -185,15 +297,17 @@ fn theme_items(
         Either::Right(lists.iter())
     };
 
-    for (children, view_of, list_id) in it {
+    for (children, selection_ref) in it {
+        let Some(children) = children else { return };
         if (*children).is_empty() {
             println!("No items to theme");
             return;
         }
-        // either this List is a view of some items defined elsewhere, or the items are
-        // define on the List entity.
-        let selection_id = view_of.map_or(list_id, |ViewOf(selection_id)| *selection_id);
-        let selection = selections.get(selection_id).unwrap();
+        let selection = if let Some(SelectionRef(selection_ref)) = selection_ref {
+            selections.get(*selection_ref).unwrap()
+        } else {
+            &Selection::default()
+        };
 
         for item_view_id in children {
             let (

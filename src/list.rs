@@ -1,7 +1,6 @@
 use bevy::app::App;
 use bevy::app::Plugin;
 use bevy::app::Update;
-use bevy::ecs::children;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
@@ -12,17 +11,16 @@ use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
 use bevy::ecs::query::Without;
-use bevy::ecs::relationship::RelatedSpawner;
+use bevy::ecs::relationship::RelationshipSourceCollection;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::spawn::SpawnRelated;
-use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::In;
 use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::world::OnInsert;
 use bevy::input::ButtonInput;
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::MouseScrollUnit;
@@ -52,16 +50,12 @@ use bevy::utils::default;
 use itertools::Either;
 
 use crate::MouseEvent;
-use crate::WidgetId;
-use crate::get_anywhere;
-use crate::get_or_insert_id;
 use crate::select::Item;
-use crate::select::ItemOf;
 use crate::select::Items;
-use crate::select::OnAddItem;
-use crate::select::OnSelectionChange;
+use crate::select::ItemsChanged;
+use crate::select::ItemsRef;
 use crate::select::Selection;
-use crate::select::ViewOf;
+use crate::select::SelectionRef;
 use crate::theme::Theme;
 
 pub(crate) struct ListPlugin;
@@ -83,8 +77,8 @@ impl Plugin for ListPlugin {
                         .run_if(resource_changed::<Theme>),
                 ),
             )
-            .add_observer(on_add_item)
-            .add_observer(on_selection_change);
+            .add_observer(on_insert_selection_ref)
+            .add_observer(on_add_items_ref);
     }
 }
 
@@ -115,72 +109,13 @@ pub struct NoDefaultItems;
 
 impl List {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let id = get_or_insert_id(&mut world, &context);
-
-        let (items_entity, items) = if let Some((items_entity, existing_items)) =
-            get_anywhere::<Items>(&world, &context, id)
-        {
-            let items = existing_items
-                .iter()
-                .copied()
-                .map(|item| {
-                    let e = world.entity(item).get::<Item<String>>().unwrap();
-                    (item, e.data.clone())
-                })
-                .collect::<Vec<_>>();
-
-            (items_entity, items)
-        } else {
-            let new_items = Items::default();
-            let items_entity = world
-                .commands()
-                .entity(context.entity)
-                .insert(new_items.clone())
-                .id();
-            (items_entity, vec![])
-        };
-
-        if context.entity != items_entity {
-            world
-                .commands()
-                .entity(context.entity)
-                .insert(ViewOf(items_entity));
-        }
-
         // TODO change this assert
         // assert!(
         //     world.entity(context.entity).get::<Node>().is_none(),
         //     "Cannot override Node for List"
         // );
 
-        // TODO reuse event handle code
-        let children = Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<ChildOf>| {
-            assert!(items.is_empty());
-            for (item_ref, item_label) in items {
-                parent
-                    .spawn((
-                        Button,
-                        // Allow scrolling
-                        Pickable {
-                            should_block_lower: false,
-                            ..default()
-                        },
-                        Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Px(36.0),
-                            justify_content: JustifyContent::FlexStart,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        ItemView { item_id: item_ref },
-                        children![(Text(item_label), ItemLabel, Pickable::IGNORE)],
-                    ))
-                    .observe(handle_mouse_events);
-            }
-        }));
-
         let layout = world.entity(context.entity).get::<ListLayout>().unwrap();
-
         let grid_auto_flow = match layout {
             ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => {
                 GridAutoFlow::RowDense
@@ -200,10 +135,7 @@ impl List {
             grid_template_columns,
             ..default()
         };
-        world
-            .commands()
-            .entity(context.entity)
-            .insert((node, children));
+        world.commands().entity(context.entity).insert(node);
 
         world
             .commands()
@@ -213,21 +145,8 @@ impl List {
 
 #[derive(Component, Debug, Copy, Clone)]
 #[require(RelativeCursorPosition::default())]
-#[component(on_add = Self::on_add)]
 pub struct ItemView {
     pub item_id: Entity,
-}
-
-impl ItemView {
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let Some(parent) = world.entity(context.entity).get::<ChildOf>() else {
-            panic!("ItemView must be a child of an entity");
-        };
-        let Some(&parent_id) = world.entity(parent.0).get::<WidgetId>() else {
-            panic!("ItemView must be a child of an entity with a WidgetId");
-        };
-        world.commands().entity(context.entity).insert(parent_id);
-    }
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -242,55 +161,11 @@ impl ItemLabel {
     }
 }
 
-fn on_add_item(
-    t: Trigger<OnAddItem>,
-    items: Query<&Item<String>>,
-    mut commands: Commands,
-    lists: Query<(), (With<List>, Without<NoDefaultItems>)>,
-) {
-    if !lists.contains(t.target()) {
-        return;
-    }
-    let item = items.get(t.event().item_id).unwrap();
-    let list_id = t.target();
-
-    commands.entity(list_id).with_children(|spawner| {
-        spawner
-            .spawn((
-                Name::new("ItemView"),
-                Button,
-                // Allow scrolling
-                Pickable {
-                    should_block_lower: false,
-                    ..default()
-                },
-                Node {
-                    display: Display::Flex,
-                    justify_self: JustifySelf::Stretch,
-                    // flex_grow: 1.0,
-                    justify_content: JustifyContent::Stretch,
-                    align_items: AlignItems::Stretch,
-                    padding: UiRect::ZERO,
-                    ..default()
-                },
-                ItemView {
-                    item_id: t.event().item_id,
-                },
-            ))
-            .observe(handle_mouse_events)
-            .with_children(|parent| {
-                parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
-            });
-    });
-
-    commands.run_system_cached_with(theme_items, Some(list_id));
-}
-
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
     selections: Query<&Selection>,
-    item_ofs: Query<&ItemOf>,
-    mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
+    selection_refs: Query<&SelectionRef>,
+    mut item_views: Query<(&ItemView, &ChildOf, &mut BackgroundColor)>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
@@ -298,11 +173,11 @@ fn handle_mouse_events(
         ItemView {
             item_id: target_item_entity,
         },
+        ChildOf(list_entity),
         mut background_color,
     ) = item_views.get_mut(t.target()).unwrap();
-    let ItemOf(items_entity) = item_ofs.get(*target_item_entity).unwrap();
-    let selection = selections.get(*items_entity).unwrap();
-
+    let SelectionRef(selection_ref) = selection_refs.get(*list_entity).unwrap();
+    let selection = selections.get(*selection_ref).unwrap();
     let is_selected = selection.items.contains(target_item_entity);
 
     match (t.event(), is_selected) {
@@ -320,25 +195,36 @@ fn handle_mouse_events(
         }
         (MouseEvent::Released, _) => {
             if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
-                commands.entity(*items_entity).insert(new_selection);
+                commands.entity(*selection_ref).insert(new_selection);
             }
         }
     }
 }
 
+#[derive(Debug)]
+struct SelectionChangeInput {
+    selection_ref: Entity,
+    list_ref: Entity,
+}
+
 fn on_selection_change(
-    t: Trigger<OnSelectionChange>,
+    t: In<SelectionChangeInput>,
     selections: Query<&Selection>,
     lists: Query<&Children, (With<List>, Without<NoDefaultItems>)>,
     mut item_views: Query<(&ItemView, &RelativeCursorPosition, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
-    if !lists.contains(t.target()) {
-        return;
-    }
-    let selection = selections.get(t.event().selection_id).unwrap();
+    let SelectionChangeInput {
+        selection_ref,
+        list_ref,
+    } = *t;
+    let selection = selections.get(selection_ref).unwrap();
 
-    for item_view_id in lists.get(t.target()).unwrap() {
+    let Ok(children) = lists.get(list_ref) else {
+        return;
+    };
+
+    for item_view_id in children {
         let (item_view, rcp, mut bg) = item_views.get_mut(*item_view_id).unwrap();
 
         match (selection.is_selected(item_view.item_id), rcp.mouse_over()) {
@@ -350,13 +236,146 @@ fn on_selection_change(
     }
 }
 
+fn on_insert_selection_ref(
+    t: Trigger<OnInsert, SelectionRef>,
+    lists: Query<&SelectionRef, With<List>>,
+    mut commands: Commands,
+) {
+    let Ok(SelectionRef(selection_ref)) = lists.get(t.target()).copied() else {
+        return;
+    };
+    let list_ref = t.target();
+
+    // register observer for selection change event
+    commands.entity(selection_ref).observe(
+        move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
+            let input = SelectionChangeInput {
+                selection_ref,
+                list_ref,
+            };
+            commands.run_system_cached_with(on_selection_change, input);
+        },
+    );
+
+    // update view now
+    commands.run_system_cached_with(
+        on_selection_change,
+        SelectionChangeInput {
+            selection_ref,
+            list_ref,
+        },
+    );
+}
+
+pub(crate) struct ItemsChangedInput {
+    pub(crate) list_ref: Entity,
+    pub(crate) items: Vec<Entity>,
+}
+
+fn on_items_changed(
+    input: In<ItemsChangedInput>,
+    items_query: Query<&Item<String>>,
+    mut commands: Commands,
+    lists: Query<Option<&Children>, (With<List>, Without<NoDefaultItems>)>,
+    item_views: Query<(Entity, &ItemView)>,
+) {
+    let ItemsChangedInput { list_ref, items } = &*input;
+    let Ok(children) = lists.get(*list_ref) else {
+        return;
+    };
+
+    let existing = children
+        .map(|c| {
+            c.iter()
+                .map(|c| item_views.get(*c).unwrap())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let mut items = items.clone();
+    for (view_ref, ItemView { item_id }) in existing {
+        let len_before = items.len();
+        items.retain(|x| x != item_id);
+        if len_before == items.len() {
+            // a view was found without a corresponding item
+            commands.entity(view_ref).despawn();
+        }
+    }
+
+    for item_id in items {
+        let item = items_query.get(item_id).unwrap();
+        commands.entity(*list_ref).with_children(|spawner| {
+            spawner
+                .spawn((
+                    Name::new("ItemView"),
+                    Button,
+                    // Allow scrolling
+                    Pickable {
+                        should_block_lower: false,
+                        ..default()
+                    },
+                    Node {
+                        display: Display::Flex,
+                        justify_self: JustifySelf::Stretch,
+                        // flex_grow: 1.0,
+                        justify_content: JustifyContent::Stretch,
+                        align_items: AlignItems::Stretch,
+                        padding: UiRect::ZERO,
+                        ..default()
+                    },
+                    ItemView { item_id },
+                ))
+                .observe(handle_mouse_events)
+                .with_children(|parent| {
+                    parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
+                });
+        });
+    }
+
+    commands.run_system_cached_with(theme_items, Some(*list_ref));
+}
+
+fn on_add_items_ref(
+    t: Trigger<OnInsert, ItemsRef>,
+    lists: Query<&ItemsRef, (With<List>, Without<NoDefaultItems>)>,
+    items: Query<&Items>,
+    mut commands: Commands,
+) {
+    let Ok(ItemsRef(items_ref)) = lists.get(t.target()).copied() else {
+        return;
+    };
+    let list_ref = t.target();
+
+    // register observer for items change event
+    commands
+        .entity(items_ref)
+        .observe(move |t: Trigger<ItemsChanged>, mut commands: Commands| {
+            commands.run_system_cached_with(
+                on_items_changed,
+                ItemsChangedInput {
+                    list_ref,
+                    items: t.event().0.iter().collect(),
+                },
+            );
+        });
+
+    // update all items now
+    let all_items = items.get(items_ref).unwrap().iter().collect();
+    commands.run_system_cached_with(
+        on_items_changed,
+        ItemsChangedInput {
+            list_ref,
+            items: all_items,
+        },
+    );
+}
+
 fn theme_items(
     list_id: In<Option<Entity>>,
     lists: Query<
         (
-            &Children,
-            Option<&ViewOf>,
-            Entity,
+            Option<&Children>,
+            Option<&SelectionRef>,
             &ListLayout,
             &CornerStyle,
         ),
@@ -378,15 +397,20 @@ fn theme_items(
         Either::Right(lists.into_iter())
     };
 
-    for (children, view_of, list_id, layout, corner_style) in iter {
+    for (children, selection_ref, layout, corner_style) in iter {
+        let Some(children) = children else {
+            continue;
+        };
         if children.is_empty() {
             continue;
         }
         let last = children.len() - 1;
-        // either this List is a view of some items defined elsewhere, or the items are
-        // define on the List entity.
-        let selection_id = view_of.map_or(list_id, |ViewOf(selection_id)| *selection_id);
-        let selection = selections.get(selection_id).unwrap();
+
+        let selection = if let Some(SelectionRef(selection_ref)) = selection_ref {
+            selections.get(*selection_ref).unwrap()
+        } else {
+            &Selection::default()
+        };
 
         for (i, item_view_id) in children.iter().enumerate() {
             let (ItemView { item_id }, mut node, mut bg, mut border_radius, mut border_color) =

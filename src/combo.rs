@@ -7,10 +7,13 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::system::Commands;
+use bevy::ecs::system::In;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::world::OnInsert;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use bevy::picking::Pickable;
@@ -30,15 +33,17 @@ use crate::MouseEvent;
 use crate::float::Float;
 use crate::get_or_insert_id;
 use crate::list::List;
+use crate::list::NoDefaultItems;
 use crate::push_button::NoDefaultHover;
 use crate::push_button::PushButton;
 use crate::push_button::PushButtonLabel;
 use crate::push_button::PushButtonRefs;
 use crate::select::Item;
 use crate::select::Items;
+use crate::select::ItemsRef;
 use crate::select::OnSelectionChange;
 use crate::select::Selection;
-use crate::select::ViewOf;
+use crate::select::SelectionRef;
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -47,7 +52,8 @@ pub struct ComboPlugin;
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, close_combos_on_outside_click)
-            .add_observer(on_selection_change);
+            .add_observer(on_insert_selection_ref)
+            .add_observer(on_add_items_ref);
     }
 }
 
@@ -136,7 +142,6 @@ impl Combo {
                 list_id = spawner
                     .spawn((
                         id,
-                        ViewOf(context.entity),
                         List,
                         Float,
                         Visibility::Hidden,
@@ -155,8 +160,14 @@ impl Combo {
     }
 }
 
+#[derive(Debug)]
+struct SelectionChangeInput {
+    selection_ref: Entity,
+    combo_ref: Entity,
+}
+
 fn on_selection_change(
-    t: Trigger<OnSelectionChange>,
+    t: In<SelectionChangeInput>,
     combos: Query<&ComboSubRefs, With<Combo>>,
     pblr: Query<&PushButtonRefs>,
     selections: Query<&Selection>,
@@ -165,13 +176,13 @@ fn on_selection_change(
 ) {
     let Ok(ComboSubRefs {
         button_id: button, ..
-    }) = combos.get(t.target())
+    }) = combos.get(t.combo_ref)
     else {
         return;
     };
 
     let PushButtonRefs { label_id, .. } = pblr.get(*button).unwrap();
-    let selection = selections.get(t.event().selection_id).unwrap();
+    let selection = selections.get(t.selection_ref).unwrap();
 
     let mut text = labels.get_mut(*label_id).unwrap();
     let label = if selection.items.is_empty() {
@@ -184,6 +195,56 @@ fn on_selection_change(
             .join(", ")
     };
     text.0 = label;
+}
+
+fn on_insert_selection_ref(
+    t: Trigger<OnInsert, SelectionRef>,
+    combos: Query<(&SelectionRef, &ComboSubRefs), (With<Combo>, Without<NoDefaultItems>)>,
+    mut commands: Commands,
+) {
+    let combo_ref = t.target();
+    let Ok((SelectionRef(selection_ref), ComboSubRefs { list_id, .. })) = combos.get(combo_ref)
+    else {
+        return;
+    };
+    let selection_ref = *selection_ref;
+
+    // propagate the SelectionRef to the list
+    commands
+        .entity(*list_id)
+        .insert(SelectionRef(selection_ref));
+
+    // register observer for selection change event
+    commands.entity(selection_ref).observe(
+        move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
+            let input = SelectionChangeInput {
+                selection_ref,
+                combo_ref,
+            };
+            commands.run_system_cached_with(on_selection_change, input);
+        },
+    );
+
+    // update view now
+    commands.run_system_cached_with(
+        on_selection_change,
+        SelectionChangeInput {
+            selection_ref,
+            combo_ref,
+        },
+    );
+}
+
+fn on_add_items_ref(
+    t: Trigger<OnInsert, ItemsRef>,
+    combos: Query<(&ItemsRef, &ComboSubRefs), (With<Combo>, Without<NoDefaultItems>)>,
+    mut commands: Commands,
+) {
+    let Ok((ItemsRef(items_ref), ComboSubRefs { list_id, .. })) = combos.get(t.target()) else {
+        return;
+    };
+    // propagate the ItemsRef to the list
+    commands.entity(*list_id).insert(ItemsRef(*items_ref));
 }
 
 /// System that closes the combo when clicking outside of it.

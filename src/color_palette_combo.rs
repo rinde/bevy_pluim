@@ -6,6 +6,7 @@ use bevy::color::Srgba;
 use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
+use bevy::ecs::hierarchy::Children;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
@@ -19,6 +20,7 @@ use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::system::Single;
 use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::world::OnInsert;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use bevy::math::Vec2;
@@ -51,9 +53,10 @@ use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::Item;
 use crate::select::Items;
+use crate::select::ItemsRef;
 use crate::select::OnSelectionChange;
 use crate::select::Selection;
-use crate::select::ViewOf;
+use crate::select::SelectionRef;
 use crate::theme::Theme;
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -70,7 +73,8 @@ impl Plugin for ColorPaletteComboPlugin {
                 close_combos_on_outside_click,
             ),
         )
-        .add_observer(on_selection_change);
+        .add_observer(on_add_items_ref)
+        .add_observer(on_insert_selection_ref);
     }
 }
 
@@ -131,7 +135,6 @@ impl ColorPaletteCombo {
                     ScrollArea::bundle(
                         move |parent| {
                             parent.spawn((
-                                ViewOf(context.entity),
                                 Pickable {
                                     should_block_lower: false,
                                     ..default()
@@ -293,6 +296,65 @@ fn on_selection_change(
     };
     color_square_background.0 = color;
     commands.run_system_cached_with(color_push_button::update_theme, Some(*button));
+}
+
+fn on_insert_selection_ref(
+    t: Trigger<OnInsert, SelectionRef>,
+    combos: Query<(&SelectionRef, &SubRefs), With<ColorPaletteCombo>>,
+    children: Query<&Children>,
+    mut commands: Commands,
+) {
+    let combo_ref = t.target();
+    let Ok((SelectionRef(selection_ref), SubRefs { float_id, .. })) = combos.get(combo_ref) else {
+        return;
+    };
+    println!("ColorPaletteCombo onInsertSelectionRef");
+    let selection_ref = *selection_ref;
+
+    let color_palette_ref = children.get(*float_id).unwrap().iter().next().unwrap();
+
+    // propagate the SelectionRef to the ColorPalette
+    commands
+        .entity(*color_palette_ref)
+        .insert(SelectionRef(selection_ref));
+
+    // // register observer for selection change event
+    // commands.entity(selection_ref).observe(
+    //     move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
+    //         let input = SelectionChangeInput {
+    //             selection_ref,
+    //             combo_ref,
+    //         };
+    //         commands.run_system_cached_with(on_selection_change, input);
+    //     },
+    // );
+
+    // // update view now
+    // commands.run_system_cached_with(
+    //     on_selection_change,
+    //     SelectionChangeInput {
+    //         selection_ref,
+    //         combo_ref,
+    //     },
+    // );
+}
+
+fn on_add_items_ref(
+    t: Trigger<OnInsert, ItemsRef>,
+    combos: Query<(&ItemsRef, &SubRefs), With<ColorPaletteCombo>>,
+    children: Query<&Children>,
+    mut commands: Commands,
+) {
+    println!("before ColorPaletteCombo onAddItemsRef");
+    let Ok((ItemsRef(items_ref), SubRefs { float_id, .. })) = combos.get(t.target()) else {
+        return;
+    };
+    println!("ColorPaletteCombo onAddItemsRef");
+    let color_palette_ref = children.get(*float_id).unwrap().iter().next().unwrap();
+    // propagate the ItemsRef to the list
+    commands
+        .entity(*color_palette_ref)
+        .insert(ItemsRef(*items_ref));
 }
 
 /// System that closes the combo when clicking outside of it.

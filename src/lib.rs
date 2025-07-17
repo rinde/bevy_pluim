@@ -48,6 +48,7 @@ use crate::float::FloatPlugin;
 use crate::list::ListPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
+use crate::select::ItemsPlugin;
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -65,6 +66,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)
             .add_plugins(ColorPushButtonPlugin)
+            .add_plugins(ItemsPlugin)
             .add_systems(PostStartup, setup);
     }
 }

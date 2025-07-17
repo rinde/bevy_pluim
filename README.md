@@ -7,9 +7,18 @@
 - [v] Theming of custom items
 - [v] Color palette (with scrollbars)
 - [v] Color palette combo
-- [ ] Tabs
-- [ ] TabPane (stack?)
-- [ ] Card
+- [v] Tabs
+- [v] TabPane (stack?)
+- [ ] Use SelectionRef
+- [ ] Get rid of WidgetId?
+- [ ] Card -> just ads a bit of style to a node
+- [ ] Label with different text sizes (Header, Normal)
+
+# Future
+- [ ] Toggle with images (e.g. for theme switcher)
+- [ ] Detect dark/light mode (change)
+- [ ] Theme editor
+- [ ] Tooltips
 - [ ] ClearColor: auto update ClearColor on Theme change
 - [ ] Customizable List bundle to show tooltip (needed or not?)
 - [ ] List: allow optionally setting maximum height

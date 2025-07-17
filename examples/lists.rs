@@ -5,6 +5,7 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::list::CornerStyle;
@@ -13,7 +14,9 @@ use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::select::Item;
 use ui::select::Items;
+use ui::select::ItemsRef;
 use ui::select::Selection;
+use ui::select::SelectionRef;
 use ui::theme::Theme;
 
 fn main() {
@@ -23,7 +26,7 @@ fn main() {
         .add_plugins((EguiPlugin {
             enable_multipass_for_primary_context: false,
         },))
-        // .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(UiDebugOptions {
             enabled: false,
             line_width: 1.0,
@@ -39,6 +42,22 @@ fn main() {
 fn setup(mut commands: Commands, theme: Res<Theme>) {
     commands.spawn(Camera2d);
 
+    let selection_ref = commands
+        .spawn((
+            Selection {
+                items: smallvec![],
+                multi: false,
+            },
+            related!(Items[
+                Item::new("Netherlands"),
+                Item::new("Canada"),
+                Item::new("Indonesia"),
+                Item::new("Portugal"),
+                Item::new("Belgium")
+            ]),
+        ))
+        .id();
+
     // Root container
     commands.spawn((
         Node {
@@ -53,20 +72,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         BackgroundColor(theme.colors.background_primary),
         Root,
         children![
-            (
-                List,
-                Selection {
-                    items: smallvec![],
-                    multi: true,
-                },
-                related!(Items[
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
-                ]),
-            ),
+            (List, SelectionRef(selection_ref), ItemsRef(selection_ref),),
             (
                 List,
                 ListLayout::Horizontal,
@@ -85,17 +91,8 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             (
                 List,
                 ListLayout::VerticalGrid { columns: 3 },
-                Selection {
-                    items: smallvec![],
-                    multi: false,
-                },
-                related!(Items[
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
-                ]),
+                SelectionRef(selection_ref),
+                ItemsRef(selection_ref)
             ),
             (
                 List,
@@ -104,13 +101,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     items: smallvec![],
                     multi: false,
                 },
-                related!(Items[
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
-                ]),
+                ItemsRef(selection_ref)
             ),
             (
                 List,
@@ -120,13 +111,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     items: smallvec![],
                     multi: true,
                 },
-                related!(Items[
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
-                ]),
+                ItemsRef(selection_ref)
             ),
             (
                 List,
