@@ -7,9 +7,7 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use smallvec::smallvec;
 use ui::WidgetsPlugin;
-use ui::color_palette::ColorPalette;
 use ui::color_palette_combo::ColorPaletteCombo;
 use ui::list::CornerStyle;
 use ui::list::List;
@@ -18,8 +16,8 @@ use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
 use ui::select::Item;
 use ui::select::ItemValues;
+use ui::select::ItemsRef;
 use ui::select::Selection;
-use ui::select::SelectionValue;
 use ui::stack::Stack;
 use ui::stack::StackChildSpawner;
 use ui::stack::StackItem;
@@ -43,6 +41,7 @@ fn main() {
         .add_observer(on_press)
         .add_systems(Update, update_theme.run_if(resource_changed::<Theme>))
         .add_systems(Startup, setup)
+        .add_systems(PostStartup, post_setup)
         .run();
 }
 
@@ -71,11 +70,8 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     List,
                     CornerStyle::Tabs,
                     ListLayout::Horizontal,
-                    SelectionValue {
-                        items: smallvec![],
-                        multi: false,
-                    }
-                    .into_component(),
+                    Selection::default(),
+                    TabItemsAndSelection,
                     related!(ItemValues[
                         (Item::new("Panel A"), StackItem::new(&create_a)),
                         (Item::new("Panel B"), StackItem::new(&create_b)),
@@ -102,25 +98,50 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
     ));
 }
 
+#[derive(Component)]
+struct TabItemsAndSelection;
+
+fn post_setup(
+    query: Query<(Entity, &Selection, &ItemValues), With<TabItemsAndSelection>>,
+    mut commands: Commands,
+) {
+    let (sref, selection, item_values) = query.single().unwrap();
+    let s = selection
+        .as_selection()
+        .unwrap()
+        .toggle_selected(item_values.iter().next().unwrap())
+        .unwrap();
+    commands.entity(sref).insert(s.into_component());
+}
+
 fn create_a(spawner: StackChildSpawner) -> Entity {
-    spawner.spawn((children![
-        Text::new("Panel A"),
-        (
+    spawner.spawn(Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+        parent.spawn(Text::new("Panel A"));
+
+        let colors = parent
+            .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
+            .id();
+
+        let selection_ref = parent.spawn(Selection::default()).id();
+
+        parent.spawn((
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
-            ItemValues::spawn(SpawnIter(color_palette().into_iter()))
-        ),
-        (
-            ColorPalette,
-            ListLayout::VerticalGrid { columns: 11 },
-            ItemValues::spawn(SpawnIter(color_palette().into_iter()))
-        ),
-        (
+            Selection::reference(selection_ref),
+            ItemsRef(colors),
+        ));
+        parent.spawn((
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
-            ItemValues::spawn(SpawnIter(color_palette().into_iter()))
-        ),
-    ],))
+            ItemsRef(colors),
+        ));
+        parent.spawn((
+            ColorPaletteCombo,
+            ListLayout::VerticalGrid { columns: 11 },
+            Selection::reference(selection_ref),
+            ItemsRef(colors),
+        ));
+    })))
 }
 
 fn create_b(spawner: StackChildSpawner) -> Entity {

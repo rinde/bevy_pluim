@@ -9,9 +9,10 @@
 - [v] Color palette combo
 - [v] Tabs
 - [v] TabPane (stack?)
-- [ ] Get rid of WidgetId?
+- [v] Get rid of WidgetId?
 - [ ] Card -> just ads a bit of style to a node
 - [ ] Label with different text sizes (Header, Normal)
+- [v] allow setting default selection (e.g. for Stack)
 
 # Future
 - [ ] Toggle with images (e.g. for theme switcher)
