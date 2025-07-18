@@ -1,15 +1,45 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
+use bevy::app::PostStartup;
 use bevy::app::Startup;
+use bevy::app::Update;
+use bevy::core_pipeline::core_2d::Camera2d;
+use bevy::ecs::bundle::Bundle;
+use bevy::ecs::children;
+use bevy::ecs::component::Component;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::hierarchy::ChildSpawner;
+use bevy::ecs::hierarchy::Children;
+use bevy::ecs::observer::Trigger;
+use bevy::ecs::query::With;
+use bevy::ecs::related;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::spawn::SpawnIter;
+use bevy::ecs::spawn::SpawnRelated;
 use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::Commands;
-use bevy::prelude::*;
+use bevy::ecs::system::Query;
+use bevy::ecs::system::Res;
+use bevy::ecs::system::ResMut;
+use bevy::picking::events::Pointer;
+use bevy::picking::events::Released;
+use bevy::text::TextColor;
+use bevy::ui::AlignItems;
+use bevy::ui::AlignSelf;
+use bevy::ui::BackgroundColor;
+use bevy::ui::Display;
+use bevy::ui::GridPlacement;
+use bevy::ui::GridTrack;
+use bevy::ui::Node;
 use bevy::ui::UiDebugOptions;
+use bevy::ui::Val;
+use bevy::utils::default;
 use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
 use ui::color_palette_combo::ColorPaletteCombo;
 use ui::combo::Combo;
+use ui::label::Label;
 use ui::list::CornerStyle;
 use ui::list::List;
 use ui::list::ListLayout;
@@ -113,14 +143,14 @@ fn post_setup(
     let s = selection
         .as_selection()
         .unwrap()
-        .toggle_selected(item_values.iter().next().unwrap())
+        .toggle_selected(item_values.iter().copied().next().unwrap())
         .unwrap();
     commands.entity(sref).insert(s.into_component());
 }
 
 fn create_a(spawner: StackChildSpawner) -> Entity {
     spawner.spawn(Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-        parent.spawn(Text::new("Panel A"));
+        parent.spawn(Label::regular("Panel A"));
 
         let colors = parent
             .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
@@ -161,7 +191,7 @@ fn create_a(spawner: StackChildSpawner) -> Entity {
 
 fn create_b(spawner: StackChildSpawner) -> Entity {
     spawner.spawn((children![
-        Text::new("Panel B"),
+        Label::header("Panel B"),
         ScrollArea::bundle(
             |parent| {
                 parent.spawn((

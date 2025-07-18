@@ -7,6 +7,7 @@ pub mod color_palette_combo;
 pub mod color_push_button;
 pub mod combo;
 pub mod float;
+pub mod label;
 pub mod list;
 pub mod push_button;
 pub mod scroll_area;
@@ -41,6 +42,7 @@ use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
+use crate::label::LabelPlugin;
 use crate::list::ListPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
@@ -62,6 +64,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ColorPaletteComboPlugin)
             .add_plugins(ColorPushButtonPlugin)
             .add_plugins(ItemsPlugin)
+            .add_plugins(LabelPlugin)
             .add_systems(PostStartup, setup);
     }
 }

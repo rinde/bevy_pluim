@@ -10,9 +10,9 @@
 - [v] Tabs
 - [v] TabPane (stack?)
 - [v] Get rid of WidgetId?
-- [ ] Card -> just ads a bit of style to a node
-- [ ] Label with different text sizes (Header, Normal)
+- [v] Label with different text sizes (Header, Normal)
 - [v] allow setting default selection (e.g. for Stack)
+- [ ] Card -> just adds a bit of style to a node
 
 # Future
 - [ ] Toggle with images (e.g. for theme switcher)

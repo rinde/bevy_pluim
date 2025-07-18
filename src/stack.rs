@@ -111,7 +111,9 @@ impl StackChildSpawner<'_, '_> {
     pub fn spawn(mut self, child: impl Bundle) -> Entity {
         let mut id = Entity::PLACEHOLDER;
         self.commands.entity(self.parent).with_children(|parent| {
-            id = parent.spawn((Node { ..default() }, child)).id();
+            id = parent
+                .spawn((Name::new("StackItem"), Node { ..default() }, child))
+                .id();
         });
         id
     }
