@@ -13,10 +13,10 @@ use ui::list::List;
 use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::select::Item;
-use ui::select::Items;
+use ui::select::ItemValues;
 use ui::select::ItemsRef;
 use ui::select::Selection;
-use ui::select::SelectionRef;
+use ui::select::SelectionValue;
 use ui::theme::Theme;
 
 fn main() {
@@ -44,11 +44,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 
     let selection_ref = commands
         .spawn((
-            Selection {
+            SelectionValue {
                 items: smallvec![],
                 multi: false,
-            },
-            related!(Items[
+            }
+            .into_component(),
+            related!(ItemValues[
                 Item::new("Netherlands"),
                 Item::new("Canada"),
                 Item::new("Indonesia"),
@@ -72,15 +73,20 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         BackgroundColor(theme.colors.background_primary),
         Root,
         children![
-            (List, SelectionRef(selection_ref), ItemsRef(selection_ref),),
+            (
+                List,
+                Selection::reference(selection_ref),
+                ItemsRef(selection_ref),
+            ),
             (
                 List,
                 ListLayout::Horizontal,
-                Selection {
+                SelectionValue {
                     items: smallvec![],
                     multi: true,
-                },
-                related!(Items[
+                }
+                .into_component(),
+                related!(ItemValues[
                     Item::new("Netherlands"),
                     Item::new("Canada"),
                     Item::new("Indonesia"),
@@ -91,37 +97,40 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             (
                 List,
                 ListLayout::VerticalGrid { columns: 3 },
-                SelectionRef(selection_ref),
+                Selection::reference(selection_ref),
                 ItemsRef(selection_ref)
             ),
             (
                 List,
                 CornerStyle::Tabs,
-                Selection {
+                SelectionValue {
                     items: smallvec![],
                     multi: false,
-                },
+                }
+                .into_component(),
                 ItemsRef(selection_ref)
             ),
             (
                 List,
                 ListLayout::Horizontal,
                 CornerStyle::Tabs,
-                Selection {
+                SelectionValue {
                     items: smallvec![],
                     multi: true,
-                },
+                }
+                .into_component(),
                 ItemsRef(selection_ref)
             ),
             (
                 List,
                 ListLayout::VerticalGrid { columns: 3 },
                 CornerStyle::Tabs,
-                Selection {
+                SelectionValue {
                     items: smallvec![],
                     multi: true,
-                },
-                related!(Items[
+                }
+                .into_component(),
+                related!(ItemValues[
                     Item::new("Netherlands"),
                     Item::new("Canada"),
                     Item::new("Indonesia"),

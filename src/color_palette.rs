@@ -8,6 +8,7 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::hierarchy::Children;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
+use bevy::ecs::query::Changed;
 use bevy::ecs::query::With;
 use bevy::ecs::query::Without;
 use bevy::ecs::schedule::IntoScheduleConfigs;
@@ -42,13 +43,12 @@ use crate::list::List;
 use crate::list::ListLayout;
 use crate::list::NoDefaultItems;
 use crate::select::Item;
-use crate::select::ItemOf;
-use crate::select::Items;
+use crate::select::ItemValues;
 use crate::select::ItemsChanged;
 use crate::select::ItemsRef;
-use crate::select::OnSelectionChange;
 use crate::select::Selection;
-use crate::select::SelectionRef;
+use crate::select::SelectionParam;
+use crate::select::SelectionValue;
 use crate::theme::Theme;
 
 const COLOR_SQUARE_SIZE: f32 = 35.0;
@@ -60,12 +60,14 @@ impl Plugin for ColorPalettePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            ((|| None::<Entity>)
-                .pipe(theme_items)
-                .run_if(resource_changed::<Theme>),),
+            (
+                (|| None::<Entity>)
+                    .pipe(theme_items)
+                    .run_if(resource_changed::<Theme>),
+                on_selection_change,
+            ),
         )
-        .add_observer(on_add_items_ref)
-        .add_observer(on_selection_change);
+        .add_observer(on_add_items_ref);
     }
 }
 
@@ -75,63 +77,10 @@ impl Plugin for ColorPalettePlugin {
     ListLayout::VerticalGrid { columns: 6 },
     CornerStyle::None,
     Selection::default(),
-    NoDefaultItems
+    NoDefaultItems,
+    Name::new("ColorPalette")
 )]
 pub struct ColorPalette;
-
-// fn on_add_item(
-//     t: Trigger<OnAddItem>,
-//     items: Query<&Item<Color>>,
-//     mut commands: Commands,
-//     lists: Query<(), With<ColorPalette>>,
-// ) {
-//     if !lists.contains(t.target()) {
-//         return;
-//     }
-//     let color_item = items.get(t.event().item_id).unwrap();
-//     let list_id = t.target();
-
-//     commands.entity(list_id).with_children(|spawner| {
-//         spawner
-//             .spawn((
-//                 Name::new("ItemView"),
-//                 Button,
-//                 // Allow scrolling
-//                 Pickable {
-//                     should_block_lower: false,
-//                     ..default()
-//                 },
-//                 Node {
-//                     display: Display::Flex,
-//                     justify_self: JustifySelf::Stretch,
-//                     // flex_grow: 1.0,
-//                     justify_content: JustifyContent::Stretch,
-//                     align_items: AlignItems::Stretch,
-//                     padding: UiRect::ZERO,
-//                     ..default()
-//                 },
-//                 ItemView {
-//                     item_id: t.event().item_id,
-//                 },
-//             ))
-//             .observe(handle_mouse_events)
-//             .with_children(|parent| {
-//                 parent.spawn((
-//                     Node {
-//                         border: UiRect::all(Val::Px(1.0)),
-//                         width: Val::Px(COLOR_SQUARE_SIZE),
-//                         height: Val::Px(COLOR_SQUARE_SIZE),
-//                         ..default()
-//                     },
-//                     BorderRadius::all(Val::Px(5.0)),
-//                     BackgroundColor(color_item.data),
-//                     Pickable::IGNORE,
-//                 ));
-//             });
-//     });
-
-//     commands.run_system_cached_with(theme_items, Some(list_id));
-// }
 
 fn on_items_changed(
     input: In<ItemsChangedInput>,
@@ -154,7 +103,13 @@ fn on_items_changed(
         .unwrap_or_default();
 
     let mut items = items.clone();
-    for (view_ref, ItemView { item_id }) in existing {
+    for (
+        view_ref,
+        ItemView {
+            item_ref: item_id, ..
+        },
+    ) in existing
+    {
         let len_before = items.len();
         items.retain(|x| x != item_id);
         if len_before == items.len() {
@@ -184,7 +139,10 @@ fn on_items_changed(
                         padding: UiRect::ZERO,
                         ..default()
                     },
-                    ItemView { item_id },
+                    ItemView {
+                        item_ref: item_id,
+                        list_ref: *list_ref,
+                    },
                 ))
                 .observe(handle_mouse_events)
                 .with_children(|parent| {
@@ -209,7 +167,7 @@ fn on_items_changed(
 fn on_add_items_ref(
     t: Trigger<OnInsert, ItemsRef>,
     lists: Query<&ItemsRef, With<ColorPalette>>,
-    items: Query<&Items>,
+    items: Query<&ItemValues>,
     mut commands: Commands,
 ) {
     let Ok(ItemsRef(items_ref)) = lists.get(t.target()).copied() else {
@@ -243,19 +201,21 @@ fn on_add_items_ref(
 
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
-    selections: Query<&Selection>,
-    item_ofs: Query<(&Item<Color>, &ItemOf)>,
+    selections: SelectionParam,
+    color_items: Query<&Item<Color>>,
     mut item_views: Query<&ItemView>,
     mut commands: Commands,
 ) {
     let ItemView {
-        item_id: target_item_entity,
+        item_ref: target_item_ref,
+        list_ref: target_list_ref,
     } = item_views.get_mut(t.target()).unwrap();
-    let (Item { data: item_color }, ItemOf(items_entity)) =
-        item_ofs.get(*target_item_entity).unwrap();
-    let selection = selections.get(*items_entity).unwrap();
+    let Item { data: item_color } = color_items.get(*target_item_ref).unwrap();
+    let (selection_ref, selection) = selections
+        .get_with_ref(*target_list_ref)
+        .unwrap_or_else(|| panic!("ColorPalette: No selection found for entity {target_list_ref}"));
 
-    let is_selected = selection.items.contains(target_item_entity);
+    let is_selected = selection.items.contains(target_item_ref);
 
     let highlight = match (t.event(), is_selected) {
         (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => Some(HoverState::SelectedHover),
@@ -263,8 +223,10 @@ fn handle_mouse_events(
         (MouseEvent::Out, true) => Some(HoverState::Selected),
         (MouseEvent::Out, false) => Some(HoverState::Unselected),
         (MouseEvent::Released, _) => {
-            if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
-                commands.entity(*items_entity).insert(new_selection);
+            if let Some(new_selection) = selection.toggle_selected(*target_item_ref) {
+                commands
+                    .entity(selection_ref)
+                    .insert(new_selection.into_component());
             }
             None
         }
@@ -278,8 +240,8 @@ fn handle_mouse_events(
 fn theme_items(
     list_id: In<Option<Entity>>,
     theme: Res<Theme>,
-    lists: Query<(Option<&Children>, Option<&SelectionRef>), (With<List>, With<ColorPalette>)>,
-    selections: Query<&Selection>,
+    color_palettes: Query<(Entity, Option<&Children>), With<ColorPalette>>,
+    selections: SelectionParam,
     mut item_views: Query<(
         &Children,
         &ItemView,
@@ -292,27 +254,27 @@ fn theme_items(
     mut commands: Commands,
 ) {
     let it = if let Some(list_id) = list_id.as_ref() {
-        Either::Left([lists.get(*list_id).unwrap()].into_iter())
+        Either::Left([color_palettes.get(*list_id).unwrap()].into_iter())
     } else {
-        Either::Right(lists.iter())
+        Either::Right(color_palettes.iter())
     };
 
-    for (children, selection_ref) in it {
+    for (color_palette_ref, children) in it {
         let Some(children) = children else { return };
         if (*children).is_empty() {
             println!("No items to theme");
-            return;
+            continue;
         }
-        let selection = if let Some(SelectionRef(selection_ref)) = selection_ref {
-            selections.get(*selection_ref).unwrap()
+        let selection = if let Some(selection) = selections.get(color_palette_ref) {
+            selection
         } else {
-            &Selection::default()
+            &SelectionValue::default()
         };
 
         for item_view_id in children {
             let (
                 children,
-                ItemView { item_id },
+                ItemView { item_ref, .. },
                 mut outer_node,
                 mut outer_background_color,
                 mut outer_border_radius,
@@ -329,12 +291,12 @@ fn theme_items(
             inner_node.border = UiRect::all(Val::Px(1.0));
             *inner_border_radius = BorderRadius::all(Val::Px(5.0));
 
-            let hover_state = if selection.is_selected(*item_id) {
+            let hover_state = if selection.is_selected(*item_ref) {
                 HoverState::Selected
             } else {
                 HoverState::Unselected
             };
-            let Item { data: item_color } = color_items.get(*item_id).unwrap();
+            let Item { data: item_color } = color_items.get(*item_ref).unwrap();
             commands
                 .run_system_cached_with(set_highlight, (*item_view_id, *item_color, hover_state));
         }
@@ -342,28 +304,39 @@ fn theme_items(
 }
 
 fn on_selection_change(
-    t: Trigger<OnSelectionChange>,
-    selections: Query<&Selection>,
-    lists: Query<&Children, (With<List>, With<ColorPalette>)>,
+    q: Query<Entity, Changed<Selection>>,
+    selections: SelectionParam,
+    color_palettes: Query<(Entity, &Children), With<ColorPalette>>,
     mut item_views: Query<(&ItemView, &RelativeCursorPosition)>,
     color_items: Query<&Item<Color>>,
     mut commands: Commands,
 ) {
-    if !lists.contains(t.target()) {
-        return;
-    }
-    let selection = selections.get(t.event().selection_id).unwrap();
+    for changed_selection_ref in q {
+        for (color_palette_ref, children) in color_palettes {
+            let Some((selection_ref, selection)) = selections.get_with_ref(color_palette_ref)
+            else {
+                continue;
+            };
+            if selection_ref != changed_selection_ref {
+                continue;
+            }
 
-    for item_view_id in lists.get(t.target()).unwrap() {
-        let (item_view, rcp) = item_views.get_mut(*item_view_id).unwrap();
-        let Item { data: item_color } = color_items.get(item_view.item_id).unwrap();
-        let hover_state = match (selection.is_selected(item_view.item_id), rcp.mouse_over()) {
-            (true, true) => HoverState::SelectedHover,
-            (true, false) => HoverState::Selected,
-            (false, true) => HoverState::Hover,
-            (false, false) => HoverState::Unselected,
-        };
-        commands.run_system_cached_with(set_highlight, (*item_view_id, *item_color, hover_state));
+            for item_view_id in children {
+                let (item_view, rcp) = item_views.get_mut(*item_view_id).unwrap();
+                let Item { data: item_color } = color_items.get(item_view.item_ref).unwrap();
+                let hover_state =
+                    match (selection.is_selected(item_view.item_ref), rcp.mouse_over()) {
+                        (true, true) => HoverState::SelectedHover,
+                        (true, false) => HoverState::Selected,
+                        (false, true) => HoverState::Hover,
+                        (false, false) => HoverState::Unselected,
+                    };
+                commands.run_system_cached_with(
+                    set_highlight,
+                    (*item_view_id, *item_color, hover_state),
+                );
+            }
+        }
     }
 }
 

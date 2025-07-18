@@ -9,6 +9,7 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::hierarchy::Children;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
+use bevy::ecs::query::Changed;
 use bevy::ecs::query::With;
 use bevy::ecs::query::Without;
 use bevy::ecs::schedule::IntoScheduleConfigs;
@@ -52,11 +53,9 @@ use crate::list::ListLayout;
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::Item;
-use crate::select::Items;
 use crate::select::ItemsRef;
-use crate::select::OnSelectionChange;
 use crate::select::Selection;
-use crate::select::SelectionRef;
+use crate::select::SelectionParam;
 use crate::theme::Theme;
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -71,15 +70,15 @@ impl Plugin for ColorPaletteComboPlugin {
                     .pipe(theme_floats)
                     .run_if(resource_changed::<Theme>),
                 close_combos_on_outside_click,
+                on_selection_change,
             ),
         )
-        .add_observer(on_add_items_ref)
-        .add_observer(on_insert_selection_ref);
+        .add_observer(on_add_items_ref);
     }
 }
 
 #[derive(Component, Debug, Copy, Clone)]
-#[component(on_insert=Self::on_insert)]
+#[component(on_add=Self::on_insert)]
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -87,7 +86,6 @@ impl Plugin for ColorPaletteComboPlugin {
         ..default()
     },
     Selection::default(),
-    Items::default(),
     Name::new("ColorPaletteCombo"),
     RelativeCursorPosition::default()
 )]
@@ -105,6 +103,7 @@ impl ColorPaletteCombo {
         let mut float_id = Entity::PLACEHOLDER;
         let list_layout = world.entity(context.entity).get::<ListLayout>().copied();
 
+        let existing_items_ref = world.entity(context.entity).get::<ItemsRef>().copied();
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((
@@ -134,14 +133,20 @@ impl ColorPaletteCombo {
                     Visibility::Hidden,
                     ScrollArea::bundle(
                         move |parent| {
-                            parent.spawn((
+                            let bundle = (
                                 Pickable {
                                     should_block_lower: false,
                                     ..default()
                                 },
                                 ColorPalette,
                                 list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
-                            ));
+                            );
+
+                            if let Some(items_ref) = existing_items_ref {
+                                parent.spawn((bundle, items_ref));
+                            } else {
+                                parent.spawn(bundle);
+                            }
                         },
                         true,
                         false,
@@ -157,7 +162,7 @@ impl ColorPaletteCombo {
             .insert((
                 State::Closed,
                 SubRefs {
-                    button_id,
+                    button: button_id,
                     float_id,
                 },
             ))
@@ -167,7 +172,7 @@ impl ColorPaletteCombo {
 
 #[derive(Component, Debug, Copy, Clone)]
 struct SubRefs {
-    button_id: Entity,
+    button: Entity,
     float_id: Entity,
 }
 
@@ -222,7 +227,7 @@ fn position_float(
     const BUTTON_FLOAT_DIST: f32 = 3.0;
 
     let (mut node, global_transform, computed_node) = dims.get_mut(sub_refs.float_id).unwrap();
-    let button_computed_node = parent_dims.get(sub_refs.button_id).unwrap();
+    let button_computed_node = parent_dims.get(sub_refs.button).unwrap();
 
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let size = computed_node.content_size() * computed_node.inverse_scale_factor();
@@ -269,74 +274,62 @@ fn position_float(
 }
 
 fn on_selection_change(
-    t: Trigger<OnSelectionChange>,
-    combos: Query<&SubRefs, With<ColorPaletteCombo>>,
+    q: Query<Entity, Changed<Selection>>,
+    combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
     color_square_refs: Query<&ColorSquareRef>,
     mut color_squares: Query<&mut BackgroundColor, With<ColorSquare>>,
-    selections: Query<&Selection>,
+    selections: SelectionParam,
     items: Query<&Item<Color>>,
-    mut commands: Commands,
-) {
-    let Ok(SubRefs {
-        button_id: button, ..
-    }) = combos.get(t.target())
-    else {
-        return;
-    };
-
-    let ColorSquareRef(color_square_id) = color_square_refs.get(*button).unwrap();
-    let mut color_square_background = color_squares.get_mut(*color_square_id).unwrap();
-    let selection = selections.get(t.event().selection_id).unwrap();
-
-    assert!(selection.items.len() <= 1, "Multi selection not supported");
-    let color = if let Some(selected) = selection.items.first() {
-        items.get(*selected).unwrap().data
-    } else {
-        Color::Srgba(Srgba::NONE)
-    };
-    color_square_background.0 = color;
-    commands.run_system_cached_with(color_push_button::update_theme, Some(*button));
-}
-
-fn on_insert_selection_ref(
-    t: Trigger<OnInsert, SelectionRef>,
-    combos: Query<(&SelectionRef, &SubRefs), With<ColorPaletteCombo>>,
     children: Query<&Children>,
     mut commands: Commands,
 ) {
-    let combo_ref = t.target();
-    let Ok((SelectionRef(selection_ref), SubRefs { float_id, .. })) = combos.get(combo_ref) else {
-        return;
-    };
-    println!("ColorPaletteCombo onInsertSelectionRef");
-    let selection_ref = *selection_ref;
+    for changed_selection_ref in q {
+        for (color_palette_combo_ref, sub_refs) in combos {
+            let Some((selection_ref, selection)) = selections.get_with_ref(color_palette_combo_ref)
+            else {
+                continue;
+            };
+            if selection_ref != changed_selection_ref {
+                continue;
+            }
 
-    let color_palette_ref = children.get(*float_id).unwrap().iter().next().unwrap();
+            // TODO make this less brittle
+            let scroll_contents_ref = children
+                .get(sub_refs.float_id)
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap();
+            let color_palette_ref = children
+                .get(*scroll_contents_ref)
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap();
 
-    // propagate the SelectionRef to the ColorPalette
-    commands
-        .entity(*color_palette_ref)
-        .insert(SelectionRef(selection_ref));
+            if selections
+                .get_ref(*color_palette_ref)
+                .is_none_or(|existing_ref| existing_ref != changed_selection_ref)
+            {
+                // Selection id has changed -> propagate to the List
+                commands
+                    .entity(*color_palette_ref)
+                    .insert(Selection::reference(changed_selection_ref));
+            }
 
-    // // register observer for selection change event
-    // commands.entity(selection_ref).observe(
-    //     move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
-    //         let input = SelectionChangeInput {
-    //             selection_ref,
-    //             combo_ref,
-    //         };
-    //         commands.run_system_cached_with(on_selection_change, input);
-    //     },
-    // );
+            let ColorSquareRef(color_square_id) = color_square_refs.get(sub_refs.button).unwrap();
+            let mut color_square_background = color_squares.get_mut(*color_square_id).unwrap();
 
-    // // update view now
-    // commands.run_system_cached_with(
-    //     on_selection_change,
-    //     SelectionChangeInput {
-    //         selection_ref,
-    //         combo_ref,
-    //     },
-    // );
+            assert!(selection.items.len() <= 1, "Multi selection not supported");
+            let color = if let Some(selected) = selection.items.first() {
+                items.get(*selected).unwrap().data
+            } else {
+                Color::Srgba(Srgba::NONE)
+            };
+            color_square_background.0 = color;
+            commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
+        }
+    }
 }
 
 fn on_add_items_ref(
@@ -345,12 +338,19 @@ fn on_add_items_ref(
     children: Query<&Children>,
     mut commands: Commands,
 ) {
-    println!("before ColorPaletteCombo onAddItemsRef");
     let Ok((ItemsRef(items_ref), SubRefs { float_id, .. })) = combos.get(t.target()) else {
         return;
     };
-    println!("ColorPaletteCombo onAddItemsRef");
-    let color_palette_ref = children.get(*float_id).unwrap().iter().next().unwrap();
+
+    // TODO make this less brittle
+    let scroll_contents_ref = children.get(*float_id).unwrap().iter().next().unwrap();
+    let color_palette_ref = children
+        .get(*scroll_contents_ref)
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap();
+
     // propagate the ItemsRef to the list
     commands
         .entity(*color_palette_ref)
@@ -360,32 +360,25 @@ fn on_add_items_ref(
 /// System that closes the combo when clicking outside of it.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combos: Query<
-        (
-            Entity,
-            &RelativeCursorPosition,
-            &State,
-            &SubRefs,
-            &Selection,
-        ),
-        With<ColorPaletteCombo>,
-    >,
+    combos: Query<(Entity, &RelativeCursorPosition, &State, &SubRefs), With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
         (&mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
     >,
+    selections: SelectionParam,
     floats: Query<&RelativeCursorPosition, With<ColorPaletteComboFloat>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     if mouse_button.just_released(MouseButton::Left) {
-        for (combo_id, rcp, &combo_state, subs, selection) in combos.iter() {
+        for (combo_id, rcp, &combo_state, subs) in combos.iter() {
+            let selection = selections.get(combo_id).unwrap();
             if combo_state == State::Open
                 && !rcp.mouse_over()
                 && !(selection.multi && floats.get(subs.float_id).unwrap().mouse_over())
             {
                 let (mut background_color, mut border_color) =
-                    combo_buttons.get_mut(subs.button_id).unwrap();
+                    combo_buttons.get_mut(subs.button).unwrap();
 
                 *background_color = BackgroundColor(theme.colors.background_primary);
                 *border_color = BorderColor(theme.colors.border);
@@ -405,7 +398,12 @@ fn handle_combo_button_mouse_events(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    let (SubRefs { button_id, .. }, combo_state) = combos.get(trigger.target()).unwrap();
+    let (
+        SubRefs {
+            button: button_id, ..
+        },
+        combo_state,
+    ) = combos.get(trigger.target()).unwrap();
     let (mut background_color, mut border_color) = combo_buttons.get_mut(*button_id).unwrap();
 
     match (trigger.event(), combo_state) {

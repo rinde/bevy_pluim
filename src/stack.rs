@@ -10,13 +10,14 @@ use bevy::ecs::observer::Trigger;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::Query;
 use bevy::ecs::world::DeferredWorld;
+use bevy::ecs::world::OnInsert;
 use bevy::ui::Display;
 use bevy::ui::Node;
 use bevy::utils::default;
 
 use crate::select::Item;
-use crate::select::OnSelectionChange;
 use crate::select::Selection;
+use crate::select::SelectionParam;
 
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("Stack"), Node::default())]
@@ -30,13 +31,13 @@ impl Stack {
         let stack = *world.entity(context.entity).get::<Self>().unwrap();
 
         world.commands().entity(stack.selection_ref).observe(
-            move |event: Trigger<OnSelectionChange>,
-                  selections: Query<&Selection>,
+            move |event: Trigger<OnInsert, Selection>,
+                  selections: SelectionParam,
                   mut items: Query<(&Item<String>, &mut StackItem)>,
                   children: Query<&Children>,
                   mut nodes: Query<&mut Node>,
                   commands: Commands| {
-                let selection = selections.get(event.selection_id).unwrap();
+                let selection = selections.get(event.target()).unwrap();
                 assert!(
                     !selection.multi,
                     "Multi-selection is not supported for Stack"

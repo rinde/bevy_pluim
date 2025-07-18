@@ -17,8 +17,9 @@ use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
 use ui::select::Item;
-use ui::select::Items;
+use ui::select::ItemValues;
 use ui::select::Selection;
+use ui::select::SelectionValue;
 use ui::stack::Stack;
 use ui::stack::StackChildSpawner;
 use ui::stack::StackItem;
@@ -70,11 +71,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     List,
                     CornerStyle::Tabs,
                     ListLayout::Horizontal,
-                    Selection {
+                    SelectionValue {
                         items: smallvec![],
                         multi: false,
-                    },
-                    related!(Items[
+                    }
+                    .into_component(),
+                    related!(ItemValues[
                         (Item::new("Panel A"), StackItem::new(&create_a)),
                         (Item::new("Panel B"), StackItem::new(&create_b)),
                     ]),
@@ -106,17 +108,17 @@ fn create_a(spawner: StackChildSpawner) -> Entity {
         (
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
-            Items::spawn(SpawnIter(color_palette().into_iter()))
+            ItemValues::spawn(SpawnIter(color_palette().into_iter()))
         ),
         (
             ColorPalette,
             ListLayout::VerticalGrid { columns: 11 },
-            Items::spawn(SpawnIter(color_palette().into_iter()))
+            ItemValues::spawn(SpawnIter(color_palette().into_iter()))
         ),
         (
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
-            Items::spawn(SpawnIter(color_palette().into_iter()))
+            ItemValues::spawn(SpawnIter(color_palette().into_iter()))
         ),
     ],))
 }
@@ -128,11 +130,8 @@ fn create_b(spawner: StackChildSpawner) -> Entity {
             |parent| {
                 parent.spawn((
                     List,
-                    Selection {
-                        items: smallvec![],
-                        multi: false,
-                    },
-                    Items::spawn(SpawnIter(items())),
+                    Selection::default(),
+                    ItemValues::spawn(SpawnIter(items())),
                 ));
             },
             true,
@@ -145,11 +144,8 @@ fn create_b(spawner: StackChildSpawner) -> Entity {
             },
             children![(
                 List,
-                Selection {
-                    items: smallvec![],
-                    multi: false,
-                },
-                related!(Items[
+                Selection::default(),
+                related!(ItemValues[
                     Item::new("Netherlands"),
                     Item::new("Canada"),
                     Item::new("Indonesia"),

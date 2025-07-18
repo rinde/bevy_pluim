@@ -27,8 +27,8 @@ use ui::list::List;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
 use ui::select::Item;
-use ui::select::Items;
-use ui::select::Selection;
+use ui::select::ItemValues;
+use ui::select::SelectionValue;
 use ui::theme::Theme;
 
 fn main() {
@@ -131,11 +131,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ),
                 (
                     List,
-                    Selection {
+                    SelectionValue {
                         items: smallvec![],
                         multi: true,
-                    },
-                    related!(Items[
+                    }
+                    .into_component(),
+                    related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -145,7 +146,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ),
                 (
                     Combo,
-                    related!(Items[
+                    related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -155,11 +156,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ),
                 (
                     Combo,
-                    Selection {
+                    SelectionValue {
                         items: smallvec![],
                         multi: true,
-                    },
-                    related!(Items[
+                    }
+                    .into_component(),
+                    related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -177,7 +179,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
                 commands.entity(root).with_child((
                     List,
-                    related!(Items[
+                    related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -191,7 +193,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
                 commands.entity(root).with_child((
                     Combo,
-                    related!(Items[
+                    related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),

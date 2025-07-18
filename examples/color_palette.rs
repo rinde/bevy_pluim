@@ -14,7 +14,9 @@ use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
 use ui::select::Item;
-use ui::select::Items;
+use ui::select::ItemValues;
+use ui::select::ItemsRef;
+use ui::select::Selection;
 use ui::tailwind::COLORS;
 use ui::theme::Theme;
 
@@ -41,6 +43,15 @@ fn main() {
 fn setup(mut commands: Commands, theme: Res<Theme>) {
     commands.spawn(Camera2d);
 
+    let selection_ref = commands
+        .spawn((
+            Selection::default(),
+            ItemValues::spawn(SpawnIter(color_palette().into_iter())),
+        ))
+        .id();
+
+    let selection_ref2 = commands.spawn((Selection::default(),)).id();
+
     // Root container
     commands.spawn((
         Node {
@@ -56,9 +67,10 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         Root,
         children![
             (
+                Selection::reference(selection_ref),
                 ColorPalette,
                 ListLayout::VerticalGrid { columns: 11 },
-                Items::spawn(SpawnIter(color_palette().into_iter()))
+                ItemsRef(selection_ref),
             ),
             (
                 Node {
@@ -67,7 +79,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     ..default()
                 },
                 ScrollArea::bundle(
-                    |parent| {
+                    move |parent| {
                         parent.spawn((
                             Pickable {
                                 should_block_lower: false,
@@ -75,7 +87,31 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                             },
                             ColorPalette,
                             ListLayout::VerticalGrid { columns: 11 },
-                            Items::spawn(SpawnIter(color_palette().into_iter())),
+                            ItemsRef(selection_ref),
+                            Selection::reference(selection_ref),
+                        ));
+                    },
+                    true,
+                    true
+                )
+            ),
+            (
+                Node {
+                    width: Val::Px(230.0),
+                    height: Val::Px(600.0),
+                    ..default()
+                },
+                ScrollArea::bundle(
+                    move |parent| {
+                        parent.spawn((
+                            Pickable {
+                                should_block_lower: false,
+                                ..default()
+                            },
+                            ColorPalette,
+                            ListLayout::VerticalGrid { columns: 11 },
+                            Selection::default(),
+                            ItemValues::spawn(SpawnIter(color_palette().into_iter())),
                         ));
                     },
                     true,
@@ -85,7 +121,20 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             (
                 ColorPaletteCombo,
                 ListLayout::VerticalGrid { columns: 11 },
-                Items::spawn(SpawnIter(color_palette().into_iter()))
+                ItemsRef(selection_ref),
+                Selection::reference(selection_ref2),
+            ),
+            (
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                ItemsRef(selection_ref),
+                Selection::reference(selection_ref2),
+            ),
+            (
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::default(),
+                ItemValues::spawn(SpawnIter(color_palette().into_iter()))
             ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],

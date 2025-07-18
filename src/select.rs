@@ -9,8 +9,10 @@ use bevy::ecs::name::Name;
 use bevy::ecs::query::Changed;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::Query;
+use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
 use bevy::reflect::Reflect;
+use bevy::utils::default;
 use derive_more::Deref;
 use smallvec::SmallVec;
 
@@ -23,15 +25,91 @@ impl Plugin for ItemsPlugin {
     }
 }
 
-#[derive(Component, Debug, Clone, Default)]
+#[derive(Component, Debug, Clone)]
 #[component(immutable)]
-#[component(on_add=Self::on_add, on_insert = Self::on_insert)]
-pub struct Selection {
+pub enum Selection {
+    Ref(Entity),
+    Value(SelectionValue),
+}
+
+impl Selection {
+    #[must_use]
+    pub const fn reference(selection_ref: Entity) -> Selection {
+        Selection::Ref(selection_ref)
+    }
+
+    #[must_use]
+    pub const fn as_selection(&self) -> Option<&SelectionValue> {
+        match self {
+            Selection::Ref(_) => None,
+            Selection::Value(selection) => Some(selection),
+        }
+    }
+
+    #[must_use]
+    pub const fn as_ref(&self) -> Option<&Entity> {
+        match self {
+            Selection::Ref(entity) => Some(entity),
+            Selection::Value(_) => None,
+        }
+    }
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self::Value(default())
+    }
+}
+
+#[derive(SystemParam, Debug)]
+pub struct SelectionParam<'w, 's> {
+    selection_refs: Query<'w, 's, &'static Selection>,
+}
+
+impl SelectionParam<'_, '_> {
+    #[must_use]
+    pub fn get(&self, entity: Entity) -> Option<&SelectionValue> {
+        self.get_with_ref(entity).map(|(_, s)| s)
+    }
+
+    #[must_use]
+    pub fn get_ref(&self, entity: Entity) -> Option<Entity> {
+        self.get_with_ref(entity).map(|(e, _)| e)
+    }
+
+    #[must_use]
+    pub fn get_with_ref(&self, entity: Entity) -> Option<(Entity, &SelectionValue)> {
+        self.selection_refs
+            .get(entity)
+            .map(|x| match x {
+                Selection::Ref(entity_ref) => (
+                    *entity_ref,
+                    self.selection_refs
+                        .get(*entity_ref)
+                        .unwrap_or_else(|e| {
+                            panic!("Selection reference {entity} -> {entity_ref} -> ? does not point to a Selection: {e}")
+                        })
+                        .as_selection()
+                        .unwrap(),
+                ),
+                Selection::Value(selection) => (entity, selection),
+            })
+            .ok()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SelectionValue {
     pub items: SmallVec<[Entity; 4]>,
     pub multi: bool,
 }
 
-impl Selection {
+impl SelectionValue {
+    #[must_use]
+    pub const fn into_component(self) -> Selection {
+        Selection::Value(self)
+    }
+
     #[must_use]
     pub fn is_selected(&self, item: Entity) -> bool {
         self.items.contains(&item)
@@ -56,25 +134,6 @@ impl Selection {
         }
         Some(clone)
     }
-
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
-        world
-            .commands()
-            .entity(context.entity)
-            .insert(SelectionRef(context.entity));
-    }
-
-    fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        // let event = OnSelectionChange {
-        //     selection_id: context.entity,
-        // };
-        // if let Some(views) = world.entity(context.entity).get::<Views>().cloned() {
-        //     for view_id in views.iter() {
-        //         world.commands().trigger_targets(event, *view_id);
-        //     }
-        // }
-        // world.commands().trigger_targets(event, context.entity);
-    }
 }
 
 // TODO remove and use Trigger<OnInsert, Selection> instead
@@ -82,25 +141,31 @@ impl Selection {
 pub struct OnSelectionChange {
     pub selection_id: Entity,
 }
+
 #[derive(Component, Debug, Clone, Copy)]
+#[relationship(relationship_target = SelectionBackRefs)]
 #[component(immutable)]
 pub struct SelectionRef(pub Entity);
+
+#[derive(Component, Debug, Default, Clone, Reflect, Deref)]
+#[relationship_target(relationship = SelectionRef, linked_spawn)]
+pub struct SelectionBackRefs(Vec<Entity>);
 
 #[derive(Component, Debug, Clone, Copy)]
 #[component(immutable)]
 pub struct ItemsRef(pub Entity);
 
 #[derive(Component, Debug, Clone, Copy)]
-#[relationship(relationship_target = Items)]
+#[relationship(relationship_target = ItemValues)]
 pub struct ItemOf(pub Entity);
 
 #[derive(Component, Debug, Default, Clone, Reflect, Deref)]
 #[relationship_target(relationship = ItemOf, linked_spawn)]
 #[component(on_add = Self::on_add)]
-#[require(Selection::default(), Name::new("Items"))]
-pub struct Items(Vec<Entity>);
+#[require(Name::new("Items"))]
+pub struct ItemValues(Vec<Entity>);
 
-impl Items {
+impl ItemValues {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         world
             .commands()
@@ -128,9 +193,9 @@ impl<T: Into<String>> From<T> for Item<String> {
 }
 
 #[derive(Event, Debug, Clone)]
-pub struct ItemsChanged(pub Items);
+pub struct ItemsChanged(pub ItemValues);
 
-fn items_change(q: Query<(Entity, &Items), Changed<Items>>, mut commands: Commands) {
+fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut commands: Commands) {
     for (items_ref, items) in q {
         commands.trigger_targets(ItemsChanged(items.clone()), items_ref);
     }

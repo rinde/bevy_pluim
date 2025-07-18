@@ -5,10 +5,10 @@ use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::event::EventReader;
-use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::hierarchy::Children;
 use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
+use bevy::ecs::query::Changed;
 use bevy::ecs::query::With;
 use bevy::ecs::query::Without;
 use bevy::ecs::relationship::RelationshipSourceCollection;
@@ -51,11 +51,12 @@ use itertools::Either;
 
 use crate::MouseEvent;
 use crate::select::Item;
-use crate::select::Items;
+use crate::select::ItemValues;
 use crate::select::ItemsChanged;
 use crate::select::ItemsRef;
 use crate::select::Selection;
-use crate::select::SelectionRef;
+use crate::select::SelectionParam;
+use crate::select::SelectionValue;
 use crate::theme::Theme;
 
 pub(crate) struct ListPlugin;
@@ -75,19 +76,24 @@ impl Plugin for ListPlugin {
                     (|| None::<Entity>)
                         .pipe(theme_item_labels)
                         .run_if(resource_changed::<Theme>),
+                    selection_change,
                 ),
             )
-            .add_observer(on_insert_selection_ref)
             .add_observer(on_add_items_ref);
     }
 }
 
 #[derive(Component, Debug, Copy, Clone, Default)]
 #[component(on_insert = Self::on_insert)]
-#[require(Name::new("List"), ListLayout::Vertical, CornerStyle::FollowLayout,  Pickable {
-    should_block_lower: false,
-    ..default()
-},)]
+#[require(
+    Name::new("List"),
+    ListLayout::Vertical,
+    CornerStyle::FollowLayout,
+    Pickable {
+        should_block_lower: false,
+        ..default()
+    }
+)]
 pub struct List;
 
 #[derive(Component, Debug, Copy, Clone)]
@@ -146,7 +152,8 @@ impl List {
 #[derive(Component, Debug, Copy, Clone)]
 #[require(RelativeCursorPosition::default())]
 pub struct ItemView {
-    pub item_id: Entity,
+    pub item_ref: Entity,
+    pub list_ref: Entity,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -163,21 +170,21 @@ impl ItemLabel {
 
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
-    selections: Query<&Selection>,
-    selection_refs: Query<&SelectionRef>,
-    mut item_views: Query<(&ItemView, &ChildOf, &mut BackgroundColor)>,
+    selections: SelectionParam,
+    mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     let (
         ItemView {
-            item_id: target_item_entity,
+            item_ref: target_item_entity,
+            list_ref,
         },
-        ChildOf(list_entity),
         mut background_color,
     ) = item_views.get_mut(t.target()).unwrap();
-    let SelectionRef(selection_ref) = selection_refs.get(*list_entity).unwrap();
-    let selection = selections.get(*selection_ref).unwrap();
+    let (selection_ref, selection) = selections
+        .get_with_ref(*list_ref)
+        .unwrap_or_else(|| panic!("No selection found for entity {list_ref}"));
     let is_selected = selection.items.contains(target_item_entity);
 
     match (t.event(), is_selected) {
@@ -195,76 +202,44 @@ fn handle_mouse_events(
         }
         (MouseEvent::Released, _) => {
             if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
-                commands.entity(*selection_ref).insert(new_selection);
+                commands
+                    .entity(selection_ref)
+                    .insert(new_selection.into_component());
             }
         }
     }
 }
 
-#[derive(Debug)]
-struct SelectionChangeInput {
-    selection_ref: Entity,
-    list_ref: Entity,
-}
-
-fn on_selection_change(
-    t: In<SelectionChangeInput>,
-    selections: Query<&Selection>,
-    lists: Query<&Children, (With<List>, Without<NoDefaultItems>)>,
+fn selection_change(
+    q: Query<Entity, Changed<Selection>>,
+    selections: SelectionParam,
+    lists: Query<(Entity, &Children, &Selection), (With<List>, Without<NoDefaultItems>)>,
     mut item_views: Query<(&ItemView, &RelativeCursorPosition, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
-    let SelectionChangeInput {
-        selection_ref,
-        list_ref,
-    } = *t;
-    let selection = selections.get(selection_ref).unwrap();
+    for changed_selection_ref in q {
+        for (list_ref, children, list_selection) in lists {
+            let is_changed = match list_selection {
+                Selection::Ref(entity) => changed_selection_ref == *entity,
+                Selection::Value(_selection) => changed_selection_ref == list_ref,
+            };
+            if is_changed {
+                let selection = selections.get(changed_selection_ref).unwrap_or_else(|| {
+                    panic!("No selection found for entity {changed_selection_ref}")
+                });
+                for item_view_id in children {
+                    let (item_view, rcp, mut bg) = item_views.get_mut(*item_view_id).unwrap();
 
-    let Ok(children) = lists.get(list_ref) else {
-        return;
-    };
-
-    for item_view_id in children {
-        let (item_view, rcp, mut bg) = item_views.get_mut(*item_view_id).unwrap();
-
-        match (selection.is_selected(item_view.item_id), rcp.mouse_over()) {
-            (true, true) => bg.0 = theme.colors.selected_hovered_item,
-            (true, false) => bg.0 = theme.colors.selected_item,
-            (false, true) => bg.0 = theme.colors.hovered_item,
-            (false, false) => bg.0 = theme.colors.background_primary,
+                    match (selection.is_selected(item_view.item_ref), rcp.mouse_over()) {
+                        (true, true) => bg.0 = theme.colors.selected_hovered_item,
+                        (true, false) => bg.0 = theme.colors.selected_item,
+                        (false, true) => bg.0 = theme.colors.hovered_item,
+                        (false, false) => bg.0 = theme.colors.background_primary,
+                    }
+                }
+            }
         }
     }
-}
-
-fn on_insert_selection_ref(
-    t: Trigger<OnInsert, SelectionRef>,
-    lists: Query<&SelectionRef, With<List>>,
-    mut commands: Commands,
-) {
-    let Ok(SelectionRef(selection_ref)) = lists.get(t.target()).copied() else {
-        return;
-    };
-    let list_ref = t.target();
-
-    // register observer for selection change event
-    commands.entity(selection_ref).observe(
-        move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
-            let input = SelectionChangeInput {
-                selection_ref,
-                list_ref,
-            };
-            commands.run_system_cached_with(on_selection_change, input);
-        },
-    );
-
-    // update view now
-    commands.run_system_cached_with(
-        on_selection_change,
-        SelectionChangeInput {
-            selection_ref,
-            list_ref,
-        },
-    );
 }
 
 pub(crate) struct ItemsChangedInput {
@@ -293,17 +268,17 @@ fn on_items_changed(
         .unwrap_or_default();
 
     let mut items = items.clone();
-    for (view_ref, ItemView { item_id }) in existing {
+    for (view_ref, ItemView { item_ref, .. }) in existing {
         let len_before = items.len();
-        items.retain(|x| x != item_id);
+        items.retain(|x| x != item_ref);
         if len_before == items.len() {
             // a view was found without a corresponding item
             commands.entity(view_ref).despawn();
         }
     }
 
-    for item_id in items {
-        let item = items_query.get(item_id).unwrap();
+    for item_ref in items {
+        let item = items_query.get(item_ref).unwrap();
         commands.entity(*list_ref).with_children(|spawner| {
             spawner
                 .spawn((
@@ -323,7 +298,10 @@ fn on_items_changed(
                         padding: UiRect::ZERO,
                         ..default()
                     },
-                    ItemView { item_id },
+                    ItemView {
+                        item_ref,
+                        list_ref: *list_ref,
+                    },
                 ))
                 .observe(handle_mouse_events)
                 .with_children(|parent| {
@@ -338,7 +316,7 @@ fn on_items_changed(
 fn on_add_items_ref(
     t: Trigger<OnInsert, ItemsRef>,
     lists: Query<&ItemsRef, (With<List>, Without<NoDefaultItems>)>,
-    items: Query<&Items>,
+    items: Query<&ItemValues>,
     mut commands: Commands,
 ) {
     let Ok(ItemsRef(items_ref)) = lists.get(t.target()).copied() else {
@@ -373,12 +351,7 @@ fn on_add_items_ref(
 fn theme_items(
     list_id: In<Option<Entity>>,
     lists: Query<
-        (
-            Option<&Children>,
-            Option<&SelectionRef>,
-            &ListLayout,
-            &CornerStyle,
-        ),
+        (Entity, Option<&Children>, &ListLayout, &CornerStyle),
         (With<List>, Without<NoDefaultItems>),
     >,
     theme: Res<Theme>,
@@ -389,7 +362,7 @@ fn theme_items(
         &mut BorderRadius,
         &mut BorderColor,
     )>,
-    selections: Query<&Selection>,
+    selections: SelectionParam,
 ) {
     let iter = if let Some(list_id) = list_id.0 {
         Either::Left([lists.get(list_id).unwrap()].into_iter())
@@ -397,7 +370,7 @@ fn theme_items(
         Either::Right(lists.into_iter())
     };
 
-    for (children, selection_ref, layout, corner_style) in iter {
+    for (list_ref, children, layout, corner_style) in iter {
         let Some(children) = children else {
             continue;
         };
@@ -406,17 +379,17 @@ fn theme_items(
         }
         let last = children.len() - 1;
 
-        let selection = if let Some(SelectionRef(selection_ref)) = selection_ref {
-            selections.get(*selection_ref).unwrap()
+        let selection = if let Some(selection) = selections.get(list_ref) {
+            selection
         } else {
-            &Selection::default()
+            &SelectionValue::default()
         };
 
         for (i, item_view_id) in children.iter().enumerate() {
-            let (ItemView { item_id }, mut node, mut bg, mut border_radius, mut border_color) =
+            let (ItemView { item_ref, .. }, mut node, mut bg, mut border_radius, mut border_color) =
                 item_views.get_mut(*item_view_id).unwrap();
 
-            let is_selected = selection.is_selected(*item_id);
+            let is_selected = selection.is_selected(*item_ref);
 
             if is_selected {
                 bg.0 = theme.colors.selected_item;
