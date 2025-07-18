@@ -31,7 +31,6 @@ use bevy::utils::default;
 use itertools::Either;
 
 use crate::MouseEvent;
-use crate::WidgetId;
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -116,27 +115,15 @@ impl PushButton {
         }
         let mut label_id = Entity::PLACEHOLDER;
         let mut icon_id = None;
-        if let Some(&id) = world.entity(context.entity).get::<WidgetId>() {
-            world
-                .commands()
-                .entity(context.entity)
-                .with_children(|spawner| {
-                    label_id = spawner.spawn((id, label)).id();
-                    if let Some(icon) = icon {
-                        icon_id = Some(spawner.spawn((id, icon)).id());
-                    }
-                });
-        } else {
-            world
-                .commands()
-                .entity(context.entity)
-                .with_children(|spawner| {
-                    label_id = spawner.spawn(label).id();
-                    if let Some(icon) = icon {
-                        icon_id = Some(spawner.spawn(icon).id());
-                    }
-                });
-        }
+        world
+            .commands()
+            .entity(context.entity)
+            .with_children(|spawner| {
+                label_id = spawner.spawn(label).id();
+                if let Some(icon) = icon {
+                    icon_id = Some(spawner.spawn(icon).id());
+                }
+            });
         world
             .commands()
             .entity(context.entity)

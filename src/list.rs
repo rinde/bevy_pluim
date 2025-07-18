@@ -92,7 +92,8 @@ impl Plugin for ListPlugin {
     Pickable {
         should_block_lower: false,
         ..default()
-    }
+    },
+    Selection::default()
 )]
 pub struct List;
 

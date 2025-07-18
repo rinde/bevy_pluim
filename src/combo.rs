@@ -31,7 +31,6 @@ use itertools::Itertools;
 
 use crate::MouseEvent;
 use crate::float::Float;
-use crate::get_or_insert_id;
 use crate::list::List;
 use crate::list::NoDefaultItems;
 use crate::push_button::NoDefaultHover;
@@ -63,6 +62,7 @@ impl Plugin for ComboPlugin {
         position_type: PositionType::Relative,
         ..default()
     },
+    Selection::default(),
     Name::new("Combo"),
     RelativeCursorPosition::default()
 )]
@@ -115,13 +115,11 @@ const PLACEHOLDER_TEXT: &str = "Select..";
 
 impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let id = get_or_insert_id(&mut world, &context);
         let mut button_id = Entity::PLACEHOLDER;
         let mut list_id = Entity::PLACEHOLDER;
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((
-                    id,
                     PushButton::new(PLACEHOLDER_TEXT, "\\/"),
                     ComboButton,
                     NoDefaultHover,
@@ -136,7 +134,6 @@ impl Combo {
             x.spawn(Node::default()).with_children(|spawner| {
                 list_id = spawner
                     .spawn((
-                        id,
                         List,
                         Float,
                         Visibility::Hidden,
@@ -154,7 +151,6 @@ impl Combo {
             .observe(handle_combo_button_mouse_events);
 
         if let Some(items_ref) = world.entity(context.entity).get::<ItemsRef>().copied() {
-            println!("Combo contains ItemsRef");
             // propagate the ItemsRef to the list
             world.commands().entity(list_id).insert(items_ref);
         }
@@ -177,14 +173,12 @@ fn selection_change(
                 Selection::Value(_selection) => changed_selection_ref == combo_ref,
             };
             if is_changed {
-                println!("selection change for {combo_ref}");
                 let selection = selections.get(changed_selection_ref).unwrap();
 
                 if selections
                     .get_ref(sub_refs.list_id)
                     .is_none_or(|existing_ref| existing_ref != changed_selection_ref)
                 {
-                    println!(" selection id has changed -> propagate to the List");
                     // Selection id has changed -> propagate to the List
                     commands
                         .entity(sub_refs.list_id)
@@ -213,11 +207,9 @@ fn on_add_items_ref(
     combos: Query<(&ItemsRef, &ComboSubRefs), (With<Combo>, Without<NoDefaultItems>)>,
     mut commands: Commands,
 ) {
-    println!("Combo::on_add_items_ref {}", t.target());
     let Ok((ItemsRef(items_ref), ComboSubRefs { list_id, .. })) = combos.get(t.target()) else {
         return;
     };
-    println!(" > Propagating ItemsRef to the list");
     // propagate the ItemsRef to the list
     commands.entity(*list_id).insert(ItemsRef(*items_ref));
 }

@@ -9,7 +9,6 @@
 - [v] Color palette combo
 - [v] Tabs
 - [v] TabPane (stack?)
-- [ ] Use SelectionRef
 - [ ] Get rid of WidgetId?
 - [ ] Card -> just ads a bit of style to a node
 - [ ] Label with different text sizes (Header, Normal)

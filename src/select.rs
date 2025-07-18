@@ -136,21 +136,6 @@ impl SelectionValue {
     }
 }
 
-// TODO remove and use Trigger<OnInsert, Selection> instead
-#[derive(Event, Copy, Clone, Debug)]
-pub struct OnSelectionChange {
-    pub selection_id: Entity,
-}
-
-#[derive(Component, Debug, Clone, Copy)]
-#[relationship(relationship_target = SelectionBackRefs)]
-#[component(immutable)]
-pub struct SelectionRef(pub Entity);
-
-#[derive(Component, Debug, Default, Clone, Reflect, Deref)]
-#[relationship_target(relationship = SelectionRef, linked_spawn)]
-pub struct SelectionBackRefs(Vec<Entity>);
-
 #[derive(Component, Debug, Clone, Copy)]
 #[component(immutable)]
 pub struct ItemsRef(pub Entity);

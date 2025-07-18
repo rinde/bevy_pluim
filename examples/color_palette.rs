@@ -6,7 +6,6 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use ui::WidgetsPlugin;
 use ui::color_palette::ColorPalette;
 use ui::color_palette_combo::ColorPaletteCombo;
@@ -27,7 +26,7 @@ fn main() {
         .add_plugins((EguiPlugin {
             enable_multipass_for_primary_context: false,
         },))
-        .add_plugins(WorldInspectorPlugin::new())
+        // .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(UiDebugOptions {
             enabled: false,
             line_width: 1.0,

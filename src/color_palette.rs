@@ -262,7 +262,6 @@ fn theme_items(
     for (color_palette_ref, children) in it {
         let Some(children) = children else { return };
         if (*children).is_empty() {
-            println!("No items to theme");
             continue;
         }
         let selection = if let Some(selection) = selections.get(color_palette_ref) {
