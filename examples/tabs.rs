@@ -9,6 +9,7 @@ use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
 use ui::color_palette_combo::ColorPaletteCombo;
+use ui::combo::Combo;
 use ui::list::CornerStyle;
 use ui::list::List;
 use ui::list::ListLayout;
@@ -90,6 +91,9 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 Node {
                     grid_column: GridPlacement::span(3),
                     display: Display::Flex,
+                    align_items: AlignItems::FlexStart,
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
                     ..default()
                 },
                 Stack { selection_ref: id },
@@ -141,6 +145,17 @@ fn create_a(spawner: StackChildSpawner) -> Entity {
             Selection::reference(selection_ref),
             ItemsRef(colors),
         ));
+        parent.spawn((
+            Combo,
+            related!(ItemValues[
+                Item::new("Netherlands"),
+                Item::new("Canada"),
+                Item::new("Indonesia"),
+                Item::new("Portugal"),
+                Item::new("Belgium")
+            ]),
+        ));
+        parent.spawn(PushButton::from_label("hello"));
     })))
 }
 
