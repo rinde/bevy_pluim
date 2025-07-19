@@ -2,6 +2,7 @@
     clippy::type_complexity,
     reason = "Query types can be complex without being difficult to understand"
 )]
+pub mod card;
 pub mod color_palette;
 pub mod color_palette_combo;
 pub mod color_push_button;
@@ -37,6 +38,7 @@ use bevy::picking::events::Released;
 use bevy::reflect::Reflect;
 use bevy::ui::Node;
 
+use crate::card::CardPlugin;
 use crate::color_palette::ColorPalettePlugin;
 use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::color_push_button::ColorPushButtonPlugin;
@@ -65,6 +67,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ColorPushButtonPlugin)
             .add_plugins(ItemsPlugin)
             .add_plugins(LabelPlugin)
+            .add_plugins(CardPlugin)
             .add_systems(PostStartup, setup);
     }
 }

@@ -1477,13 +1477,13 @@ pub const COLORS: [TailwindColor; 242] = [
     },
 ];
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct TailwindColor {
     pub class: Class,
     pub variant: Variant,
     pub color: Color,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Class {
     Slate,
     Gray,
@@ -1508,7 +1508,7 @@ pub enum Class {
     Pink,
     Rose,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Variant {
     V50,
     V100,

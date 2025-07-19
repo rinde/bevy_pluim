@@ -13,7 +13,6 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::ecs::world::OnInsert;
 use bevy::ui::Display;
 use bevy::ui::Node;
-use bevy::utils::default;
 
 use crate::select::Item;
 use crate::select::Selection;
@@ -112,9 +111,13 @@ impl StackChildSpawner<'_, '_> {
         let mut id = Entity::PLACEHOLDER;
         self.commands.entity(self.parent).with_children(|parent| {
             id = parent
-                .spawn((Name::new("StackItem"), Node { ..default() }, child))
+                .spawn((Name::new("StackItem"), AddNodeIfAbsent, child))
                 .id();
         });
         id
     }
 }
+
+#[derive(Component, Clone, Copy, Debug)]
+#[require(Node::default())]
+struct AddNodeIfAbsent;

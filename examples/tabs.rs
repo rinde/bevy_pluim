@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::app::PostStartup;
@@ -22,21 +24,28 @@ use bevy::ecs::system::Commands;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::system::ResMut;
+use bevy::picking::Pickable;
 use bevy::picking::events::Pointer;
 use bevy::picking::events::Released;
 use bevy::text::TextColor;
 use bevy::ui::AlignItems;
 use bevy::ui::AlignSelf;
 use bevy::ui::BackgroundColor;
+use bevy::ui::BorderRadius;
 use bevy::ui::Display;
+use bevy::ui::FlexWrap;
 use bevy::ui::GridPlacement;
 use bevy::ui::GridTrack;
+use bevy::ui::JustifyContent;
 use bevy::ui::Node;
+use bevy::ui::PositionType;
 use bevy::ui::UiDebugOptions;
+use bevy::ui::UiRect;
 use bevy::ui::Val;
 use bevy::utils::default;
 use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
+use ui::card::Card;
 use ui::color_palette_combo::ColorPaletteCombo;
 use ui::combo::Combo;
 use ui::label::Label;
@@ -53,6 +62,8 @@ use ui::stack::Stack;
 use ui::stack::StackChildSpawner;
 use ui::stack::StackItem;
 use ui::tailwind::COLORS;
+use ui::tailwind::TailwindColor;
+use ui::tailwind::Variant;
 use ui::theme::Theme;
 
 fn main() {
@@ -106,6 +117,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     related!(ItemValues[
                         (Item::new("Panel A"), StackItem::new(&create_a)),
                         (Item::new("Panel B"), StackItem::new(&create_b)),
+                        (Item::new("Card demo"), StackItem::new(&create_card_demo)),
                     ]),
                 ))
                 .id();
@@ -176,14 +188,29 @@ fn create_a(spawner: StackChildSpawner) -> Entity {
             ItemsRef(colors),
         ));
         parent.spawn((
-            Combo,
-            related!(ItemValues[
-                Item::new("Netherlands"),
-                Item::new("Canada"),
-                Item::new("Indonesia"),
-                Item::new("Portugal"),
-                Item::new("Belgium")
-            ]),
+            Card,
+            Node {
+                height: Val::Px(200.0),
+                margin: UiRect::all(Val::Px(5.0)),
+                padding: UiRect::all(Val::Px(10.0)),
+                align_items: AlignItems::FlexStart,
+                row_gap: Val::Px(10.0),
+                column_gap: Val::Px(10.0),
+                ..default()
+            },
+            children![
+                (
+                    Combo,
+                    related!(ItemValues[
+                        Item::new("Netherlands"),
+                        Item::new("Canada"),
+                        Item::new("Indonesia"),
+                        Item::new("Portugal"),
+                        Item::new("Belgium")
+                    ])
+                ),
+                PushButton::from_label("Button on a card")
+            ],
         ));
         parent.spawn(PushButton::from_label("hello"));
     })))
@@ -222,6 +249,96 @@ fn create_b(spawner: StackChildSpawner) -> Entity {
         ),
     ],))
 }
+
+static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
+    COLORS
+        .iter()
+        .filter(|x| x.variant == Variant::V200)
+        .copied()
+        .collect::<Vec<_>>()
+});
+
+fn create_card_demo(spawner: StackChildSpawner) -> Entity {
+    spawner.spawn((
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            display: Display::Grid,
+
+            ..default()
+        },
+        children![
+            Label::header("Card demo"),
+            (
+                Node {
+                    // width: Val::Percent(100.0),
+                    ..default()
+                },
+                Pickable {
+                    should_block_lower: false,
+                    ..default()
+                },
+                ScrollArea::bundle(
+                    |parent| {
+                        parent.spawn((
+                            Node {
+                                row_gap: Val::Px(16.0),
+                                column_gap: Val::Px(16.0),
+                                flex_wrap: FlexWrap::Wrap,
+                                margin: UiRect::left(Val::Px(16.0)),
+                                ..default()
+                            },
+                            Pickable {
+                                should_block_lower: false,
+                                ..default()
+                            },
+                            Children::spawn(SpawnIter((0..300).map(|i| {
+                                (
+                                    Node {
+                                        min_width: Val::Px(50.0),
+                                        width: Val::Px(100.0),
+                                        height: Val::Px(100.0),
+                                        align_items: AlignItems::Center,
+                                        justify_content: JustifyContent::Center,
+                                        ..default()
+                                    },
+                                    Card,
+                                    Pickable {
+                                        should_block_lower: false,
+                                        ..default()
+                                    },
+                                    children![
+                                        (
+                                            Pickable {
+                                                should_block_lower: false,
+                                                ..default()
+                                            },
+                                            Node {
+                                                position_type: PositionType::Absolute,
+                                                top: Val::Px(0.0),
+                                                height: Val::Percent(50.0),
+                                                width: Val::Percent(100.0),
+                                                ..default()
+                                            },
+                                            BorderRadius::top(Val::Px(10.0)),
+                                            BackgroundColor(
+                                                LIGHT_COLORS[(i / 10) % LIGHT_COLORS.len()].color
+                                            )
+                                        ),
+                                        Label::regular(format!("{i}"))
+                                    ],
+                                )
+                            }))),
+                        ));
+                    },
+                    true,
+                    true
+                )
+            )
+        ],
+    ))
+}
+
 fn color_palette() -> Vec<impl Bundle> {
     COLORS.iter().map(|c| (Item { data: c.color })).collect()
 }

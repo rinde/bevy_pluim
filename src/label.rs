@@ -12,6 +12,7 @@ use bevy::ecs::system::IntoSystem;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
+use bevy::picking::Pickable;
 use bevy::text::TextColor;
 use bevy::text::TextFont;
 use bevy::ui::AlignSelf;
@@ -43,6 +44,10 @@ impl Plugin for LabelPlugin {
         align_self: AlignSelf::Center,
         ..default()
     },
+    Pickable {
+        should_block_lower: false,
+        ..default()
+    },
 )]
 pub enum Label {
     Header(String),
@@ -64,6 +69,9 @@ impl Label {
             Label::Header(text) | Label::Regular(text) => text.clone(),
         };
         world.commands().entity(context.entity).insert(Text(text));
+        world
+            .commands()
+            .run_system_cached_with(theme_labels, Some(context.entity));
     }
 }
 

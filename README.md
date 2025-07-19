@@ -12,10 +12,11 @@
 - [v] Get rid of WidgetId?
 - [v] Label with different text sizes (Header, Normal)
 - [v] allow setting default selection (e.g. for Stack)
-- [ ] Card -> just adds a bit of style to a node
+- [v] Card -> just adds a bit of style to a node
 
 # Future
-- [ ] Toggle with images (e.g. for theme switcher)
+- [ ] slider
+- [ ] Toggle/switch with images (e.g. for theme switcher)
 - [ ] Detect dark/light mode (change)
 - [ ] Theme editor
 - [ ] Tooltips
@@ -25,7 +26,9 @@
 - [ ] Combo: allow specifying placeholder text
 - [ ] Combo: ensure List is visible within window
 - [ ] ScrollArea: allow dragging thumb
+- [ ] ScrollArea: don't reserve space for scrollbars when not needed
 - [ ] Give Floats their own window so they can get out of the main window
+
 
 
 # Open questions
