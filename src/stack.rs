@@ -9,6 +9,7 @@ use bevy::ecs::name::Name;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::Query;
+use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
 use bevy::ecs::world::OnInsert;
 use bevy::ui::Display;
@@ -17,6 +18,7 @@ use bevy::ui::Node;
 use crate::select::Item;
 use crate::select::Selection;
 use crate::select::SelectionParam;
+use crate::theme::Theme;
 
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("Stack"), Node::default())]
@@ -35,7 +37,8 @@ impl Stack {
                   mut items: Query<(&Item<String>, &mut StackItem)>,
                   children: Query<&Children>,
                   mut nodes: Query<&mut Node>,
-                  commands: Commands| {
+                  commands: Commands,
+                  theme: Res<Theme>| {
                 let selection = selections.get(event.target()).unwrap();
                 assert!(
                     !selection.multi,
@@ -62,7 +65,7 @@ impl Stack {
                         parent: context.entity,
                         commands,
                     };
-                    let new_id = (selected_stack_item.create)(spawner);
+                    let new_id = (selected_stack_item.create)(spawner, &*theme);
                     selected_stack_item.entity = Some(new_id);
                 }
             },
@@ -73,7 +76,7 @@ impl Stack {
 #[derive(Component, Clone, Copy)]
 pub struct StackItem {
     entity: Option<Entity>,
-    pub create: &'static (dyn Fn(StackChildSpawner) -> Entity + Send + Sync),
+    pub create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
 }
 
 impl fmt::Debug for StackItem {
@@ -85,7 +88,9 @@ impl fmt::Debug for StackItem {
 }
 
 impl StackItem {
-    pub fn new(create: &'static (dyn Fn(StackChildSpawner) -> Entity + Send + Sync)) -> Self {
+    pub fn new(
+        create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
+    ) -> Self {
         Self {
             entity: None,
             create,

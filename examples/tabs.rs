@@ -14,6 +14,7 @@ use bevy::ecs::hierarchy::ChildSpawner;
 use bevy::ecs::hierarchy::Children;
 use bevy::ecs::observer::Trigger;
 use bevy::ecs::query::With;
+use bevy::ecs::query::Without;
 use bevy::ecs::related;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::schedule::common_conditions::resource_changed;
@@ -160,7 +161,7 @@ fn post_setup(
     commands.entity(sref).insert(s.into_component());
 }
 
-fn create_a(spawner: StackChildSpawner) -> Entity {
+fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
     spawner.spawn(Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
         parent.spawn(Label::regular("Panel A"));
 
@@ -216,7 +217,7 @@ fn create_a(spawner: StackChildSpawner) -> Entity {
     })))
 }
 
-fn create_b(spawner: StackChildSpawner) -> Entity {
+fn create_b(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
     spawner.spawn((children![
         Label::header("Panel B"),
         ScrollArea::bundle(
@@ -258,7 +259,8 @@ static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
         .collect::<Vec<_>>()
 });
 
-fn create_card_demo(spawner: StackChildSpawner) -> Entity {
+fn create_card_demo(spawner: StackChildSpawner, theme: &Theme) -> Entity {
+    let background_color = theme.colors.background_primary;
     spawner.spawn((
         Node {
             width: Val::Percent(100.0),
@@ -279,7 +281,7 @@ fn create_card_demo(spawner: StackChildSpawner) -> Entity {
                     ..default()
                 },
                 ScrollArea::bundle(
-                    |parent| {
+                    move |parent| {
                         parent.spawn((
                             Node {
                                 row_gap: Val::Px(16.0),
@@ -292,7 +294,7 @@ fn create_card_demo(spawner: StackChildSpawner) -> Entity {
                                 should_block_lower: false,
                                 ..default()
                             },
-                            Children::spawn(SpawnIter((0..300).map(|i| {
+                            Children::spawn(SpawnIter((0..300).map(move |i| {
                                 (
                                     Node {
                                         min_width: Val::Px(50.0),
@@ -325,7 +327,20 @@ fn create_card_demo(spawner: StackChildSpawner) -> Entity {
                                                 LIGHT_COLORS[(i / 10) % LIGHT_COLORS.len()].color
                                             )
                                         ),
-                                        Label::regular(format!("{i}"))
+                                        (
+                                            CardBackground,
+                                            BorderRadius::top(Val::Px(5.0)),
+                                            BackgroundColor(background_color),
+                                            Pickable {
+                                                should_block_lower: false,
+                                                ..default()
+                                            },
+                                            Node {
+                                                padding: UiRect::px(5.0, 5.0, 3.0, 3.0),
+                                                ..default()
+                                            },
+                                            children![Label::regular(format!("{i}")),]
+                                        ),
                                     ],
                                 )
                             }))),
@@ -338,6 +353,9 @@ fn create_card_demo(spawner: StackChildSpawner) -> Entity {
         ],
     ))
 }
+
+#[derive(Component)]
+struct CardBackground;
 
 fn color_palette() -> Vec<impl Bundle> {
     COLORS.iter().map(|c| (Item { data: c.color })).collect()
@@ -370,11 +388,15 @@ fn update_theme(
     theme: Res<Theme>,
     mut background: Query<&mut BackgroundColor, With<Root>>,
     mut hello_world: Query<&mut TextColor, With<HelloWorldLabel>>,
+    mut card_background: Query<&mut BackgroundColor, (With<CardBackground>, Without<Root>)>,
 ) {
     for mut background_color in &mut background {
         background_color.0 = theme.colors.background_primary;
     }
     for mut text_color in &mut hello_world {
         text_color.0 = theme.colors.text_primary;
+    }
+    for mut card_background_color in &mut card_background {
+        card_background_color.0 = theme.colors.background_primary;
     }
 }
