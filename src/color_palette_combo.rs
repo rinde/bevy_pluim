@@ -156,22 +156,28 @@ impl ColorPaletteCombo {
                 .id();
         });
 
+        let sub_refs = SubRefs {
+            parent: context.entity,
+            button: button_id,
+            float_id,
+        };
+
         world
             .commands()
             .entity(context.entity)
-            .insert((
-                State::Closed,
-                SubRefs {
-                    button: button_id,
-                    float_id,
-                },
-            ))
+            .insert((State::Closed, sub_refs));
+
+        world
+            .commands()
+            .entity(button_id)
+            .insert(sub_refs)
             .observe(handle_combo_button_mouse_events);
     }
 }
 
 #[derive(Component, Debug, Copy, Clone)]
 struct SubRefs {
+    parent: Entity,
     button: Entity,
     float_id: Entity,
 }
@@ -390,27 +396,26 @@ fn close_combos_on_outside_click(
 
 fn handle_combo_button_mouse_events(
     trigger: Trigger<MouseEvent>,
-    combos: Query<(&SubRefs, &State), With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
-        (&mut BackgroundColor, &mut BorderColor),
+        (&SubRefs, &mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
     >,
+    combos: Query<&State, With<ColorPaletteCombo>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     let (
         SubRefs {
-            button: button_id, ..
+            parent: parent_id, ..
         },
-        combo_state,
-    ) = combos.get(trigger.target()).unwrap();
-    let (mut background_color, mut border_color) = combo_buttons.get_mut(*button_id).unwrap();
+        mut background_color,
+        mut border_color,
+    ) = combo_buttons.get_mut(trigger.target()).unwrap();
+    let combo_state = combos.get(*parent_id).unwrap();
 
     match (trigger.event(), combo_state) {
         (MouseEvent::Pressed, _) => {
-            commands
-                .entity(trigger.target())
-                .insert(combo_state.inverse());
+            commands.entity(*parent_id).insert(combo_state.inverse());
         }
         (MouseEvent::Over, _) | (_, State::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);

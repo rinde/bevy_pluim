@@ -50,7 +50,7 @@ impl Plugin for PushButtonPlugin {
 #[derive(Component, Clone, Debug, Eq, PartialEq)]
 #[component(on_add = Self::on_add)]
 #[require(BoxShadow::default(),
-    Node{
+    Node {
         justify_content: JustifyContent::SpaceBetween,
         align_items: AlignItems::Center,
         ..default()

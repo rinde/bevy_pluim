@@ -32,6 +32,7 @@ use bevy::text::TextColor;
 use bevy::ui::AlignItems;
 use bevy::ui::AlignSelf;
 use bevy::ui::BackgroundColor;
+use bevy::ui::BorderColor;
 use bevy::ui::BorderRadius;
 use bevy::ui::Display;
 use bevy::ui::FlexWrap;
@@ -91,6 +92,8 @@ fn main() {
 fn setup(mut commands: Commands, theme: Res<Theme>) {
     commands.spawn(Camera2d);
 
+    let theme_border_color = theme.colors.border;
+
     // Root container
     commands.spawn((
         Node {
@@ -107,7 +110,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         },
         BackgroundColor(theme.colors.background_primary),
         Root,
-        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
             let id = parent
                 .spawn((
                     List,
@@ -123,10 +126,14 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ))
                 .id();
             // filler
-            parent.spawn(Node {
-                max_width: Val::Percent(100.0),
-                ..default()
-            });
+            parent.spawn((
+                BorderColor(theme_border_color),
+                Node {
+                    max_width: Val::Percent(100.0),
+                    border: UiRect::bottom(Val::Px(1.0)),
+                    ..default()
+                },
+            ));
 
             parent.spawn((PushButton::from_label("Toggle theme"), ThemeButton));
 
@@ -273,7 +280,7 @@ fn create_card_demo(spawner: StackChildSpawner, theme: &Theme) -> Entity {
             Label::header("Card demo"),
             (
                 Node {
-                    // width: Val::Percent(100.0),
+                    width: Val::Percent(100.0),
                     ..default()
                 },
                 Pickable {
