@@ -17,6 +17,7 @@
 # Future
 - [ ] slider
 - [ ] Toggle/switch with images (e.g. for theme switcher)
+- [ ] Triple switch (Light, System, Dark)
 - [ ] Detect dark/light mode (change)
 - [ ] Theme editor
 - [ ] Tooltips

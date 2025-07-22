@@ -215,7 +215,12 @@ fn selection_change(
     q: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
     lists: Query<(Entity, &Children, &Selection), (With<List>, Without<NoDefaultItems>)>,
-    mut item_views: Query<(&ItemView, &RelativeCursorPosition, &mut BackgroundColor)>,
+    mut item_views: Query<(
+        &ItemView,
+        &RelativeCursorPosition,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
     theme: Res<Theme>,
 ) {
     for changed_selection_ref in q {
@@ -229,13 +234,21 @@ fn selection_change(
                     panic!("No selection found for entity {changed_selection_ref}")
                 });
                 for item_view_id in children {
-                    let (item_view, rcp, mut bg) = item_views.get_mut(*item_view_id).unwrap();
+                    let (item_view, rcp, mut bg, mut border_color) =
+                        item_views.get_mut(*item_view_id).unwrap();
 
-                    match (selection.is_selected(item_view.item_ref), rcp.mouse_over()) {
+                    let is_selected = selection.is_selected(item_view.item_ref);
+                    match (is_selected, rcp.mouse_over()) {
                         (true, true) => bg.0 = theme.colors.selected_hovered_item,
                         (true, false) => bg.0 = theme.colors.selected_item,
                         (false, true) => bg.0 = theme.colors.hovered_item,
                         (false, false) => bg.0 = theme.colors.background_primary,
+                    }
+
+                    if is_selected {
+                        border_color.0 = theme.colors.border_highlight;
+                    } else {
+                        border_color.0 = theme.colors.border;
                     }
                 }
             }
@@ -397,8 +410,8 @@ fn theme_items(
                 border_color.0 = theme.colors.border_highlight;
             } else {
                 bg.0 = theme.colors.background_primary;
-                border_color.0 = theme.colors.border;
             }
+            border_color.0 = theme.colors.border;
 
             theme_item_border(
                 &mut node,
