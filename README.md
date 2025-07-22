@@ -15,7 +15,7 @@
 - [v] Card -> just adds a bit of style to a node
 
 # Future
-- [ ] slider
+- [ ] Slider (wait for Bevy 0.17)
 - [ ] Toggle/switch with images (e.g. for theme switcher)
 - [ ] Triple switch (Light, System, Dark)
 - [ ] Detect dark/light mode (change)
