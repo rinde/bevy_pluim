@@ -65,7 +65,7 @@ impl Stack {
                         parent: context.entity,
                         commands,
                     };
-                    let new_id = (selected_stack_item.create)(spawner, &*theme);
+                    let new_id = (selected_stack_item.create)(spawner, &theme);
                     selected_stack_item.entity = Some(new_id);
                 }
             },

@@ -36,6 +36,7 @@ use bevy::ui::BorderColor;
 use bevy::ui::BorderRadius;
 use bevy::ui::Display;
 use bevy::ui::FlexWrap;
+use bevy::ui::GridAutoFlow;
 use bevy::ui::GridPlacement;
 use bevy::ui::GridTrack;
 use bevy::ui::JustifyContent;
@@ -273,16 +274,14 @@ fn create_card_demo(spawner: StackChildSpawner, theme: &Theme) -> Entity {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
             display: Display::Grid,
-
+            grid_auto_columns: vec![GridTrack::percent(100.0)],
+            grid_auto_flow: GridAutoFlow::Row,
             ..default()
         },
         children![
             Label::header("Card demo"),
             (
-                Node {
-                    width: Val::Percent(100.0),
-                    ..default()
-                },
+                Node { ..default() },
                 Pickable {
                     should_block_lower: false,
                     ..default()
@@ -294,7 +293,8 @@ fn create_card_demo(spawner: StackChildSpawner, theme: &Theme) -> Entity {
                                 row_gap: Val::Px(16.0),
                                 column_gap: Val::Px(16.0),
                                 flex_wrap: FlexWrap::Wrap,
-                                margin: UiRect::left(Val::Px(16.0)),
+                                justify_content: JustifyContent::Center,
+                                margin: UiRect::px(8.0, 8.0, 8.0, 0.0),
                                 ..default()
                             },
                             Pickable {
