@@ -5,7 +5,6 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::combo::Combo;
 use ui::push_button::PushButton;
@@ -13,7 +12,6 @@ use ui::select::Item;
 use ui::select::ItemValues;
 use ui::select::ItemsRef;
 use ui::select::Selection;
-use ui::select::SelectionValue;
 use ui::theme::Theme;
 
 fn main() {
@@ -41,11 +39,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 
     let selection_ref = commands
         .spawn((
-            SelectionValue {
-                items: smallvec![],
-                multi: false,
-            }
-            .into_component(),
+            Selection::default(),
             related!(ItemValues[
                 Item::new("Netherlands"),
                 Item::new("Canada"),
