@@ -27,6 +27,9 @@ pub struct Stack {
     pub selection_ref: Entity,
 }
 
+#[derive(Component)]
+struct PrevDisplay(Display);
+
 impl Stack {
     pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let stack = *world.entity(context.entity).get::<Self>().unwrap();
@@ -37,7 +40,8 @@ impl Stack {
                   mut items: Query<(&Item<String>, &mut StackItem)>,
                   children: Query<&Children>,
                   mut nodes: Query<&mut Node>,
-                  commands: Commands,
+                  prev_displays: Query<&PrevDisplay>,
+                  mut commands: Commands,
                   theme: Res<Theme>| {
                 let selection = selections.get(event.target()).unwrap();
                 assert!(
@@ -53,13 +57,19 @@ impl Stack {
                     // hide all children
                     for c in children {
                         let mut node = nodes.get_mut(*c).unwrap();
-                        node.display = Display::None;
+
+                        if node.display != Display::None {
+                            commands.entity(*c).insert(PrevDisplay(node.display));
+                            node.display = Display::None;
+                        }
                     }
                 }
 
                 // create new child or make existing visible
                 if let Some(existing) = selected_stack_item.entity {
-                    nodes.get_mut(existing).unwrap().display = Display::Flex;
+                    let mut node = nodes.get_mut(existing).unwrap();
+                    let prev = prev_displays.get(existing).unwrap();
+                    node.display = prev.0;
                 } else {
                     let spawner = StackChildSpawner {
                         parent: context.entity,
