@@ -7,6 +7,7 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::event::Event;
 use bevy::ecs::name::Name;
 use bevy::ecs::query::Changed;
+use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::SystemParam;
@@ -149,6 +150,8 @@ pub struct ItemOf(pub Entity);
 #[component(on_add = Self::on_add)]
 #[require(Name::new("Items"))]
 pub struct ItemValues(Vec<Entity>);
+
+pub type ItemsSpawner<'w> = RelatedSpawner<'w, ItemOf>;
 
 impl ItemValues {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
