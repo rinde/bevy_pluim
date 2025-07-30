@@ -1,19 +1,8 @@
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::Event;
-use bevy::ecs::name::Name;
-use bevy::ecs::query::Changed;
 use bevy::ecs::relationship::RelatedSpawner;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::Query;
 use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
-use bevy::reflect::Reflect;
-use bevy::utils::default;
+use bevy::prelude::*;
 use derive_more::Deref;
 use smallvec::SmallVec;
 

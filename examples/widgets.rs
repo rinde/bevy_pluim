@@ -1,20 +1,9 @@
 use bevy::DefaultPlugins;
-use bevy::app::App;
-use bevy::app::Startup;
-use bevy::color::palettes::tailwind::AMBER_300;
-use bevy::color::palettes::tailwind::BLUE_300;
-use bevy::color::palettes::tailwind::CYAN_300;
-use bevy::color::palettes::tailwind::EMERALD_300;
-use bevy::color::palettes::tailwind::FUCHSIA_300;
-use bevy::color::palettes::tailwind::GREEN_300;
-use bevy::color::palettes::tailwind::INDIGO_300;
-use bevy::color::palettes::tailwind::LIME_300;
-use bevy::color::palettes::tailwind::ORANGE_300;
-use bevy::color::palettes::tailwind::PINK_300;
-use bevy::color::palettes::tailwind::PURPLE_300;
-use bevy::color::palettes::tailwind::ROSE_300;
-use bevy::color::palettes::tailwind::SKY_300;
-use bevy::color::palettes::tailwind::YELLOW_300;
+use bevy::app::{App, Startup};
+use bevy::color::palettes::tailwind::{
+    AMBER_300, BLUE_300, CYAN_300, EMERALD_300, FUCHSIA_300, GREEN_300, INDIGO_300, LIME_300,
+    ORANGE_300, PINK_300, PURPLE_300, ROSE_300, SKY_300, YELLOW_300,
+};
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
@@ -26,9 +15,7 @@ use ui::combo::Combo;
 use ui::list::List;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::Item;
-use ui::select::ItemValues;
-use ui::select::SelectionValue;
+use ui::select::{Item, ItemValues, SelectionValue};
 use ui::theme::Theme;
 
 fn main() {

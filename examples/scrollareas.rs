@@ -1,20 +1,9 @@
 use bevy::DefaultPlugins;
-use bevy::app::App;
-use bevy::app::Startup;
-use bevy::color::palettes::tailwind::AMBER_600;
-use bevy::color::palettes::tailwind::BLUE_600;
-use bevy::color::palettes::tailwind::CYAN_600;
-use bevy::color::palettes::tailwind::EMERALD_600;
-use bevy::color::palettes::tailwind::FUCHSIA_600;
-use bevy::color::palettes::tailwind::GREEN_600;
-use bevy::color::palettes::tailwind::INDIGO_600;
-use bevy::color::palettes::tailwind::LIME_600;
-use bevy::color::palettes::tailwind::ORANGE_600;
-use bevy::color::palettes::tailwind::PINK_600;
-use bevy::color::palettes::tailwind::PURPLE_600;
-use bevy::color::palettes::tailwind::ROSE_600;
-use bevy::color::palettes::tailwind::SKY_600;
-use bevy::color::palettes::tailwind::YELLOW_600;
+use bevy::app::{App, Startup};
+use bevy::color::palettes::tailwind::{
+    AMBER_600, BLUE_600, CYAN_600, EMERALD_600, FUCHSIA_600, GREEN_600, INDIGO_600, LIME_600,
+    ORANGE_600, PINK_600, PURPLE_600, ROSE_600, SKY_600, YELLOW_600,
+};
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;

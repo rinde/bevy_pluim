@@ -1,44 +1,7 @@
-use bevy::app::Plugin;
-use bevy::app::PostUpdate;
-use bevy::app::Update;
-use bevy::ecs::bundle::Bundle;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::ChildOf;
-use bevy::ecs::hierarchy::Children;
-use bevy::ecs::name::Name;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::Changed;
-use bevy::ecs::query::Or;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::relationship::RelatedSpawner;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
 use bevy::ecs::spawn::SpawnWith;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::math::Vec2;
-use bevy::prelude::Button;
-use bevy::prelude::SpawnRelated;
-use bevy::render::view::Visibility;
-use bevy::ui::BackgroundColor;
-use bevy::ui::BorderColor;
-use bevy::ui::BorderRadius;
-use bevy::ui::ComputedNode;
-use bevy::ui::Display;
-use bevy::ui::Node;
-use bevy::ui::Overflow;
-use bevy::ui::PositionType;
-use bevy::ui::RepeatedGridTrack;
-use bevy::ui::ScrollPosition;
-use bevy::ui::Val;
-use bevy::utils::default;
+use bevy::prelude::*;
 use itertools::Either;
 
 use crate::MouseEvent;
@@ -48,7 +11,7 @@ use crate::theme::Theme;
 pub struct ScrollAreaPlugin;
 
 impl Plugin for ScrollAreaPlugin {
-    fn build(&self, app: &mut bevy::app::App) {
+    fn build(&self, app: &mut App) {
         app.add_systems(PostUpdate, handle_scroll_change)
             .add_systems(
                 Update,
@@ -94,11 +57,11 @@ struct ScrollAreaRefs {
 impl ScrollArea {
     pub fn bundle<F>(contents_spawner: F, v_scroll: bool, h_scroll: bool) -> impl Bundle
     where
-        F: FnOnce(&mut RelatedSpawner<ChildOf>) + Send + Sync + 'static,
+        F: FnOnce(&mut ChildSpawner) + Send + Sync + 'static,
     {
         (
             ScrollArea,
-            Children::spawn(SpawnWith(move |s: &mut RelatedSpawner<ChildOf>| {
+            Children::spawn(SpawnWith(move |s: &mut ChildSpawner| {
                 let contents_ref = s
                     .spawn((ScrollContents, Children::spawn(SpawnWith(contents_spawner))))
                     .id();
@@ -192,7 +155,7 @@ fn scroll_system(
         let (_, scrollbar_children, mut scrollbar_visibility) =
             scroll_bars.get_mut(entity).unwrap();
         let thumb = scrollbar_children.iter().next().unwrap();
-        let mut thumb_node = scroll_thumbs.get_mut(*thumb).unwrap();
+        let mut thumb_node = scroll_thumbs.get_mut(thumb).unwrap();
 
         let index = match orientation {
             Orientation::Horizontal => 0,
@@ -306,7 +269,7 @@ fn theme_scroll_area(
                 mut thumb_background_color,
                 mut thumb_border_radius,
                 mut thumb_border_color,
-            ) = scroll_thumbs.get_mut(*thumb_entity).unwrap();
+            ) = scroll_thumbs.get_mut(thumb_entity).unwrap();
 
             match orientation {
                 Orientation::Horizontal => {

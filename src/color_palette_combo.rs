@@ -1,62 +1,19 @@
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::color::Color;
-use bevy::color::Srgba;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::Children;
-use bevy::ecs::name::Name;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::Changed;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
-use bevy::ecs::system::Single;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ecs::world::OnInsert;
-use bevy::input::ButtonInput;
-use bevy::input::mouse::MouseButton;
-use bevy::math::Vec2;
-use bevy::picking::Pickable;
-use bevy::render::view::Visibility;
-use bevy::transform::components::GlobalTransform;
-use bevy::ui::BackgroundColor;
-use bevy::ui::BorderColor;
-use bevy::ui::ComputedNode;
-use bevy::ui::FlexDirection;
-use bevy::ui::Node;
-use bevy::ui::PositionType;
+use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use bevy::ui::UiRect;
-use bevy::ui::Val;
-use bevy::utils::default;
 use bevy::window::PrimaryWindow;
-use bevy::window::Window;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::color_palette::ColorPalette;
-use crate::color_push_button;
-use crate::color_push_button::ColorPushButton;
-use crate::color_push_button::ColorSquare;
-use crate::color_push_button::ColorSquareRef;
+use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::Float;
 use crate::list::ListLayout;
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
-use crate::select::Item;
-use crate::select::ItemsRef;
-use crate::select::Selection;
-use crate::select::SelectionParam;
+use crate::select::{Item, ItemsRef, Selection, SelectionParam};
 use crate::theme::Theme;
+use crate::{MouseEvent, color_push_button};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ColorPaletteComboPlugin;
@@ -307,19 +264,19 @@ fn on_selection_change(
                 .next()
                 .unwrap();
             let color_palette_ref = children
-                .get(*scroll_contents_ref)
+                .get(scroll_contents_ref)
                 .unwrap()
                 .iter()
                 .next()
                 .unwrap();
 
             if selections
-                .get_ref(*color_palette_ref)
+                .get_ref(color_palette_ref)
                 .is_none_or(|existing_ref| existing_ref != changed_selection_ref)
             {
                 // Selection id has changed -> propagate to the List
                 commands
-                    .entity(*color_palette_ref)
+                    .entity(color_palette_ref)
                     .insert(Selection::reference(changed_selection_ref));
             }
 
@@ -351,7 +308,7 @@ fn on_add_items_ref(
     // TODO make this less brittle
     let scroll_contents_ref = children.get(*float_id).unwrap().iter().next().unwrap();
     let color_palette_ref = children
-        .get(*scroll_contents_ref)
+        .get(scroll_contents_ref)
         .unwrap()
         .iter()
         .next()
@@ -359,7 +316,7 @@ fn on_add_items_ref(
 
     // propagate the ItemsRef to the list
     commands
-        .entity(*color_palette_ref)
+        .entity(color_palette_ref)
         .insert(ItemsRef(*items_ref));
 }
 

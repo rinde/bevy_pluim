@@ -1,23 +1,10 @@
 use std::fmt;
 
-use bevy::ecs::bundle::Bundle;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::Children;
-use bevy::ecs::name::Name;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ecs::world::OnInsert;
-use bevy::ui::Display;
-use bevy::ui::Node;
+use bevy::prelude::*;
 
-use crate::select::Item;
-use crate::select::Selection;
-use crate::select::SelectionParam;
+use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 
 #[derive(Component, Debug, Copy, Clone)]

@@ -17,26 +17,7 @@ pub mod stack;
 pub mod tailwind;
 pub mod theme;
 
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::PostStartup;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::Event;
-use bevy::ecs::hierarchy::ChildOf;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::EntityCommands;
-use bevy::ecs::system::Query;
-use bevy::ecs::world::EntityWorldMut;
-use bevy::picking::events::Out;
-use bevy::picking::events::Over;
-use bevy::picking::events::Pointer;
-use bevy::picking::events::Pressed;
-use bevy::picking::events::Released;
-use bevy::reflect::Reflect;
-use bevy::ui::Node;
+use bevy::prelude::*;
 
 use crate::card::CardPlugin;
 use crate::color_palette::ColorPalettePlugin;

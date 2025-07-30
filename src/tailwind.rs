@@ -1,246 +1,35 @@
-use bevy::color::Color;
-use bevy::color::palettes::tailwind::AMBER_50;
-use bevy::color::palettes::tailwind::AMBER_100;
-use bevy::color::palettes::tailwind::AMBER_200;
-use bevy::color::palettes::tailwind::AMBER_300;
-use bevy::color::palettes::tailwind::AMBER_400;
-use bevy::color::palettes::tailwind::AMBER_500;
-use bevy::color::palettes::tailwind::AMBER_600;
-use bevy::color::palettes::tailwind::AMBER_700;
-use bevy::color::palettes::tailwind::AMBER_800;
-use bevy::color::palettes::tailwind::AMBER_900;
-use bevy::color::palettes::tailwind::AMBER_950;
-use bevy::color::palettes::tailwind::BLUE_50;
-use bevy::color::palettes::tailwind::BLUE_100;
-use bevy::color::palettes::tailwind::BLUE_200;
-use bevy::color::palettes::tailwind::BLUE_300;
-use bevy::color::palettes::tailwind::BLUE_400;
-use bevy::color::palettes::tailwind::BLUE_500;
-use bevy::color::palettes::tailwind::BLUE_600;
-use bevy::color::palettes::tailwind::BLUE_700;
-use bevy::color::palettes::tailwind::BLUE_800;
-use bevy::color::palettes::tailwind::BLUE_900;
-use bevy::color::palettes::tailwind::BLUE_950;
-use bevy::color::palettes::tailwind::CYAN_50;
-use bevy::color::palettes::tailwind::CYAN_100;
-use bevy::color::palettes::tailwind::CYAN_200;
-use bevy::color::palettes::tailwind::CYAN_300;
-use bevy::color::palettes::tailwind::CYAN_400;
-use bevy::color::palettes::tailwind::CYAN_500;
-use bevy::color::palettes::tailwind::CYAN_600;
-use bevy::color::palettes::tailwind::CYAN_700;
-use bevy::color::palettes::tailwind::CYAN_800;
-use bevy::color::palettes::tailwind::CYAN_900;
-use bevy::color::palettes::tailwind::CYAN_950;
-use bevy::color::palettes::tailwind::EMERALD_50;
-use bevy::color::palettes::tailwind::EMERALD_100;
-use bevy::color::palettes::tailwind::EMERALD_200;
-use bevy::color::palettes::tailwind::EMERALD_300;
-use bevy::color::palettes::tailwind::EMERALD_400;
-use bevy::color::palettes::tailwind::EMERALD_500;
-use bevy::color::palettes::tailwind::EMERALD_600;
-use bevy::color::palettes::tailwind::EMERALD_700;
-use bevy::color::palettes::tailwind::EMERALD_800;
-use bevy::color::palettes::tailwind::EMERALD_900;
-use bevy::color::palettes::tailwind::EMERALD_950;
-use bevy::color::palettes::tailwind::FUCHSIA_50;
-use bevy::color::palettes::tailwind::FUCHSIA_100;
-use bevy::color::palettes::tailwind::FUCHSIA_200;
-use bevy::color::palettes::tailwind::FUCHSIA_300;
-use bevy::color::palettes::tailwind::FUCHSIA_400;
-use bevy::color::palettes::tailwind::FUCHSIA_500;
-use bevy::color::palettes::tailwind::FUCHSIA_600;
-use bevy::color::palettes::tailwind::FUCHSIA_700;
-use bevy::color::palettes::tailwind::FUCHSIA_800;
-use bevy::color::palettes::tailwind::FUCHSIA_900;
-use bevy::color::palettes::tailwind::FUCHSIA_950;
-use bevy::color::palettes::tailwind::GRAY_50;
-use bevy::color::palettes::tailwind::GRAY_100;
-use bevy::color::palettes::tailwind::GRAY_200;
-use bevy::color::palettes::tailwind::GRAY_300;
-use bevy::color::palettes::tailwind::GRAY_400;
-use bevy::color::palettes::tailwind::GRAY_500;
-use bevy::color::palettes::tailwind::GRAY_600;
-use bevy::color::palettes::tailwind::GRAY_700;
-use bevy::color::palettes::tailwind::GRAY_800;
-use bevy::color::palettes::tailwind::GRAY_900;
-use bevy::color::palettes::tailwind::GRAY_950;
-use bevy::color::palettes::tailwind::GREEN_50;
-use bevy::color::palettes::tailwind::GREEN_100;
-use bevy::color::palettes::tailwind::GREEN_200;
-use bevy::color::palettes::tailwind::GREEN_300;
-use bevy::color::palettes::tailwind::GREEN_400;
-use bevy::color::palettes::tailwind::GREEN_500;
-use bevy::color::palettes::tailwind::GREEN_600;
-use bevy::color::palettes::tailwind::GREEN_700;
-use bevy::color::palettes::tailwind::GREEN_800;
-use bevy::color::palettes::tailwind::GREEN_900;
-use bevy::color::palettes::tailwind::GREEN_950;
-use bevy::color::palettes::tailwind::INDIGO_50;
-use bevy::color::palettes::tailwind::INDIGO_100;
-use bevy::color::palettes::tailwind::INDIGO_200;
-use bevy::color::palettes::tailwind::INDIGO_300;
-use bevy::color::palettes::tailwind::INDIGO_400;
-use bevy::color::palettes::tailwind::INDIGO_500;
-use bevy::color::palettes::tailwind::INDIGO_600;
-use bevy::color::palettes::tailwind::INDIGO_700;
-use bevy::color::palettes::tailwind::INDIGO_800;
-use bevy::color::palettes::tailwind::INDIGO_900;
-use bevy::color::palettes::tailwind::INDIGO_950;
-use bevy::color::palettes::tailwind::LIME_50;
-use bevy::color::palettes::tailwind::LIME_100;
-use bevy::color::palettes::tailwind::LIME_200;
-use bevy::color::palettes::tailwind::LIME_300;
-use bevy::color::palettes::tailwind::LIME_400;
-use bevy::color::palettes::tailwind::LIME_500;
-use bevy::color::palettes::tailwind::LIME_600;
-use bevy::color::palettes::tailwind::LIME_700;
-use bevy::color::palettes::tailwind::LIME_800;
-use bevy::color::palettes::tailwind::LIME_900;
-use bevy::color::palettes::tailwind::LIME_950;
-use bevy::color::palettes::tailwind::NEUTRAL_50;
-use bevy::color::palettes::tailwind::NEUTRAL_100;
-use bevy::color::palettes::tailwind::NEUTRAL_200;
-use bevy::color::palettes::tailwind::NEUTRAL_300;
-use bevy::color::palettes::tailwind::NEUTRAL_400;
-use bevy::color::palettes::tailwind::NEUTRAL_500;
-use bevy::color::palettes::tailwind::NEUTRAL_600;
-use bevy::color::palettes::tailwind::NEUTRAL_700;
-use bevy::color::palettes::tailwind::NEUTRAL_800;
-use bevy::color::palettes::tailwind::NEUTRAL_900;
-use bevy::color::palettes::tailwind::NEUTRAL_950;
-use bevy::color::palettes::tailwind::ORANGE_50;
-use bevy::color::palettes::tailwind::ORANGE_100;
-use bevy::color::palettes::tailwind::ORANGE_200;
-use bevy::color::palettes::tailwind::ORANGE_300;
-use bevy::color::palettes::tailwind::ORANGE_400;
-use bevy::color::palettes::tailwind::ORANGE_500;
-use bevy::color::palettes::tailwind::ORANGE_600;
-use bevy::color::palettes::tailwind::ORANGE_700;
-use bevy::color::palettes::tailwind::ORANGE_800;
-use bevy::color::palettes::tailwind::ORANGE_900;
-use bevy::color::palettes::tailwind::ORANGE_950;
-use bevy::color::palettes::tailwind::PINK_50;
-use bevy::color::palettes::tailwind::PINK_100;
-use bevy::color::palettes::tailwind::PINK_200;
-use bevy::color::palettes::tailwind::PINK_300;
-use bevy::color::palettes::tailwind::PINK_400;
-use bevy::color::palettes::tailwind::PINK_500;
-use bevy::color::palettes::tailwind::PINK_600;
-use bevy::color::palettes::tailwind::PINK_700;
-use bevy::color::palettes::tailwind::PINK_800;
-use bevy::color::palettes::tailwind::PINK_900;
-use bevy::color::palettes::tailwind::PINK_950;
-use bevy::color::palettes::tailwind::PURPLE_50;
-use bevy::color::palettes::tailwind::PURPLE_100;
-use bevy::color::palettes::tailwind::PURPLE_200;
-use bevy::color::palettes::tailwind::PURPLE_300;
-use bevy::color::palettes::tailwind::PURPLE_400;
-use bevy::color::palettes::tailwind::PURPLE_500;
-use bevy::color::palettes::tailwind::PURPLE_600;
-use bevy::color::palettes::tailwind::PURPLE_700;
-use bevy::color::palettes::tailwind::PURPLE_800;
-use bevy::color::palettes::tailwind::PURPLE_900;
-use bevy::color::palettes::tailwind::PURPLE_950;
-use bevy::color::palettes::tailwind::RED_50;
-use bevy::color::palettes::tailwind::RED_100;
-use bevy::color::palettes::tailwind::RED_200;
-use bevy::color::palettes::tailwind::RED_300;
-use bevy::color::palettes::tailwind::RED_400;
-use bevy::color::palettes::tailwind::RED_500;
-use bevy::color::palettes::tailwind::RED_600;
-use bevy::color::palettes::tailwind::RED_700;
-use bevy::color::palettes::tailwind::RED_800;
-use bevy::color::palettes::tailwind::RED_900;
-use bevy::color::palettes::tailwind::RED_950;
-use bevy::color::palettes::tailwind::ROSE_50;
-use bevy::color::palettes::tailwind::ROSE_100;
-use bevy::color::palettes::tailwind::ROSE_200;
-use bevy::color::palettes::tailwind::ROSE_300;
-use bevy::color::palettes::tailwind::ROSE_400;
-use bevy::color::palettes::tailwind::ROSE_500;
-use bevy::color::palettes::tailwind::ROSE_600;
-use bevy::color::palettes::tailwind::ROSE_700;
-use bevy::color::palettes::tailwind::ROSE_800;
-use bevy::color::palettes::tailwind::ROSE_900;
-use bevy::color::palettes::tailwind::ROSE_950;
-use bevy::color::palettes::tailwind::SKY_50;
-use bevy::color::palettes::tailwind::SKY_100;
-use bevy::color::palettes::tailwind::SKY_200;
-use bevy::color::palettes::tailwind::SKY_300;
-use bevy::color::palettes::tailwind::SKY_400;
-use bevy::color::palettes::tailwind::SKY_500;
-use bevy::color::palettes::tailwind::SKY_600;
-use bevy::color::palettes::tailwind::SKY_700;
-use bevy::color::palettes::tailwind::SKY_800;
-use bevy::color::palettes::tailwind::SKY_900;
-use bevy::color::palettes::tailwind::SKY_950;
-use bevy::color::palettes::tailwind::SLATE_50;
-use bevy::color::palettes::tailwind::SLATE_100;
-use bevy::color::palettes::tailwind::SLATE_200;
-use bevy::color::palettes::tailwind::SLATE_300;
-use bevy::color::palettes::tailwind::SLATE_400;
-use bevy::color::palettes::tailwind::SLATE_500;
-use bevy::color::palettes::tailwind::SLATE_600;
-use bevy::color::palettes::tailwind::SLATE_700;
-use bevy::color::palettes::tailwind::SLATE_800;
-use bevy::color::palettes::tailwind::SLATE_900;
-use bevy::color::palettes::tailwind::SLATE_950;
-use bevy::color::palettes::tailwind::STONE_50;
-use bevy::color::palettes::tailwind::STONE_100;
-use bevy::color::palettes::tailwind::STONE_200;
-use bevy::color::palettes::tailwind::STONE_300;
-use bevy::color::palettes::tailwind::STONE_400;
-use bevy::color::palettes::tailwind::STONE_500;
-use bevy::color::palettes::tailwind::STONE_600;
-use bevy::color::palettes::tailwind::STONE_700;
-use bevy::color::palettes::tailwind::STONE_800;
-use bevy::color::palettes::tailwind::STONE_900;
-use bevy::color::palettes::tailwind::STONE_950;
-use bevy::color::palettes::tailwind::TEAL_50;
-use bevy::color::palettes::tailwind::TEAL_100;
-use bevy::color::palettes::tailwind::TEAL_200;
-use bevy::color::palettes::tailwind::TEAL_300;
-use bevy::color::palettes::tailwind::TEAL_400;
-use bevy::color::palettes::tailwind::TEAL_500;
-use bevy::color::palettes::tailwind::TEAL_600;
-use bevy::color::palettes::tailwind::TEAL_700;
-use bevy::color::palettes::tailwind::TEAL_800;
-use bevy::color::palettes::tailwind::TEAL_900;
-use bevy::color::palettes::tailwind::TEAL_950;
-use bevy::color::palettes::tailwind::VIOLET_50;
-use bevy::color::palettes::tailwind::VIOLET_100;
-use bevy::color::palettes::tailwind::VIOLET_200;
-use bevy::color::palettes::tailwind::VIOLET_300;
-use bevy::color::palettes::tailwind::VIOLET_400;
-use bevy::color::palettes::tailwind::VIOLET_500;
-use bevy::color::palettes::tailwind::VIOLET_600;
-use bevy::color::palettes::tailwind::VIOLET_700;
-use bevy::color::palettes::tailwind::VIOLET_800;
-use bevy::color::palettes::tailwind::VIOLET_900;
-use bevy::color::palettes::tailwind::VIOLET_950;
-use bevy::color::palettes::tailwind::YELLOW_50;
-use bevy::color::palettes::tailwind::YELLOW_100;
-use bevy::color::palettes::tailwind::YELLOW_200;
-use bevy::color::palettes::tailwind::YELLOW_300;
-use bevy::color::palettes::tailwind::YELLOW_400;
-use bevy::color::palettes::tailwind::YELLOW_500;
-use bevy::color::palettes::tailwind::YELLOW_600;
-use bevy::color::palettes::tailwind::YELLOW_700;
-use bevy::color::palettes::tailwind::YELLOW_800;
-use bevy::color::palettes::tailwind::YELLOW_900;
-use bevy::color::palettes::tailwind::YELLOW_950;
-use bevy::color::palettes::tailwind::ZINC_50;
-use bevy::color::palettes::tailwind::ZINC_100;
-use bevy::color::palettes::tailwind::ZINC_200;
-use bevy::color::palettes::tailwind::ZINC_300;
-use bevy::color::palettes::tailwind::ZINC_400;
-use bevy::color::palettes::tailwind::ZINC_500;
-use bevy::color::palettes::tailwind::ZINC_600;
-use bevy::color::palettes::tailwind::ZINC_700;
-use bevy::color::palettes::tailwind::ZINC_800;
-use bevy::color::palettes::tailwind::ZINC_900;
-use bevy::color::palettes::tailwind::ZINC_950;
+use bevy::color::palettes::tailwind::{
+    AMBER_50, AMBER_100, AMBER_200, AMBER_300, AMBER_400, AMBER_500, AMBER_600, AMBER_700,
+    AMBER_800, AMBER_900, AMBER_950, BLUE_50, BLUE_100, BLUE_200, BLUE_300, BLUE_400, BLUE_500,
+    BLUE_600, BLUE_700, BLUE_800, BLUE_900, BLUE_950, CYAN_50, CYAN_100, CYAN_200, CYAN_300,
+    CYAN_400, CYAN_500, CYAN_600, CYAN_700, CYAN_800, CYAN_900, CYAN_950, EMERALD_50, EMERALD_100,
+    EMERALD_200, EMERALD_300, EMERALD_400, EMERALD_500, EMERALD_600, EMERALD_700, EMERALD_800,
+    EMERALD_900, EMERALD_950, FUCHSIA_50, FUCHSIA_100, FUCHSIA_200, FUCHSIA_300, FUCHSIA_400,
+    FUCHSIA_500, FUCHSIA_600, FUCHSIA_700, FUCHSIA_800, FUCHSIA_900, FUCHSIA_950, GRAY_50,
+    GRAY_100, GRAY_200, GRAY_300, GRAY_400, GRAY_500, GRAY_600, GRAY_700, GRAY_800, GRAY_900,
+    GRAY_950, GREEN_50, GREEN_100, GREEN_200, GREEN_300, GREEN_400, GREEN_500, GREEN_600,
+    GREEN_700, GREEN_800, GREEN_900, GREEN_950, INDIGO_50, INDIGO_100, INDIGO_200, INDIGO_300,
+    INDIGO_400, INDIGO_500, INDIGO_600, INDIGO_700, INDIGO_800, INDIGO_900, INDIGO_950, LIME_50,
+    LIME_100, LIME_200, LIME_300, LIME_400, LIME_500, LIME_600, LIME_700, LIME_800, LIME_900,
+    LIME_950, NEUTRAL_50, NEUTRAL_100, NEUTRAL_200, NEUTRAL_300, NEUTRAL_400, NEUTRAL_500,
+    NEUTRAL_600, NEUTRAL_700, NEUTRAL_800, NEUTRAL_900, NEUTRAL_950, ORANGE_50, ORANGE_100,
+    ORANGE_200, ORANGE_300, ORANGE_400, ORANGE_500, ORANGE_600, ORANGE_700, ORANGE_800, ORANGE_900,
+    ORANGE_950, PINK_50, PINK_100, PINK_200, PINK_300, PINK_400, PINK_500, PINK_600, PINK_700,
+    PINK_800, PINK_900, PINK_950, PURPLE_50, PURPLE_100, PURPLE_200, PURPLE_300, PURPLE_400,
+    PURPLE_500, PURPLE_600, PURPLE_700, PURPLE_800, PURPLE_900, PURPLE_950, RED_50, RED_100,
+    RED_200, RED_300, RED_400, RED_500, RED_600, RED_700, RED_800, RED_900, RED_950, ROSE_50,
+    ROSE_100, ROSE_200, ROSE_300, ROSE_400, ROSE_500, ROSE_600, ROSE_700, ROSE_800, ROSE_900,
+    ROSE_950, SKY_50, SKY_100, SKY_200, SKY_300, SKY_400, SKY_500, SKY_600, SKY_700, SKY_800,
+    SKY_900, SKY_950, SLATE_50, SLATE_100, SLATE_200, SLATE_300, SLATE_400, SLATE_500, SLATE_600,
+    SLATE_700, SLATE_800, SLATE_900, SLATE_950, STONE_50, STONE_100, STONE_200, STONE_300,
+    STONE_400, STONE_500, STONE_600, STONE_700, STONE_800, STONE_900, STONE_950, TEAL_50, TEAL_100,
+    TEAL_200, TEAL_300, TEAL_400, TEAL_500, TEAL_600, TEAL_700, TEAL_800, TEAL_900, TEAL_950,
+    VIOLET_50, VIOLET_100, VIOLET_200, VIOLET_300, VIOLET_400, VIOLET_500, VIOLET_600, VIOLET_700,
+    VIOLET_800, VIOLET_900, VIOLET_950, YELLOW_50, YELLOW_100, YELLOW_200, YELLOW_300, YELLOW_400,
+    YELLOW_500, YELLOW_600, YELLOW_700, YELLOW_800, YELLOW_900, YELLOW_950, ZINC_50, ZINC_100,
+    ZINC_200, ZINC_300, ZINC_400, ZINC_500, ZINC_600, ZINC_700, ZINC_800, ZINC_900, ZINC_950,
+};
+use bevy::prelude::*;
 
 pub const COLORS: [TailwindColor; 242] = [
     // slate

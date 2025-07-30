@@ -1,33 +1,6 @@
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::name::Name;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::picking::Pickable;
-use bevy::text::TextColor;
-use bevy::text::TextFont;
-use bevy::ui::AlignItems;
-use bevy::ui::BackgroundColor;
-use bevy::ui::BorderColor;
-use bevy::ui::BorderRadius;
-use bevy::ui::BoxShadow;
-use bevy::ui::JustifyContent;
-use bevy::ui::Node;
-use bevy::ui::UiRect;
-use bevy::ui::widget::Button;
-use bevy::ui::widget::Text;
-use bevy::utils::default;
+use bevy::prelude::*;
 use itertools::Either;
 
 use crate::MouseEvent;
@@ -37,7 +10,7 @@ use crate::theme::Theme;
 pub struct PushButtonPlugin;
 
 impl Plugin for PushButtonPlugin {
-    fn build(&self, app: &mut bevy::app::App) {
+    fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
             (|| None::<Entity>)

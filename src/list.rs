@@ -1,62 +1,15 @@
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::event::EventReader;
-use bevy::ecs::hierarchy::Children;
-use bevy::ecs::name::Name;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::Changed;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::relationship::RelationshipSourceCollection;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ecs::world::OnInsert;
-use bevy::input::ButtonInput;
-use bevy::input::keyboard::KeyCode;
-use bevy::input::mouse::MouseScrollUnit;
-use bevy::input::mouse::MouseWheel;
-use bevy::picking::Pickable;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
-use bevy::text::TextColor;
-use bevy::text::TextFont;
-use bevy::ui::AlignItems;
-use bevy::ui::BackgroundColor;
-use bevy::ui::BorderColor;
-use bevy::ui::BorderRadius;
-use bevy::ui::Display;
-use bevy::ui::GridAutoFlow;
-use bevy::ui::JustifyContent;
-use bevy::ui::JustifySelf;
-use bevy::ui::Node;
-use bevy::ui::PositionType;
+use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use bevy::ui::RepeatedGridTrack;
-use bevy::ui::ScrollPosition;
-use bevy::ui::UiRect;
-use bevy::ui::Val;
-use bevy::ui::widget::Button;
-use bevy::ui::widget::Text;
-use bevy::utils::default;
 use itertools::Either;
 
 use crate::MouseEvent;
-use crate::select::Item;
-use crate::select::ItemValues;
-use crate::select::ItemsChanged;
-use crate::select::ItemsRef;
-use crate::select::Selection;
-use crate::select::SelectionParam;
-use crate::select::SelectionValue;
+use crate::select::{
+    Item, ItemValues, ItemsChanged, ItemsRef, Selection, SelectionParam, SelectionValue,
+};
 use crate::theme::Theme;
 
 pub(crate) struct ListPlugin;
@@ -276,7 +229,7 @@ fn on_items_changed(
     let existing = children
         .map(|c| {
             c.iter()
-                .map(|c| item_views.get(*c).unwrap())
+                .map(|c| item_views.get(c).unwrap())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -401,7 +354,7 @@ fn theme_items(
 
         for (i, item_view_id) in children.iter().enumerate() {
             let (ItemView { item_ref, .. }, mut node, mut bg, mut border_radius, mut border_color) =
-                item_views.get_mut(*item_view_id).unwrap();
+                item_views.get_mut(item_view_id).unwrap();
 
             let is_selected = selection.is_selected(*item_ref);
 

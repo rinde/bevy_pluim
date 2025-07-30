@@ -1,21 +1,6 @@
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::query::With;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::ui::BoxShadow;
-use bevy::ui::GlobalZIndex;
-use bevy::ui::Node;
-use bevy::ui::PositionType;
+use bevy::prelude::*;
 use itertools::Either;
 
 use crate::theme::Theme;

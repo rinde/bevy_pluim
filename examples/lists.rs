@@ -1,21 +1,14 @@
 use bevy::DefaultPlugins;
-use bevy::app::App;
-use bevy::app::Startup;
+use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use smallvec::smallvec;
 use ui::WidgetsPlugin;
-use ui::list::CornerStyle;
-use ui::list::List;
-use ui::list::ListLayout;
+use ui::list::{CornerStyle, List, ListLayout};
 use ui::push_button::PushButton;
-use ui::select::Item;
-use ui::select::ItemValues;
-use ui::select::ItemsRef;
-use ui::select::Selection;
-use ui::select::SelectionValue;
+use ui::select::{Item, ItemValues, ItemsRef, Selection, SelectionValue};
 use ui::theme::Theme;
 
 fn main() {

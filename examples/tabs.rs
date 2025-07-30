@@ -1,50 +1,27 @@
 use std::sync::LazyLock;
 
 use bevy::DefaultPlugins;
-use bevy::app::App;
-use bevy::app::PostStartup;
-use bevy::app::Startup;
-use bevy::app::Update;
+use bevy::app::{App, PostStartup, Startup, Update};
 use bevy::core_pipeline::core_2d::Camera2d;
 use bevy::ecs::bundle::Bundle;
-use bevy::ecs::children;
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::ChildSpawner;
-use bevy::ecs::hierarchy::Children;
+use bevy::ecs::hierarchy::{ChildSpawner, Children};
 use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::related;
+use bevy::ecs::query::{With, Without};
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::spawn::SpawnIter;
-use bevy::ecs::spawn::SpawnRelated;
-use bevy::ecs::spawn::SpawnWith;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
-use bevy::ecs::system::ResMut;
+use bevy::ecs::spawn::{SpawnIter, SpawnRelated, SpawnWith};
+use bevy::ecs::system::{Commands, Query, Res, ResMut};
+use bevy::ecs::{children, related};
 use bevy::picking::Pickable;
-use bevy::picking::events::Pointer;
-use bevy::picking::events::Released;
+use bevy::picking::events::{Pointer, Released};
 use bevy::text::TextColor;
-use bevy::ui::AlignItems;
-use bevy::ui::AlignSelf;
-use bevy::ui::BackgroundColor;
-use bevy::ui::BorderColor;
-use bevy::ui::BorderRadius;
-use bevy::ui::Display;
-use bevy::ui::FlexWrap;
-use bevy::ui::GridAutoFlow;
-use bevy::ui::GridPlacement;
-use bevy::ui::GridTrack;
-use bevy::ui::JustifyContent;
-use bevy::ui::Node;
-use bevy::ui::PositionType;
-use bevy::ui::UiDebugOptions;
-use bevy::ui::UiRect;
-use bevy::ui::Val;
+use bevy::ui::{
+    AlignItems, AlignSelf, BackgroundColor, BorderColor, BorderRadius, Display, FlexWrap,
+    GridAutoFlow, GridPlacement, GridTrack, JustifyContent, Node, PositionType, UiDebugOptions,
+    UiRect, Val,
+};
 use bevy::utils::default;
 use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
@@ -52,21 +29,12 @@ use ui::card::Card;
 use ui::color_palette_combo::ColorPaletteCombo;
 use ui::combo::Combo;
 use ui::label::Label;
-use ui::list::CornerStyle;
-use ui::list::List;
-use ui::list::ListLayout;
+use ui::list::{CornerStyle, List, ListLayout};
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::Item;
-use ui::select::ItemValues;
-use ui::select::ItemsRef;
-use ui::select::Selection;
-use ui::stack::Stack;
-use ui::stack::StackChildSpawner;
-use ui::stack::StackItem;
-use ui::tailwind::COLORS;
-use ui::tailwind::TailwindColor;
-use ui::tailwind::Variant;
+use ui::select::{Item, ItemValues, ItemsRef, Selection};
+use ui::stack::{Stack, StackChildSpawner, StackItem};
+use ui::tailwind::{COLORS, TailwindColor, Variant};
 use ui::theme::Theme;
 
 fn main() {

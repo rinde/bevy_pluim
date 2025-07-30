@@ -1,54 +1,12 @@
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::color::Color;
-use bevy::color::Luminance;
-use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::Children;
-use bevy::ecs::name::Name;
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::Changed;
-use bevy::ecs::query::With;
-use bevy::ecs::query::Without;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::system::Commands;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
-use bevy::ecs::world::OnInsert;
-use bevy::picking::Pickable;
-use bevy::ui::AlignItems;
-use bevy::ui::BackgroundColor;
-use bevy::ui::BorderColor;
-use bevy::ui::BorderRadius;
-use bevy::ui::Display;
-use bevy::ui::JustifyContent;
-use bevy::ui::JustifySelf;
-use bevy::ui::Node;
+use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use bevy::ui::UiRect;
-use bevy::ui::Val;
-use bevy::ui::widget::Button;
-use bevy::utils::default;
 use itertools::Either;
 
 use crate::MouseEvent;
-use crate::list::CornerStyle;
-use crate::list::ItemView;
-use crate::list::ItemsChangedInput;
-use crate::list::List;
-use crate::list::ListLayout;
-use crate::list::NoDefaultItems;
-use crate::select::Item;
-use crate::select::ItemValues;
-use crate::select::ItemsChanged;
-use crate::select::ItemsRef;
-use crate::select::Selection;
-use crate::select::SelectionParam;
-use crate::select::SelectionValue;
+use crate::list::{CornerStyle, ItemView, ItemsChangedInput, List, ListLayout, NoDefaultItems};
+use crate::select::{
+    Item, ItemValues, ItemsChanged, ItemsRef, Selection, SelectionParam, SelectionValue,
+};
 use crate::theme::Theme;
 
 const COLOR_SQUARE_SIZE: f32 = 35.0;
@@ -97,7 +55,7 @@ fn on_items_changed(
     let existing = children
         .map(|c| {
             c.iter()
-                .map(|c| item_views.get(*c).unwrap())
+                .map(|c| item_views.get(c).unwrap())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -183,13 +141,13 @@ fn on_add_items_ref(
                 on_items_changed,
                 ItemsChangedInput {
                     list_ref,
-                    items: t.event().0.iter().copied().collect(),
+                    items: t.event().0.iter().collect(),
                 },
             );
         });
 
     // update all items now
-    let all_items = items.get(items_ref).unwrap().iter().copied().collect();
+    let all_items = items.get(items_ref).unwrap().iter().collect();
     commands.run_system_cached_with(
         on_items_changed,
         ItemsChangedInput {

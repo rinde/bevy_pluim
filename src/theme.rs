@@ -1,23 +1,8 @@
-use bevy::color::Color;
-use bevy::color::palettes::tailwind::BLUE_200;
-use bevy::color::palettes::tailwind::BLUE_400;
-use bevy::color::palettes::tailwind::BLUE_500;
-use bevy::color::palettes::tailwind::BLUE_600;
-use bevy::color::palettes::tailwind::BLUE_700;
-use bevy::color::palettes::tailwind::BLUE_800;
-use bevy::color::palettes::tailwind::BLUE_900;
-use bevy::color::palettes::tailwind::GRAY_50;
-use bevy::color::palettes::tailwind::GRAY_100;
-use bevy::color::palettes::tailwind::GRAY_200;
-use bevy::color::palettes::tailwind::GRAY_400;
-use bevy::color::palettes::tailwind::GRAY_600;
-use bevy::color::palettes::tailwind::GRAY_800;
-use bevy::color::palettes::tailwind::GRAY_900;
-use bevy::color::palettes::tailwind::GRAY_950;
-use bevy::ecs::resource::Resource;
-use bevy::ui::ShadowStyle;
-use bevy::ui::UiRect;
-use bevy::ui::Val;
+use bevy::color::palettes::tailwind::{
+    BLUE_200, BLUE_400, BLUE_500, BLUE_600, BLUE_700, BLUE_800, BLUE_900, GRAY_50, GRAY_100,
+    GRAY_200, GRAY_400, GRAY_600, GRAY_800, GRAY_900, GRAY_950,
+};
+use bevy::prelude::*;
 use educe::Educe;
 
 #[derive(Resource, Clone, Copy, Debug, Educe)]

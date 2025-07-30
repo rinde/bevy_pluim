@@ -1,24 +1,6 @@
-use bevy::app::App;
-use bevy::app::Plugin;
-use bevy::app::Update;
-use bevy::ecs::component::Component;
 use bevy::ecs::component::HookContext;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::name::Name;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::system::In;
-use bevy::ecs::system::IntoSystem;
-use bevy::ecs::system::Query;
-use bevy::ecs::system::Res;
 use bevy::ecs::world::DeferredWorld;
-use bevy::picking::Pickable;
-use bevy::text::TextColor;
-use bevy::text::TextFont;
-use bevy::ui::AlignSelf;
-use bevy::ui::Node;
-use bevy::ui::widget::Text;
-use bevy::utils::default;
+use bevy::prelude::*;
 use itertools::Either;
 
 use crate::theme::Theme;

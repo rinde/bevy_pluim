@@ -1,6 +1,5 @@
 use bevy::DefaultPlugins;
-use bevy::app::App;
-use bevy::app::Startup;
+use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
@@ -8,10 +7,7 @@ use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
 use ui::combo::Combo;
 use ui::push_button::PushButton;
-use ui::select::Item;
-use ui::select::ItemValues;
-use ui::select::ItemsRef;
-use ui::select::Selection;
+use ui::select::{Item, ItemValues, ItemsRef, Selection};
 use ui::theme::Theme;
 
 fn main() {

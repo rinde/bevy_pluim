@@ -1,6 +1,5 @@
 use bevy::DefaultPlugins;
-use bevy::app::App;
-use bevy::app::Startup;
+use bevy::app::{App, Startup};
 use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
@@ -12,10 +11,7 @@ use ui::color_palette_combo::ColorPaletteCombo;
 use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::Item;
-use ui::select::ItemValues;
-use ui::select::ItemsRef;
-use ui::select::Selection;
+use ui::select::{Item, ItemValues, ItemsRef, Selection};
 use ui::tailwind::COLORS;
 use ui::theme::Theme;
 
