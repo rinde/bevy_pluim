@@ -10,6 +10,7 @@ pub mod combo;
 pub mod float;
 pub mod label;
 pub mod list;
+pub mod numeric_stepper;
 pub mod push_button;
 pub mod scroll_area;
 pub mod select;
@@ -27,6 +28,7 @@ use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::label::LabelPlugin;
 use crate::list::ListPlugin;
+use crate::numeric_stepper::NumericStepperPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
 use crate::select::ItemsPlugin;
@@ -49,6 +51,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ItemsPlugin)
             .add_plugins(LabelPlugin)
             .add_plugins(CardPlugin)
+            .add_plugins(NumericStepperPlugin)
             .add_systems(PostStartup, setup);
     }
 }
