@@ -56,6 +56,10 @@ impl NumericStepper {
             ),
             (PushButton::from_label("+"), Increase, value_ref),
         ]);
+
+        world
+            .commands()
+            .run_system_cached_with(theme_numeric_stepper, Some(context.entity));
     }
 }
 
