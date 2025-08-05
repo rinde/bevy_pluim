@@ -1,4 +1,5 @@
 use bevy::ecs::component::HookContext;
+use bevy::ecs::query::{QueryFilter, QuerySingleError};
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
@@ -52,11 +53,27 @@ impl Default for Selection {
 }
 
 #[derive(SystemParam, Debug)]
-pub struct SelectionParam<'w, 's> {
+pub struct SelectionParam<'w, 's, F: QueryFilter + 'static = ()> {
     selection_refs: Query<'w, 's, &'static Selection>,
+    subset: Query<'w, 's, (Entity, &'static Selection), F>,
 }
 
-impl SelectionParam<'_, '_> {
+impl<F> SelectionParam<'_, '_, F>
+where
+    F: QueryFilter + 'static,
+{
+    pub fn iter(&self) -> impl Iterator<Item = (Entity, &SelectionValue)> {
+        self.subset
+            .iter()
+            .map(|(entity, selection)| self.find(entity, selection))
+    }
+
+    pub fn single(&self) -> Result<(Entity, &SelectionValue), QuerySingleError> {
+        self.subset
+            .single()
+            .map(|(entity, selection)| self.find(entity, selection))
+    }
+
     #[must_use]
     pub fn get(&self, entity: Entity) -> Option<&SelectionValue> {
         self.get_with_ref(entity).map(|(_, s)| s)
@@ -71,20 +88,28 @@ impl SelectionParam<'_, '_> {
     pub fn get_with_ref(&self, entity: Entity) -> Option<(Entity, &SelectionValue)> {
         self.selection_refs
             .get(entity)
-            .map(|x| match x {
-                Selection::Ref(entity_ref) => (
-                    *entity_ref,
-                    self.selection_refs
-                        .get(*entity_ref)
-                        .unwrap_or_else(|e| {
-                            panic!("Selection reference {entity} -> {entity_ref} -> ? does not point to a Selection: {e}")
-                        })
-                        .as_selection()
-                        .unwrap(),
-                ),
-                Selection::Value(selection) => (entity, selection),
-            })
+            .map(|x| self.find(entity, x))
             .ok()
+    }
+
+    fn find<'a>(
+        &'a self,
+        entity: Entity,
+        selection: &'a Selection,
+    ) -> (Entity, &'a SelectionValue) {
+        match selection {
+            Selection::Ref(entity_ref) => (
+                *entity_ref,
+                self.selection_refs
+                    .get(*entity_ref)
+                    .unwrap_or_else(|e| {
+                        panic!("Selection reference {entity} -> {entity_ref} -> ? does not point to a Selection: {e}")
+                    })
+                    .as_selection()
+                    .unwrap(),
+            ),
+            Selection::Value(selection) => (entity, selection),
+        }
     }
 }
 
@@ -103,6 +128,16 @@ impl SelectionValue {
     #[must_use]
     pub fn is_selected(&self, item: Entity) -> bool {
         self.items.contains(&item)
+    }
+
+    #[must_use]
+    pub fn selected_items(&self) -> &[Entity] {
+        &self.items
+    }
+
+    #[must_use]
+    pub fn single(&self) -> Option<Entity> {
+        (self.items.len() == 1).then(|| self.items[0])
     }
 
     #[must_use]

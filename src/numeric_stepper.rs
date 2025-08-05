@@ -83,7 +83,8 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
+    #[must_use]
+    pub const fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
         Value::U32 {
             value: initial_value,
             min,
@@ -92,7 +93,8 @@ impl Value {
         }
     }
 
-    pub fn new_f32(initial_value: f32, min: f32, max: f32, step: f32) -> Self {
+    #[must_use]
+    pub const fn new_f32(initial_value: f32, min: f32, max: f32, step: f32) -> Self {
         Value::F32 {
             value: initial_value,
             min,
@@ -152,6 +154,22 @@ impl Value {
                 }
                 false
             }
+        }
+    }
+
+    #[must_use]
+    pub const fn as_f32(&self) -> Option<f32> {
+        match self {
+            Value::F32 { value, .. } => Some(*value),
+            Value::U32 { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_u32(&self) -> Option<u32> {
+        match self {
+            Value::F32 { .. } => None,
+            Value::U32 { value, .. } => Some(*value),
         }
     }
 }
