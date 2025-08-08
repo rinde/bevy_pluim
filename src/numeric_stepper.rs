@@ -74,23 +74,29 @@ pub enum Value {
         max: f32,
         step: f32,
     },
-    U32 {
-        value: u32,
-        min: u32,
-        max: u32,
-        step: u32,
-    },
+    U16(UIntValue<u16>),
+    U32(UIntValue<u32>),
 }
 
 impl Value {
     #[must_use]
-    pub const fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
-        Value::U32 {
+    pub const fn new_u16(initial_value: u16, min: u16, max: u16, step: u16) -> Self {
+        Value::U16(UIntValue {
             value: initial_value,
             min,
             max,
             step,
-        }
+        })
+    }
+
+    #[must_use]
+    pub const fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
+        Value::U32(UIntValue {
+            value: initial_value,
+            min,
+            max,
+            step,
+        })
     }
 
     #[must_use]
@@ -115,18 +121,8 @@ impl Value {
                 }
                 false
             }
-            Value::U32 {
-                value, max, step, ..
-            } => {
-                let new_value = value.checked_add(*step);
-                if let Some(new_value) = new_value
-                    && new_value <= *max
-                {
-                    *value = new_value;
-                    return true;
-                }
-                false
-            }
+            Value::U16(uint_value) => uint_value.increment(),
+            Value::U32(uint_value) => uint_value.increment(),
         }
     }
 
@@ -142,18 +138,24 @@ impl Value {
                 }
                 false
             }
-            Value::U32 {
-                value, min, step, ..
-            } => {
-                let new_value = value.checked_sub(*step);
-                if let Some(new_value) = new_value
-                    && new_value >= *min
-                {
-                    *value = new_value;
-                    return true;
-                }
-                false
-            }
+            Value::U16(uint_value) => uint_value.decrement(),
+            Value::U32(uint_value) => uint_value.decrement(),
+        }
+    }
+
+    pub fn can_increment(&self) -> bool {
+        match self {
+            Value::F32 { value, max, .. } => value < max,
+            Value::U16(uint_value) => uint_value.value < uint_value.max,
+            Value::U32(uint_value) => uint_value.value < uint_value.max,
+        }
+    }
+
+    pub fn can_decrement(&self) -> bool {
+        match self {
+            Value::F32 { value, min, .. } => value > min,
+            Value::U16(uint_value) => uint_value.value > uint_value.min,
+            Value::U32(uint_value) => uint_value.value > uint_value.min,
         }
     }
 
@@ -161,15 +163,23 @@ impl Value {
     pub const fn as_f32(&self) -> Option<f32> {
         match self {
             Value::F32 { value, .. } => Some(*value),
-            Value::U32 { .. } => None,
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_u16(&self) -> Option<u16> {
+        match self {
+            Value::U16(uint_value) => Some(uint_value.value),
+            _ => None,
         }
     }
 
     #[must_use]
     pub const fn as_u32(&self) -> Option<u32> {
         match self {
-            Value::F32 { .. } => None,
-            Value::U32 { value, .. } => Some(*value),
+            Value::U32(uint_value) => Some(uint_value.value),
+            _ => None,
         }
     }
 }
@@ -178,7 +188,8 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::F32 { value, .. } => write!(f, "{value:.1}"),
-            Value::U32 { value, .. } => write!(f, "{value}"),
+            Value::U32(uint_value) => write!(f, "{}", uint_value.value),
+            Value::U16(uint_value) => write!(f, "{}", uint_value.value),
         }
     }
 }
@@ -219,10 +230,14 @@ fn on_press(
 ) {
     if let Ok(vr) = decrease.get(trigger.target()) {
         let mut value = values.get_mut(vr.0).unwrap();
-        value.decrement();
+        if value.can_decrement() {
+            value.decrement();
+        }
     } else if let Ok(vr) = increase.get(trigger.target()) {
         let mut value = values.get_mut(vr.0).unwrap();
-        value.increment();
+        if value.can_increment() {
+            value.increment();
+        }
     }
 }
 
@@ -238,3 +253,57 @@ fn on_change(
         }
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct UIntValue<T> {
+    pub value: T,
+    pub min: T,
+    pub max: T,
+    pub step: T,
+}
+
+impl<T: UInt> UIntValue<T> {
+    fn increment(&mut self) -> bool {
+        let new_value = self.value.checked_add(self.step);
+        if let Some(new_value) = new_value
+            && new_value <= self.max
+        {
+            self.value = new_value;
+            return true;
+        }
+        false
+    }
+
+    fn decrement(&mut self) -> bool {
+        let new_value = self.value.checked_sub(self.step);
+        if let Some(new_value) = new_value
+            && new_value >= self.min
+        {
+            self.value = new_value;
+            return true;
+        }
+        false
+    }
+}
+
+pub trait UInt: Sized + Ord + Copy {
+    fn checked_add(self, rhs: Self) -> Option<Self>;
+    fn checked_sub(self, rhs: Self) -> Option<Self>;
+}
+
+macro_rules! impl_uint {
+    ($($i:ty),+ $(,)?) => {
+        $(
+            impl UInt for $i {
+                fn checked_add(self, rhs: Self) -> Option<Self> {
+                    self.checked_add(rhs)
+                }
+                fn checked_sub(self, rhs: Self) -> Option<Self> {
+                    self.checked_sub(rhs)
+                }
+            }
+
+        )+
+    };
+}
+impl_uint!(u8, u16, u32, u64);

@@ -42,6 +42,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         Root,
         children![
             NumericStepper,
+            (NumericStepper, Value::new_u16(10, 5, 15, 1)),
             (NumericStepper, Value::new_u32(10, 5, 15, 1)),
             (NumericStepper, Value::new_f32(10.0, 5.0, 15.0, 0.5)),
             (PushButton::from_label("Change theme"), ThemeButton),
