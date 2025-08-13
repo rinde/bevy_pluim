@@ -77,7 +77,9 @@ fn on_items_changed(
     }
 
     for item_id in items {
-        let item = items_query.get(item_id).unwrap();
+        let item = items_query.get(item_id).unwrap_or_else(|_| {
+            panic!("Item<Color> not found with id {item_id}");
+        });
         commands.entity(*list_ref).with_children(|spawner| {
             spawner
                 .spawn((

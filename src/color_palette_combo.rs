@@ -34,7 +34,7 @@ impl Plugin for ColorPaletteComboPlugin {
     }
 }
 
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Default)]
 #[component(on_add=Self::on_insert)]
 #[require(
     Node {
