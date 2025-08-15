@@ -16,7 +16,7 @@ impl Plugin for ItemsPlugin {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Eq, PartialEq)]
 #[component(immutable)]
 pub enum Selection {
     Ref(Entity),
@@ -113,7 +113,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct SelectionValue {
     pub items: SmallVec<[Entity; 4]>,
     pub multi: bool,
