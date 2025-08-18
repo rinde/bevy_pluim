@@ -9,13 +9,12 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::combo::Combo;
 use ui::list::List;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::{Item, ItemValues, SelectionValue};
+use ui::select::{Item, ItemValues, Selection};
 use ui::theme::Theme;
 
 fn main() {
@@ -118,11 +117,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ),
                 (
                     List,
-                    SelectionValue {
-                        items: smallvec![],
-                        multi: true,
-                    }
-                    .into_component(),
+                    Selection::zero_or_more(),
                     related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),
@@ -143,11 +138,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ),
                 (
                     Combo,
-                    SelectionValue {
-                        items: smallvec![],
-                        multi: true,
-                    }
-                    .into_component(),
+                    Selection::zero_or_more(),
                     related!(ItemValues[
                         Item::new("Netherlands"),
                         Item::new("Canada"),

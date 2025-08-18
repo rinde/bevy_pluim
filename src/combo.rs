@@ -155,13 +155,18 @@ fn selection_change(
 
                 let PushButtonRefs { label_id, .. } = pblr.get(sub_refs.button_id).unwrap();
                 let mut text = labels.get_mut(*label_id).unwrap();
-                let label = if selection.items.is_empty() {
+                let label = if selection.is_empty() {
                     PLACEHOLDER_TEXT.to_string()
                 } else {
                     selection
-                        .items
                         .iter()
-                        .map(|item| &items.get(*item).unwrap().data)
+                        .map(|item| {
+                            if item == Entity::PLACEHOLDER {
+                                ""
+                            } else {
+                                &items.get(item).unwrap().data
+                            }
+                        })
                         .join(", ")
                 };
                 text.0 = label;
@@ -197,7 +202,8 @@ fn close_combos_on_outside_click(
             let selection_value = selections.get(combo_ref).unwrap();
             if combo_state == ComboState::Open
                 && !rcp.mouse_over()
-                && !(selection_value.multi && combo_lists.get(subs.list_id).unwrap().mouse_over())
+                && !(selection_value.allow_multiple()
+                    && combo_lists.get(subs.list_id).unwrap().mouse_over())
             {
                 let (mut background_color, mut border_color) =
                     combo_buttons.get_mut(subs.button_id).unwrap();

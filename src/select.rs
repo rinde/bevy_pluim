@@ -5,7 +5,11 @@ use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use derive_more::Deref;
+use educe::Educe;
+use itertools::Either;
 use smallvec::SmallVec;
+use smallvec::smallvec;
+use strum::EnumIs;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ItemsPlugin;
@@ -44,11 +48,162 @@ impl Selection {
             Selection::Value(_) => None,
         }
     }
+
+    #[must_use]
+    pub const fn one() -> Self {
+        Self::Value(SelectionValue::One(Entity::PLACEHOLDER))
+    }
+
+    #[must_use]
+    pub const fn one_with(selected: Entity) -> Self {
+        Self::Value(SelectionValue::One(selected))
+    }
+
+    #[must_use]
+    pub const fn zero_or_one() -> Self {
+        Self::Value(SelectionValue::ZeroOrOne(None))
+    }
+
+    #[must_use]
+    pub const fn zero_or_more() -> Self {
+        Self::Value(SelectionValue::ZeroOrMore(SmallVec::new_const()))
+    }
+
+    #[must_use]
+    pub fn one_or_more() -> Self {
+        Self::Value(SelectionValue::OneOrMore(smallvec![Entity::PLACEHOLDER]))
+    }
 }
 
 impl Default for Selection {
     fn default() -> Self {
         Self::Value(default())
+    }
+}
+
+#[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs)]
+#[educe(Default)]
+pub enum SelectionValue {
+    One(Entity),
+    #[educe(Default)]
+    ZeroOrOne(Option<Entity>),
+    OneOrMore(SmallVec<[Entity; 4]>),
+    ZeroOrMore(SmallVec<[Entity; 4]>),
+}
+
+impl SelectionValue {
+    #[must_use]
+    pub const fn into_component(self) -> Selection {
+        Selection::Value(self)
+    }
+
+    pub const fn allow_multiple(&self) -> bool {
+        match self {
+            SelectionValue::One(_) | SelectionValue::ZeroOrOne(_) => false,
+            SelectionValue::OneOrMore(_) | SelectionValue::ZeroOrMore(_) => true,
+        }
+    }
+
+    #[must_use]
+    pub fn is_selected(&self, item: Entity) -> bool {
+        match self {
+            SelectionValue::One(selected) => selected == &item,
+            SelectionValue::ZeroOrOne(selected) => selected.is_some_and(|s| s == item),
+            SelectionValue::OneOrMore(items) | SelectionValue::ZeroOrMore(items) => {
+                items.contains(&item)
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn iter(&self) -> impl Iterator<Item = Entity> {
+        match self {
+            SelectionValue::One(selected) => Either::Left(Some(selected).into_iter().copied()),
+            SelectionValue::ZeroOrOne(selected) => {
+                let x = match selected {
+                    Some(item) => Some(item).into_iter().copied(),
+                    None => None.into_iter().copied(),
+                };
+                Either::Left(x)
+            }
+            SelectionValue::OneOrMore(items) | SelectionValue::ZeroOrMore(items) => {
+                Either::Right(items.iter().copied())
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            SelectionValue::One(_) => false,
+            SelectionValue::ZeroOrOne(selected) => selected.is_none(),
+            SelectionValue::OneOrMore(items) | SelectionValue::ZeroOrMore(items) => {
+                items.is_empty()
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            SelectionValue::One(_) => 1,
+            SelectionValue::ZeroOrOne(selected) => selected.is_some() as usize,
+            SelectionValue::OneOrMore(items) | SelectionValue::ZeroOrMore(items) => items.len(),
+        }
+    }
+
+    #[must_use]
+    pub fn single(&self) -> Option<Entity> {
+        match self {
+            SelectionValue::One(selected) => Some(*selected),
+            SelectionValue::ZeroOrOne(selected) => *selected,
+            SelectionValue::OneOrMore(items) | SelectionValue::ZeroOrMore(items) => {
+                (items.len() == 1).then(|| items[0])
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn toggle_selected(&self, new_selection: Entity) -> Option<Self> {
+        match self {
+            SelectionValue::One(selected) => {
+                // is a no-op if attempted to toggle the current selection
+                (*selected != new_selection).then_some(SelectionValue::One(new_selection))
+            }
+            SelectionValue::ZeroOrOne(selected) => match selected {
+                Some(selected) if selected == &new_selection => {
+                    Some(SelectionValue::ZeroOrOne(None))
+                }
+                _ => Some(SelectionValue::ZeroOrOne(Some(new_selection))),
+            },
+            SelectionValue::OneOrMore(selected) => {
+                if selected.len() == 1 {
+                    if selected[0] == new_selection {
+                        None
+                    } else {
+                        Some(SelectionValue::OneOrMore(smallvec![new_selection]))
+                    }
+                } else {
+                    // more
+                    let mut clone = selected.clone();
+                    if self.is_selected(new_selection) {
+                        clone.retain(|x| *x != new_selection);
+                    } else {
+                        clone.push(new_selection);
+                    }
+                    Some(SelectionValue::OneOrMore(clone))
+                }
+            }
+            SelectionValue::ZeroOrMore(selected) => {
+                let mut clone = selected.clone();
+                if self.is_selected(new_selection) {
+                    clone.retain(|x| *x != new_selection);
+                } else {
+                    clone.push(new_selection);
+                }
+                Some(SelectionValue::ZeroOrMore(clone))
+            }
+        }
     }
 }
 
@@ -110,54 +265,6 @@ where
             ),
             Selection::Value(selection) => (entity, selection),
         }
-    }
-}
-
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct SelectionValue {
-    pub items: SmallVec<[Entity; 4]>,
-    pub multi: bool,
-}
-
-impl SelectionValue {
-    #[must_use]
-    pub const fn into_component(self) -> Selection {
-        Selection::Value(self)
-    }
-
-    #[must_use]
-    pub fn is_selected(&self, item: Entity) -> bool {
-        self.items.contains(&item)
-    }
-
-    #[must_use]
-    pub fn selected_items(&self) -> &[Entity] {
-        &self.items
-    }
-
-    #[must_use]
-    pub fn single(&self) -> Option<Entity> {
-        (self.items.len() == 1).then(|| self.items[0])
-    }
-
-    #[must_use]
-    pub fn toggle_selected(&self, item: Entity) -> Option<Self> {
-        let mut clone = self.clone();
-        if self.multi {
-            if self.is_selected(item) {
-                clone.items.retain(|x| *x != item);
-            } else {
-                clone.items.push(item);
-            }
-        } else {
-            // selecting the same item twice is a no-op if only one selection is allowed
-            if self.is_selected(item) {
-                return None;
-            }
-            clone.items.clear();
-            clone.items.push(item);
-        }
-        Some(clone)
     }
 }
 

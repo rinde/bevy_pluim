@@ -32,6 +32,7 @@ use crate::numeric_stepper::NumericStepperPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
 use crate::select::ItemsPlugin;
+use crate::stack::StackPlugin;
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -45,6 +46,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
+            .add_plugins(StackPlugin)
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)
             .add_plugins(ColorPushButtonPlugin)

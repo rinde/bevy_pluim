@@ -32,7 +32,7 @@ impl Plugin for ListPlugin {
                     selection_change,
                 ),
             )
-            .add_observer(on_add_items_ref);
+            .add_observer(on_insert_items_ref);
     }
 }
 
@@ -139,7 +139,7 @@ fn handle_mouse_events(
     let (selection_ref, selection) = selections
         .get_with_ref(*list_ref)
         .unwrap_or_else(|| panic!("No selection found for entity {list_ref}"));
-    let is_selected = selection.items.contains(target_item_entity);
+    let is_selected = selection.is_selected(*target_item_entity);
 
     match (t.event(), is_selected) {
         (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => {
@@ -220,11 +220,19 @@ fn on_items_changed(
     mut commands: Commands,
     lists: Query<Option<&Children>, (With<List>, Without<NoDefaultItems>)>,
     item_views: Query<(Entity, &ItemView)>,
+    selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
     let Ok(children) = lists.get(*list_ref) else {
         return;
     };
+
+    let (selection_ref, selection) = selections.get_with_ref(*list_ref).unwrap();
+    if selection == &SelectionValue::One(Entity::PLACEHOLDER) && !items.is_empty() {
+        commands
+            .entity(selection_ref)
+            .insert(Selection::one_with(items[0]));
+    }
 
     let existing = children
         .map(|c| {
@@ -280,16 +288,25 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
-fn on_add_items_ref(
+fn on_insert_items_ref(
     t: Trigger<OnInsert, ItemsRef>,
     lists: Query<&ItemsRef, (With<List>, Without<NoDefaultItems>)>,
     items: Query<&ItemValues>,
+    selections: SelectionParam,
     mut commands: Commands,
 ) {
-    let Ok(ItemsRef(items_ref)) = lists.get(t.target()).copied() else {
+    let list_ref = t.target();
+    let Ok(ItemsRef(items_ref)) = lists.get(list_ref).copied() else {
         return;
     };
-    let list_ref = t.target();
+    let all_items = items.get(items_ref).unwrap().iter().collect::<Vec<_>>();
+
+    let (selection_ref, selection) = selections.get_with_ref(list_ref).unwrap();
+    if selection == &SelectionValue::One(Entity::PLACEHOLDER) && !all_items.is_empty() {
+        commands
+            .entity(selection_ref)
+            .insert(Selection::one_with(all_items[0]));
+    }
 
     // register observer for items change event
     commands
@@ -305,7 +322,6 @@ fn on_add_items_ref(
         });
 
     // update all items now
-    let all_items = items.get(items_ref).unwrap().iter().collect();
     commands.run_system_cached_with(
         on_items_changed,
         ItemsChangedInput {

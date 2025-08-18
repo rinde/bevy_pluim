@@ -283,9 +283,9 @@ fn on_selection_change(
             let ColorSquareRef(color_square_id) = color_square_refs.get(sub_refs.button).unwrap();
             let mut color_square_background = color_squares.get_mut(*color_square_id).unwrap();
 
-            assert!(selection.items.len() <= 1, "Multi selection not supported");
-            let color = if let Some(selected) = selection.items.first() {
-                items.get(*selected).unwrap().data
+            assert!(!selection.allow_multiple(), "Multi selection not supported");
+            let color = if let Some(selected) = selection.single() {
+                items.get(selected).unwrap().data
             } else {
                 Color::Srgba(Srgba::NONE)
             };
@@ -338,7 +338,7 @@ fn close_combos_on_outside_click(
             let selection = selections.get(combo_id).unwrap();
             if combo_state == State::Open
                 && !rcp.mouse_over()
-                && !(selection.multi && floats.get(subs.float_id).unwrap().mouse_over())
+                && !(selection.allow_multiple() && floats.get(subs.float_id).unwrap().mouse_over())
             {
                 let (mut background_color, mut border_color) =
                     combo_buttons.get_mut(subs.button).unwrap();

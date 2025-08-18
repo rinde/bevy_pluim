@@ -175,7 +175,7 @@ fn handle_mouse_events(
         .get_with_ref(*target_list_ref)
         .unwrap_or_else(|| panic!("ColorPalette: No selection found for entity {target_list_ref}"));
 
-    let is_selected = selection.items.contains(target_item_ref);
+    let is_selected = selection.is_selected(*target_item_ref);
 
     let highlight = match (t.event(), is_selected) {
         (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => Some(HoverState::SelectedHover),

@@ -1,15 +1,21 @@
 use std::fmt;
 
-use bevy::ecs::component::HookContext;
-use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 
 use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 
+#[derive(Copy, Clone, Debug)]
+pub struct StackPlugin;
+
+impl Plugin for StackPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(on_add_stack);
+    }
+}
+
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("Stack"), Node::default())]
-#[component(on_insert=Self::on_insert)]
 pub struct Stack {
     pub selection_ref: Entity,
 }
@@ -17,56 +23,74 @@ pub struct Stack {
 #[derive(Component)]
 struct PrevDisplay(Display);
 
-impl Stack {
-    pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let stack = *world.entity(context.entity).get::<Self>().unwrap();
+fn on_add_stack(
+    t: Trigger<OnAdd, Stack>,
+    stacks: Query<&Stack>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let stack_ref = t.target();
+    let Ok(stack) = stacks.get(stack_ref).copied() else {
+        return;
+    };
 
-        world.commands().entity(stack.selection_ref).observe(
-            move |event: Trigger<OnInsert, Selection>,
-                  selections: SelectionParam,
-                  mut items: Query<(&Item<String>, &mut StackItem)>,
-                  children: Query<&Children>,
-                  mut nodes: Query<&mut Node>,
-                  prev_displays: Query<&PrevDisplay>,
-                  mut commands: Commands,
-                  theme: Res<Theme>| {
-                let selection = selections.get(event.target()).unwrap();
-                assert!(
-                    !selection.multi,
-                    "Multi-selection is not supported for Stack"
-                );
+    if selections.get(stack.selection_ref).is_some() {
+        commands.run_system_cached_with(switch_view, (stack_ref, stack));
+    }
 
-                let selected_item = selection.items.first().unwrap();
-                let (_selected_item, mut selected_stack_item) =
-                    items.get_mut(*selected_item).unwrap();
+    commands.entity(stack.selection_ref).observe(
+        move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
+            commands.run_system_cached_with(switch_view, (stack_ref, stack));
+        },
+    );
+}
 
-                if let Ok(children) = children.get(context.entity) {
-                    // hide all children
-                    for c in children {
-                        let mut node = nodes.get_mut(*c).unwrap();
+fn switch_view(
+    stack_and_ref: In<(Entity, Stack)>,
+    selections: SelectionParam,
+    mut items: Query<(&Item<String>, &mut StackItem)>,
+    children: Query<&Children>,
+    mut nodes: Query<&mut Node>,
+    prev_displays: Query<&PrevDisplay>,
+    mut commands: Commands,
+    theme: Res<Theme>,
+) {
+    let (stack_ref, stack) = *stack_and_ref;
+    let selection = selections.get(stack.selection_ref).unwrap();
+    assert!(
+        selection.is_one(),
+        "Stack always needs to have exactly one selected item"
+    );
+    let selected_item = selection.single().unwrap();
+    if selected_item == Entity::PLACEHOLDER {
+        return;
+    }
+    let (_selected_item, mut selected_stack_item) = items.get_mut(selected_item).unwrap();
 
-                        if node.display != Display::None {
-                            commands.entity(*c).insert(PrevDisplay(node.display));
-                            node.display = Display::None;
-                        }
-                    }
-                }
+    if let Ok(children) = children.get(stack_ref) {
+        // hide all children
+        for c in children {
+            let mut node = nodes.get_mut(*c).unwrap();
 
-                // create new child or make existing visible
-                if let Some(existing) = selected_stack_item.entity {
-                    let mut node = nodes.get_mut(existing).unwrap();
-                    let prev = prev_displays.get(existing).unwrap();
-                    node.display = prev.0;
-                } else {
-                    let spawner = StackChildSpawner {
-                        parent: context.entity,
-                        commands,
-                    };
-                    let new_id = (selected_stack_item.create)(spawner, &theme);
-                    selected_stack_item.entity = Some(new_id);
-                }
-            },
-        );
+            if node.display != Display::None {
+                commands.entity(*c).insert(PrevDisplay(node.display));
+                node.display = Display::None;
+            }
+        }
+    }
+
+    // create new child or make existing visible
+    if let Some(existing) = selected_stack_item.entity {
+        let mut node = nodes.get_mut(existing).unwrap();
+        let prev = prev_displays.get(existing).unwrap();
+        node.display = prev.0;
+    } else {
+        let spawner = StackChildSpawner {
+            parent: stack_ref,
+            commands,
+        };
+        let new_id = (selected_stack_item.create)(spawner, &theme);
+        selected_stack_item.entity = Some(new_id);
     }
 }
 

@@ -1,28 +1,7 @@
 use std::sync::LazyLock;
 
-use bevy::DefaultPlugins;
-use bevy::app::{App, PostStartup, Startup, Update};
-use bevy::core_pipeline::core_2d::Camera2d;
-use bevy::ecs::bundle::Bundle;
-use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
-use bevy::ecs::hierarchy::{ChildSpawner, Children};
-use bevy::ecs::observer::Trigger;
-use bevy::ecs::query::{With, Without};
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::ecs::schedule::common_conditions::resource_changed;
-use bevy::ecs::spawn::{SpawnIter, SpawnRelated, SpawnWith};
-use bevy::ecs::system::{Commands, Query, Res, ResMut};
-use bevy::ecs::{children, related};
-use bevy::picking::Pickable;
-use bevy::picking::events::{Pointer, Released};
-use bevy::text::TextColor;
-use bevy::ui::{
-    AlignItems, AlignSelf, BackgroundColor, BorderColor, BorderRadius, Display, FlexWrap,
-    GridAutoFlow, GridPlacement, GridTrack, JustifyContent, Node, PositionType, UiDebugOptions,
-    UiRect, Val,
-};
-use bevy::utils::default;
+use bevy::ecs::spawn::{SpawnIter, SpawnWith};
+use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
 use ui::card::Card;
@@ -54,7 +33,6 @@ fn main() {
         .add_observer(on_press)
         .add_systems(Update, update_theme.run_if(resource_changed::<Theme>))
         .add_systems(Startup, setup)
-        .add_systems(PostStartup, post_setup)
         .run();
 }
 
@@ -80,13 +58,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         BackgroundColor(theme.colors.background_primary),
         Root,
         Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-            let id = parent
+            let selection_ref = parent
                 .spawn((
                     List,
                     CornerStyle::Tabs,
                     ListLayout::Horizontal,
-                    Selection::default(),
-                    TabItemsAndSelection,
+                    Selection::one(),
                     related!(ItemValues[
                         (Item::new("Panel A"), StackItem::new(&create_a)),
                         (Item::new("Panel B"), StackItem::new(&create_b)),
@@ -94,6 +71,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     ]),
                 ))
                 .id();
+
             // filler
             parent.spawn((
                 BorderColor(theme_border_color),
@@ -115,26 +93,10 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     height: Val::Percent(100.0),
                     ..default()
                 },
-                Stack { selection_ref: id },
+                Stack { selection_ref },
             ));
         })),
     ));
-}
-
-#[derive(Component)]
-struct TabItemsAndSelection;
-
-fn post_setup(
-    query: Query<(Entity, &Selection, &ItemValues), With<TabItemsAndSelection>>,
-    mut commands: Commands,
-) {
-    let (sref, selection, item_values) = query.single().unwrap();
-    let s = selection
-        .as_selection()
-        .unwrap()
-        .toggle_selected(item_values.iter().copied().next().unwrap())
-        .unwrap();
-    commands.entity(sref).insert(s.into_component());
 }
 
 fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {

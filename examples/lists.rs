@@ -4,11 +4,10 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use smallvec::smallvec;
 use ui::WidgetsPlugin;
 use ui::list::{CornerStyle, List, ListLayout};
 use ui::push_button::PushButton;
-use ui::select::{Item, ItemValues, ItemsRef, Selection, SelectionValue};
+use ui::select::{Item, ItemValues, ItemsRef, Selection};
 use ui::theme::Theme;
 
 fn main() {
@@ -36,11 +35,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 
     let selection_ref = commands
         .spawn((
-            SelectionValue {
-                items: smallvec![],
-                multi: false,
-            }
-            .into_component(),
+            Selection::one_or_more(),
             related!(ItemValues[
                 Item::new("Netherlands"),
                 Item::new("Canada"),
@@ -73,11 +68,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             (
                 List,
                 ListLayout::Horizontal,
-                SelectionValue {
-                    items: smallvec![],
-                    multi: true,
-                }
-                .into_component(),
+                Selection::zero_or_more(),
                 related!(ItemValues[
                     Item::new("Netherlands"),
                     Item::new("Canada"),
@@ -95,33 +86,21 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             (
                 List,
                 CornerStyle::Tabs,
-                SelectionValue {
-                    items: smallvec![],
-                    multi: false,
-                }
-                .into_component(),
+                Selection::zero_or_one(),
                 ItemsRef(selection_ref)
             ),
             (
                 List,
                 ListLayout::Horizontal,
                 CornerStyle::Tabs,
-                SelectionValue {
-                    items: smallvec![],
-                    multi: true,
-                }
-                .into_component(),
+                Selection::zero_or_more(),
                 ItemsRef(selection_ref)
             ),
             (
                 List,
                 ListLayout::VerticalGrid { columns: 3 },
                 CornerStyle::Tabs,
-                SelectionValue {
-                    items: smallvec![],
-                    multi: true,
-                }
-                .into_component(),
+                Selection::zero_or_more(),
                 related!(ItemValues[
                     Item::new("Netherlands"),
                     Item::new("Canada"),
