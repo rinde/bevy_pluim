@@ -40,12 +40,6 @@ impl ScrollArea {
 }
 
 #[derive(Component, Clone, Copy, Debug)]
-#[require(Node {
-    width : Val::Percent(100.0),
-    height: Val::Percent(100.0),
-    overflow: Overflow::scroll(),
-    ..default()
-})]
 pub struct ScrollContents;
 
 #[derive(Component, Clone, Copy, Debug)]
@@ -59,11 +53,32 @@ impl ScrollArea {
     where
         F: FnOnce(&mut ChildSpawner) + Send + Sync + 'static,
     {
+        let overflow = Overflow {
+            x: if h_scroll {
+                OverflowAxis::Scroll
+            } else {
+                OverflowAxis::Hidden
+            },
+            y: if v_scroll {
+                OverflowAxis::Scroll
+            } else {
+                OverflowAxis::Hidden
+            },
+        };
         (
             ScrollArea,
             Children::spawn(SpawnWith(move |s: &mut ChildSpawner| {
                 let contents_ref = s
-                    .spawn((ScrollContents, Children::spawn(SpawnWith(contents_spawner))))
+                    .spawn((
+                        ScrollContents,
+                        Children::spawn(SpawnWith(contents_spawner)),
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Percent(100.0),
+                            overflow,
+                            ..default()
+                        },
+                    ))
                     .id();
 
                 let refs = ScrollAreaRefs {
