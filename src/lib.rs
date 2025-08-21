@@ -54,17 +54,28 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(LabelPlugin)
             .add_plugins(CardPlugin)
             .add_plugins(NumericStepperPlugin)
-            .add_systems(PostStartup, setup);
+            .add_systems(PostStartup, setup)
+            .add_observer(test);
     }
 }
 
-fn setup(mut commands: Commands, root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
-    let Ok(root) = root_node.single() else {
-        panic!("A root node is required");
-    };
-
-    commands.entity(root).observe_and_transform_mouse_events();
+fn test(t: Trigger<OnAdd, Node>, has_childof: Query<Has<ChildOf>>, mut commands: Commands) {
+    let is_root = !has_childof.get(t.target()).unwrap();
+    if is_root {
+        commands
+            .entity(t.target())
+            .insert(UiRoot)
+            .observe_and_transform_mouse_events();
+    }
 }
+
+fn setup(root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
+    assert!(root_node.single().is_ok(), "A root node is required");
+}
+
+#[derive(Component, Debug, Copy, Clone)]
+#[require(Name::new("UiRoot"))]
+pub struct UiRoot;
 
 #[derive(Event, Copy, Clone, Debug)]
 enum MouseEvent {

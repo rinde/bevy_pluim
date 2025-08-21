@@ -5,7 +5,9 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use ui::WidgetsPlugin;
+use ui::card::Card;
 use ui::color_palette::ColorPalette;
 use ui::color_palette_combo::ColorPaletteCombo;
 use ui::list::ListLayout;
@@ -22,7 +24,7 @@ fn main() {
         .add_plugins((EguiPlugin {
             enable_multipass_for_primary_context: false,
         },))
-        // .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(UiDebugOptions {
             enabled: false,
             line_width: 1.0,
@@ -130,6 +132,44 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 ListLayout::VerticalGrid { columns: 11 },
                 Selection::default(),
                 ItemValues::spawn(SpawnIter(color_palette().into_iter()))
+            ),
+            (
+                Node {
+                    width: Val::Px(100.0),
+                    height: Val::Px(100.0),
+                    ..default()
+                },
+                ScrollArea::bundle(
+                    move |parent| {
+                        parent.spawn((
+                            Pickable {
+                                should_block_lower: false,
+                                ..default()
+                            },
+                            ColorPaletteCombo,
+                            ListLayout::VerticalGrid { columns: 11 },
+                            ItemsRef(selection_ref),
+                            Selection::reference(selection_ref),
+                        ));
+                        parent.spawn((
+                            Node {
+                                min_width: Val::Px(50.0),
+                                width: Val::Px(100.0),
+                                height: Val::Px(100.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            Card,
+                            Pickable {
+                                should_block_lower: false,
+                                ..default()
+                            },
+                        ));
+                    },
+                    true,
+                    true
+                )
             ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],

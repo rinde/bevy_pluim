@@ -1,5 +1,3 @@
-use bevy::ecs::component::HookContext;
-use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::window::PrimaryWindow;
@@ -13,7 +11,7 @@ use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, ItemsRef, Selection, SelectionParam};
 use crate::theme::Theme;
-use crate::{MouseEvent, color_push_button};
+use crate::{MouseEvent, UiRoot, color_push_button};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ColorPaletteComboPlugin;
@@ -30,12 +28,14 @@ impl Plugin for ColorPaletteComboPlugin {
                 on_selection_change,
             ),
         )
-        .add_observer(on_add_items_ref);
+        .add_observer(on_add_items_ref)
+        .add_observer(on_insert_combo)
+        .add_observer(on_insert_state);
     }
 }
 
 #[derive(Component, Debug, Copy, Clone, Default)]
-#[component(on_add=Self::on_insert)]
+// #[component(on_add=Self::on_insert)]
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -52,84 +52,93 @@ pub struct ColorPaletteCombo;
 struct ColorPaletteComboButton;
 
 #[derive(Component, Debug, Copy, Clone)]
+#[require(Name::new("ColorPaletteComboFloat"))]
 struct ColorPaletteComboFloat;
 
-impl ColorPaletteCombo {
-    fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let mut button_id = Entity::PLACEHOLDER;
-        let mut float_id = Entity::PLACEHOLDER;
-        let list_layout = world.entity(context.entity).get::<ListLayout>().copied();
+fn on_insert_combo(
+    t: Trigger<OnInsert, ColorPaletteCombo>,
+    mut commands: Commands,
+    list_layouts: Query<(Option<&ListLayout>, Option<&ItemsRef>)>,
+    root: Query<Entity, With<UiRoot>>,
+) {
+    let mut button_id = Entity::PLACEHOLDER;
+    let mut float_id = Entity::PLACEHOLDER;
 
-        let existing_items_ref = world.entity(context.entity).get::<ItemsRef>().copied();
-        world.commands().entity(context.entity).with_children(|x| {
-            button_id = x
-                .spawn((
-                    ColorPaletteComboButton,
-                    ColorPushButton,
-                    NoDefaultHover,
-                    // allow mouse events to pass through to parent
-                    Pickable {
-                        should_block_lower: false,
-                        ..default()
+    let (list_layout, existing_items_ref) = list_layouts
+        .get(t.target())
+        .map(|(l, e)| (l.copied(), e.copied()))
+        .unwrap();
+
+    commands.entity(t.target()).with_children(|parent| {
+        button_id = parent
+            .spawn((
+                ColorPaletteComboButton,
+                ColorPushButton,
+                NoDefaultHover,
+                // allow mouse events to pass through to parent
+                Pickable {
+                    should_block_lower: false,
+                    ..default()
+                },
+            ))
+            .id();
+    });
+    let root = root.single().unwrap();
+    commands.entity(root).with_children(|parent| {
+        float_id = parent
+            .spawn((
+                Float,
+                ColorPaletteComboFloat,
+                Node {
+                    left: Val::Px(0.0),
+                    top: Val::Px(40.0),
+                    position_type: PositionType::Absolute,
+                    height: Val::Px(250.0),
+                    border: UiRect::all(Val::Px(1.0)),
+                    ..default()
+                },
+                BorderColor(Color::BLACK),
+                Visibility::Hidden,
+                ScrollArea::bundle(
+                    move |parent| {
+                        let bundle = (
+                            Pickable {
+                                should_block_lower: false,
+                                ..default()
+                            },
+                            ColorPalette,
+                            list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
+                        );
+
+                        if let Some(items_ref) = existing_items_ref {
+                            parent.spawn((bundle, items_ref));
+                        } else {
+                            parent.spawn(bundle);
+                        }
                     },
-                ))
-                .id();
-            float_id = x
-                .spawn((
-                    Float,
-                    ColorPaletteComboFloat,
-                    Node {
-                        left: Val::Px(0.0),
-                        top: Val::Px(40.0),
-                        position_type: PositionType::Absolute,
-                        height: Val::Px(250.0),
-                        border: UiRect::all(Val::Px(1.0)),
-                        ..default()
-                    },
-                    BorderColor(Color::BLACK),
-                    Visibility::Hidden,
-                    ScrollArea::bundle(
-                        move |parent| {
-                            let bundle = (
-                                Pickable {
-                                    should_block_lower: false,
-                                    ..default()
-                                },
-                                ColorPalette,
-                                list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
-                            );
+                    true,
+                    false,
+                ),
+                RelativeCursorPosition::default(),
+            ))
+            .id();
+    });
 
-                            if let Some(items_ref) = existing_items_ref {
-                                parent.spawn((bundle, items_ref));
-                            } else {
-                                parent.spawn(bundle);
-                            }
-                        },
-                        true,
-                        false,
-                    ),
-                    RelativeCursorPosition::default(),
-                ))
-                .id();
-        });
+    let sub_refs = SubRefs {
+        parent: t.target(),
+        button: button_id,
+        float_id,
+    };
+    commands
+        .entity(t.target())
+        .insert((State::Closed, sub_refs));
 
-        let sub_refs = SubRefs {
-            parent: context.entity,
-            button: button_id,
-            float_id,
-        };
+    commands
+        .entity(button_id)
+        .insert(sub_refs)
+        .observe(handle_combo_button_mouse_events);
 
-        world
-            .commands()
-            .entity(context.entity)
-            .insert((State::Closed, sub_refs));
-
-        world
-            .commands()
-            .entity(button_id)
-            .insert(sub_refs)
-            .observe(handle_combo_button_mouse_events);
-    }
+    commands.run_system_cached_with(propagate_items_ref, t.target());
 }
 
 #[derive(Component, Debug, Copy, Clone)]
@@ -140,7 +149,7 @@ struct SubRefs {
 }
 
 #[derive(Component, Debug, Copy, Clone, Eq, PartialEq)]
-#[component(immutable, on_insert=Self::on_insert)]
+#[component(immutable)]
 pub enum State {
     Open,
     Closed,
@@ -154,23 +163,22 @@ impl State {
             State::Closed => State::Open,
         }
     }
+}
 
-    fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let (state, &sub_refs) = world
-            .entity(context.entity)
-            .components::<(&State, &SubRefs)>();
+fn on_insert_state(
+    t: Trigger<OnInsert, State>,
+    state: Query<(&State, &SubRefs)>,
+    mut commands: Commands,
+) {
+    let (&state, &sub_refs) = state.get(t.target()).unwrap();
 
-        let visibility = match state {
-            State::Open => Visibility::Visible,
-            State::Closed => Visibility::Hidden,
-        };
-        world
-            .commands()
-            .entity(sub_refs.float_id)
-            .insert(visibility);
-        world
-            .commands()
-            .run_system_cached_with(position_float, sub_refs);
+    let visibility = match state {
+        State::Open => Visibility::Visible,
+        State::Closed => Visibility::Hidden,
+    };
+    commands.entity(sub_refs.float_id).insert(visibility);
+    if state == State::Open {
+        commands.run_system_cached_with(position_float, sub_refs);
     }
 }
 
@@ -179,7 +187,7 @@ fn position_float(
     window: Single<&Window, With<PrimaryWindow>>,
     mut dims: Query<(&mut Node, &GlobalTransform, &ComputedNode), With<ColorPaletteComboFloat>>,
     parent_dims: Query<
-        &ComputedNode,
+        (&ComputedNode, &GlobalTransform),
         (
             With<ColorPaletteComboButton>,
             Without<ColorPaletteComboFloat>,
@@ -189,20 +197,27 @@ fn position_float(
     const MARGIN: f32 = 10.0;
     const BUTTON_FLOAT_DIST: f32 = 3.0;
 
-    let (mut node, global_transform, computed_node) = dims.get_mut(sub_refs.float_id).unwrap();
-    let button_computed_node = parent_dims.get(sub_refs.button).unwrap();
+    let (mut node, global_transform, float_computed_node) =
+        dims.get_mut(sub_refs.float_id).unwrap();
+    let (button_computed_node, button_transform) = parent_dims.get(sub_refs.button).unwrap();
 
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
-    let size = computed_node.content_size() * computed_node.inverse_scale_factor();
+    let float_size =
+        float_computed_node.content_size() * float_computed_node.inverse_scale_factor();
     let translation = Vec2::new(
         global_transform.translation().x,
         global_transform.translation().y,
-    ) * computed_node.inverse_scale_factor();
-    let min_coord = translation - (size / 2.0);
-    let max_coord = translation + (size / 2.0);
+    ) * float_computed_node.inverse_scale_factor();
+    let button_translation = Vec2::new(
+        button_transform.translation().x,
+        button_transform.translation().y,
+    ) * button_computed_node.inverse_scale_factor();
 
-    let mut intended_x = -size.x / 2.0 + (button_size.x / 2.0);
-    let mut intended_y = button_size.y + BUTTON_FLOAT_DIST;
+    let min_coord = translation - (float_size / 2.0);
+    let max_coord = translation + (float_size / 2.0);
+
+    let mut intended_x = button_translation.x + (-float_size.x / 2.0) + (button_size.x / 2.0);
+    let mut intended_y = button_translation.y + (button_size.y / 2.0) + BUTTON_FLOAT_DIST;
 
     // set x position
     let Val::Px(current_x) = node.left else {
@@ -231,7 +246,8 @@ fn position_float(
     let global_max_y = max_coord.y + delta_y;
 
     if global_max_y + MARGIN > window.height() {
-        intended_y = -size.y - BUTTON_FLOAT_DIST;
+        intended_y =
+            button_translation.y - (button_size.y / 2.0) - BUTTON_FLOAT_DIST - float_size.y;
     }
     node.top = Val::Px(intended_y);
 }
@@ -298,15 +314,28 @@ fn on_selection_change(
 fn on_add_items_ref(
     t: Trigger<OnInsert, ItemsRef>,
     combos: Query<(&ItemsRef, &SubRefs), With<ColorPaletteCombo>>,
+    mut commands: Commands,
+) {
+    if combos.contains(t.target()) {
+        commands.run_system_cached_with(propagate_items_ref, t.target());
+    };
+}
+
+fn propagate_items_ref(
+    combo_ref: In<Entity>,
+    combos: Query<(&ItemsRef, &SubRefs), With<ColorPaletteCombo>>,
     children: Query<&Children>,
     mut commands: Commands,
 ) {
-    let Ok((ItemsRef(items_ref), SubRefs { float_id, .. })) = combos.get(t.target()) else {
-        return;
-    };
+    let (&items_ref, sub_refs) = combos.get(*combo_ref).unwrap();
 
     // TODO make this less brittle
-    let scroll_contents_ref = children.get(*float_id).unwrap().iter().next().unwrap();
+    let scroll_contents_ref = children
+        .get(sub_refs.float_id)
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap();
     let color_palette_ref = children
         .get(scroll_contents_ref)
         .unwrap()
@@ -315,9 +344,7 @@ fn on_add_items_ref(
         .unwrap();
 
     // propagate the ItemsRef to the list
-    commands
-        .entity(color_palette_ref)
-        .insert(ItemsRef(*items_ref));
+    commands.entity(color_palette_ref).insert(items_ref);
 }
 
 /// System that closes the combo when clicking outside of it.
