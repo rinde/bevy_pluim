@@ -7,8 +7,7 @@ use bevy::prelude::*;
 use derive_more::Deref;
 use educe::Educe;
 use itertools::Either;
-use smallvec::SmallVec;
-use smallvec::smallvec;
+use smallvec::{SmallVec, smallvec};
 use strum::EnumIs;
 
 #[derive(Copy, Clone, Debug, Default)]
