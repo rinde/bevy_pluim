@@ -32,12 +32,13 @@ fn main() {
             show_clipped: false,
         })
         .add_observer(on_press)
-        .add_systems(Update, update_theme.run_if(resource_changed::<Theme>))
+        .add_observer(on_press_add_combo_button)
+        .add_observer(on_press_remove_combo_button)
         .add_systems(Startup, setup)
         .run();
 }
 
-fn setup(mut commands: Commands, theme: Res<Theme>) {
+fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     let selection_ref = commands
@@ -52,16 +53,12 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
     // Root container
     commands.spawn((
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
             justify_content: JustifyContent::SpaceEvenly,
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
             ..default()
         },
-        BackgroundColor(theme.colors.background_primary),
-        Root,
         children![
             (
                 Selection::reference(selection_ref),
@@ -171,7 +168,15 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     true
                 )
             ),
-            (PushButton::from_label("Change theme"), ThemeButton),
+            (
+                Node::DEFAULT,
+                children![
+                    (PushButton::from_label("Change theme"), ThemeButton),
+                    (PushButton::from_label("+"), AddComboButton),
+                    (PushButton::from_label("-"), RemoveComboButton),
+                ]
+            ),
+            (Node::DEFAULT, ExtraComponentsArea)
         ],
     ));
 }
@@ -183,6 +188,15 @@ fn color_palette() -> Vec<impl Bundle> {
 #[derive(Component)]
 struct ThemeButton;
 
+#[derive(Component)]
+struct AddComboButton;
+
+#[derive(Component)]
+struct RemoveComboButton;
+
+#[derive(Component)]
+struct ExtraComponentsArea;
+
 fn on_press(
     trigger: Trigger<Pointer<Released>>,
     button: Query<(), With<ThemeButton>>,
@@ -193,21 +207,34 @@ fn on_press(
     }
 }
 
-#[derive(Component)]
-struct Root;
-
-#[derive(Component)]
-struct HelloWorldLabel;
-
-fn update_theme(
-    theme: Res<Theme>,
-    mut background: Query<&mut BackgroundColor, With<Root>>,
-    mut hello_world: Query<&mut TextColor, With<HelloWorldLabel>>,
+fn on_press_add_combo_button(
+    trigger: Trigger<Pointer<Released>>,
+    button: Query<(), With<AddComboButton>>,
+    area: Query<Entity, With<ExtraComponentsArea>>,
+    mut commands: Commands,
 ) {
-    for mut background_color in &mut background {
-        background_color.0 = theme.colors.background_primary;
+    if button.get(trigger.target()).is_ok() {
+        let area = area.single().unwrap();
+        commands.entity(area).with_children(|parent| {
+            parent.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::default(),
+                ItemValues::spawn(SpawnIter(color_palette().into_iter())),
+            ));
+        });
     }
-    for mut text_color in &mut hello_world {
-        text_color.0 = theme.colors.text_primary;
+}
+
+fn on_press_remove_combo_button(
+    trigger: Trigger<Pointer<Released>>,
+    button: Query<(), With<RemoveComboButton>>,
+    area: Query<&Children, With<ExtraComponentsArea>>,
+    mut commands: Commands,
+) {
+    if button.get(trigger.target()).is_ok() {
+        if let Some(last) = area.single().unwrap().iter().last() {
+            commands.entity(last).despawn();
+        }
     }
 }

@@ -30,6 +30,7 @@ impl Plugin for ColorPaletteComboPlugin {
         )
         .add_observer(on_add_items_ref)
         .add_observer(on_insert_combo)
+        .add_observer(on_remove_combo)
         .add_observer(on_insert_state);
     }
 }
@@ -139,6 +140,15 @@ fn on_insert_combo(
         .observe(handle_combo_button_mouse_events);
 
     commands.run_system_cached_with(propagate_items_ref, t.target());
+}
+
+fn on_remove_combo(
+    t: Trigger<OnRemove, ColorPaletteCombo>,
+    sub_refs: Query<&SubRefs>,
+    mut commands: Commands,
+) {
+    let sub_refs = sub_refs.get(t.target()).unwrap();
+    commands.entity(sub_refs.float_id).despawn();
 }
 
 #[derive(Component, Debug, Copy, Clone)]

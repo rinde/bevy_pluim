@@ -33,7 +33,7 @@ use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
 use crate::select::ItemsPlugin;
 use crate::stack::StackPlugin;
-use crate::theme::Theme;
+use crate::theme::{Theme, ThemePlugin};
 
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
@@ -54,12 +54,13 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(LabelPlugin)
             .add_plugins(CardPlugin)
             .add_plugins(NumericStepperPlugin)
+            .add_plugins(ThemePlugin)
             .add_systems(PostStartup, setup)
-            .add_observer(test);
+            .add_observer(add_ui_root);
     }
 }
 
-fn test(t: Trigger<OnAdd, Node>, has_childof: Query<Has<ChildOf>>, mut commands: Commands) {
+fn add_ui_root(t: Trigger<OnAdd, Node>, has_childof: Query<Has<ChildOf>>, mut commands: Commands) {
     let is_root = !has_childof.get(t.target()).unwrap();
     if is_root {
         commands

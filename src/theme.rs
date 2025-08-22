@@ -5,6 +5,19 @@ use bevy::color::palettes::tailwind::{
 use bevy::prelude::*;
 use educe::Educe;
 
+#[derive(Debug, Copy, Clone)]
+pub struct ThemePlugin;
+
+impl Plugin for ThemePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, update_theme.run_if(resource_changed::<Theme>));
+    }
+}
+
+fn update_theme(mut clear_color: ResMut<ClearColor>, theme: Res<Theme>) {
+    clear_color.0 = theme.colors.background_primary;
+}
+
 #[derive(Resource, Clone, Copy, Debug, Educe)]
 #[educe(Default)]
 pub struct Theme {
