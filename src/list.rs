@@ -167,7 +167,7 @@ fn handle_mouse_events(
 fn selection_change(
     q: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
-    lists: Query<(Entity, &Children, &Selection), (With<List>, Without<NoDefaultItems>)>,
+    lists: Query<(Entity, Option<&Children>, &Selection), (With<List>, Without<NoDefaultItems>)>,
     mut item_views: Query<(
         &ItemView,
         &RelativeCursorPosition,
@@ -175,20 +175,37 @@ fn selection_change(
         &mut BorderColor,
     )>,
     theme: Res<Theme>,
+    items_refs: Query<&ItemsRef>,
+    item_values: Query<&ItemValues>,
+    mut commands: Commands,
 ) {
     for changed_selection_ref in q {
         for (list_ref, children, list_selection) in lists {
             let is_changed = match list_selection {
-                Selection::Ref(entity) => changed_selection_ref == *entity,
+                Selection::Ref(entity) => {
+                    changed_selection_ref == *entity || changed_selection_ref == list_ref
+                }
                 Selection::Value(_selection) => changed_selection_ref == list_ref,
             };
             if is_changed {
-                let selection = selections.get(changed_selection_ref).unwrap_or_else(|| {
-                    panic!("No selection found for entity {changed_selection_ref}")
-                });
-                for item_view_id in children {
+                let (selection_ref, selection) = selections
+                    .get_with_ref(changed_selection_ref)
+                    .unwrap_or_else(|| {
+                        panic!("No selection found for entity {changed_selection_ref}")
+                    });
+                if selection == &SelectionValue::One(Entity::PLACEHOLDER) {
+                    if let Ok(ItemsRef(x)) = items_refs.get(list_ref).copied() {
+                        let iv = item_values.get(x).unwrap();
+                        if let Some(first_item_ref) = iv.iter().next() {
+                            commands
+                                .entity(selection_ref)
+                                .insert(Selection::one_with(first_item_ref));
+                        }
+                    }
+                }
+                for item_view_id in children.map(|c| c.iter()).unwrap_or_default() {
                     let (item_view, rcp, mut bg, mut border_color) =
-                        item_views.get_mut(*item_view_id).unwrap();
+                        item_views.get_mut(item_view_id).unwrap();
 
                     let is_selected = selection.is_selected(item_view.item_ref);
                     match (is_selected, rcp.mouse_over()) {

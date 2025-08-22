@@ -19,7 +19,7 @@ impl Plugin for ItemsPlugin {
     }
 }
 
-#[derive(Component, Debug, Clone, Eq, PartialEq)]
+#[derive(Component, Debug, Clone, Eq, PartialEq, Reflect)]
 #[component(immutable)]
 pub enum Selection {
     Ref(Entity),
@@ -80,7 +80,7 @@ impl Default for Selection {
     }
 }
 
-#[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs)]
+#[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs, Reflect)]
 #[educe(Default)]
 pub enum SelectionValue {
     One(Entity),
@@ -267,11 +267,11 @@ where
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 #[component(immutable)]
 pub struct ItemsRef(pub Entity);
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemValues)]
 pub struct ItemOf(pub Entity);
 
@@ -281,7 +281,7 @@ pub struct ItemOf(pub Entity);
 #[require(Name::new("Items"))]
 pub struct ItemValues(Vec<Entity>);
 
-pub type ItemsSpawner<'w> = RelatedSpawner<'w, ItemOf>;
+pub type ItemSpawner<'w> = RelatedSpawner<'w, ItemOf>;
 
 impl ItemValues {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
@@ -292,7 +292,7 @@ impl ItemValues {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 #[require(Name::new("Item"))]
 pub struct Item<T> {
     pub data: T,
