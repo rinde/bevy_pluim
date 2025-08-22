@@ -55,7 +55,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             height: Val::Percent(100.0),
             ..default()
         },
-        BackgroundColor(theme.colors.background_primary),
         Root,
         Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
             let selection_ref = parent
@@ -318,21 +317,10 @@ fn on_press(
 #[derive(Component)]
 struct Root;
 
-#[derive(Component)]
-struct HelloWorldLabel;
-
 fn update_theme(
     theme: Res<Theme>,
-    mut background: Query<&mut BackgroundColor, With<Root>>,
-    mut hello_world: Query<&mut TextColor, With<HelloWorldLabel>>,
     mut card_background: Query<&mut BackgroundColor, (With<CardBackground>, Without<Root>)>,
 ) {
-    for mut background_color in &mut background {
-        background_color.0 = theme.colors.background_primary;
-    }
-    for mut text_color in &mut hello_world {
-        text_color.0 = theme.colors.text_primary;
-    }
     for mut card_background_color in &mut card_background {
         card_background_color.0 = theme.colors.background_primary;
     }

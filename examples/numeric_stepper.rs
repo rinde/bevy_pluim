@@ -17,12 +17,11 @@ fn main() {
             show_clipped: false,
         })
         .add_observer(on_press)
-        .add_systems(Update, update_theme.run_if(resource_changed::<Theme>))
         .add_systems(Startup, setup)
         .run();
 }
 
-fn setup(mut commands: Commands, theme: Res<Theme>) {
+fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
     commands.spawn((
         Node {
@@ -37,8 +36,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             padding: UiRect::all(Val::Px(10.0)),
             ..default()
         },
-        BackgroundColor(theme.colors.background_primary),
-        Root,
         children![
             NumericStepper,
             (NumericStepper, Value::new_u16(10, 5, 15, 1)),
@@ -59,24 +56,5 @@ fn on_press(
 ) {
     if button.get(trigger.target()).is_ok() {
         theme.light_dark_toggle();
-    }
-}
-
-#[derive(Component)]
-struct Root;
-
-#[derive(Component)]
-struct HelloWorldLabel;
-
-fn update_theme(
-    theme: Res<Theme>,
-    mut background: Query<&mut BackgroundColor, With<Root>>,
-    mut hello_world: Query<&mut TextColor, With<HelloWorldLabel>>,
-) {
-    for mut background_color in &mut background {
-        background_color.0 = theme.colors.background_primary;
-    }
-    for mut text_color in &mut hello_world {
-        text_color.0 = theme.colors.text_primary;
     }
 }
