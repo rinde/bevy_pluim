@@ -20,9 +20,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
-        .add_plugins((EguiPlugin {
-            enable_multipass_for_primary_context: false,
-        },))
+        .add_plugins(EguiPlugin::default())
         // .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(UiDebugOptions {
             enabled: false,
