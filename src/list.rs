@@ -193,17 +193,17 @@ fn selection_change(
                     .unwrap_or_else(|| {
                         panic!("No selection found for entity {changed_selection_ref}")
                     });
-                if selection == &SelectionValue::One(Entity::PLACEHOLDER) {
-                    if let Ok(ItemsRef(x)) = items_refs.get(list_ref).copied() {
-                        let iv = item_values.get(x).unwrap();
-                        if let Some(first_item_ref) = iv.iter().next() {
-                            commands
-                                .entity(selection_ref)
-                                .insert(Selection::one_with(first_item_ref));
-                        }
+                if selection == &SelectionValue::One(Entity::PLACEHOLDER)
+                    && let Ok(ItemsRef(x)) = items_refs.get(list_ref).copied()
+                {
+                    let iv = item_values.get(x).unwrap();
+                    if let Some(first_item_ref) = iv.iter().next() {
+                        commands
+                            .entity(selection_ref)
+                            .insert(Selection::one_with(first_item_ref));
                     }
                 }
-                for item_view_id in children.map(|c| c.iter()).unwrap_or_default() {
+                for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
                     let (item_view, rcp, mut bg, mut border_color) =
                         item_views.get_mut(item_view_id).unwrap();
 

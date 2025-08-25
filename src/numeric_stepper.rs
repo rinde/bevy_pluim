@@ -143,6 +143,7 @@ impl Value {
         }
     }
 
+    #[must_use]
     pub fn can_increment(&self) -> bool {
         match self {
             Value::F32 { value, max, .. } => value < max,
@@ -151,6 +152,7 @@ impl Value {
         }
     }
 
+    #[must_use]
     pub fn can_decrement(&self) -> bool {
         match self {
             Value::F32 { value, min, .. } => value > min,

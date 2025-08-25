@@ -232,9 +232,9 @@ fn on_press_remove_combo_button(
     area: Query<&Children, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
-    if button.get(trigger.target()).is_ok() {
-        if let Some(last) = area.single().unwrap().iter().last() {
-            commands.entity(last).despawn();
-        }
+    if button.get(trigger.target()).is_ok()
+        && let Some(last) = area.single().unwrap().iter().last()
+    {
+        commands.entity(last).despawn();
     }
 }

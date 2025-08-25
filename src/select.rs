@@ -96,6 +96,7 @@ impl SelectionValue {
         Selection::Value(self)
     }
 
+    #[must_use]
     pub const fn allow_multiple(&self) -> bool {
         match self {
             SelectionValue::One(_) | SelectionValue::ZeroOrOne(_) => false,
@@ -114,7 +115,6 @@ impl SelectionValue {
         }
     }
 
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = Entity> {
         match self {
             SelectionValue::One(selected) => Either::Left(Some(selected).into_iter().copied()),
@@ -146,7 +146,7 @@ impl SelectionValue {
     pub fn len(&self) -> usize {
         match self {
             SelectionValue::One(_) => 1,
-            SelectionValue::ZeroOrOne(selected) => selected.is_some() as usize,
+            SelectionValue::ZeroOrOne(selected) => usize::from(selected.is_some()),
             SelectionValue::OneOrMore(items) | SelectionValue::ZeroOrMore(items) => items.len(),
         }
     }

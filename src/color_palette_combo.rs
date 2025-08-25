@@ -328,7 +328,7 @@ fn on_add_items_ref(
 ) {
     if combos.contains(t.target()) {
         commands.run_system_cached_with(propagate_items_ref, t.target());
-    };
+    }
 }
 
 fn propagate_items_ref(
