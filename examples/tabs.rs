@@ -11,7 +11,7 @@ use ui::label::Label;
 use ui::list::{CornerStyle, List, ListLayout};
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::{Item, ItemValues, ItemsRef, Selection};
+use ui::select::{Item, ItemValues, Selection};
 use ui::stack::{Stack, StackChildSpawner, StackItem};
 use ui::tailwind::{COLORS, TailwindColor, Variant};
 use ui::theme::Theme;
@@ -60,8 +60,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     List,
                     CornerStyle::Tabs,
                     ListLayout::Horizontal,
-                    Selection::one(),
-                    related!(ItemValues[
+                    Selection::builder().one().build_with_items([
                         (Item::new("Panel A"), StackItem::new(&create_a)),
                         (Item::new("Panel B"), StackItem::new(&create_b)),
                         (Item::new("Card demo"), StackItem::new(&create_card_demo)),
@@ -104,24 +103,30 @@ fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
             .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
             .id();
 
-        let selection_ref = parent.spawn(Selection::default()).id();
+        let selection_ref = parent
+            .spawn(
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items_ref(colors),
+            )
+            .id();
 
         parent.spawn((
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
             Selection::reference(selection_ref),
-            ItemsRef(colors),
         ));
         parent.spawn((
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
-            ItemsRef(colors),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items_ref(colors),
         ));
         parent.spawn((
             ColorPaletteCombo,
             ListLayout::VerticalGrid { columns: 11 },
             Selection::reference(selection_ref),
-            ItemsRef(colors),
         ));
         parent.spawn((
             Card,
@@ -137,13 +142,13 @@ fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
             children![
                 (
                     Combo,
-                    related!(ItemValues[
+                    Selection::builder().zero_or_one().build_with_items([
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
                         Item::new("Portugal"),
                         Item::new("Belgium")
-                    ])
+                    ]),
                 ),
                 PushButton::from_label("Button on a card")
             ],
@@ -157,11 +162,7 @@ fn create_b(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
         Label::header("Panel B"),
         ScrollArea::bundle(
             |parent| {
-                parent.spawn((
-                    List,
-                    Selection::default(),
-                    ItemValues::spawn(SpawnIter(items())),
-                ));
+                parent.spawn((List, Selection::builder().one().build_with_items(items())));
             },
             true,
             false,
@@ -173,8 +174,7 @@ fn create_b(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
             },
             children![(
                 List,
-                Selection::default(),
-                related!(ItemValues[
+                Selection::builder().zero_or_one().build_with_items([
                     Item::new("Netherlands"),
                     Item::new("Canada"),
                     Item::new("Indonesia"),

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
@@ -7,9 +9,7 @@ use bevy::ui::RelativeCursorPosition;
 use itertools::Either;
 
 use crate::MouseEvent;
-use crate::select::{
-    Item, ItemValues, ItemsChanged, ItemsRef, Selection, SelectionParam, SelectionValue,
-};
+use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
 pub(crate) struct ListPlugin;
@@ -32,7 +32,7 @@ impl Plugin for ListPlugin {
                     selection_change,
                 ),
             )
-            .add_observer(on_insert_items_ref);
+            .add_observer(on_insert_selection);
     }
 }
 
@@ -46,7 +46,6 @@ impl Plugin for ListPlugin {
         should_block_lower: false,
         ..default()
     },
-    Selection::default()
 )]
 pub struct List;
 
@@ -175,9 +174,6 @@ fn selection_change(
         &mut BorderColor,
     )>,
     theme: Res<Theme>,
-    items_refs: Query<&ItemsRef>,
-    item_values: Query<&ItemValues>,
-    mut commands: Commands,
 ) {
     for changed_selection_ref in q {
         for (list_ref, children, list_selection) in lists {
@@ -188,21 +184,10 @@ fn selection_change(
                 Selection::Value(_selection) => changed_selection_ref == list_ref,
             };
             if is_changed {
-                let (selection_ref, selection) = selections
-                    .get_with_ref(changed_selection_ref)
-                    .unwrap_or_else(|| {
-                        panic!("No selection found for entity {changed_selection_ref}")
-                    });
-                if selection == &SelectionValue::One(Entity::PLACEHOLDER)
-                    && let Ok(ItemsRef(x)) = items_refs.get(list_ref).copied()
-                {
-                    let iv = item_values.get(x).unwrap();
-                    if let Some(first_item_ref) = iv.iter().next() {
-                        commands
-                            .entity(selection_ref)
-                            .insert(Selection::one_with(first_item_ref));
-                    }
-                }
+                let selection = selections.get(changed_selection_ref).unwrap_or_else(|| {
+                    panic!("No selection found for entity {changed_selection_ref}")
+                });
+
                 for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
                     let (item_view, rcp, mut bg, mut border_color) =
                         item_views.get_mut(item_view_id).unwrap();
@@ -237,19 +222,11 @@ fn on_items_changed(
     mut commands: Commands,
     lists: Query<Option<&Children>, (With<List>, Without<NoDefaultItems>)>,
     item_views: Query<(Entity, &ItemView)>,
-    selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
     let Ok(children) = lists.get(*list_ref) else {
         return;
     };
-
-    let (selection_ref, selection) = selections.get_with_ref(*list_ref).unwrap();
-    if selection == &SelectionValue::One(Entity::PLACEHOLDER) && !items.is_empty() {
-        commands
-            .entity(selection_ref)
-            .insert(Selection::one_with(items[0]));
-    }
 
     let existing = children
         .map(|c| {
@@ -305,29 +282,28 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
-fn on_insert_items_ref(
-    t: Trigger<OnInsert, ItemsRef>,
-    lists: Query<&ItemsRef, (With<List>, Without<NoDefaultItems>)>,
-    items: Query<&ItemValues>,
+fn on_insert_selection(
+    t: Trigger<OnInsert, Selection>,
+    lists: Query<&Selection, (With<List>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
     mut commands: Commands,
+    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
 ) {
     let list_ref = t.target();
-    let Ok(ItemsRef(items_ref)) = lists.get(list_ref).copied() else {
+    if lists.get(list_ref).is_err() {
         return;
-    };
-    let all_items = items.get(items_ref).unwrap().iter().collect::<Vec<_>>();
-
-    let (selection_ref, selection) = selections.get_with_ref(list_ref).unwrap();
-    if selection == &SelectionValue::One(Entity::PLACEHOLDER) && !all_items.is_empty() {
-        commands
-            .entity(selection_ref)
-            .insert(Selection::one_with(all_items[0]));
     }
+
+    let (values_ref, all_items) = selections.get_item_values(list_ref).unwrap();
+    if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
+        // no change in items ref
+        return;
+    }
+    existing_values_ref_map.insert(list_ref, values_ref);
 
     // register observer for items change event
     commands
-        .entity(items_ref)
+        .entity(values_ref)
         .observe(move |t: Trigger<ItemsChanged>, mut commands: Commands| {
             commands.run_system_cached_with(
                 on_items_changed,
@@ -343,7 +319,7 @@ fn on_insert_items_ref(
         on_items_changed,
         ItemsChangedInput {
             list_ref,
-            items: all_items,
+            items: all_items.iter().collect(),
         },
     );
 }

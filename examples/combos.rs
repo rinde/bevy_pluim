@@ -7,7 +7,7 @@ use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
 use ui::combo::Combo;
 use ui::push_button::PushButton;
-use ui::select::{Item, ItemValues, ItemsRef, Selection};
+use ui::select::{Item, Selection};
 use ui::theme::Theme;
 
 fn main() {
@@ -31,16 +31,13 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     let selection_ref = commands
-        .spawn((
-            Selection::default(),
-            related!(ItemValues[
-                Item::new("Netherlands"),
-                Item::new("Canada"),
-                Item::new("Indonesia"),
-                Item::new("Portugal"),
-                Item::new("Belgium")
-            ]),
-        ))
+        .spawn(Selection::builder().zero_or_one().build_with_items([
+            Item::new("Netherlands"),
+            Item::new("Canada"),
+            Item::new("Indonesia"),
+            Item::new("Portugal"),
+            Item::new("Belgium"),
+        ]))
         .id();
 
     // Root container
@@ -55,27 +52,14 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         children![
+            (Combo, Selection::reference(selection_ref)),
             (
                 Combo,
-                Selection::reference(selection_ref),
-                ItemsRef(selection_ref),
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items_ref(selection_ref),
             ),
-            (
-                Combo,
-                Selection::default(),
-                related!(ItemValues[
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
-                ]),
-            ),
-            (
-                Combo,
-                Selection::reference(selection_ref),
-                ItemsRef(selection_ref)
-            ),
+            (Combo, Selection::reference(selection_ref)),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));

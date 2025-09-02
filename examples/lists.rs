@@ -7,7 +7,7 @@ use bevy_egui::EguiPlugin;
 use ui::WidgetsPlugin;
 use ui::list::{CornerStyle, List, ListLayout};
 use ui::push_button::PushButton;
-use ui::select::{Item, ItemValues, ItemsRef, Selection};
+use ui::select::{Item, Selection};
 use ui::theme::Theme;
 
 fn main() {
@@ -31,16 +31,13 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     let selection_ref = commands
-        .spawn((
-            Selection::one_or_more(),
-            related!(ItemValues[
-                Item::new("Netherlands"),
-                Item::new("Canada"),
-                Item::new("Indonesia"),
-                Item::new("Portugal"),
-                Item::new("Belgium")
-            ]),
-        ))
+        .spawn(Selection::builder().one_or_more().build_with_items([
+            Item::new("Netherlands"),
+            Item::new("Canada"),
+            Item::new("Indonesia"),
+            Item::new("Portugal"),
+            Item::new("Belgium"),
+        ]))
         .id();
 
     // Root container
@@ -53,54 +50,49 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         children![
-            (
-                List,
-                Selection::reference(selection_ref),
-                ItemsRef(selection_ref),
-            ),
+            (List, Selection::reference(selection_ref),),
             (
                 List,
                 ListLayout::Horizontal,
-                Selection::zero_or_more(),
-                related!(ItemValues[
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
+                Selection::builder().one().build_with_items([
+                    Item::new("NL"),
+                    Item::new("CA"),
+                    Item::new("ID"),
+                    Item::new("PT"),
+                    Item::new("BE")
                 ]),
             ),
             (
                 List,
                 ListLayout::VerticalGrid { columns: 3 },
                 Selection::reference(selection_ref),
-                ItemsRef(selection_ref)
             ),
             (
                 List,
                 CornerStyle::Tabs,
-                Selection::zero_or_one(),
-                ItemsRef(selection_ref)
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items_ref(selection_ref),
             ),
             (
                 List,
                 ListLayout::Horizontal,
                 CornerStyle::Tabs,
-                Selection::zero_or_more(),
-                ItemsRef(selection_ref)
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items_ref(selection_ref),
             ),
             (
                 List,
                 ListLayout::VerticalGrid { columns: 3 },
                 CornerStyle::Tabs,
-                Selection::zero_or_more(),
-                related!(ItemValues[
+                Selection::builder().zero_or_more().build_with_items([
                     Item::new("Netherlands"),
                     Item::new("Canada"),
                     Item::new("Indonesia"),
                     Item::new("Portugal"),
                     Item::new("Belgium")
-                ]),
+                ])
             ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],

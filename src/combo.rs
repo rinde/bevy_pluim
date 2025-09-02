@@ -8,7 +8,7 @@ use crate::MouseEvent;
 use crate::float::Float;
 use crate::list::{List, NoDefaultItems};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
-use crate::select::{Item, ItemsRef, Selection, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 
 #[derive(Debug, Copy, Clone)]
@@ -17,7 +17,7 @@ pub struct ComboPlugin;
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (close_combos_on_outside_click, selection_change))
-            .add_observer(on_add_items_ref);
+            .add_observer(on_insert_combo);
     }
 }
 
@@ -30,7 +30,6 @@ impl Plugin for ComboPlugin {
         position_type: PositionType::Relative,
         ..default()
     },
-    Selection::default(),
     Name::new("Combo"),
     RelativeCursorPosition::default()
 )]
@@ -99,7 +98,7 @@ impl Combo {
                 ))
                 .id();
 
-            x.spawn(Node::default()).with_children(|spawner| {
+            x.spawn(Node::DEFAULT).with_children(|spawner| {
                 list_id = spawner
                     .spawn((
                         List,
@@ -117,74 +116,78 @@ impl Combo {
             .entity(context.entity)
             .insert((ComboState::Closed, ComboSubRefs { button_id, list_id }))
             .observe(handle_combo_button_mouse_events);
-
-        if let Some(items_ref) = world.entity(context.entity).get::<ItemsRef>().copied() {
-            // propagate the ItemsRef to the list
-            world.commands().entity(list_id).insert(items_ref);
-        }
     }
+}
+
+fn on_insert_combo(
+    t: Trigger<OnInsert, Combo>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let combo_ref = t.target();
+    let combo_selection = selections.get_ref(combo_ref).unwrap();
+    commands.run_system_cached_with(update_selection, (combo_selection, combo_ref));
 }
 
 fn selection_change(
     q: Query<Entity, Changed<Selection>>,
-    selections: SelectionParam,
-    combos: Query<(Entity, &Selection, &ComboSubRefs), (With<Combo>, Without<NoDefaultItems>)>,
-    pblr: Query<&PushButtonRefs>,
-    items: Query<&Item<String>>,
-    mut labels: Query<&mut Text, With<PushButtonLabel>>,
+    combos: Query<(Entity, &Selection), (With<Combo>, Without<NoDefaultItems>)>,
     mut commands: Commands,
 ) {
     for changed_selection_ref in q {
-        for (combo_ref, combo_selection, sub_refs) in combos {
+        for (combo_ref, combo_selection) in combos {
             let is_changed = match combo_selection {
                 Selection::Ref(entity) => changed_selection_ref == *entity,
                 Selection::Value(_selection) => changed_selection_ref == combo_ref,
             };
             if is_changed {
-                let selection = selections.get(changed_selection_ref).unwrap();
-
-                if selections
-                    .get_ref(sub_refs.list_id)
-                    .is_none_or(|existing_ref| existing_ref != changed_selection_ref)
-                {
-                    // Selection id has changed -> propagate to the List
-                    commands
-                        .entity(sub_refs.list_id)
-                        .insert(Selection::reference(changed_selection_ref));
-                }
-
-                let PushButtonRefs { label_id, .. } = pblr.get(sub_refs.button_id).unwrap();
-                let mut text = labels.get_mut(*label_id).unwrap();
-                let label = if selection.is_empty() {
-                    PLACEHOLDER_TEXT.to_string()
-                } else {
-                    selection
-                        .iter()
-                        .map(|item| {
-                            if item == Entity::PLACEHOLDER {
-                                ""
-                            } else {
-                                &items.get(item).unwrap().data
-                            }
-                        })
-                        .join(", ")
-                };
-                text.0 = label;
+                commands
+                    .run_system_cached_with(update_selection, (changed_selection_ref, combo_ref));
             }
         }
     }
 }
 
-fn on_add_items_ref(
-    t: Trigger<OnInsert, ItemsRef>,
-    combos: Query<(&ItemsRef, &ComboSubRefs), (With<Combo>, Without<NoDefaultItems>)>,
+fn update_selection(
+    input: In<(Entity, Entity)>,
+    selections: SelectionParam,
+    combo_sub_refs: Query<&ComboSubRefs>,
+    pblr: Query<&PushButtonRefs>,
+    items: Query<&Item<String>>,
+    mut labels: Query<&mut Text, With<PushButtonLabel>>,
     mut commands: Commands,
 ) {
-    let Ok((ItemsRef(items_ref), ComboSubRefs { list_id, .. })) = combos.get(t.target()) else {
-        return;
+    let (selection_ref, combo_ref) = *input;
+    let sub_refs = combo_sub_refs.get(combo_ref).unwrap();
+    let selection = selections.get(selection_ref).unwrap();
+
+    if selections
+        .get_ref(sub_refs.list_id)
+        .is_none_or(|existing_ref| existing_ref != selection_ref)
+    {
+        // Selection id has changed -> propagate to the List
+        commands
+            .entity(sub_refs.list_id)
+            .insert(Selection::reference(selection_ref));
+    }
+
+    let PushButtonRefs { label_id, .. } = pblr.get(sub_refs.button_id).unwrap();
+    let mut text = labels.get_mut(*label_id).unwrap();
+    let label = if selection.is_empty() {
+        PLACEHOLDER_TEXT.to_string()
+    } else {
+        selection
+            .iter()
+            .map(|item| {
+                if item == Entity::PLACEHOLDER {
+                    ""
+                } else {
+                    &items.get(item).unwrap().data
+                }
+            })
+            .join(", ")
     };
-    // propagate the ItemsRef to the list
-    commands.entity(*list_id).insert(ItemsRef(*items_ref));
+    text.0 = label;
 }
 
 /// System that closes the combo when clicking outside of it.

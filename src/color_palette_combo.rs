@@ -9,7 +9,7 @@ use crate::float::Float;
 use crate::list::ListLayout;
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
-use crate::select::{Item, ItemsRef, Selection, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 use crate::{MouseEvent, UiRoot, color_push_button};
 
@@ -28,7 +28,6 @@ impl Plugin for ColorPaletteComboPlugin {
                 on_selection_change,
             ),
         )
-        .add_observer(on_add_items_ref)
         .add_observer(on_insert_combo)
         .add_observer(on_remove_combo)
         .add_observer(on_insert_state);
@@ -43,7 +42,6 @@ impl Plugin for ColorPaletteComboPlugin {
         position_type: PositionType::Relative,
         ..default()
     },
-    Selection::default(),
     Name::new("ColorPaletteCombo"),
     RelativeCursorPosition::default()
 )]
@@ -59,17 +57,13 @@ struct ColorPaletteComboFloat;
 fn on_insert_combo(
     t: Trigger<OnInsert, ColorPaletteCombo>,
     mut commands: Commands,
-    list_layouts: Query<(Option<&ListLayout>, Option<&ItemsRef>)>,
+    list_layouts: Query<&ListLayout>,
     root: Query<Entity, With<UiRoot>>,
 ) {
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
 
-    let (list_layout, existing_items_ref) = list_layouts
-        .get(t.target())
-        .map(|(l, e)| (l.copied(), e.copied()))
-        .unwrap();
-
+    let list_layout = list_layouts.get(t.target()).ok().copied();
     commands.entity(t.target()).with_children(|parent| {
         button_id = parent
             .spawn((
@@ -102,20 +96,14 @@ fn on_insert_combo(
                 Visibility::Hidden,
                 ScrollArea::bundle(
                     move |parent| {
-                        let bundle = (
+                        parent.spawn((
                             Pickable {
                                 should_block_lower: false,
                                 ..default()
                             },
                             ColorPalette,
                             list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
-                        );
-
-                        if let Some(items_ref) = existing_items_ref {
-                            parent.spawn((bundle, items_ref));
-                        } else {
-                            parent.spawn(bundle);
-                        }
+                        ));
                     },
                     true,
                     false,
@@ -138,8 +126,6 @@ fn on_insert_combo(
         .entity(button_id)
         .insert(sub_refs)
         .observe(handle_combo_button_mouse_events);
-
-    commands.run_system_cached_with(propagate_items_ref, t.target());
 }
 
 fn on_remove_combo(
@@ -319,42 +305,6 @@ fn on_selection_change(
             commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
         }
     }
-}
-
-fn on_add_items_ref(
-    t: Trigger<OnInsert, ItemsRef>,
-    combos: Query<(&ItemsRef, &SubRefs), With<ColorPaletteCombo>>,
-    mut commands: Commands,
-) {
-    if combos.contains(t.target()) {
-        commands.run_system_cached_with(propagate_items_ref, t.target());
-    }
-}
-
-fn propagate_items_ref(
-    combo_ref: In<Entity>,
-    combos: Query<(&ItemsRef, &SubRefs), With<ColorPaletteCombo>>,
-    children: Query<&Children>,
-    mut commands: Commands,
-) {
-    let (&items_ref, sub_refs) = combos.get(*combo_ref).unwrap();
-
-    // TODO make this less brittle
-    let scroll_contents_ref = children
-        .get(sub_refs.float_id)
-        .unwrap()
-        .iter()
-        .next()
-        .unwrap();
-    let color_palette_ref = children
-        .get(scroll_contents_ref)
-        .unwrap()
-        .iter()
-        .next()
-        .unwrap();
-
-    // propagate the ItemsRef to the list
-    commands.entity(color_palette_ref).insert(items_ref);
 }
 
 /// System that closes the combo when clicking outside of it.

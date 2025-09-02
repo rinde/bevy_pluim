@@ -1,6 +1,5 @@
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
-use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
@@ -13,7 +12,7 @@ use ui::color_palette_combo::ColorPaletteCombo;
 use ui::list::ListLayout;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::{Item, ItemValues, ItemsRef, Selection};
+use ui::select::{Item, Selection};
 use ui::tailwind::COLORS;
 use ui::theme::Theme;
 
@@ -40,13 +39,20 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     let selection_ref = commands
-        .spawn((
-            Selection::default(),
-            ItemValues::spawn(SpawnIter(color_palette().into_iter())),
-        ))
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(color_palette()),
+        )
         .id();
 
-    let selection_ref2 = commands.spawn((Selection::default(),)).id();
+    let selection_ref2 = commands
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items_ref(selection_ref),
+        )
+        .id();
 
     // Root container
     commands.spawn((
@@ -62,7 +68,6 @@ fn setup(mut commands: Commands) {
                 Selection::reference(selection_ref),
                 ColorPalette,
                 ListLayout::VerticalGrid { columns: 11 },
-                ItemsRef(selection_ref),
             ),
             (
                 Node {
@@ -79,7 +84,6 @@ fn setup(mut commands: Commands) {
                             },
                             ColorPalette,
                             ListLayout::VerticalGrid { columns: 11 },
-                            ItemsRef(selection_ref),
                             Selection::reference(selection_ref),
                         ));
                     },
@@ -102,8 +106,9 @@ fn setup(mut commands: Commands) {
                             },
                             ColorPalette,
                             ListLayout::VerticalGrid { columns: 11 },
-                            Selection::default(),
-                            ItemValues::spawn(SpawnIter(color_palette().into_iter())),
+                            Selection::builder()
+                                .zero_or_one()
+                                .build_with_items_ref(selection_ref),
                         ));
                     },
                     true,
@@ -113,20 +118,19 @@ fn setup(mut commands: Commands) {
             (
                 ColorPaletteCombo,
                 ListLayout::VerticalGrid { columns: 11 },
-                ItemsRef(selection_ref),
                 Selection::reference(selection_ref2),
             ),
             (
                 ColorPaletteCombo,
                 ListLayout::VerticalGrid { columns: 11 },
-                ItemsRef(selection_ref),
                 Selection::reference(selection_ref2),
             ),
             (
                 ColorPaletteCombo,
                 ListLayout::VerticalGrid { columns: 11 },
-                Selection::default(),
-                ItemValues::spawn(SpawnIter(color_palette().into_iter()))
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items_ref(selection_ref),
             ),
             (
                 Node {
@@ -143,7 +147,6 @@ fn setup(mut commands: Commands) {
                             },
                             ColorPaletteCombo,
                             ListLayout::VerticalGrid { columns: 11 },
-                            ItemsRef(selection_ref),
                             Selection::reference(selection_ref),
                         ));
                         parent.spawn((
@@ -217,8 +220,9 @@ fn on_press_add_combo_button(
             parent.spawn((
                 ColorPaletteCombo,
                 ListLayout::VerticalGrid { columns: 11 },
-                Selection::default(),
-                ItemValues::spawn(SpawnIter(color_palette().into_iter())),
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items(color_palette()),
             ));
         });
     }

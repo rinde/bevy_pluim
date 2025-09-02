@@ -14,7 +14,7 @@ use ui::combo::Combo;
 use ui::list::List;
 use ui::push_button::PushButton;
 use ui::scroll_area::ScrollArea;
-use ui::select::{Item, ItemValues, Selection};
+use ui::select::{Item, Selection};
 use ui::theme::Theme;
 
 fn main() {
@@ -52,6 +52,16 @@ fn setup(mut commands: Commands) {
         AMBER_300,
     ];
     commands.spawn(Camera2d);
+
+    let country_selection = commands
+        .spawn(Selection::builder().zero_or_more().build_with_items([
+            Item::new("Netherlands"),
+            Item::new("Canada"),
+            Item::new("Indonesia"),
+            Item::new("Portugal"),
+            Item::new("Belgium"),
+        ]))
+        .id();
 
     // Root container
     let root = commands
@@ -112,8 +122,7 @@ fn setup(mut commands: Commands) {
                 ),
                 (
                     List,
-                    Selection::zero_or_more(),
-                    related!(ItemValues[
+                    Selection::builder().zero_or_more().build_with_items([
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -123,7 +132,7 @@ fn setup(mut commands: Commands) {
                 ),
                 (
                     Combo,
-                    related!(ItemValues[
+                    Selection::builder().zero_or_one().build_with_items([
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -133,8 +142,7 @@ fn setup(mut commands: Commands) {
                 ),
                 (
                     Combo,
-                    Selection::zero_or_more(),
-                    related!(ItemValues[
+                    Selection::builder().zero_or_more().build_with_items([
                         Item::new("Netherlands"),
                         Item::new("Canada"),
                         Item::new("Indonesia"),
@@ -150,30 +158,16 @@ fn setup(mut commands: Commands) {
     commands.entity(root).with_children(|spawner| {
         spawner.spawn(PushButton::from_label("Add List")).observe(
             move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
-                commands.entity(root).with_child((
-                    List,
-                    related!(ItemValues[
-                        Item::new("Netherlands"),
-                        Item::new("Canada"),
-                        Item::new("Indonesia"),
-                        Item::new("Portugal"),
-                        Item::new("Belgium")
-                    ]),
-                ));
+                commands
+                    .entity(root)
+                    .with_child((List, Selection::reference(country_selection)));
             },
         );
         spawner.spawn(PushButton::from_label("Add Combo")).observe(
             move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
-                commands.entity(root).with_child((
-                    Combo,
-                    related!(ItemValues[
-                        Item::new("Netherlands"),
-                        Item::new("Canada"),
-                        Item::new("Indonesia"),
-                        Item::new("Portugal"),
-                        Item::new("Belgium")
-                    ]),
-                ));
+                commands
+                    .entity(root)
+                    .with_child((Combo, Selection::reference(country_selection)));
             },
         );
         spawner

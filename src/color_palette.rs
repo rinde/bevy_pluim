@@ -1,12 +1,12 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use itertools::Either;
 
 use crate::MouseEvent;
 use crate::list::{CornerStyle, ItemView, ItemsChangedInput, List, ListLayout, NoDefaultItems};
-use crate::select::{
-    Item, ItemValues, ItemsChanged, ItemsRef, Selection, SelectionParam, SelectionValue,
-};
+use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
 const COLOR_SQUARE_SIZE: f32 = 35.0;
@@ -25,7 +25,7 @@ impl Plugin for ColorPalettePlugin {
                 on_selection_change,
             ),
         )
-        .add_observer(on_add_items_ref);
+        .add_observer(on_insert_selection);
     }
 }
 
@@ -34,7 +34,6 @@ impl Plugin for ColorPalettePlugin {
     List,
     ListLayout::VerticalGrid { columns: 6 },
     CornerStyle::None,
-    Selection::default(),
     NoDefaultItems,
     Name::new("ColorPalette")
 )]
@@ -124,20 +123,27 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
-fn on_add_items_ref(
-    t: Trigger<OnInsert, ItemsRef>,
-    lists: Query<&ItemsRef, With<ColorPalette>>,
-    items: Query<&ItemValues>,
+fn on_insert_selection(
+    t: Trigger<OnInsert, Selection>,
+    color_palettes: Query<&Selection, With<ColorPalette>>,
+    selections: SelectionParam,
     mut commands: Commands,
+    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
 ) {
-    let Ok(ItemsRef(items_ref)) = lists.get(t.target()).copied() else {
-        return;
-    };
     let list_ref = t.target();
+    if color_palettes.get(list_ref).is_err() {
+        return;
+    }
+    let (values_ref, all_items) = selections.get_item_values(list_ref).unwrap();
+    if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
+        // no change in items ref
+        return;
+    }
+    existing_values_ref_map.insert(list_ref, values_ref);
 
     // register observer for items change event
     commands
-        .entity(items_ref)
+        .entity(values_ref)
         .observe(move |t: Trigger<ItemsChanged>, mut commands: Commands| {
             commands.run_system_cached_with(
                 on_items_changed,
@@ -149,12 +155,11 @@ fn on_add_items_ref(
         });
 
     // update all items now
-    let all_items = items.get(items_ref).unwrap().iter().collect();
     commands.run_system_cached_with(
         on_items_changed,
         ItemsChangedInput {
             list_ref,
-            items: all_items,
+            items: all_items.iter().collect(),
         },
     );
 }
