@@ -496,7 +496,6 @@ where
     }
 
     fn do_update_selection(&mut self, selection_ref: Entity, new_selection: SelectionValue) {
-        println!("SelectionParam::do_update_selection {selection_ref} {new_selection:?}");
         self.commands
             .entity(selection_ref)
             .insert(new_selection.into_component());

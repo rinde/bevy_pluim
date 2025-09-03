@@ -1,3 +1,4 @@
+#![expect(clippy::used_underscore_binding, reason = "Caused by Reflect")]
 use std::collections::HashMap;
 
 use bevy::ecs::component::HookContext;
@@ -284,7 +285,7 @@ fn on_items_changed(
 
 fn on_insert_selection(
     t: Trigger<OnInsert, Selection>,
-    lists: Query<&Selection, (With<List>, Without<NoDefaultItems>)>,
+    lists: Query<(), (With<List>, With<Selection>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
     mut commands: Commands,
     mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,

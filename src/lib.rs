@@ -2,6 +2,7 @@
     clippy::type_complexity,
     reason = "Query types can be complex without being difficult to understand"
 )]
+pub mod breadcrumbs;
 pub mod card;
 pub mod color_palette;
 pub mod color_palette_combo;
@@ -20,6 +21,7 @@ pub mod theme;
 
 use bevy::prelude::*;
 
+use crate::breadcrumbs::BreadCrumbsPlugin;
 use crate::card::CardPlugin;
 use crate::color_palette::ColorPalettePlugin;
 use crate::color_palette_combo::ColorPaletteComboPlugin;
@@ -55,6 +57,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(CardPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)
+            .add_plugins(BreadCrumbsPlugin)
             .add_systems(PostStartup, setup)
             .add_observer(add_ui_root);
     }
