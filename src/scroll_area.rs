@@ -18,7 +18,9 @@ impl Plugin for ScrollAreaPlugin {
                 (|| None::<Entity>)
                     .pipe(theme_scroll_area)
                     .run_if(resource_changed::<Theme>),
-            );
+            )
+            .register_type::<ScrollBar>()
+            .register_type::<ScrollAreaRefs>();
     }
 }
 
@@ -42,7 +44,7 @@ impl ScrollArea {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ScrollContents;
 
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
 struct ScrollAreaRefs {
     v_scrollbar: Option<Entity>,
     h_scrollbar: Option<Entity>,
@@ -94,12 +96,12 @@ impl ScrollArea {
     }
 }
 
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
 #[require(Node::default(), Visibility::Inherited, Name::new("ScrollBar"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollBar(pub Orientation);
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Reflect)]
 pub enum Orientation {
     Horizontal,
     Vertical,

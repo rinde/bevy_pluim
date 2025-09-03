@@ -20,7 +20,13 @@ impl Plugin for ItemsPlugin {
                 Update,
                 process_event_buffer.run_if(resource_changed::<SelectionResource>),
             )
-            .add_observer(on_add_selection);
+            .add_observer(on_add_selection)
+            .register_type::<Item<String>>()
+            .register_type::<ItemOf>()
+            .register_type::<ItemValues>()
+            .register_type::<ItemsRef>()
+            .register_type::<ItemSelections>()
+            .register_type::<Selection>();
     }
 }
 
@@ -132,7 +138,6 @@ fn on_add_selection(
 ) {
     let selection_ref = t.target();
     let (selection, selection_of, item_values) = selections.get(selection_ref).unwrap();
-    println!("Add selection {selection:?}");
     match (selection, selection_of, item_values) {
         (Selection::Value(SelectionValue::One(one)), items_ref, item_values)
             if items_ref.is_some() != item_values.is_some() && one == &Entity::PLACEHOLDER =>
@@ -378,12 +383,13 @@ impl SelectionValue {
     }
 }
 
-#[derive(SystemParam, Debug)]
+#[derive(SystemParam)]
 pub struct SelectionParam<'w, 's, F: QueryFilter + 'static = ()> {
     selection_refs: Query<'w, 's, &'static Selection>,
     subset: Query<'w, 's, (Entity, &'static Selection), F>,
     item_values: Query<'w, 's, (Entity, &'static ItemValues)>,
     items_refs: Query<'w, 's, (Entity, &'static ItemsRef)>,
+    commands: Commands<'w, 's>,
 }
 
 impl<F> SelectionParam<'_, '_, F>
@@ -400,6 +406,12 @@ where
         self.subset
             .single()
             .map(|(entity, selection)| self.find(entity, selection))
+    }
+
+    pub fn single_ref(&self) -> Result<Entity, QuerySingleError> {
+        self.subset
+            .single()
+            .map(|(entity, selection)| self.find(entity, selection).0)
     }
 
     #[must_use]
@@ -455,39 +467,48 @@ where
             None
         }
     }
+
+    pub fn update_selection_single(
+        &mut self,
+        updater: impl FnOnce(&SelectionValue) -> Option<SelectionValue>,
+    ) -> bool {
+        let (selection_ref, selection) = self.single().unwrap();
+        if let Some(new_selection) = updater(selection) {
+            self.do_update_selection(selection_ref, new_selection);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn update_selection(
+        &mut self,
+        selection_ref: Entity,
+        updater: impl FnOnce(&SelectionValue) -> Option<SelectionValue>,
+    ) -> bool {
+        let (selection_ref, selection) = self.get_with_ref(selection_ref).unwrap();
+        if let Some(new_selection) = updater(selection) {
+            self.do_update_selection(selection_ref, new_selection);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn do_update_selection(&mut self, selection_ref: Entity, new_selection: SelectionValue) {
+        println!("SelectionParam::do_update_selection {selection_ref} {new_selection:?}");
+        self.commands
+            .entity(selection_ref)
+            .insert(new_selection.into_component());
+    }
 }
 
-#[derive(SystemParam)]
-pub struct SelectionMutParam<'w, 's, F: QueryFilter + 'static = ()> {
-    _selection_refs: Query<'w, 's, &'static Selection>,
-    subset: Query<'w, 's, (Entity, &'static Selection), F>,
-    commands: Commands<'w, 's>,
-}
-
-impl<F> std::fmt::Debug for SelectionMutParam<'_, '_, F>
+impl<F> std::fmt::Debug for SelectionParam<'_, '_, F>
 where
     F: QueryFilter + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SelectionMutParam").finish_non_exhaustive()
-    }
-}
-
-impl<F> SelectionMutParam<'_, '_, F>
-where
-    F: QueryFilter + 'static,
-{
-    pub fn update_selection_single(
-        &mut self,
-        closure: impl FnOnce(&SelectionValue) -> Option<SelectionValue>,
-    ) {
-        let (selection_ref, selection) = self.subset.single().unwrap();
-        let selection = selection.as_selection().unwrap();
-        if let Some(new_selection) = closure(selection) {
-            self.commands
-                .entity(selection_ref)
-                .insert(new_selection.into_component());
-        }
     }
 }
 
@@ -540,16 +561,16 @@ pub struct ItemsRef(pub Entity);
 pub struct ItemSelections(Vec<Entity>);
 
 /// T: The type of the item data.
-/// E: Additional query data (optional).
+/// D: Additional query data (optional).
 /// F: Additional filter data (optional).
 #[derive(SystemParam, Debug)]
-pub struct ItemParam<'w, 's, T, E = (), F = ()>
+pub struct ItemParam<'w, 's, T, D = (), F = ()>
 where
     T: Send + Sync + 'static,
-    E: QueryData + 'static,
+    D: QueryData + 'static,
     F: QueryFilter + 'static,
 {
-    items: Query<'w, 's, (Entity, &'static Item<T>, E), F>,
+    items: Query<'w, 's, (Entity, &'static Item<T>, D), F>,
 }
 
 impl<T, E, F> ItemParam<'_, '_, T, E, F>

@@ -32,7 +32,10 @@ impl Plugin for ListPlugin {
                     selection_change,
                 ),
             )
-            .add_observer(on_insert_selection);
+            .add_observer(on_insert_selection)
+            .register_type::<ItemView>()
+            .register_type::<ListLayout>()
+            .register_type::<CornerStyle>();
     }
 }
 
@@ -49,14 +52,14 @@ impl Plugin for ListPlugin {
 )]
 pub struct List;
 
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
 pub enum ListLayout {
     Vertical,
     Horizontal,
     VerticalGrid { columns: u16 },
 }
 
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
 pub enum CornerStyle {
     FollowLayout,
     Tabs,
@@ -102,7 +105,7 @@ impl List {
     }
 }
 
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
 #[require(RelativeCursorPosition::default())]
 pub struct ItemView {
     pub item_ref: Entity,
@@ -123,10 +126,9 @@ impl ItemLabel {
 
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
-    selections: SelectionParam,
+    mut selections: SelectionParam,
     mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
     theme: Res<Theme>,
-    mut commands: Commands,
 ) {
     let (
         ItemView {
@@ -135,8 +137,8 @@ fn handle_mouse_events(
         },
         mut background_color,
     ) = item_views.get_mut(t.target()).unwrap();
-    let (selection_ref, selection) = selections
-        .get_with_ref(*list_ref)
+    let selection = selections
+        .get(*list_ref)
         .unwrap_or_else(|| panic!("No selection found for entity {list_ref}"));
     let is_selected = selection.is_selected(*target_item_entity);
 
@@ -154,11 +156,9 @@ fn handle_mouse_events(
             background_color.0 = theme.colors.background_primary;
         }
         (MouseEvent::Released, _) => {
-            if let Some(new_selection) = selection.toggle_selected(*target_item_entity) {
-                commands
-                    .entity(selection_ref)
-                    .insert(new_selection.into_component());
-            }
+            selections.update_selection(*list_ref, |selection| {
+                selection.toggle_selected(*target_item_entity)
+            });
         }
     }
 }

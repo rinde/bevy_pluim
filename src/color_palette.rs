@@ -25,7 +25,8 @@ impl Plugin for ColorPalettePlugin {
                 on_selection_change,
             ),
         )
-        .add_observer(on_insert_selection);
+        .add_observer(on_insert_selection)
+        .register_type::<Item<Color>>();
     }
 }
 
@@ -166,7 +167,7 @@ fn on_insert_selection(
 
 fn handle_mouse_events(
     t: Trigger<MouseEvent>,
-    selections: SelectionParam,
+    mut selections: SelectionParam,
     color_items: Query<&Item<Color>>,
     mut item_views: Query<&ItemView>,
     mut commands: Commands,
@@ -188,11 +189,9 @@ fn handle_mouse_events(
         (MouseEvent::Out, true) => Some(HoverState::Selected),
         (MouseEvent::Out, false) => Some(HoverState::Unselected),
         (MouseEvent::Released, _) => {
-            if let Some(new_selection) = selection.toggle_selected(*target_item_ref) {
-                commands
-                    .entity(selection_ref)
-                    .insert(new_selection.into_component());
-            }
+            selections.update_selection(selection_ref, |selection| {
+                selection.toggle_selected(*target_item_ref)
+            });
             None
         }
     };
