@@ -10,6 +10,7 @@ pub mod color_push_button;
 pub mod combo;
 pub mod float;
 pub mod label;
+pub mod link;
 pub mod list;
 pub mod numeric_stepper;
 pub mod push_button;
@@ -29,6 +30,7 @@ use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
 use crate::label::LabelPlugin;
+use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
 use crate::push_button::PushButtonPlugin;
@@ -58,6 +60,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)
+            .add_plugins(LinkPlugin)
             .add_systems(PostStartup, setup)
             .add_observer(add_ui_root);
     }

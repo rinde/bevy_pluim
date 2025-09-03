@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::label::Label;
+use crate::link::Link;
 use crate::select::{Item, Selection, SelectionParam};
 
 #[derive(Copy, Clone, Debug)]
@@ -59,18 +60,26 @@ fn selection_change(
                         commands.entity(*existing_bc_view).despawn();
                     }
                 }
+                // TODO avoid double first
 
-                let add_from = first_diff.unwrap_or(existing.len());
+                let add_from = first_diff.unwrap_or(existing.len()).saturating_sub(1);
                 for (index, bc) in selected[add_from..].iter().enumerate() {
                     let item = items.get(bc.0).unwrap();
-                    let string = if index + add_from == 0 {
-                        item.data.clone()
+                    let link = Link::new(item.data.clone());
+                    if index + add_from == 0 {
+                        commands.entity(bread_crumbs_ref).with_child((*bc, link));
+                    } else if index + add_from == selected.len() - 1 {
+                        commands
+                            .entity(bread_crumbs_ref)
+                            .with_child((*bc, Label::header(format!(" > {}", item.data.clone()))));
                     } else {
-                        format!(" > {}", item.data)
-                    };
-                    commands
-                        .entity(bread_crumbs_ref)
-                        .with_child((*bc, Label::regular(string)));
+                        let separator = Label::regular(" > ");
+                        commands.entity(bread_crumbs_ref).with_child((
+                            *bc,
+                            Node::DEFAULT,
+                            children![separator, link],
+                        ));
+                    }
                 }
             }
         }
