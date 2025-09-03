@@ -57,15 +57,6 @@ fn switch_view(
 ) {
     let (stack_ref, stack) = *stack_and_ref;
     let selection = selections.get(stack.selection_ref).unwrap();
-    assert!(
-        selection.is_one(),
-        "Stack always needs to have exactly one selected item"
-    );
-    let selected_item = selection.single().unwrap();
-    if selected_item == Entity::PLACEHOLDER {
-        return;
-    }
-    let (_selected_item, mut selected_stack_item) = items.get_mut(selected_item).unwrap();
 
     if let Ok(children) = children.get(stack_ref) {
         // hide all children
@@ -78,6 +69,14 @@ fn switch_view(
             }
         }
     }
+
+    let Some(selected_item) = selection.last() else {
+        return;
+    };
+    if selected_item == Entity::PLACEHOLDER {
+        return;
+    }
+    let (_selected_item, mut selected_stack_item) = items.get_mut(selected_item).unwrap();
 
     // create new child or make existing visible
     if let Some(existing) = selected_stack_item.entity {
