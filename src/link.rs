@@ -16,7 +16,8 @@ impl Plugin for LinkPlugin {
             (|| None::<Entity>)
                 .pipe(theme_link)
                 .run_if(resource_changed::<Theme>),
-        );
+        )
+        .add_observer(on_insert_link_state);
     }
 }
 
@@ -32,8 +33,7 @@ impl Plugin for LinkPlugin {
     },
     BorderRadius::all(Val::Px(4.0)),
     Name::new("Link"),
-    Button,
-
+    LinkState::Enabled,
 )]
 pub struct Link {
     label: String,
@@ -41,6 +41,13 @@ pub struct Link {
 
 #[derive(Component, Clone, Debug, Copy)]
 struct LinkText;
+
+#[derive(Component, Clone, Debug, Copy, Eq, PartialEq)]
+#[component(immutable)]
+pub enum LinkState {
+    Enabled,
+    Disabled,
+}
 
 impl Link {
     pub fn new(label: impl Into<String>) -> Self {
@@ -63,10 +70,28 @@ impl Link {
             LinkText,
             Pickable::IGNORE,
         ));
-        entity_commands.observe(handle_hover);
+        // entity_commands.observe(handle_hover);
         world
             .commands()
             .run_system_cached_with(theme_link, Some(context.entity));
+    }
+}
+
+fn on_insert_link_state(
+    t: Trigger<OnInsert, LinkState>,
+    q: Query<&LinkState>,
+    mut commands: Commands,
+) {
+    let state = q.get(t.target()).unwrap();
+    match state {
+        LinkState::Disabled => {
+            commands.entity(t.target()).remove::<(Button, Observer)>();
+        }
+        LinkState::Enabled => {
+            let mut observer = Observer::new(handle_hover);
+            observer.watch_entity(t.target());
+            commands.entity(t.target()).insert((Button, observer));
+        }
     }
 }
 
@@ -96,7 +121,7 @@ fn handle_hover(
 fn theme_link(
     link_id: In<Option<Entity>>,
     theme: Res<Theme>,
-    mut links: Query<(&mut BackgroundColor, &Children), With<Link>>,
+    mut links: Query<(&mut BackgroundColor, &Children, &LinkState), With<Link>>,
     mut link_texts: Query<&mut TextColor, With<LinkText>>,
 ) {
     let it = if let Some(link_id) = link_id.as_ref() {
@@ -104,10 +129,13 @@ fn theme_link(
     } else {
         Either::Right(links.iter_mut())
     };
-    for (mut link_bg, children) in it {
+    for (mut link_bg, children, state) in it {
         link_bg.0 = theme.colors.background_primary;
         let text_ref = children.iter().next().unwrap();
         let mut text_color = link_texts.get_mut(text_ref).unwrap();
-        text_color.0 = theme.colors.link;
+        match state {
+            LinkState::Enabled => text_color.0 = theme.colors.link,
+            LinkState::Disabled => text_color.0 = theme.colors.text_primary,
+        }
     }
 }

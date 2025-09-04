@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::label::Label;
-use crate::link::Link;
+use crate::link::{Link, LinkState};
 use crate::select::{Item, Selection, SelectionParam};
 
 #[derive(Copy, Clone, Debug)]
@@ -19,6 +19,9 @@ impl Plugin for BreadCrumbsPlugin {
 })]
 pub struct BreadCrumbs;
 
+#[derive(Component, Debug, Clone, Copy)]
+struct BreadCrumb(Entity);
+
 fn selection_change(
     q: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
@@ -27,6 +30,11 @@ fn selection_change(
     bread_crumb_views: Query<&BreadCrumb>,
     mut commands: Commands,
 ) {
+    let create_observer = |selection_ref: Entity, new_length: usize| {
+        move |_: Trigger<Pointer<Released>>, mut selections: SelectionParam| {
+            selections.update_selection(selection_ref, |s| s.trim_to_length(new_length));
+        }
+    };
     for changed_selection_ref in q {
         for (bread_crumbs_ref, children, list_selection) in lists {
             let is_changed = match list_selection {
@@ -50,41 +58,59 @@ fn selection_change(
 
                 let selected = selection.iter().map(BreadCrumb).collect::<Vec<_>>();
 
-                let first_diff = existing.iter().enumerate().find_map(|(i, (_, bc))| {
-                    let sel = selected.get(i);
-                    sel.is_none_or(|sel| sel.0 != bc.0).then_some(i)
-                });
+                let first_diff = existing
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, (_, bc))| {
+                        let sel = selected.get(i);
+                        sel.is_none_or(|sel| sel.0 != bc.0).then_some(i)
+                    })
+                    .unwrap_or(existing.len())
+                    .saturating_sub(1);
 
-                if let Some(first_diff) = first_diff {
-                    for (existing_bc_view, _) in &existing[first_diff..] {
-                        commands.entity(*existing_bc_view).despawn();
-                    }
+                for (existing_bc_view, _) in &existing[first_diff..] {
+                    commands.entity(*existing_bc_view).despawn();
                 }
-                // TODO avoid double first
-
-                let add_from = first_diff.unwrap_or(existing.len()).saturating_sub(1);
-                for (index, bc) in selected[add_from..].iter().enumerate() {
+                for (index, bc) in selected[first_diff..].iter().enumerate() {
                     let item = items.get(bc.0).unwrap();
                     let link = Link::new(item.data.clone());
-                    if index + add_from == 0 {
-                        commands.entity(bread_crumbs_ref).with_child((*bc, link));
-                    } else if index + add_from == selected.len() - 1 {
-                        commands
-                            .entity(bread_crumbs_ref)
-                            .with_child((*bc, Label::header(format!(" > {}", item.data.clone()))));
+                    let current_index = index + first_diff;
+
+                    let link = if current_index == selected.len() - 1 {
+                        (link, LinkState::Disabled)
+                    } else {
+                        (link, LinkState::Enabled)
+                    };
+                    let is_enabled = link.1 == LinkState::Enabled;
+                    if current_index == 0 {
+                        commands.entity(bread_crumbs_ref).with_children(|parent| {
+                            let mut e = parent.spawn((*bc, link));
+                            if is_enabled {
+                                e.observe(create_observer(
+                                    changed_selection_ref,
+                                    current_index + 1,
+                                ));
+                            }
+                        });
                     } else {
                         let separator = Label::regular(" > ");
-                        commands.entity(bread_crumbs_ref).with_child((
-                            *bc,
-                            Node::DEFAULT,
-                            children![separator, link],
-                        ));
+                        commands.entity(bread_crumbs_ref).with_children(|parent| {
+                            parent
+                                .spawn((*bc, Node::DEFAULT))
+                                .with_children(|sub_parent| {
+                                    sub_parent.spawn(separator);
+                                    let mut e = sub_parent.spawn(link);
+                                    if is_enabled {
+                                        e.observe(create_observer(
+                                            changed_selection_ref,
+                                            current_index + 1,
+                                        ));
+                                    }
+                                });
+                        });
                     }
                 }
             }
         }
     }
 }
-
-#[derive(Component, Debug, Clone, Copy)]
-struct BreadCrumb(Entity);

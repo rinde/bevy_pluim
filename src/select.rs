@@ -351,9 +351,9 @@ impl SelectionValue {
     #[must_use]
     pub fn push(&self, new_selection: Entity) -> Self {
         match self {
-            Self::One(_) => panic!("Cannot push to a Self::One"),
+            Self::One(_) => panic!("Cannot push to a SelectionValue::One"),
             Self::ZeroOrOne(Some(_)) => {
-                panic!("Cannot push to a Self::ZeroOrOne if it already has a selection")
+                panic!("Cannot push to a SelectionValue::ZeroOrOne if it already has a selection")
             }
             Self::ZeroOrOne(None) => Self::ZeroOrOne(Some(new_selection)),
             Self::OneOrMore(selected) => {
@@ -368,7 +368,7 @@ impl SelectionValue {
     #[must_use]
     pub fn pop(&self) -> Option<Self> {
         match self {
-            Self::One(_) => panic!("Cannot pop a Self::One"),
+            Self::One(_) => panic!("Cannot pop a SelectionValue::One"),
             Self::ZeroOrOne(None) => None,
             Self::ZeroOrOne(Some(_)) => Some(Self::ZeroOrOne(None)),
             Self::OneOrMore(selection) if selection.len() <= 1 => None,
@@ -378,6 +378,27 @@ impl SelectionValue {
             Self::ZeroOrMore(selection) if selection.is_empty() => None,
             Self::ZeroOrMore(s) => Some(Self::ZeroOrMore(
                 s.iter().take(s.len() - 1).copied().collect(),
+            )),
+        }
+    }
+
+    #[must_use]
+    pub fn trim_to_length(&self, new_length: usize) -> Option<Self> {
+        match self {
+            Self::One(_) => panic!("Cannot trim a SelectionValue::One"),
+            Self::ZeroOrOne(_) if new_length > 1 => {
+                panic!("Cannot trim Self::ZeroOrOne to {new_length}")
+            }
+            Self::ZeroOrOne(_) if new_length == 1 => None,
+            Self::ZeroOrOne(_) => Some(Self::ZeroOrOne(None)),
+            Self::OneOrMore(_) if new_length == 0 => panic!("Cannot trim Self::OneOrMore to 0"),
+            Self::OneOrMore(small_vec) if new_length >= small_vec.len() => None,
+            Self::OneOrMore(small_vec) => Some(Self::OneOrMore(
+                small_vec[..new_length].iter().copied().collect(),
+            )),
+            Self::ZeroOrMore(small_vec) if new_length >= small_vec.len() => None,
+            Self::ZeroOrMore(small_vec) => Some(Self::ZeroOrMore(
+                small_vec[..new_length].iter().copied().collect(),
             )),
         }
     }

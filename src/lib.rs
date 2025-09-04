@@ -20,6 +20,7 @@ pub mod stack;
 pub mod tailwind;
 pub mod theme;
 
+use bevy::ecs::entity_disabling::Disabled;
 use bevy::prelude::*;
 
 use crate::breadcrumbs::BreadCrumbsPlugin;
@@ -66,8 +67,12 @@ impl Plugin for WidgetsPlugin {
     }
 }
 
-fn add_ui_root(t: Trigger<OnAdd, Node>, has_childof: Query<Has<ChildOf>>, mut commands: Commands) {
-    let is_root = !has_childof.get(t.target()).unwrap();
+fn add_ui_root(
+    t: Trigger<OnAdd, Node>,
+    has_childof: Query<(Has<ChildOf>, Has<Disabled>)>,
+    mut commands: Commands,
+) {
+    let is_root = !has_childof.get(t.target()).unwrap().0;
     if is_root {
         commands
             .entity(t.target())
