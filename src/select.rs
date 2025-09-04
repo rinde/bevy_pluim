@@ -593,16 +593,16 @@ where
     items: Query<'w, 's, (Entity, &'static Item<T>, D), F>,
 }
 
-impl<T, E, F> ItemParam<'_, '_, T, E, F>
+impl<T, D, F> ItemParam<'_, '_, T, D, F>
 where
     T: Send + Sync + 'static,
-    E: QueryData + 'static,
+    D: QueryData + 'static,
     F: QueryFilter + 'static,
 {
     pub fn find_item(
         &self,
-        predicate: impl Fn(&Item<T>, &ROQueryItem<E>) -> bool,
-    ) -> Option<(Entity, &Item<T>, ROQueryItem<'_, E>)> {
+        predicate: impl Fn(&Item<T>, &ROQueryItem<D>) -> bool,
+    ) -> Option<(Entity, &Item<T>, ROQueryItem<'_, D>)> {
         self.items
             .iter()
             .find(|(_, item, e_value)| predicate(item, e_value))
@@ -610,7 +610,7 @@ where
 
     pub fn find_item_ref(
         &self,
-        predicate: impl Fn(&Item<T>, &ROQueryItem<E>) -> bool,
+        predicate: impl Fn(&Item<T>, &ROQueryItem<D>) -> bool,
     ) -> Option<Entity> {
         self.find_item(predicate).map(|(item_ref, _, _)| item_ref)
     }

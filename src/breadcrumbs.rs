@@ -72,7 +72,9 @@ fn selection_change(
                     commands.entity(*existing_bc_view).despawn();
                 }
                 for (index, bc) in selected[first_diff..].iter().enumerate() {
-                    let item = items.get(bc.0).unwrap();
+                    let item = items
+                        .get(bc.0)
+                        .unwrap_or_else(|e| panic!("Item not found {bc:?} {e:?}"));
                     let link = Link::new(item.data.clone());
                     let current_index = index + first_diff;
 
