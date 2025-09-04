@@ -48,7 +48,7 @@ fn on_add_stack(
 fn switch_view(
     stack_and_ref: In<(Entity, Stack)>,
     selections: SelectionParam,
-    mut items: Query<(&Item<String>, &mut StackItem)>,
+    mut items: Query<&mut StackItem, With<Item<String>>>,
     children: Query<&Children>,
     mut nodes: Query<&mut Node>,
     prev_displays: Query<&PrevDisplay>,
@@ -62,7 +62,6 @@ fn switch_view(
         // hide all children
         for c in children {
             let mut node = nodes.get_mut(*c).unwrap();
-
             if node.display != Display::None {
                 commands.entity(*c).insert(PrevDisplay(node.display));
                 node.display = Display::None;
@@ -70,33 +69,62 @@ fn switch_view(
         }
     }
 
-    let Some(selected_item) = selection.last() else {
+    let Some(selected_item_ref) = selection.last() else {
         return;
     };
-    if selected_item == Entity::PLACEHOLDER {
+    if selected_item_ref == Entity::PLACEHOLDER {
         return;
     }
-    let (_selected_item, mut selected_stack_item) = items.get_mut(selected_item).unwrap();
+    let selected_stack_item = items.get(selected_item_ref).unwrap();
+
+    let mut show_node = |node_ref| {
+        let mut node = nodes.get_mut(node_ref).unwrap();
+        let prev = prev_displays.get(node_ref).unwrap();
+        node.display = prev.0;
+    };
 
     // create new child or make existing visible
-    if let Some(existing) = selected_stack_item.entity {
-        let mut node = nodes.get_mut(existing).unwrap();
-        let prev = prev_displays.get(existing).unwrap();
-        node.display = prev.0;
+    if let Some(existing_node_ref) = selected_stack_item.entity {
+        show_node(existing_node_ref);
     } else {
         let spawner = StackChildSpawner {
             parent: stack_ref,
             commands,
         };
-        let new_id = (selected_stack_item.create)(spawner, &theme);
-        selected_stack_item.entity = Some(new_id);
+
+        let new_ref = if let Some(creator) = selected_stack_item.create {
+            creator(spawner, &theme)
+        } else {
+            let item_values = selections.get_item_values(stack.selection_ref).unwrap().1;
+            let mut reference = Entity::PLACEHOLDER;
+            for item_ref in item_values.iter() {
+                let stack_item = items.get(item_ref).unwrap();
+                if stack_item.id == selected_stack_item.id {
+                    if let Some(existing_entity) = stack_item.entity {
+                        reference = existing_entity;
+                        show_node(existing_entity);
+                    } else {
+                        reference = stack_item.create.unwrap()(spawner, &theme);
+                        items.get_mut(item_ref).unwrap().entity = Some(reference);
+                    }
+
+                    break;
+                }
+            }
+            assert!(reference != Entity::PLACEHOLDER);
+            reference
+        };
+
+        let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap();
+        mutable_selected_stack_item.entity = Some(new_ref);
     }
 }
 
 #[derive(Component, Clone, Copy)]
 pub struct StackItem {
     entity: Option<Entity>,
-    pub create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
+    pub create: Option<&'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync)>,
+    id: Option<usize>,
 }
 
 impl fmt::Debug for StackItem {
@@ -108,12 +136,38 @@ impl fmt::Debug for StackItem {
 }
 
 impl StackItem {
+    #[must_use]
     pub fn new(
         create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
     ) -> Self {
         Self {
             entity: None,
-            create,
+            create: Some(create),
+            id: None,
+        }
+    }
+
+    /// Create a new `StackItem` with a reference such that it's create function
+    /// can be reused by other `StackItem`s created with
+    /// [`StackItem::new_reference`].
+    #[must_use]
+    pub fn new_with_reference(
+        id: usize,
+        create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
+    ) -> Self {
+        Self {
+            entity: None,
+            create: Some(create),
+            id: Some(id),
+        }
+    }
+
+    #[must_use]
+    pub fn new_reference(id: usize) -> Self {
+        Self {
+            entity: None,
+            create: None,
+            id: Some(id),
         }
     }
 }

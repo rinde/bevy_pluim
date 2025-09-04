@@ -33,6 +33,7 @@ struct BreadCrumbsSelection;
 enum BreadCrumbsAction {
     Home,
     PanelA,
+    PanelAvariant,
     PanelB,
     PanelBsub,
 }
@@ -52,7 +53,12 @@ fn setup(mut commands: Commands) {
                 (
                     BreadCrumbsAction::PanelA,
                     Item::new("Panel A"),
-                    StackItem::new(&create_a),
+                    StackItem::new_with_reference(0, &create_a),
+                ),
+                (
+                    BreadCrumbsAction::PanelAvariant,
+                    Item::new("Panel A variant"),
+                    StackItem::new_reference(0),
                 ),
                 (
                     BreadCrumbsAction::PanelB,
@@ -147,6 +153,16 @@ fn create_home(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
                      mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                      items: ItemParam<String, &BreadCrumbsAction>| {
                         push_to_selection(BreadCrumbsAction::PanelA, &mut selections, items);
+                    },
+                );
+
+            parent
+                .spawn(PushButton::from_label("Go to Panel A variant"))
+                .observe(
+                    |_: Trigger<Pointer<Released>>,
+                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                     items: ItemParam<String, &BreadCrumbsAction>| {
+                        push_to_selection(BreadCrumbsAction::PanelAvariant, &mut selections, items);
                     },
                 );
 
