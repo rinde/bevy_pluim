@@ -1,6 +1,6 @@
 use bevy::color::palettes::tailwind::{
     BLUE_200, BLUE_400, BLUE_500, BLUE_600, BLUE_700, BLUE_800, BLUE_900, GRAY_50, GRAY_100,
-    GRAY_200, GRAY_400, GRAY_600, GRAY_800, GRAY_900, GRAY_950,
+    GRAY_200, GRAY_400, GRAY_600, GRAY_700, GRAY_800, GRAY_900, GRAY_950,
 };
 use bevy::prelude::*;
 use educe::Educe;
@@ -117,7 +117,7 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     selected_item: Color::Srgba(BLUE_800),
     hovered_item: Color::Srgba(BLUE_900),
     selected_hovered_item: Color::Srgba(BLUE_700),
-    border: Color::Srgba(GRAY_800),
+    border: Color::Srgba(GRAY_700),
     border_highlight: Color::Srgba(BLUE_800),
     text_primary: Color::Srgba(GRAY_100),
     link: Color::Srgba(BLUE_400),
