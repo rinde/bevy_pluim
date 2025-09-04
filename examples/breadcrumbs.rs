@@ -130,7 +130,7 @@ fn push_to_selection(
     items: ItemParam<String, &BreadCrumbsAction>,
 ) {
     let item_a_ref = items.find_item_ref(|_, bca| **bca == target).unwrap();
-    selections.update_selection_single(|selection| Some(selection.push(item_a_ref)));
+    selections.update_selection_single(|selection| selection.push(item_a_ref));
 }
 
 fn pop_on_pointer_release(

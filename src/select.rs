@@ -5,7 +5,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use derive_more::Deref;
 use educe::Educe;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use smallvec::{SmallVec, smallvec};
 use strum::{EnumDiscriminants, EnumIs};
 
@@ -153,11 +153,7 @@ fn on_add_selection(
                     .entity(selection_ref)
                     .insert(Selection::Value(SelectionValue::One(first_item)));
             } else {
-                r.buffer.push((
-                    selection_ref,
-                    SelectionValue::One(Entity::PLACEHOLDER),
-                    selection_ref,
-                ));
+                r.buffer.push((selection_ref, selection_ref));
             }
         }
         (Selection::Value(SelectionValue::OneOrMore(selected)), items_ref, item_values)
@@ -176,11 +172,7 @@ fn on_add_selection(
                         first_item
                     ])));
             } else {
-                r.buffer.push((
-                    selection_ref,
-                    SelectionValue::OneOrMore(smallvec![]),
-                    selection_ref,
-                ));
+                r.buffer.push((selection_ref, selection_ref));
             }
         }
         (Selection::Ref(_), _, _)
@@ -195,7 +187,7 @@ fn on_add_selection(
 
 #[derive(Resource, Default)]
 struct SelectionResource {
-    buffer: Vec<(Entity, SelectionValue, Entity)>,
+    buffer: Vec<(Entity, Entity)>,
 }
 
 fn process_event_buffer(
@@ -203,21 +195,31 @@ fn process_event_buffer(
     mut commands: Commands,
     selections: SelectionParam,
 ) {
-    for (target_ref, selection_value, selection_ref) in r.buffer.drain(..) {
+    for (target_ref, selection_ref) in r.buffer.drain(..) {
         if let Some((_, values)) = selections.get_item_values(selection_ref) {
+            let selection_value = selections.get(selection_ref).unwrap();
             let new_selection_value = match selection_value {
-                SelectionValue::One(_) => SelectionValue::One(values.iter().next().unwrap()),
-                SelectionValue::OneOrMore(selected) if selected.is_empty() => {
-                    SelectionValue::OneOrMore(smallvec![values.iter().next().unwrap()])
+                SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
+                    Some(SelectionValue::One(values.iter().next().unwrap()))
                 }
+                SelectionValue::OneOrMore(selected) if selected.is_empty() => {
+                    Some(SelectionValue::OneOrMore(smallvec![
+                        values.iter().next().unwrap()
+                    ]))
+                }
+                SelectionValue::One(_) | SelectionValue::OneOrMore(_) => None,
                 _ => unimplemented!(),
             };
-            commands
-                .entity(target_ref)
-                .insert(Selection::Value(new_selection_value));
+            if let Some(new_selection_value) = new_selection_value {
+                commands
+                    .entity(target_ref)
+                    .insert(Selection::Value(new_selection_value));
+            }
         }
     }
 }
+
+type SelectionVec = SmallVec<[Entity; 4]>;
 
 #[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs, Reflect, EnumDiscriminants)]
 #[educe(Default)]
@@ -225,8 +227,8 @@ pub enum SelectionValue {
     One(Entity),
     #[educe(Default)]
     ZeroOrOne(Option<Entity>),
-    OneOrMore(SmallVec<[Entity; 4]>),
-    ZeroOrMore(SmallVec<[Entity; 4]>),
+    OneOrMore(SelectionVec),
+    ZeroOrMore(SelectionVec),
 }
 
 impl SelectionValue {
@@ -351,18 +353,54 @@ impl SelectionValue {
     }
 
     #[must_use]
-    pub fn push(&self, new_selection: Entity) -> Self {
+    pub fn push(&self, new_selection: Entity) -> Option<Self> {
+        self.append([new_selection])
+    }
+
+    #[must_use]
+    pub fn append(&self, iter: impl IntoIterator<Item = Entity>) -> Option<Self> {
         match self {
-            Self::One(_) => panic!("Cannot push to a SelectionValue::One"),
+            Self::One(_) => panic!("Cannot append to a SelectionValue::One"),
             Self::ZeroOrOne(Some(_)) => {
-                panic!("Cannot push to a SelectionValue::ZeroOrOne if it already has a selection")
+                panic!("Cannot append to a SelectionValue::ZeroOrOne if it already has a selection")
             }
-            Self::ZeroOrOne(None) => Self::ZeroOrOne(Some(new_selection)),
+            Self::ZeroOrOne(None) => {
+                let res = iter.into_iter().unique().collect::<SelectionVec>();
+                assert!(
+                    res.len() <= 1,
+                    "Cannot append more than one entity to a SelectionValue::ZeroOrOne"
+                );
+                if res.is_empty() {
+                    None
+                } else {
+                    Some(Self::ZeroOrOne(res.first().copied()))
+                }
+            }
             Self::OneOrMore(selected) => {
-                Self::OneOrMore(selected.iter().copied().chain([new_selection]).collect())
+                let new_selected = selected
+                    .iter()
+                    .copied()
+                    .chain(iter)
+                    .unique()
+                    .collect::<SelectionVec>();
+                if new_selected.len() == selected.len() {
+                    None
+                } else {
+                    Some(Self::OneOrMore(new_selected))
+                }
             }
             Self::ZeroOrMore(selected) => {
-                Self::ZeroOrMore(selected.iter().copied().chain([new_selection]).collect())
+                let new_selected = selected
+                    .iter()
+                    .copied()
+                    .chain(iter)
+                    .unique()
+                    .collect::<SelectionVec>();
+                if new_selected.len() == selected.len() {
+                    None
+                } else {
+                    Some(Self::ZeroOrMore(new_selected))
+                }
             }
         }
     }
@@ -389,11 +427,13 @@ impl SelectionValue {
         match self {
             Self::One(_) => panic!("Cannot trim a SelectionValue::One"),
             Self::ZeroOrOne(_) if new_length > 1 => {
-                panic!("Cannot trim Self::ZeroOrOne to {new_length}")
+                panic!("Cannot trim SelectionValue::ZeroOrOne to {new_length}")
             }
             Self::ZeroOrOne(_) if new_length == 1 => None,
             Self::ZeroOrOne(_) => Some(Self::ZeroOrOne(None)),
-            Self::OneOrMore(_) if new_length == 0 => panic!("Cannot trim Self::OneOrMore to 0"),
+            Self::OneOrMore(_) if new_length == 0 => {
+                panic!("Cannot trim SelectionValue::OneOrMore to 0")
+            }
             Self::OneOrMore(small_vec) if new_length >= small_vec.len() => None,
             Self::OneOrMore(small_vec) => Some(Self::OneOrMore(
                 small_vec[..new_length].iter().copied().collect(),
@@ -402,6 +442,61 @@ impl SelectionValue {
             Self::ZeroOrMore(small_vec) => Some(Self::ZeroOrMore(
                 small_vec[..new_length].iter().copied().collect(),
             )),
+        }
+    }
+
+    #[must_use]
+    pub fn clear(&self) -> Option<Self> {
+        match self {
+            Self::One(_) => panic!("Cannot clear SelectionValue::One"),
+            Self::ZeroOrOne(None) => None,
+            Self::ZeroOrOne(Some(_)) => Some(Self::ZeroOrOne(None)),
+            Self::OneOrMore(_) => panic!("Cannot clear SelectionValue::OneOrMore"),
+            Self::ZeroOrMore(s) if s.is_empty() => None,
+            Self::ZeroOrMore(_) => Some(Self::ZeroOrMore(smallvec![])),
+        }
+    }
+
+    #[must_use]
+    pub fn set_selection(&self, iter: impl IntoIterator<Item = Entity>) -> Option<Self> {
+        let mut iter = iter.into_iter().unique();
+        match self {
+            Self::One(x) => {
+                let value = iter.next().unwrap();
+                assert!(iter.next().is_none());
+                if *x == value {
+                    None
+                } else {
+                    Some(Self::One(value))
+                }
+            }
+            Self::ZeroOrOne(x) => {
+                let value = iter.next();
+                assert!(iter.next().is_none());
+                if *x == value {
+                    None
+                } else {
+                    Some(Self::ZeroOrOne(value))
+                }
+            }
+            Self::OneOrMore(x) => {
+                let new_vals = iter.collect::<SelectionVec>();
+                if new_vals.is_empty() {
+                    panic!("SelectionValue::OneOrMore needs to have at least one element");
+                } else if x.len() == new_vals.len() && x.iter().all(|v| new_vals.contains(v)) {
+                    None
+                } else {
+                    Some(Self::OneOrMore(new_vals))
+                }
+            }
+            Self::ZeroOrMore(x) => {
+                let new_vals = iter.collect::<SelectionVec>();
+                if x.len() == new_vals.len() && x.iter().all(|v| new_vals.contains(v)) {
+                    None
+                } else {
+                    Some(Self::ZeroOrMore(new_vals))
+                }
+            }
         }
     }
 }
