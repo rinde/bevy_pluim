@@ -323,7 +323,9 @@ impl SelectionValue {
                     if selected[0] == new_selection {
                         None
                     } else {
-                        Some(Self::OneOrMore(smallvec![new_selection]))
+                        let mut clone = selected.clone();
+                        clone.push(new_selection);
+                        Some(Self::OneOrMore(clone))
                     }
                 } else {
                     // more
