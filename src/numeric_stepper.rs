@@ -246,6 +246,7 @@ fn on_press(
 fn on_change(
     changed_values: Query<(Entity, &Value), Changed<Value>>,
     mut numeric_stepper_labels: Query<(&ValueRef, &mut Text), With<NumericStepperLabel>>,
+    mut commands: Commands,
 ) {
     for (value_ref, value) in &changed_values {
         for (text_value_ref, mut text) in &mut numeric_stepper_labels {
@@ -253,7 +254,15 @@ fn on_change(
                 text.0 = value.to_string();
             }
         }
+        commands
+            .entity(value_ref)
+            .trigger(ValueChange { value: *value });
     }
+}
+
+#[derive(Event, Debug, Clone, Copy)]
+pub struct ValueChange {
+    pub value: Value,
 }
 
 #[derive(Debug, Clone, Copy)]
