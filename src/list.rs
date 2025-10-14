@@ -534,7 +534,7 @@ const fn theme_item_border(
                         n if n % columns == 0 && last.abs_diff(n) < columns => {
                             BorderRadius::bottom_left(theme.corner_radius)
                         }
-                        n if n == last && last % columns == 0 => {
+                        n if n == last && last.is_multiple_of(columns) => {
                             BorderRadius::bottom_right(theme.corner_radius)
                         }
                         _ => BorderRadius::ZERO,

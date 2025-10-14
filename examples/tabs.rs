@@ -292,7 +292,7 @@ fn create_card_demo(spawner: StackChildSpawner, theme: &Theme) -> Entity {
 struct CardBackground;
 
 fn color_palette() -> Vec<impl Bundle> {
-    COLORS.iter().map(|c| (Item { data: c.color })).collect()
+    COLORS.iter().map(|c| Item { data: c.color }).collect()
 }
 
 fn items() -> impl Iterator<Item = Item<String>> {

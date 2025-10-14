@@ -183,7 +183,7 @@ fn setup(mut commands: Commands) {
 }
 
 fn color_palette() -> Vec<impl Bundle> {
-    COLORS.iter().map(|c| (Item { data: c.color })).collect()
+    COLORS.iter().map(|c| Item { data: c.color }).collect()
 }
 
 #[derive(Component)]
