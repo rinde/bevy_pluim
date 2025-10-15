@@ -187,6 +187,22 @@ fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
             parent
                 .spawn(PushButton::from_label("Go back to home"))
                 .observe(pop_on_pointer_release);
+
+            parent
+                .spawn(PushButton::from_label("Go to panel A variant"))
+                .observe(
+                    |_: Trigger<Pointer<Released>>,
+                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                     items: ItemParam<String, &BreadCrumbsAction>| {
+                        let item_a_ref = items
+                            .find_item_ref(|_, bca| **bca == BreadCrumbsAction::PanelAvariant)
+                            .unwrap();
+                        selections.update_selection_single(|x| {
+                            let x = x.pop().unwrap();
+                            x.push(item_a_ref)
+                        });
+                    },
+                );
         })),
     ))
 }
