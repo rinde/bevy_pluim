@@ -2,7 +2,7 @@ use std::fmt;
 
 use bevy::prelude::*;
 
-use crate::select::{Item, Selection, SelectionParam};
+use crate::select::{Selection, SelectionParam};
 use crate::theme::Theme;
 
 #[derive(Copy, Clone, Debug)]
@@ -48,7 +48,7 @@ fn on_add_stack(
 fn switch_view(
     stack_and_ref: In<(Entity, Stack)>,
     selections: SelectionParam,
-    mut items: Query<&mut StackItem, With<Item<String>>>,
+    mut items: Query<&mut StackItem>,
     children: Query<&Children>,
     mut nodes: Query<&mut Node>,
     prev_displays: Query<&PrevDisplay>,
@@ -96,7 +96,9 @@ fn switch_view(
         if selected_item_ref == Entity::PLACEHOLDER {
             return Action::HideAll;
         }
-        let selected_stack_item = items.get(selected_item_ref).unwrap();
+        let selected_stack_item = items.get(selected_item_ref).unwrap_or_else(|_| {
+            panic!("Selected stack item {selected_item_ref} not found");
+        });
         if let Some(existing_node_ref) = selected_stack_item.entity {
             return if currently_visible_entity == Some(existing_node_ref) {
                 Action::SelectSame
