@@ -55,70 +55,102 @@ fn switch_view(
     mut commands: Commands,
     theme: Res<Theme>,
 ) {
+    enum Action {
+        HideAll,
+        CreateNew(Entity, StackChildCreator),
+        SelectDifferent(Entity),
+        SelectDifferentRef(Entity, Entity),
+        SelectSame,
+    }
     let (stack_ref, stack) = *stack_and_ref;
     let selection = selections.get(stack.selection_ref).unwrap();
 
-    if let Ok(children) = children.get(stack_ref) {
-        // hide all children
-        for c in children {
-            let mut node = nodes.get_mut(*c).unwrap();
-            if node.display != Display::None {
-                commands.entity(*c).insert(PrevDisplay(node.display));
-                node.display = Display::None;
-            }
-        }
-    }
+    let currently_visible_entity = children.get(stack_ref).ok().and_then(|children| {
+        children
+            .iter()
+            .find(|c| nodes.get(*c).unwrap().display != Display::None)
+    });
 
-    let Some(selected_item_ref) = selection.last() else {
-        return;
-    };
-    if selected_item_ref == Entity::PLACEHOLDER {
-        return;
-    }
-    let selected_stack_item = items.get(selected_item_ref).unwrap();
-
-    let mut show_node = |node_ref| {
-        let mut node = nodes.get_mut(node_ref).unwrap();
-        let prev = prev_displays.get(node_ref).unwrap();
-        node.display = prev.0;
-    };
-
-    // create new child or make existing visible
-    if let Some(existing_node_ref) = selected_stack_item.entity {
-        show_node(existing_node_ref);
-    } else {
-        let spawner = StackChildSpawner {
-            parent: stack_ref,
-            commands,
-        };
-
-        let new_ref = if let Some(creator) = selected_stack_item.create {
-            creator(spawner, &theme)
-        } else {
-            let item_values = selections.get_item_values(stack.selection_ref).unwrap().1;
-            let mut reference = Entity::PLACEHOLDER;
-            for item_ref in item_values.iter() {
-                let stack_item = items.get(item_ref).unwrap();
-                if stack_item.id == selected_stack_item.id {
-                    if let Some(existing_entity) = stack_item.entity {
-                        reference = existing_entity;
-                        show_node(existing_entity);
-                    } else {
-                        reference = stack_item.create.unwrap()(spawner, &theme);
-                        items.get_mut(item_ref).unwrap().entity = Some(reference);
-                    }
-
-                    break;
+    let mut show = |node: Option<Entity>| {
+        if let Ok(children) = children.get(stack_ref) {
+            for c in children.iter().filter(|c| node.is_none_or(|x| x != *c)) {
+                let mut node = nodes.get_mut(c).unwrap();
+                if node.display != Display::None {
+                    commands.entity(c).insert(PrevDisplay(node.display));
+                    node.display = Display::None;
                 }
             }
-            assert!(reference != Entity::PLACEHOLDER);
-            reference
-        };
+        }
 
-        let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap();
-        mutable_selected_stack_item.entity = Some(new_ref);
+        if let Some(node_ref) = node {
+            let mut node = nodes.get_mut(node_ref).unwrap();
+            let prev = prev_displays.get(node_ref).unwrap();
+            node.display = prev.0;
+        }
+    };
+
+    let action = (|| {
+        let Some(selected_item_ref) = selection.last() else {
+            return Action::HideAll;
+        };
+        if selected_item_ref == Entity::PLACEHOLDER {
+            return Action::HideAll;
+        }
+        let selected_stack_item = items.get(selected_item_ref).unwrap();
+        if let Some(existing_node_ref) = selected_stack_item.entity {
+            return if currently_visible_entity == Some(existing_node_ref) {
+                Action::SelectSame
+            } else {
+                Action::SelectDifferent(existing_node_ref)
+            };
+        }
+        if let Some(creator) = selected_stack_item.create {
+            return Action::CreateNew(selected_item_ref, creator);
+        }
+        let item_values = selections.get_item_values(stack.selection_ref).unwrap().1;
+
+        let referenced_stack_item = item_values
+            .iter()
+            .find_map(|item_ref| {
+                let stack_item = items.get(item_ref).unwrap();
+                (stack_item.id == selected_stack_item.id && stack_item.create.is_some())
+                    .then_some(stack_item)
+            })
+            .unwrap();
+
+        if let Some(existing_entity) = referenced_stack_item.entity {
+            if currently_visible_entity == Some(existing_entity) {
+                Action::SelectSame
+            } else {
+                Action::SelectDifferentRef(selected_item_ref, existing_entity)
+            }
+        } else {
+            Action::CreateNew(selected_item_ref, referenced_stack_item.create.unwrap())
+        }
+    })();
+    match action {
+        Action::HideAll => show(None),
+        Action::CreateNew(selected_item_ref, creator) => {
+            show(None);
+            let spawner = StackChildSpawner {
+                parent: stack_ref,
+                commands,
+            };
+            let new_reference = creator(spawner, &theme);
+            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap();
+            mutable_selected_stack_item.entity = Some(new_reference);
+        }
+        Action::SelectDifferent(new_selected) => show(Some(new_selected)),
+        Action::SelectDifferentRef(selected_item_ref, new_selected) => {
+            show(Some(new_selected));
+            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap();
+            mutable_selected_stack_item.entity = Some(new_selected);
+        }
+        Action::SelectSame => (),
     }
 }
+
+type StackChildCreator = &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync);
 
 #[derive(Component, Clone, Copy)]
 pub struct StackItem {
