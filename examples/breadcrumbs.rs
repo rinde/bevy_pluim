@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use bevy::ecs::spawn::SpawnWith;
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
@@ -178,7 +180,14 @@ fn create_home(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
         })),
     ))
 }
+
+static INITIALIZED_A: AtomicBool = AtomicBool::new(false);
+
 fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
+    println!("Creating Panel A");
+    let initialized = INITIALIZED_A.load(Ordering::Relaxed);
+    assert!(!initialized);
+    INITIALIZED_A.store(true, Ordering::Relaxed);
     spawner.spawn((
         Node::DEFAULT,
         Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {

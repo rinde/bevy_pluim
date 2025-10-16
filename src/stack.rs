@@ -2,7 +2,7 @@ use std::fmt;
 
 use bevy::prelude::*;
 
-use crate::select::{Selection, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 
 #[derive(Copy, Clone, Debug)]
@@ -10,11 +10,11 @@ pub struct StackPlugin;
 
 impl Plugin for StackPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_add_stack);
+        app.add_observer(on_add_stack).register_type::<Stack>();
     }
 }
 
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
 #[require(Name::new("Stack"), Node::default())]
 pub struct Stack {
     pub selection_ref: Entity,
@@ -48,7 +48,7 @@ fn on_add_stack(
 fn switch_view(
     stack_and_ref: In<(Entity, Stack)>,
     selections: SelectionParam,
-    mut items: Query<&mut StackItem>,
+    mut items: Query<(&mut StackItem, Option<&Item<String>>)>,
     children: Query<&Children>,
     mut nodes: Query<&mut Node>,
     prev_displays: Query<&PrevDisplay>,
@@ -84,7 +84,9 @@ fn switch_view(
 
         if let Some(node_ref) = node {
             let mut node = nodes.get_mut(node_ref).unwrap();
-            let prev = prev_displays.get(node_ref).unwrap();
+            let prev = prev_displays
+                .get(node_ref)
+                .unwrap_or_else(|e| panic!("{}: {e}", stack_and_ref.0.0));
             node.display = prev.0;
         }
     };
@@ -96,9 +98,12 @@ fn switch_view(
         if selected_item_ref == Entity::PLACEHOLDER {
             return Action::HideAll;
         }
-        let selected_stack_item = items.get(selected_item_ref).unwrap_or_else(|_| {
-            panic!("Selected stack item {selected_item_ref} not found");
-        });
+        let selected_stack_item = items
+            .get(selected_item_ref)
+            .unwrap_or_else(|_| {
+                panic!("Selected stack item {selected_item_ref} not found");
+            })
+            .0;
         if let Some(existing_node_ref) = selected_stack_item.entity {
             return if currently_visible_entity == Some(existing_node_ref) {
                 Action::SelectSame
@@ -115,19 +120,22 @@ fn switch_view(
             .iter()
             .find_map(|item_ref| {
                 let stack_item = items.get(item_ref).unwrap();
-                (stack_item.id == selected_stack_item.id && stack_item.create.is_some())
-                    .then_some(stack_item)
+                (stack_item.0.id == selected_stack_item.id && stack_item.0.create.is_some())
+                    .then_some((item_ref, stack_item))
             })
             .unwrap();
 
-        if let Some(existing_entity) = referenced_stack_item.entity {
+        if let Some(existing_entity) = referenced_stack_item.1.0.entity {
             if currently_visible_entity == Some(existing_entity) {
                 Action::SelectSame
             } else {
                 Action::SelectDifferentRef(selected_item_ref, existing_entity)
             }
         } else {
-            Action::CreateNew(selected_item_ref, referenced_stack_item.create.unwrap())
+            Action::CreateNew(
+                referenced_stack_item.0,
+                referenced_stack_item.1.0.create.unwrap(),
+            )
         }
     })();
     match action {
@@ -139,13 +147,13 @@ fn switch_view(
                 commands,
             };
             let new_reference = creator(spawner, &theme);
-            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap();
+            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap().0;
             mutable_selected_stack_item.entity = Some(new_reference);
         }
         Action::SelectDifferent(new_selected) => show(Some(new_selected)),
         Action::SelectDifferentRef(selected_item_ref, new_selected) => {
             show(Some(new_selected));
-            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap();
+            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap().0;
             mutable_selected_stack_item.entity = Some(new_selected);
         }
         Action::SelectSame => (),
@@ -165,6 +173,7 @@ impl fmt::Debug for StackItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StackItem")
             .field("entity", &self.entity)
+            .field("id", &self.id)
             .finish_non_exhaustive()
     }
 }
