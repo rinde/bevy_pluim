@@ -39,6 +39,20 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 
     let theme_border_color = theme.colors.border;
 
+    let items = [
+        (
+            Item::new("Panel A"),
+            StackItem::new(commands.register_system(create_a)),
+        ),
+        (
+            Item::new("Panel B"),
+            StackItem::new(commands.register_system(create_b)),
+        ),
+        (
+            Item::new("Card demo"),
+            StackItem::new(commands.register_system(create_card_demo)),
+        ),
+    ];
     // Root container
     commands.spawn((
         Node {
@@ -60,11 +74,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                     List,
                     CornerStyle::Tabs,
                     ListLayout::Horizontal,
-                    Selection::builder().one().build_with_items([
-                        (Item::new("Panel A"), StackItem::new(&create_a)),
-                        (Item::new("Panel B"), StackItem::new(&create_b)),
-                        (Item::new("Card demo"), StackItem::new(&create_card_demo)),
-                    ]),
+                    Selection::builder().one().build_with_items(items),
                 ))
                 .id();
 
@@ -95,53 +105,90 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
     ));
 }
 
-fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
-    spawner.spawn(Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-        parent.spawn(Label::regular("Panel A"));
+fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn(
+        &mut commands,
+        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+            parent.spawn(Label::regular("Panel A"));
 
-        let colors = parent
-            .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
-            .id();
+            let colors = parent
+                .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
+                .id();
 
-        let selection_ref = parent
-            .spawn(
+            let selection_ref = parent
+                .spawn(
+                    Selection::builder()
+                        .zero_or_one()
+                        .build_with_items_ref(colors),
+                )
+                .id();
+
+            parent.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::reference(selection_ref),
+            ));
+            parent.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
                 Selection::builder()
                     .zero_or_one()
                     .build_with_items_ref(colors),
-            )
-            .id();
+            ));
+            parent.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::reference(selection_ref),
+            ));
+            parent.spawn((
+                Card,
+                Node {
+                    height: Val::Px(200.0),
+                    margin: UiRect::all(Val::Px(5.0)),
+                    padding: UiRect::all(Val::Px(10.0)),
+                    align_items: AlignItems::FlexStart,
+                    row_gap: Val::Px(10.0),
+                    column_gap: Val::Px(10.0),
+                    ..default()
+                },
+                children![
+                    (
+                        Combo,
+                        Selection::builder().zero_or_one().build_with_items([
+                            Item::new("Netherlands"),
+                            Item::new("Canada"),
+                            Item::new("Indonesia"),
+                            Item::new("Portugal"),
+                            Item::new("Belgium")
+                        ]),
+                    ),
+                    PushButton::from_label("Button on a card")
+                ],
+            ));
+            parent.spawn(PushButton::from_label("hello"));
+        })),
+    );
+}
 
-        parent.spawn((
-            ColorPaletteCombo,
-            ListLayout::VerticalGrid { columns: 11 },
-            Selection::reference(selection_ref),
-        ));
-        parent.spawn((
-            ColorPaletteCombo,
-            ListLayout::VerticalGrid { columns: 11 },
-            Selection::builder()
-                .zero_or_one()
-                .build_with_items_ref(colors),
-        ));
-        parent.spawn((
-            ColorPaletteCombo,
-            ListLayout::VerticalGrid { columns: 11 },
-            Selection::reference(selection_ref),
-        ));
-        parent.spawn((
-            Card,
-            Node {
-                height: Val::Px(200.0),
-                margin: UiRect::all(Val::Px(5.0)),
-                padding: UiRect::all(Val::Px(10.0)),
-                align_items: AlignItems::FlexStart,
-                row_gap: Val::Px(10.0),
-                column_gap: Val::Px(10.0),
-                ..default()
-            },
-            children![
-                (
-                    Combo,
+fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn(
+        &mut commands,
+        (children![
+            Label::header("Panel B"),
+            ScrollArea::bundle(
+                |parent| {
+                    parent.spawn((List, Selection::builder().one().build_with_items(items())));
+                },
+                true,
+                false,
+            ),
+            (
+                Node {
+                    align_self: AlignSelf::Start,
+                    ..default()
+                },
+                children![(
+                    List,
                     Selection::builder().zero_or_one().build_with_items([
                         Item::new("Netherlands"),
                         Item::new("Canada"),
@@ -149,41 +196,10 @@ fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
                         Item::new("Portugal"),
                         Item::new("Belgium")
                     ]),
-                ),
-                PushButton::from_label("Button on a card")
-            ],
-        ));
-        parent.spawn(PushButton::from_label("hello"));
-    })))
-}
-
-fn create_b(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
-    spawner.spawn((children![
-        Label::header("Panel B"),
-        ScrollArea::bundle(
-            |parent| {
-                parent.spawn((List, Selection::builder().one().build_with_items(items())));
-            },
-            true,
-            false,
-        ),
-        (
-            Node {
-                align_self: AlignSelf::Start,
-                ..default()
-            },
-            children![(
-                List,
-                Selection::builder().zero_or_one().build_with_items([
-                    Item::new("Netherlands"),
-                    Item::new("Canada"),
-                    Item::new("Indonesia"),
-                    Item::new("Portugal"),
-                    Item::new("Belgium")
-                ]),
-            )]
-        ),
-    ],))
+                )]
+            ),
+        ],),
+    );
 }
 
 static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
@@ -194,98 +210,102 @@ static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
         .collect::<Vec<_>>()
 });
 
-fn create_card_demo(spawner: StackChildSpawner, theme: &Theme) -> Entity {
+fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut commands: Commands) {
     let background_color = theme.colors.background_primary;
-    spawner.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            display: Display::Grid,
-            grid_auto_columns: vec![GridTrack::percent(100.0)],
-            grid_auto_flow: GridAutoFlow::Row,
-            ..default()
-        },
-        children![
-            Label::header("Card demo"),
-            (
-                Node { ..default() },
-                Pickable {
-                    should_block_lower: false,
-                    ..default()
-                },
-                ScrollArea::bundle(
-                    move |parent| {
-                        parent.spawn((
-                            Node {
-                                row_gap: Val::Px(16.0),
-                                column_gap: Val::Px(16.0),
-                                flex_wrap: FlexWrap::Wrap,
-                                justify_content: JustifyContent::Center,
-                                margin: UiRect::px(8.0, 8.0, 8.0, 0.0),
-                                ..default()
-                            },
-                            Pickable {
-                                should_block_lower: false,
-                                ..default()
-                            },
-                            Children::spawn(SpawnIter((0..300).map(move |i| {
-                                (
-                                    Node {
-                                        min_width: Val::Px(50.0),
-                                        width: Val::Px(100.0),
-                                        height: Val::Px(100.0),
-                                        align_items: AlignItems::Center,
-                                        justify_content: JustifyContent::Center,
-                                        ..default()
-                                    },
-                                    Card,
-                                    Pickable {
-                                        should_block_lower: false,
-                                        ..default()
-                                    },
-                                    children![
-                                        (
-                                            Pickable {
-                                                should_block_lower: false,
-                                                ..default()
-                                            },
-                                            Node {
-                                                position_type: PositionType::Absolute,
-                                                top: Val::Px(0.0),
-                                                height: Val::Percent(50.0),
-                                                width: Val::Percent(100.0),
-                                                ..default()
-                                            },
-                                            BorderRadius::top(Val::Px(10.0)),
-                                            BackgroundColor(
-                                                LIGHT_COLORS[(i / 10) % LIGHT_COLORS.len()].color
-                                            )
-                                        ),
-                                        (
-                                            CardBackground,
-                                            BorderRadius::top(Val::Px(5.0)),
-                                            BackgroundColor(background_color),
-                                            Pickable {
-                                                should_block_lower: false,
-                                                ..default()
-                                            },
-                                            Node {
-                                                padding: UiRect::px(5.0, 5.0, 3.0, 3.0),
-                                                ..default()
-                                            },
-                                            children![Label::regular(format!("{i}")),]
-                                        ),
-                                    ],
-                                )
-                            }))),
-                        ));
+    spawner.spawn(
+        &mut commands,
+        (
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                display: Display::Grid,
+                grid_auto_columns: vec![GridTrack::percent(100.0)],
+                grid_auto_flow: GridAutoFlow::Row,
+                ..default()
+            },
+            children![
+                Label::header("Card demo"),
+                (
+                    Node { ..default() },
+                    Pickable {
+                        should_block_lower: false,
+                        ..default()
                     },
-                    true,
-                    true
+                    ScrollArea::bundle(
+                        move |parent| {
+                            parent.spawn((
+                                Node {
+                                    row_gap: Val::Px(16.0),
+                                    column_gap: Val::Px(16.0),
+                                    flex_wrap: FlexWrap::Wrap,
+                                    justify_content: JustifyContent::Center,
+                                    margin: UiRect::px(8.0, 8.0, 8.0, 0.0),
+                                    ..default()
+                                },
+                                Pickable {
+                                    should_block_lower: false,
+                                    ..default()
+                                },
+                                Children::spawn(SpawnIter((0..300).map(move |i| {
+                                    (
+                                        Node {
+                                            min_width: Val::Px(50.0),
+                                            width: Val::Px(100.0),
+                                            height: Val::Px(100.0),
+                                            align_items: AlignItems::Center,
+                                            justify_content: JustifyContent::Center,
+                                            ..default()
+                                        },
+                                        Card,
+                                        Pickable {
+                                            should_block_lower: false,
+                                            ..default()
+                                        },
+                                        children![
+                                            (
+                                                Pickable {
+                                                    should_block_lower: false,
+                                                    ..default()
+                                                },
+                                                Node {
+                                                    position_type: PositionType::Absolute,
+                                                    top: Val::Px(0.0),
+                                                    height: Val::Percent(50.0),
+                                                    width: Val::Percent(100.0),
+                                                    ..default()
+                                                },
+                                                BorderRadius::top(Val::Px(10.0)),
+                                                BackgroundColor(
+                                                    LIGHT_COLORS[(i / 10) % LIGHT_COLORS.len()]
+                                                        .color
+                                                )
+                                            ),
+                                            (
+                                                CardBackground,
+                                                BorderRadius::top(Val::Px(5.0)),
+                                                BackgroundColor(background_color),
+                                                Pickable {
+                                                    should_block_lower: false,
+                                                    ..default()
+                                                },
+                                                Node {
+                                                    padding: UiRect::px(5.0, 5.0, 3.0, 3.0),
+                                                    ..default()
+                                                },
+                                                children![Label::regular(format!("{i}")),]
+                                            ),
+                                        ],
+                                    )
+                                }))),
+                            ));
+                        },
+                        true,
+                        true
+                    )
                 )
-            )
-        ],
-    ))
+            ],
+        ),
+    );
 }
 
 #[derive(Component)]

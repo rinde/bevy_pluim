@@ -42,37 +42,37 @@ enum BreadCrumbsAction {
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-
+    let items = [
+        (
+            BreadCrumbsAction::Home,
+            Item::new("Home"),
+            StackItem::new(commands.register_system(create_home)),
+        ),
+        (
+            BreadCrumbsAction::PanelA,
+            Item::new("Panel A"),
+            StackItem::new_with_reference(0, commands.register_system(create_a)),
+        ),
+        (
+            BreadCrumbsAction::PanelAvariant,
+            Item::new("Panel A variant"),
+            StackItem::new_reference(0),
+        ),
+        (
+            BreadCrumbsAction::PanelB,
+            Item::new("Panel B"),
+            StackItem::new(commands.register_system(create_b)),
+        ),
+        (
+            BreadCrumbsAction::PanelBsub,
+            Item::new("Panel B sub"),
+            StackItem::new(commands.register_system(create_b_sub)),
+        ),
+    ];
     let selection_ref = commands
         .spawn((
             BreadCrumbsSelection,
-            Selection::builder().one_or_more().build_with_items([
-                (
-                    BreadCrumbsAction::Home,
-                    Item::new("Home"),
-                    StackItem::new(&create_home),
-                ),
-                (
-                    BreadCrumbsAction::PanelA,
-                    Item::new("Panel A"),
-                    StackItem::new_with_reference(0, &create_a),
-                ),
-                (
-                    BreadCrumbsAction::PanelAvariant,
-                    Item::new("Panel A variant"),
-                    StackItem::new_reference(0),
-                ),
-                (
-                    BreadCrumbsAction::PanelB,
-                    Item::new("Panel B"),
-                    StackItem::new(&create_b),
-                ),
-                (
-                    BreadCrumbsAction::PanelBsub,
-                    Item::new("Panel B sub"),
-                    StackItem::new(&create_b_sub),
-                ),
-            ]),
+            Selection::builder().one_or_more().build_with_items(items),
         ))
         .id();
 
@@ -142,109 +142,124 @@ fn pop_on_pointer_release(
     selections.update_selection_single(SelectionValue::pop);
 }
 
-fn create_home(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
-    spawner.spawn((
-        Node::DEFAULT,
-        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-            parent.spawn(Label::header("Home"));
+fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn(
+        &mut commands,
+        (
+            Node::DEFAULT,
+            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+                parent.spawn(Label::header("Home"));
 
-            parent
-                .spawn(PushButton::from_label("Go to Panel A"))
-                .observe(
-                    |_: Trigger<Pointer<Released>>,
-                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                     items: ItemParam<String, &BreadCrumbsAction>| {
-                        push_to_selection(BreadCrumbsAction::PanelA, &mut selections, items);
-                    },
-                );
+                parent
+                    .spawn(PushButton::from_label("Go to Panel A"))
+                    .observe(
+                        |_: Trigger<Pointer<Released>>,
+                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                         items: ItemParam<String, &BreadCrumbsAction>| {
+                            push_to_selection(BreadCrumbsAction::PanelA, &mut selections, items);
+                        },
+                    );
 
-            parent
-                .spawn(PushButton::from_label("Go to Panel A variant"))
-                .observe(
-                    |_: Trigger<Pointer<Released>>,
-                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                     items: ItemParam<String, &BreadCrumbsAction>| {
-                        push_to_selection(BreadCrumbsAction::PanelAvariant, &mut selections, items);
-                    },
-                );
+                parent
+                    .spawn(PushButton::from_label("Go to Panel A variant"))
+                    .observe(
+                        |_: Trigger<Pointer<Released>>,
+                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                         items: ItemParam<String, &BreadCrumbsAction>| {
+                            push_to_selection(
+                                BreadCrumbsAction::PanelAvariant,
+                                &mut selections,
+                                items,
+                            );
+                        },
+                    );
 
-            parent
-                .spawn(PushButton::from_label("Go to Panel B"))
-                .observe(
-                    |_: Trigger<Pointer<Released>>,
-                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                     items: ItemParam<String, &BreadCrumbsAction>| {
-                        push_to_selection(BreadCrumbsAction::PanelB, &mut selections, items);
-                    },
-                );
-        })),
-    ))
+                parent
+                    .spawn(PushButton::from_label("Go to Panel B"))
+                    .observe(
+                        |_: Trigger<Pointer<Released>>,
+                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                         items: ItemParam<String, &BreadCrumbsAction>| {
+                            push_to_selection(BreadCrumbsAction::PanelB, &mut selections, items);
+                        },
+                    );
+            })),
+        ),
+    );
 }
 
 static INITIALIZED_A: AtomicBool = AtomicBool::new(false);
 
-fn create_a(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
-    println!("Creating Panel A");
+fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
     let initialized = INITIALIZED_A.load(Ordering::Relaxed);
     assert!(!initialized);
     INITIALIZED_A.store(true, Ordering::Relaxed);
-    spawner.spawn((
-        Node::DEFAULT,
-        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-            parent.spawn(Label::header("Panel A"));
+    spawner.spawn(
+        &mut commands,
+        (
+            Node::DEFAULT,
+            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+                parent.spawn(Label::header("Panel A"));
 
-            parent
-                .spawn(PushButton::from_label("Go back to home"))
-                .observe(pop_on_pointer_release);
+                parent
+                    .spawn(PushButton::from_label("Go back to home"))
+                    .observe(pop_on_pointer_release);
 
-            parent
-                .spawn(PushButton::from_label("Go to panel A variant"))
-                .observe(
-                    |_: Trigger<Pointer<Released>>,
-                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                     items: ItemParam<String, &BreadCrumbsAction>| {
-                        let item_a_ref = items
-                            .find_item_ref(|_, bca| **bca == BreadCrumbsAction::PanelAvariant)
-                            .unwrap();
-                        selections.update_selection_single(|x| {
-                            let x = x.pop().unwrap();
-                            x.push(item_a_ref)
-                        });
-                    },
-                );
-        })),
-    ))
+                parent
+                    .spawn(PushButton::from_label("Go to panel A variant"))
+                    .observe(
+                        |_: Trigger<Pointer<Released>>,
+                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                         items: ItemParam<String, &BreadCrumbsAction>| {
+                            let item_a_ref = items
+                                .find_item_ref(|_, bca| **bca == BreadCrumbsAction::PanelAvariant)
+                                .unwrap();
+                            selections.update_selection_single(|x| {
+                                let x = x.pop().unwrap();
+                                x.push(item_a_ref)
+                            });
+                        },
+                    );
+            })),
+        ),
+    );
 }
-fn create_b(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
-    spawner.spawn((
-        Node::DEFAULT,
-        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-            parent.spawn(Label::header("Panel B"));
+fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn(
+        &mut commands,
+        (
+            Node::DEFAULT,
+            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+                parent.spawn(Label::header("Panel B"));
 
-            parent
-                .spawn(PushButton::from_label("Go back to home"))
-                .observe(pop_on_pointer_release);
-            parent
-                .spawn(PushButton::from_label("Go to panel B sub"))
-                .observe(
-                    |_: Trigger<Pointer<Released>>,
-                     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                     items: ItemParam<String, &BreadCrumbsAction>| {
-                        push_to_selection(BreadCrumbsAction::PanelBsub, &mut selections, items);
-                    },
-                );
-        })),
-    ))
+                parent
+                    .spawn(PushButton::from_label("Go back to home"))
+                    .observe(pop_on_pointer_release);
+                parent
+                    .spawn(PushButton::from_label("Go to panel B sub"))
+                    .observe(
+                        |_: Trigger<Pointer<Released>>,
+                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                         items: ItemParam<String, &BreadCrumbsAction>| {
+                            push_to_selection(BreadCrumbsAction::PanelBsub, &mut selections, items);
+                        },
+                    );
+            })),
+        ),
+    );
 }
-fn create_b_sub(spawner: StackChildSpawner, _theme: &Theme) -> Entity {
-    spawner.spawn((
-        Node::DEFAULT,
-        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-            parent.spawn(Label::header("Panel B sub"));
+fn create_b_sub(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn(
+        &mut commands,
+        (
+            Node::DEFAULT,
+            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
+                parent.spawn(Label::header("Panel B sub"));
 
-            parent
-                .spawn(PushButton::from_label("Go back to panel B"))
-                .observe(pop_on_pointer_release);
-        })),
-    ))
+                parent
+                    .spawn(PushButton::from_label("Go back to panel B"))
+                    .observe(pop_on_pointer_release);
+            })),
+        ),
+    );
 }

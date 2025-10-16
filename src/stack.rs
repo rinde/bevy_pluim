@@ -1,9 +1,7 @@
-use std::fmt;
-
+use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
 
 use crate::select::{Item, Selection, SelectionParam};
-use crate::theme::Theme;
 
 #[derive(Copy, Clone, Debug)]
 pub struct StackPlugin;
@@ -53,7 +51,6 @@ fn switch_view(
     mut nodes: Query<&mut Node>,
     prev_displays: Query<&PrevDisplay>,
     mut commands: Commands,
-    theme: Res<Theme>,
 ) {
     enum Action {
         HideAll,
@@ -144,11 +141,9 @@ fn switch_view(
             show(None);
             let spawner = StackChildSpawner {
                 parent: stack_ref,
-                commands,
+                stack_item_ref: selected_item_ref,
             };
-            let new_reference = creator(spawner, &theme);
-            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap().0;
-            mutable_selected_stack_item.entity = Some(new_reference);
+            commands.run_system_with(creator, spawner);
         }
         Action::SelectDifferent(new_selected) => show(Some(new_selected)),
         Action::SelectDifferentRef(selected_item_ref, new_selected) => {
@@ -160,29 +155,18 @@ fn switch_view(
     }
 }
 
-type StackChildCreator = &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync);
+type StackChildCreator = SystemId<In<StackChildSpawner>>;
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Copy, Clone, Debug)]
 pub struct StackItem {
     entity: Option<Entity>,
-    pub create: Option<&'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync)>,
+    pub create: Option<StackChildCreator>,
     id: Option<usize>,
-}
-
-impl fmt::Debug for StackItem {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StackItem")
-            .field("entity", &self.entity)
-            .field("id", &self.id)
-            .finish_non_exhaustive()
-    }
 }
 
 impl StackItem {
     #[must_use]
-    pub fn new(
-        create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
-    ) -> Self {
+    pub const fn new(create: StackChildCreator) -> Self {
         Self {
             entity: None,
             create: Some(create),
@@ -194,10 +178,7 @@ impl StackItem {
     /// can be reused by other `StackItem`s created with
     /// [`StackItem::new_reference`].
     #[must_use]
-    pub fn new_with_reference(
-        id: usize,
-        create: &'static (dyn Fn(StackChildSpawner, &Theme) -> Entity + Send + Sync),
-    ) -> Self {
+    pub const fn new_with_reference(id: usize, create: StackChildCreator) -> Self {
         Self {
             entity: None,
             create: Some(create),
@@ -206,7 +187,7 @@ impl StackItem {
     }
 
     #[must_use]
-    pub fn new_reference(id: usize) -> Self {
+    pub const fn new_reference(id: usize) -> Self {
         Self {
             entity: None,
             create: None,
@@ -215,29 +196,28 @@ impl StackItem {
     }
 }
 
-pub struct StackChildSpawner<'w, 's> {
+#[derive(Copy, Clone, Debug)]
+pub struct StackChildSpawner {
     parent: Entity,
-    commands: Commands<'w, 's>,
+    stack_item_ref: Entity,
 }
 
-impl fmt::Debug for StackChildSpawner<'_, '_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StackChildSpawner")
-            .field("parent", &self.parent)
-            .finish_non_exhaustive()
-    }
-}
-
-impl StackChildSpawner<'_, '_> {
-    pub fn spawn(mut self, child: impl Bundle) -> Entity {
+impl StackChildSpawner {
+    pub fn spawn(self, commands: &mut Commands, child: impl Bundle) {
         let mut id = Entity::PLACEHOLDER;
-        self.commands.entity(self.parent).with_children(|parent| {
+        commands.entity(self.parent).with_children(|parent| {
             id = parent
                 .spawn((Name::new("StackItem"), AddNodeIfAbsent, child))
                 .id();
         });
-        id
+        commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
     }
+}
+
+fn update_stack_item(input: In<(Entity, Entity)>, mut stack_items: Query<&mut StackItem>) {
+    let (stack_item_ref, new_child_ref) = *input;
+    let mut stack_item = stack_items.get_mut(stack_item_ref).unwrap();
+    stack_item.entity = Some(new_child_ref);
 }
 
 #[derive(Component, Clone, Copy, Debug)]
