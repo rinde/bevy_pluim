@@ -8,8 +8,16 @@ set shell := ["bash", "-uc"]
 BEVY_LINT_VERSION := "v0.4.0"
 BEVY_LINT_TOOLCHAIN := "nightly-2025-06-26"
 
+# The toolchain channel pinned in rust-toolchain.toml, so CI installs the
+# same version instead of hard-coding it separately.
+rust_version := `sed -nr 's/channel = "(.*)"/\1/p' rust-toolchain.toml`
+
 _default:
     @just --list --unsorted
+
+# Print the pinned Rust toolchain version (used by CI).
+rust-version:
+    echo '{{rust_version}}'
 
 # Build the library, tests and examples.
 build:

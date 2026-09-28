@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Full debuginfo in Bevy-linked test binaries fills the runner's disk.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+# A new push to a branch makes the run already in flight for it pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Format, clippy and docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev
+      - uses: taiki-e/install-action@just
+      - name: Read pinned Rust toolchain version
+        id: toolchain
+        run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: just lint
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev
+      - uses: taiki-e/install-action@just
+      - name: Read pinned Rust toolchain version
+        id: toolchain
+        run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      - run: just test
+
+  unused-deps:
+    name: Unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-machete
+      - run: just unused-deps
+
+  cross-check:
+    name: Check on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - name: Read pinned Rust toolchain version
+        id: toolchain
+        shell: bash
+        run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-targets --locked
