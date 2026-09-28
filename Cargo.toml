@@ -1,18 +1,79 @@
 [package]
-name = "ui"
-version.workspace = true
-edition.workspace = true
-
-[lints]
-workspace = true
-
+name = "rin_bevy_ui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+repository = "https://github.com/rinde/rin-bevy-ui"
+# Private software: never publish to a registry.
+publish = false
 
 [dependencies]
-bevy.workspace = true
-derive_more.workspace = true
-educe.workspace = true
-strum.workspace = true
-bevy-inspector-egui.workspace = true
-bevy_egui.workspace = true
-smallvec.workspace = true
-itertools.workspace = true
+bevy = "0.16.1"
+derive_more = { version = "2.0.1", features = ["deref"] }
+educe = { version = "0.6.0", default-features = false, features = ["Default"] }
+itertools = "0.14.0"
+smallvec = "1.15.1"
+strum = { version = "0.27.2", features = ["derive"] }
+
+[dev-dependencies]
+# The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
+bevy = { version = "0.16.1", features = ["bevy_ui_debug"] }
+bevy_egui = { version = "0.36.0", features = ["render", "serde"] }
+bevy-inspector-egui = "0.33.1"
+
+[lints.rust]
+macro_use_extern_crate = "warn"
+meta_variable_misuse = "warn"
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "allow"                 # TODO
+single_use_lifetimes = "warn"
+unreachable_pub = "warn"
+unsafe_code = "forbid"
+unstable_features = "forbid"
+unused_crate_dependencies = "allow"    # TODO
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
+dead_code = "warn"
+unused = { level = "warn", priority = -1 }
+
+[lints.rustdoc]
+broken_intra_doc_links = "deny"
+missing_crate_level_docs = "allow" # TODO
+
+[lints.clippy]
+### Complexity
+complexity = { level = "warn", priority = -1 }
+too_many_arguments = "allow"                   # TODO
+
+correctness = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+
+disallowed-types = "deny"
+missing_const_for_fn = "warn"
+
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+
+### Pedantic
+pedantic = { level = "warn", priority = -1 }
+needless_pass_by_value = "allow"             # this is often needed for Bevy
+missing_errors_doc = "allow"                 # TODO
+missing_panics_doc = "allow"                 # TODO
+too_many_lines = "allow"
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+
+### Restrictions
+exit = "warn"
+unreachable = "warn"
+
+# Bevy is unusably slow in an unoptimised build, so optimise dependencies but
+# not our own code, which keeps the edit-run loop short.
+[profile.dev.package."*"]
+opt-level = 3

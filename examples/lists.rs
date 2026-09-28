@@ -4,11 +4,11 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use ui::WidgetsPlugin;
-use ui::list::{CornerStyle, List, ListLayout};
-use ui::push_button::PushButton;
-use ui::select::{Item, Selection};
-use ui::theme::Theme;
+use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::select::{Item, Selection};
+use rin_bevy_ui::theme::Theme;
 
 fn main() {
     App::new()

@@ -9,13 +9,13 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
-use ui::WidgetsPlugin;
-use ui::combo::Combo;
-use ui::list::List;
-use ui::push_button::PushButton;
-use ui::scroll_area::ScrollArea;
-use ui::select::{Item, Selection};
-use ui::theme::Theme;
+use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::list::List;
+use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::scroll_area::ScrollArea;
+use rin_bevy_ui::select::{Item, Selection};
+use rin_bevy_ui::theme::Theme;
 
 fn main() {
     App::new()
