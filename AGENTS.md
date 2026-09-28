@@ -42,6 +42,9 @@ ambiguous, ask rather than guess.
 **Always work via PRs**, even for small changes. Before stopping, make sure
 the PR exists and check whether it needs a rebase onto `main`.
 
+Whenever asked to work on a ticket, always make sure that the ticket has the 
+label "In progress" assigned to it, if not, assign it before starting any work.
+
 ## Where to find what
 
 | Module | Holds |
