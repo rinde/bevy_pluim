@@ -174,6 +174,16 @@ a loop, and note that examples need a display.
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
 
+### Claude Code on the web
+
+`.claude/hooks/session-start.sh`, registered in `.claude/settings.json` under
+`SessionStart`, prepares a fresh cloud container: it installs the pinned
+toolchain with `clippy` and `rustfmt`, `just` and `cargo-machete` at pinned
+versions, the Bevy system headers `.github/workflows/ci.yml` also installs,
+then warms the build cache with `cargo build --all-targets` so the first real
+build isn't a cold Bevy compile. It is a no-op unless `CLAUDE_CODE_REMOTE=true`
+or run with `--force`, and is idempotent, with progress on stderr.
+
 ## Testing
 
 There are no tests yet; the headless harness is tracked in issue #7. Until it
