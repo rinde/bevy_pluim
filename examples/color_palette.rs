@@ -211,12 +211,11 @@ fn on_press(
 fn on_press_add_combo_button(
     trigger: Trigger<Pointer<Released>>,
     button: Query<(), With<AddComboButton>>,
-    area: Query<Entity, With<ExtraComponentsArea>>,
+    area: Single<Entity, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
     if button.get(trigger.target()).is_ok() {
-        let area = area.single().unwrap();
-        commands.entity(area).with_children(|parent| {
+        commands.entity(*area).with_children(|parent| {
             parent.spawn((
                 ColorPaletteCombo,
                 ListLayout::VerticalGrid { columns: 11 },
@@ -231,11 +230,11 @@ fn on_press_add_combo_button(
 fn on_press_remove_combo_button(
     trigger: Trigger<Pointer<Released>>,
     button: Query<(), With<RemoveComboButton>>,
-    area: Query<&Children, With<ExtraComponentsArea>>,
+    area: Single<&Children, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
     if button.get(trigger.target()).is_ok()
-        && let Some(last) = area.single().unwrap().iter().last()
+        && let Some(last) = area.iter().last()
     {
         commands.entity(last).despawn();
     }
