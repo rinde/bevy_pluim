@@ -21,11 +21,11 @@ rust-version:
 
 # Build the library, tests and examples.
 build:
-    cargo build --all-targets
+    cargo build --quiet --all-targets
 
 # Type check without producing binaries.
 check:
-    cargo check --all-targets
+    cargo check --quiet --all-targets
 
 # Run one of the examples, e.g. `just example widgets`.
 example NAME *ARGS:
@@ -33,12 +33,12 @@ example NAME *ARGS:
 
 # Run the whole test suite, doc tests included.
 test *ARGS:
-    cargo test --all-targets {{ARGS}}
-    cargo test --doc
+    cargo test --quiet --all-targets {{ARGS}}
+    cargo test --quiet --doc
 
 # Check formatting and run clippy at the project's settings.
 lint: fmt-check
-    cargo clippy --all-targets --locked -- -D warnings
+    cargo clippy --all-targets --locked --quiet -- -D warnings
     export RUSTDOCFLAGS="-D warnings"; cargo doc --no-deps --document-private-items
 
 # Reformat everything.
