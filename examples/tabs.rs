@@ -3,18 +3,18 @@ use std::sync::LazyLock;
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use ui::WidgetsPlugin;
-use ui::card::Card;
-use ui::color_palette_combo::ColorPaletteCombo;
-use ui::combo::Combo;
-use ui::label::Label;
-use ui::list::{CornerStyle, List, ListLayout};
-use ui::push_button::PushButton;
-use ui::scroll_area::ScrollArea;
-use ui::select::{Item, ItemValues, Selection};
-use ui::stack::{Stack, StackChildSpawner, StackItem};
-use ui::tailwind::{COLORS, TailwindColor, Variant};
-use ui::theme::Theme;
+use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::card::Card;
+use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
+use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::label::Label;
+use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::scroll_area::ScrollArea;
+use rin_bevy_ui::select::{Item, ItemValues, Selection};
+use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tailwind::{COLORS, TailwindColor, Variant};
+use rin_bevy_ui::theme::Theme;
 
 fn main() {
     App::new()

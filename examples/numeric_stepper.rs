@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
-use ui::WidgetsPlugin;
-use ui::numeric_stepper::{NumericStepper, Value};
-use ui::push_button::PushButton;
-use ui::theme::Theme;
+use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::theme::Theme;
 
 fn main() {
     App::new()

@@ -5,16 +5,16 @@ use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use ui::WidgetsPlugin;
-use ui::card::Card;
-use ui::color_palette::ColorPalette;
-use ui::color_palette_combo::ColorPaletteCombo;
-use ui::list::ListLayout;
-use ui::push_button::PushButton;
-use ui::scroll_area::ScrollArea;
-use ui::select::{Item, Selection};
-use ui::tailwind::COLORS;
-use ui::theme::Theme;
+use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::card::Card;
+use rin_bevy_ui::color_palette::ColorPalette;
+use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
+use rin_bevy_ui::list::ListLayout;
+use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::scroll_area::ScrollArea;
+use rin_bevy_ui::select::{Item, Selection};
+use rin_bevy_ui::tailwind::COLORS;
+use rin_bevy_ui::theme::Theme;
 
 fn main() {
     App::new()

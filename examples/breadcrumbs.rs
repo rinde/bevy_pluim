@@ -3,13 +3,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bevy::ecs::spawn::SpawnWith;
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use ui::WidgetsPlugin;
-use ui::breadcrumbs::BreadCrumbs;
-use ui::label::Label;
-use ui::push_button::PushButton;
-use ui::select::{Item, ItemParam, Selection, SelectionParam, SelectionValue};
-use ui::stack::{Stack, StackChildSpawner, StackItem};
-use ui::theme::Theme;
+use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::breadcrumbs::BreadCrumbs;
+use rin_bevy_ui::label::Label;
+use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::select::{Item, ItemParam, Selection, SelectionParam, SelectionValue};
+use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::theme::Theme;
 
 fn main() {
     App::new()
