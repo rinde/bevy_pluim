@@ -520,12 +520,20 @@ where
             .map(|(entity, selection)| self.find(entity, selection))
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "passes the `Result` on to the caller instead of panicking"
+    )]
     pub fn single(&self) -> Result<(Entity, &SelectionValue), QuerySingleError> {
         self.subset
             .single()
             .map(|(entity, selection)| self.find(entity, selection))
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "passes the `Result` on to the caller instead of panicking"
+    )]
     pub fn single_ref(&self) -> Result<Entity, QuerySingleError> {
         self.subset
             .single()

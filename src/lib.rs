@@ -82,7 +82,10 @@ fn add_ui_root(
 }
 
 fn setup(root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
-    assert!(root_node.single().is_ok(), "A root node is required");
+    assert!(
+        root_node.iter().count() == 1,
+        "Exactly one root node is required"
+    );
 }
 
 #[derive(Component, Debug, Copy, Clone)]
