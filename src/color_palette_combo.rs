@@ -58,7 +58,7 @@ fn on_insert_combo(
     t: Trigger<OnInsert, ColorPaletteCombo>,
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
-    root: Single<Entity, With<UiRoot>>,
+    root: Query<Entity, With<UiRoot>>,
 ) {
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
@@ -78,7 +78,7 @@ fn on_insert_combo(
             ))
             .id();
     });
-    let root = *root;
+    let root = root.single().unwrap();
     commands.entity(root).with_children(|parent| {
         float_id = parent
             .spawn((
