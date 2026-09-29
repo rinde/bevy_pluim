@@ -1,3 +1,5 @@
+//! `Float`: an absolutely positioned popup layer, used by combos.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -5,6 +7,9 @@ use itertools::Either;
 
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`Float`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct FloatPlugin;
 
@@ -27,6 +32,7 @@ impl Plugin for FloatPlugin {
 pub struct Float;
 
 impl Float {
+    /// Component hook: positions the node absolutely and gives it the large theme shadow.
     pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
         world
             .commands()

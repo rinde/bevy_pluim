@@ -1,3 +1,12 @@
+//! A reusable Bevy UI widget library built on Bevy's native `Node` UI: buttons, lists,
+//! combos, scroll areas, tabs, breadcrumbs, colour palettes and a numeric stepper,
+//! all themed from one [`Theme`] resource.
+//!
+//! Add [`WidgetsPlugin`] to an app and spawn exactly one root [`Node`].
+//!
+//! The crate takes Bevy types only: anything that knows what a picked item
+//! *means* belongs in the application that uses the widgets.
+
 pub mod breadcrumbs;
 pub mod card;
 pub mod color_palette;
@@ -36,6 +45,7 @@ use crate::select::ItemsPlugin;
 use crate::stack::StackPlugin;
 use crate::theme::{Theme, ThemePlugin};
 
+/// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
@@ -86,6 +96,9 @@ fn setup(root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
     );
 }
 
+/// Marks the one node without a parent that all other UI hangs off.
+///
+/// Inserted automatically on any [`Node`] that has no parent.
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("UiRoot"))]
 pub struct UiRoot;

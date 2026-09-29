@@ -1,3 +1,11 @@
+//! The selection model.
+//!
+//! A [`Selection`] is an immutable component that either holds a
+//! [`SelectionValue`] or refers to the selection on another entity. The items
+//! to choose from live in an [`ItemValues`] relationship target, optionally shared
+//! through [`ItemsRef`]. Widgets read and change selections through
+//! [`SelectionParam`].
+
 use bevy::ecs::query::{QueryData, QueryFilter, QuerySingleError, ROQueryItem};
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnIter;
@@ -7,8 +15,11 @@ use derive_more::Deref;
 use educe::Educe;
 use itertools::{Either, Itertools};
 use smallvec::{SmallVec, smallvec};
-use strum::{EnumDiscriminants, EnumIs};
+use strum::EnumIs;
 
+/// Registers the systems and observers of the selection model.
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ItemsPlugin;
 
@@ -30,19 +41,26 @@ impl Plugin for ItemsPlugin {
     }
 }
 
+/// What is selected: either a [`SelectionValue`] on this entity, or a reference to the selection on another entity so that several widgets share one.
+///
+/// Immutable: change it through [`SelectionParam`], which inserts the new value.
 #[derive(Component, Debug, Clone, Eq, PartialEq, Reflect)]
 #[component(immutable)]
 pub enum Selection {
+    /// Use the selection on that entity.
     Ref(Entity),
+    /// The selection itself.
     Value(SelectionValue),
 }
 
 impl Selection {
+    /// A selection that refers to the selection on `selection_ref`.
     #[must_use]
     pub const fn reference(selection_ref: Entity) -> Self {
         Self::Ref(selection_ref)
     }
 
+    /// The value, unless this is a reference.
     #[must_use]
     pub const fn as_selection(&self) -> Option<&SelectionValue> {
         match self {
@@ -51,6 +69,7 @@ impl Selection {
         }
     }
 
+    /// The referenced entity, unless this holds a value.
     #[must_use]
     pub const fn as_ref(&self) -> Option<&Entity> {
         match self {
@@ -59,20 +78,24 @@ impl Selection {
         }
     }
 
+    /// Starts a [`SelectionBuilder`].
     #[must_use]
     pub const fn builder() -> SelectionBuilder {
         SelectionBuilder
     }
 }
 
+/// Chooses the kind of [`SelectionValue`] to build.
 #[derive(Copy, Clone, Debug)]
 pub struct SelectionBuilder;
+/// A [`SelectionValue`] chosen; finish it with an item source.
 #[derive(Clone, Debug)]
 pub struct SelectionBuilderWithValue {
     value: SelectionValue,
 }
 
 impl SelectionBuilder {
+    /// Exactly one item is selected; the first item until the user picks one.
     #[must_use]
     pub const fn one(self) -> SelectionBuilderWithValue {
         SelectionBuilderWithValue {
@@ -80,6 +103,7 @@ impl SelectionBuilder {
         }
     }
 
+    /// Exactly one item is selected, initially `selection`.
     #[must_use]
     pub const fn one_with(self, selection: Entity) -> SelectionBuilderWithValue {
         SelectionBuilderWithValue {
@@ -87,6 +111,7 @@ impl SelectionBuilder {
         }
     }
 
+    /// At most one item is selected, initially none.
     #[must_use]
     pub const fn zero_or_one(self) -> SelectionBuilderWithValue {
         SelectionBuilderWithValue {
@@ -94,6 +119,7 @@ impl SelectionBuilder {
         }
     }
 
+    /// Any number of items are selected, initially none.
     #[must_use]
     pub const fn zero_or_more(self) -> SelectionBuilderWithValue {
         SelectionBuilderWithValue {
@@ -101,6 +127,7 @@ impl SelectionBuilder {
         }
     }
 
+    /// At least one item is selected; the first item until the user picks others.
     #[must_use]
     pub fn one_or_more(self) -> SelectionBuilderWithValue {
         SelectionBuilderWithValue {
@@ -110,6 +137,7 @@ impl SelectionBuilder {
 }
 
 impl SelectionBuilderWithValue {
+    /// The selection together with `items`, spawned as its [`ItemValues`].
     #[must_use]
     pub fn build_with_items<I, B>(self, items: I) -> impl Bundle
     where
@@ -123,6 +151,7 @@ impl SelectionBuilderWithValue {
         )
     }
 
+    /// The selection choosing from the items of `items_ref`, so several selections can share one set of items.
     #[must_use]
     pub fn build_with_items_ref(self, items_ref: Entity) -> impl Bundle {
         (Selection::Value(self.value), ItemsRef(items_ref))
@@ -234,22 +263,31 @@ const DANGLING_SELECTION_REF: &str = "a `Selection::Ref` that points to a `Selec
 
 type SelectionVec = SmallVec<[Entity; 4]>;
 
-#[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs, Reflect, EnumDiscriminants)]
+/// The selected items, and how many may be selected.
+///
+/// Methods that change it return the new value, or `None` when the change is not allowed for the variant or would not change anything.
+#[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs, Reflect)]
 #[educe(Default)]
 pub enum SelectionValue {
+    /// Exactly one item.
     One(Entity),
+    /// At most one item.
     #[educe(Default)]
     ZeroOrOne(Option<Entity>),
+    /// At least one item.
     OneOrMore(SelectionVec),
+    /// Any number of items.
     ZeroOrMore(SelectionVec),
 }
 
 impl SelectionValue {
+    /// This value as a [`Selection`] component.
     #[must_use]
     pub const fn into_component(self) -> Selection {
         Selection::Value(self)
     }
 
+    /// Whether more than one item can be selected.
     #[must_use]
     pub const fn allow_multiple(&self) -> bool {
         match self {
@@ -258,6 +296,7 @@ impl SelectionValue {
         }
     }
 
+    /// Whether `item` is selected.
     #[must_use]
     pub fn is_selected(&self, item: Entity) -> bool {
         match self {
@@ -267,6 +306,7 @@ impl SelectionValue {
         }
     }
 
+    /// The selected items, in selection order.
     pub fn iter(&self) -> impl Iterator<Item = Entity> {
         match self {
             Self::One(selected) => Either::Left(Some(*selected).into_iter()),
@@ -277,6 +317,7 @@ impl SelectionValue {
         }
     }
 
+    /// Whether no item is selected.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
@@ -286,6 +327,7 @@ impl SelectionValue {
         }
     }
 
+    /// The number of selected items.
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
@@ -295,6 +337,7 @@ impl SelectionValue {
         }
     }
 
+    /// The selected item, if exactly one item is selected.
     #[must_use]
     pub fn single(&self) -> Option<Entity> {
         match self {
@@ -307,6 +350,7 @@ impl SelectionValue {
         }
     }
 
+    /// The item that was selected last.
     #[must_use]
     pub fn last(&self) -> Option<Entity> {
         match self {
@@ -317,6 +361,7 @@ impl SelectionValue {
         }
     }
 
+    /// Selects `new_selection`, or deselects it if it is selected.
     #[must_use]
     pub fn toggle_selected(&self, new_selection: Entity) -> Option<Self> {
         match self {
@@ -360,11 +405,13 @@ impl SelectionValue {
         }
     }
 
+    /// Adds one item to the selection.
     #[must_use]
     pub fn push(&self, new_selection: Entity) -> Option<Self> {
         self.append([new_selection])
     }
 
+    /// Adds items to the selection, skipping the ones already selected.
     #[must_use]
     pub fn append(&self, iter: impl IntoIterator<Item = Entity>) -> Option<Self> {
         match self {
@@ -407,6 +454,7 @@ impl SelectionValue {
         }
     }
 
+    /// Removes the item that was selected last.
     #[must_use]
     pub fn pop(&self) -> Option<Self> {
         match self {
@@ -423,6 +471,7 @@ impl SelectionValue {
         }
     }
 
+    /// Keeps only the first `new_length` selected items.
     #[must_use]
     pub fn trim_to_length(&self, new_length: usize) -> Option<Self> {
         match self {
@@ -444,6 +493,7 @@ impl SelectionValue {
         }
     }
 
+    /// Deselects everything.
     #[must_use]
     pub fn clear(&self) -> Option<Self> {
         match self {
@@ -454,6 +504,7 @@ impl SelectionValue {
         }
     }
 
+    /// Replaces the selection with `iter`.
     #[must_use]
     pub fn set_selection(&self, iter: impl IntoIterator<Item = Entity>) -> Option<Self> {
         let mut iter = iter.into_iter().unique();
@@ -497,6 +548,9 @@ impl SelectionValue {
     }
 }
 
+/// System parameter to read and change selections, following any [`Selection::Ref`].
+///
+/// `F` narrows down the selections that [`Self::iter`] and [`Self::single`] see.
 #[derive(SystemParam)]
 pub struct SelectionParam<'w, 's, F: QueryFilter + 'static = ()> {
     selection_refs: Query<'w, 's, &'static Selection>,
@@ -510,6 +564,7 @@ impl<F> SelectionParam<'_, '_, F>
 where
     F: QueryFilter + 'static,
 {
+    /// The selections matching the filter, with the entity holding each value.
     pub fn iter(&self) -> impl Iterator<Item = (Entity, &SelectionValue)> {
         self.subset
             .iter()
@@ -542,16 +597,19 @@ where
         self.single().map(|(selection_ref, _)| selection_ref)
     }
 
+    /// The value of the selection on `entity`, following a reference.
     #[must_use]
     pub fn get(&self, entity: Entity) -> Option<&SelectionValue> {
         self.get_with_ref(entity).map(|(_, s)| s)
     }
 
+    /// The entity holding the value of the selection on `entity`.
     #[must_use]
     pub fn get_ref(&self, entity: Entity) -> Option<Entity> {
         self.get_with_ref(entity).map(|(e, _)| e)
     }
 
+    /// [`Self::get_ref`] and [`Self::get`] in one.
     #[must_use]
     pub fn get_with_ref(&self, selection_ref: Entity) -> Option<(Entity, &SelectionValue)> {
         let selection = self.selection_refs.get(selection_ref).ok()?;
@@ -575,6 +633,7 @@ where
         }
     }
 
+    /// The items that the selection on `selection_ref` chooses from, with the entity holding them.
     #[must_use]
     pub fn get_item_values(&self, selection_ref: Entity) -> Option<(Entity, &ItemValues)> {
         let root_selection_ref = self.get_ref(selection_ref)?;
@@ -586,6 +645,9 @@ where
         self.item_values.get(items_ref).ok()
     }
 
+    /// Changes the one selection matching the filter.
+    ///
+    /// `updater` returns the new value, or `None` to leave it as it is. Returns whether the selection changed.
     pub fn update_selection_single(
         &mut self,
         updater: impl FnOnce(&SelectionValue) -> Option<SelectionValue>,
@@ -600,6 +662,9 @@ where
         true
     }
 
+    /// Changes the selection on `selection_ref`.
+    ///
+    /// `updater` returns the new value, or `None` to leave it as it is. Returns whether the selection changed.
     pub fn update_selection(
         &mut self,
         selection_ref: Entity,
@@ -631,24 +696,30 @@ where
     }
 }
 
+/// Marks an entity as an item of the [`ItemValues`] on the given entity.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemValues)]
 pub struct ItemOf(pub Entity);
 
+/// The items that a selection chooses from.
 #[derive(Component, Debug, Default, Clone, Reflect, Deref)]
 #[relationship_target(relationship = ItemOf, linked_spawn)]
 #[require(Name::new("Items"))]
 pub struct ItemValues(Vec<Entity>);
 
+/// Spawns items into an [`ItemValues`].
 pub type ItemSpawner<'w> = RelatedSpawner<'w, ItemOf>;
 
+/// An item that can be selected, carrying `data`.
 #[derive(Component, Debug, Clone, Reflect)]
 #[require(Name::new("Item"))]
 pub struct Item<T> {
+    /// What the item shows or stands for.
     pub data: T,
 }
 
 impl Item<String> {
+    /// A text item.
     pub fn new(label: impl Into<String>) -> Self {
         Self { data: label.into() }
     }
@@ -660,6 +731,7 @@ impl<T: Into<String>> From<T> for Item<String> {
     }
 }
 
+/// Triggered on an [`ItemValues`] entity when its items change; holds the new items.
 #[derive(Event, Debug, Clone)]
 pub struct ItemsChanged(pub ItemValues);
 
@@ -671,10 +743,12 @@ fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut comman
 
 // a selection value should have this component, should not be added to any
 // other component
+/// Lets a selection choose from the [`ItemValues`] on another entity.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemSelections)]
 pub struct ItemsRef(pub Entity);
 
+/// The selections that choose from these items through [`ItemsRef`].
 #[derive(Component, Debug, Default, Clone, Reflect, Deref)]
 #[relationship_target(relationship = ItemsRef, linked_spawn)]
 pub struct ItemSelections(Vec<Entity>);
@@ -698,6 +772,7 @@ where
     D: QueryData + 'static,
     F: QueryFilter + 'static,
 {
+    /// The first item, with its extra query data, for which `predicate` holds.
     pub fn find_item(
         &self,
         predicate: impl Fn(&Item<T>, &ROQueryItem<D>) -> bool,
@@ -707,6 +782,7 @@ where
             .find(|(_, item, e_value)| predicate(item, e_value))
     }
 
+    /// The entity of the first item for which `predicate` holds.
     pub fn find_item_ref(
         &self,
         predicate: impl Fn(&Item<T>, &ROQueryItem<D>) -> bool,

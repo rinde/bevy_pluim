@@ -1,3 +1,5 @@
+//! `Link`: a clickable text whose look follows its [`LinkState`].
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -6,6 +8,9 @@ use itertools::Either;
 use crate::MouseEvent;
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`Link`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct LinkPlugin;
 
@@ -21,6 +26,7 @@ impl Plugin for LinkPlugin {
     }
 }
 
+/// Clickable text. Whether it reacts is up to its [`LinkState`].
 #[derive(Component, Clone, Debug, Eq, PartialEq)]
 #[component(on_add = Self::on_add)]
 #[require(BoxShadow::default(),
@@ -42,14 +48,18 @@ pub struct Link {
 #[derive(Component, Clone, Debug, Copy)]
 struct LinkText;
 
+/// Whether a [`Link`] can be clicked.
 #[derive(Component, Clone, Debug, Copy, Eq, PartialEq)]
 #[component(immutable)]
 pub enum LinkState {
+    /// The link highlights on hover and can be clicked.
     Enabled,
+    /// The link is plain text, for example the current crumb of a trail.
     Disabled,
 }
 
 impl Link {
+    /// A link showing `label`.
     pub fn new(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),

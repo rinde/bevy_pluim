@@ -1,3 +1,7 @@
+//! `PushButton`: a themed button with a label and an optional icon.
+//!
+//! This is the reference widget for how widgets in this crate are put together.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -6,6 +10,9 @@ use itertools::Either;
 use crate::MouseEvent;
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`PushButton`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct PushButtonPlugin;
 
@@ -20,6 +27,7 @@ impl Plugin for PushButtonPlugin {
     }
 }
 
+/// A themed button with a label and an optional icon.
 #[derive(Component, Clone, Debug, Eq, PartialEq)]
 #[component(on_add = Self::on_add)]
 #[require(BoxShadow::default(),
@@ -35,15 +43,20 @@ pub struct PushButton {
     icon: Option<String>,
 }
 
+/// Marks the label text of a [`PushButton`].
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonLabel;
 
+/// The children of a [`PushButton`].
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonRefs {
+    /// The label text.
     pub label_id: Entity,
+    /// The icon text, if the button has an icon.
     pub icon_id: Option<Entity>,
 }
 
+/// Marks the icon text of a [`PushButton`].
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonIcon;
 
@@ -52,6 +65,7 @@ pub struct PushButtonIcon;
 pub struct NoDefaultHover;
 
 impl PushButton {
+    /// A button with a label and an icon.
     pub fn new(label: impl Into<String>, icon: impl Into<String>) -> Self {
         Self {
             label: label.into(),
@@ -59,6 +73,7 @@ impl PushButton {
         }
     }
 
+    /// A button with only a label.
     pub fn from_label(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),

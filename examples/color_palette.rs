@@ -1,3 +1,5 @@
+//! `ColorPalette` and `ColorPaletteCombo` over `tailwind::COLORS`.
+
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;

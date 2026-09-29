@@ -1,3 +1,7 @@
+//! All Tailwind colours, for colour pickers.
+//!
+//! The theme itself uses [`bevy::color::palettes::tailwind`] directly.
+
 use bevy::color::palettes::tailwind::{
     AMBER_50, AMBER_100, AMBER_200, AMBER_300, AMBER_400, AMBER_500, AMBER_600, AMBER_700,
     AMBER_800, AMBER_900, AMBER_950, BLUE_50, BLUE_100, BLUE_200, BLUE_300, BLUE_400, BLUE_500,
@@ -31,6 +35,7 @@ use bevy::color::palettes::tailwind::{
 };
 use bevy::prelude::*;
 
+/// All 242 Tailwind colours: 22 classes with 11 variants each.
 pub const COLORS: [TailwindColor; 242] = [
     // slate
     TailwindColor {
@@ -1266,48 +1271,87 @@ pub const COLORS: [TailwindColor; 242] = [
     },
 ];
 
+/// One Tailwind colour.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct TailwindColor {
+    /// The hue, such as `Blue`.
     pub class: Class,
+    /// The shade, from 50 (lightest) to 950 (darkest).
     pub variant: Variant,
+    /// The colour itself.
     pub color: Color,
 }
+/// The hue of a Tailwind colour.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Class {
+    /// Tailwind `slate`.
     Slate,
+    /// Tailwind `gray`.
     Gray,
+    /// Tailwind `zinc`.
     Zinc,
+    /// Tailwind `neutral`.
     Neutral,
+    /// Tailwind `stone`.
     Stone,
+    /// Tailwind `red`.
     Red,
+    /// Tailwind `orange`.
     Orange,
+    /// Tailwind `amber`.
     Amber,
+    /// Tailwind `yellow`.
     Yellow,
+    /// Tailwind `lime`.
     Lime,
+    /// Tailwind `green`.
     Green,
+    /// Tailwind `emerald`.
     Emerald,
+    /// Tailwind `teal`.
     Teal,
+    /// Tailwind `cyan`.
     Cyan,
+    /// Tailwind `sky`.
     Sky,
+    /// Tailwind `blue`.
     Blue,
+    /// Tailwind `indigo`.
     Indigo,
+    /// Tailwind `violet`.
     Violet,
+    /// Tailwind `purple`.
     Purple,
+    /// Tailwind `fuchsia`.
     Fuchsia,
+    /// Tailwind `pink`.
     Pink,
+    /// Tailwind `rose`.
     Rose,
 }
+/// The shade of a Tailwind colour.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Variant {
+    /// Shade 50.
     V50,
+    /// Shade 100.
     V100,
+    /// Shade 200.
     V200,
+    /// Shade 300.
     V300,
+    /// Shade 400.
     V400,
+    /// Shade 500.
     V500,
+    /// Shade 600.
     V600,
+    /// Shade 700.
     V700,
+    /// Shade 800.
     V800,
+    /// Shade 900.
     V900,
+    /// Shade 950.
     V950,
 }

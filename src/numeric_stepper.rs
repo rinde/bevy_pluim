@@ -1,3 +1,5 @@
+//! `NumericStepper`: a value with a decrease and an increase button.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -7,6 +9,9 @@ use crate::label::Label;
 use crate::push_button::PushButton;
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`NumericStepper`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct NumericStepperPlugin;
 
@@ -24,6 +29,9 @@ impl Plugin for NumericStepperPlugin {
     }
 }
 
+/// A [`Value`] with a decrease and an increase button.
+///
+/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
 #[derive(Component, Clone, Copy, Debug)]
 #[component(on_insert=Self::on_insert)]
 #[require(Node::default())]
@@ -65,23 +73,34 @@ impl NumericStepper {
     }
 }
 
+/// Points a [`NumericStepper`] to the entity holding its [`Value`].
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ValueRef(pub Entity);
 
+/// A number with bounds and a step size.
 #[derive(Component, Clone, Copy, Debug)]
 pub enum Value {
+    /// A floating point value.
     F32 {
+        /// The current value.
         value: f32,
+        /// The lowest value.
         min: f32,
+        /// The highest value.
         max: f32,
+        /// The amount one press adds or subtracts.
         step: f32,
     },
+    /// An unsigned 8-bit value.
     U8(UIntValue<u8>),
+    /// An unsigned 16-bit value.
     U16(UIntValue<u16>),
+    /// An unsigned 32-bit value.
     U32(UIntValue<u32>),
 }
 
 impl Value {
+    /// A `u8` value starting at `initial_value`, between `min` and `max`, moving by `step`.
     #[must_use]
     pub const fn new_u8(initial_value: u8, min: u8, max: u8, step: u8) -> Self {
         Self::U8(UIntValue {
@@ -91,6 +110,7 @@ impl Value {
             step,
         })
     }
+    /// A `u16` value starting at `initial_value`, between `min` and `max`, moving by `step`.
     #[must_use]
     pub const fn new_u16(initial_value: u16, min: u16, max: u16, step: u16) -> Self {
         Self::U16(UIntValue {
@@ -101,6 +121,7 @@ impl Value {
         })
     }
 
+    /// A `u32` value starting at `initial_value`, between `min` and `max`, moving by `step`.
     #[must_use]
     pub const fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
         Self::U32(UIntValue {
@@ -111,6 +132,7 @@ impl Value {
         })
     }
 
+    /// An `f32` value starting at `initial_value`, between `min` and `max`, moving by `step`.
     #[must_use]
     pub const fn new_f32(initial_value: f32, min: f32, max: f32, step: f32) -> Self {
         Self::F32 {
@@ -121,6 +143,7 @@ impl Value {
         }
     }
 
+    /// Adds one step. Returns `false`, leaving the value as it is, if that would pass the maximum.
     pub fn increment(&mut self) -> bool {
         match self {
             Self::F32 {
@@ -139,6 +162,7 @@ impl Value {
         }
     }
 
+    /// Subtracts one step. Returns `false`, leaving the value as it is, if that would pass the minimum.
     pub fn decrement(&mut self) -> bool {
         match self {
             Self::F32 {
@@ -157,6 +181,7 @@ impl Value {
         }
     }
 
+    /// Whether [`Self::increment`] would change the value.
     #[must_use]
     pub fn can_increment(&self) -> bool {
         match self {
@@ -167,6 +192,7 @@ impl Value {
         }
     }
 
+    /// Whether [`Self::decrement`] would change the value.
     #[must_use]
     pub fn can_decrement(&self) -> bool {
         match self {
@@ -177,6 +203,7 @@ impl Value {
         }
     }
 
+    /// The value as an `f32`, if it is one.
     #[must_use]
     pub const fn as_f32(&self) -> Option<f32> {
         match self {
@@ -185,6 +212,7 @@ impl Value {
         }
     }
 
+    /// The value as an `u8`, if it is one.
     #[must_use]
     pub const fn as_u8(&self) -> Option<u8> {
         match self {
@@ -193,6 +221,7 @@ impl Value {
         }
     }
 
+    /// The value as an `u16`, if it is one.
     #[must_use]
     pub const fn as_u16(&self) -> Option<u16> {
         match self {
@@ -201,6 +230,7 @@ impl Value {
         }
     }
 
+    /// The value as an `u32`, if it is one.
     #[must_use]
     pub const fn as_u32(&self) -> Option<u32> {
         match self {
@@ -289,16 +319,23 @@ fn on_change(
     }
 }
 
+/// Triggered on the entity holding a [`Value`] after a stepper button changed it.
 #[derive(Event, Debug, Clone, Copy)]
 pub struct ValueChange {
+    /// The new value.
     pub value: Value,
 }
 
+/// An unsigned integer with bounds and a step size.
 #[derive(Debug, Clone, Copy)]
 pub struct UIntValue<T> {
+    /// The current value.
     pub value: T,
+    /// The lowest value.
     pub min: T,
+    /// The highest value.
     pub max: T,
+    /// The amount one press adds or subtracts.
     pub step: T,
 }
 
@@ -326,8 +363,11 @@ impl<T: UInt> UIntValue<T> {
     }
 }
 
+/// An unsigned integer type usable in a [`UIntValue`].
 pub trait UInt: Sized + Ord + Copy {
+    /// Adds, or `None` on overflow.
     fn checked_add(self, rhs: Self) -> Option<Self>;
+    /// Subtracts, or `None` on underflow.
     fn checked_sub(self, rhs: Self) -> Option<Self>;
 }
 

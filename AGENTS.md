@@ -156,6 +156,11 @@ Every example has a button that toggles the light and dark theme, and sets
   `SelectionValue` methods return `None` for a change the variant does not
   allow. Integration tests carry a file-level `#![expect(clippy::unwrap_used,
   …, reason = "tests may abort loudly")]`.
+- **Everything public is documented.** `missing_docs` and rustdoc's
+  `missing_crate_level_docs` are `deny`: every public item has a `///`
+  comment, every module (and each example) a `//!` header, and
+  `RUSTDOCFLAGS="-D warnings"` in `just lint` keeps intra-doc links honest. Say
+  what a thing is or does, not how it is implemented.
 - **`#[expect(…, reason = "…")]`, never `allow`.** `allow_attributes` and
   `allow_attributes_without_reason` are denied in `Cargo.toml`.
 - `#[derive(Debug)]` on every public type (`missing_debug_implementations`

@@ -1,3 +1,5 @@
+//! `Label`: themed text, either a header or regular text.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -18,6 +20,7 @@ impl Plugin for LabelPlugin {
     }
 }
 
+/// Themed text.
 #[derive(Component, Clone, Debug)]
 #[component(on_insert=Self::on_insert)]
 #[require(
@@ -32,15 +35,19 @@ impl Plugin for LabelPlugin {
     },
 )]
 pub enum Label {
+    /// Larger text, for headings.
     Header(String),
+    /// Body text.
     Regular(String),
 }
 
 impl Label {
+    /// A heading with the given text.
     pub fn header(text: impl Into<String>) -> Self {
         Self::Header(text.into())
     }
 
+    /// Body text with the given text.
     pub fn regular(text: impl Into<String>) -> Self {
         Self::Regular(text.into())
     }

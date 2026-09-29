@@ -1,3 +1,5 @@
+//! `ScrollArea`: scrollable contents with vertical and/or horizontal scroll bars.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::world::DeferredWorld;
@@ -7,6 +9,9 @@ use itertools::Either;
 use crate::MouseEvent;
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`ScrollArea`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct ScrollAreaPlugin;
 
@@ -24,6 +29,7 @@ impl Plugin for ScrollAreaPlugin {
     }
 }
 
+/// A node with scroll bars. Build one with [`ScrollArea::bundle`].
 #[derive(Component, Clone, Copy, Debug)]
 #[require(Node::default(), Name::new("ScrollArea"))]
 #[component(on_insert=Self::on_insert)]
@@ -43,6 +49,7 @@ impl ScrollArea {
     }
 }
 
+/// Marks the node holding the scrolled contents of a [`ScrollArea`].
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ScrollContents;
 
@@ -53,6 +60,9 @@ struct ScrollAreaRefs {
 }
 
 impl ScrollArea {
+    /// A scroll area whose contents are spawned by `contents_spawner`.
+    ///
+    /// `v_scroll` and `h_scroll` enable scrolling (and a scroll bar) on that axis.
     pub fn bundle<F>(contents_spawner: F, v_scroll: bool, h_scroll: bool) -> impl Bundle
     where
         F: FnOnce(&mut ChildSpawner) + Send + Sync + 'static,
@@ -98,18 +108,23 @@ impl ScrollArea {
     }
 }
 
+/// A scroll bar with a thumb, along the given [`Orientation`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[require(Node::default(), Visibility::Inherited, Name::new("ScrollBar"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollBar(pub Orientation);
 
+/// The axis of a [`ScrollBar`].
 #[derive(Clone, Copy, Debug, Reflect)]
 pub enum Orientation {
+    /// Scrolls left and right.
     Horizontal,
+    /// Scrolls up and down.
     Vertical,
 }
 
 impl ScrollBar {
+    /// Component hook: spawns the thumb of the scroll bar.
     pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
         world
             .commands()

@@ -1,3 +1,5 @@
+//! `BreadCrumbs` and a `Stack` sharing one selection, with reused `StackItem` creators.
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use bevy::ecs::spawn::SpawnWith;

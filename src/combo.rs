@@ -1,3 +1,7 @@
+//! `Combo`: a button that opens a [`List`] in a [`Float`].
+//!
+//! The popup closes again on a click outside of it.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -11,6 +15,9 @@ use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButton
 use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`Combo`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct ComboPlugin;
 
@@ -21,6 +28,9 @@ impl Plugin for ComboPlugin {
     }
 }
 
+/// A button that opens a [`List`] in a [`Float`].
+///
+/// The popup closes again on a click outside of it.
 #[derive(Component, Debug, Clone, Copy)]
 #[component(on_add=Self::on_add)]
 #[require(
@@ -35,28 +45,37 @@ impl Plugin for ComboPlugin {
 )]
 pub struct Combo;
 
+/// Marks the button of a [`Combo`].
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("ComboButton"))]
 pub struct ComboButton;
 
+/// The children of a [`Combo`].
 #[derive(Component, Debug, Copy, Clone)]
 pub struct ComboSubRefs {
+    /// The button that opens and closes the popup.
     pub button_id: Entity,
+    /// The list inside the popup.
     pub list_id: Entity,
 }
 
+/// Marks the list inside the popup of a [`Combo`].
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("ComboList"))]
 pub struct ComboList;
 
+/// Whether the popup of a [`Combo`] is showing.
 #[derive(Component, Debug, Copy, Clone, Eq, PartialEq)]
 #[component(immutable, on_insert=Self::on_insert)]
 pub enum ComboState {
+    /// The popup is showing.
     Open,
+    /// The popup is hidden.
     Closed,
 }
 
 impl ComboState {
+    /// The other state.
     #[must_use]
     pub const fn inverse(&self) -> Self {
         match self {

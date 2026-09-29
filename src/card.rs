@@ -1,3 +1,5 @@
+//! `Card`: a themed background, border, radius and shadow on a node.
+
 use bevy::ecs::component::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -5,6 +7,9 @@ use itertools::Either;
 
 use crate::theme::Theme;
 
+/// Registers the systems and observers of [`Card`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct CardPlugin;
 
@@ -19,6 +24,7 @@ impl Plugin for CardPlugin {
     }
 }
 
+/// A node with a themed background, border, corner radius and shadow.
 #[derive(Component, Copy, Clone, Debug)]
 #[require(BoxShadow::default(), BorderRadius::default(), Node::default())]
 #[component(on_insert=Self::on_insert)]

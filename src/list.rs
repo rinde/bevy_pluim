@@ -1,3 +1,5 @@
+//! `List`: renders the items of a [`Selection`] as views and keeps them in sync.
+
 #![expect(clippy::used_underscore_binding, reason = "Caused by Reflect")]
 use std::collections::HashMap;
 
@@ -40,6 +42,9 @@ impl Plugin for ListPlugin {
     }
 }
 
+/// Renders the items of a [`Selection`] as views, one per item, and keeps them in sync.
+///
+/// Use [`ListLayout`] and [`CornerStyle`] to change how they are laid out.
 #[derive(Component, Debug, Copy, Clone, Default)]
 #[component(on_insert = Self::on_insert)]
 #[require(
@@ -53,20 +58,32 @@ impl Plugin for ListPlugin {
 )]
 pub struct List;
 
+/// How the item views of a [`List`] are arranged.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 pub enum ListLayout {
+    /// One item per row.
     Vertical,
+    /// One item per column.
     Horizontal,
-    VerticalGrid { columns: u16 },
+    /// A grid that fills row by row.
+    VerticalGrid {
+        /// The number of columns.
+        columns: u16,
+    },
 }
 
+/// Which corners of a [`List`] and its item views are rounded.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 pub enum CornerStyle {
+    /// Round the outer corners of the list.
     FollowLayout,
+    /// Round the corners on the outside of a tab bar only.
     Tabs,
+    /// Square corners.
     None,
 }
 
+/// Opt out of the default item views, for a [`List`] that renders its items itself.
 #[derive(Component, Copy, Clone, Default, Debug)]
 pub struct NoDefaultItems;
 
@@ -108,10 +125,13 @@ impl List {
     }
 }
 
+/// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[require(RelativeCursorPosition::default())]
 pub struct ItemView {
+    /// The item this view shows.
     pub item_ref: Entity,
+    /// The list this view belongs to.
     pub list_ref: Entity,
 }
 
