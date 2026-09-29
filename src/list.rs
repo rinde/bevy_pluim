@@ -353,11 +353,11 @@ fn theme_items(
     )>,
     selections: SelectionParam,
 ) {
-    let iter = if let Some(list_id) = list_id.0 {
-        Either::Left(lists.get(list_id).into_iter())
-    } else {
-        Either::Right(lists.into_iter())
-    };
+    let iter = list_id.0.map_or_else(
+        || Either::Right(lists.into_iter()),
+        |list_id| Either::Left(lists.get(list_id).into_iter()),
+    );
+    let no_selection = SelectionValue::default();
 
     for (list_ref, children, layout, corner_style) in iter {
         let Some(children) = children else {
@@ -368,11 +368,7 @@ fn theme_items(
         }
         let last = children.len() - 1;
 
-        let selection = if let Some(selection) = selections.get(list_ref) {
-            selection
-        } else {
-            &SelectionValue::default()
-        };
+        let selection = selections.get(list_ref).unwrap_or(&no_selection);
 
         for (i, item_view_id) in children.iter().enumerate() {
             let Ok((

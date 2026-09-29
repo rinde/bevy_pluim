@@ -1,7 +1,3 @@
-#![expect(
-    clippy::type_complexity,
-    reason = "Query types can be complex without being difficult to understand"
-)]
 pub mod breadcrumbs;
 pub mod card;
 pub mod color_palette;

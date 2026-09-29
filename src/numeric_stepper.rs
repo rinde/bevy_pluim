@@ -84,7 +84,7 @@ pub enum Value {
 impl Value {
     #[must_use]
     pub const fn new_u8(initial_value: u8, min: u8, max: u8, step: u8) -> Self {
-        Value::U8(UIntValue {
+        Self::U8(UIntValue {
             value: initial_value,
             min,
             max,
@@ -93,7 +93,7 @@ impl Value {
     }
     #[must_use]
     pub const fn new_u16(initial_value: u16, min: u16, max: u16, step: u16) -> Self {
-        Value::U16(UIntValue {
+        Self::U16(UIntValue {
             value: initial_value,
             min,
             max,
@@ -103,7 +103,7 @@ impl Value {
 
     #[must_use]
     pub const fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
-        Value::U32(UIntValue {
+        Self::U32(UIntValue {
             value: initial_value,
             min,
             max,
@@ -113,7 +113,7 @@ impl Value {
 
     #[must_use]
     pub const fn new_f32(initial_value: f32, min: f32, max: f32, step: f32) -> Self {
-        Value::F32 {
+        Self::F32 {
             value: initial_value,
             min,
             max,
@@ -123,7 +123,7 @@ impl Value {
 
     pub fn increment(&mut self) -> bool {
         match self {
-            Value::F32 {
+            Self::F32 {
                 value, max, step, ..
             } => {
                 let new_value = *value + *step;
@@ -133,15 +133,15 @@ impl Value {
                 }
                 false
             }
-            Value::U8(uint_value) => uint_value.increment(),
-            Value::U16(uint_value) => uint_value.increment(),
-            Value::U32(uint_value) => uint_value.increment(),
+            Self::U8(uint_value) => uint_value.increment(),
+            Self::U16(uint_value) => uint_value.increment(),
+            Self::U32(uint_value) => uint_value.increment(),
         }
     }
 
     pub fn decrement(&mut self) -> bool {
         match self {
-            Value::F32 {
+            Self::F32 {
                 value, min, step, ..
             } => {
                 let new_value = *value - *step;
@@ -151,36 +151,36 @@ impl Value {
                 }
                 false
             }
-            Value::U8(uint_value) => uint_value.decrement(),
-            Value::U16(uint_value) => uint_value.decrement(),
-            Value::U32(uint_value) => uint_value.decrement(),
+            Self::U8(uint_value) => uint_value.decrement(),
+            Self::U16(uint_value) => uint_value.decrement(),
+            Self::U32(uint_value) => uint_value.decrement(),
         }
     }
 
     #[must_use]
     pub fn can_increment(&self) -> bool {
         match self {
-            Value::F32 { value, max, .. } => value < max,
-            Value::U8(uint_value) => uint_value.value < uint_value.max,
-            Value::U16(uint_value) => uint_value.value < uint_value.max,
-            Value::U32(uint_value) => uint_value.value < uint_value.max,
+            Self::F32 { value, max, .. } => value < max,
+            Self::U8(uint_value) => uint_value.value < uint_value.max,
+            Self::U16(uint_value) => uint_value.value < uint_value.max,
+            Self::U32(uint_value) => uint_value.value < uint_value.max,
         }
     }
 
     #[must_use]
     pub fn can_decrement(&self) -> bool {
         match self {
-            Value::F32 { value, min, .. } => value > min,
-            Value::U8(uint_value) => uint_value.value > uint_value.min,
-            Value::U16(uint_value) => uint_value.value > uint_value.min,
-            Value::U32(uint_value) => uint_value.value > uint_value.min,
+            Self::F32 { value, min, .. } => value > min,
+            Self::U8(uint_value) => uint_value.value > uint_value.min,
+            Self::U16(uint_value) => uint_value.value > uint_value.min,
+            Self::U32(uint_value) => uint_value.value > uint_value.min,
         }
     }
 
     #[must_use]
     pub const fn as_f32(&self) -> Option<f32> {
         match self {
-            Value::F32 { value, .. } => Some(*value),
+            Self::F32 { value, .. } => Some(*value),
             _ => None,
         }
     }
@@ -188,7 +188,7 @@ impl Value {
     #[must_use]
     pub const fn as_u8(&self) -> Option<u8> {
         match self {
-            Value::U8(uint_value) => Some(uint_value.value),
+            Self::U8(uint_value) => Some(uint_value.value),
             _ => None,
         }
     }
@@ -196,7 +196,7 @@ impl Value {
     #[must_use]
     pub const fn as_u16(&self) -> Option<u16> {
         match self {
-            Value::U16(uint_value) => Some(uint_value.value),
+            Self::U16(uint_value) => Some(uint_value.value),
             _ => None,
         }
     }
@@ -204,7 +204,7 @@ impl Value {
     #[must_use]
     pub const fn as_u32(&self) -> Option<u32> {
         match self {
-            Value::U32(uint_value) => Some(uint_value.value),
+            Self::U32(uint_value) => Some(uint_value.value),
             _ => None,
         }
     }
@@ -213,10 +213,10 @@ impl Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::F32 { value, .. } => write!(f, "{value:.1}"),
-            Value::U8(uint_value) => write!(f, "{}", uint_value.value),
-            Value::U16(uint_value) => write!(f, "{}", uint_value.value),
-            Value::U32(uint_value) => write!(f, "{}", uint_value.value),
+            Self::F32 { value, .. } => write!(f, "{value:.1}"),
+            Self::U8(uint_value) => write!(f, "{}", uint_value.value),
+            Self::U16(uint_value) => write!(f, "{}", uint_value.value),
+            Self::U32(uint_value) => write!(f, "{}", uint_value.value),
         }
     }
 }

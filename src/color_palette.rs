@@ -224,22 +224,18 @@ fn theme_items(
     color_items: Query<&Item<Color>>,
     mut commands: Commands,
 ) {
-    let it = if let Some(list_id) = list_id.as_ref() {
-        Either::Left(color_palettes.get(*list_id).into_iter())
-    } else {
-        Either::Right(color_palettes.iter())
-    };
+    let it = list_id.as_ref().map_or_else(
+        || Either::Right(color_palettes.iter()),
+        |list_id| Either::Left(color_palettes.get(*list_id).into_iter()),
+    );
+    let no_selection = SelectionValue::default();
 
     for (color_palette_ref, children) in it {
         let Some(children) = children else { return };
         if (*children).is_empty() {
             continue;
         }
-        let selection = if let Some(selection) = selections.get(color_palette_ref) {
-            selection
-        } else {
-            &SelectionValue::default()
-        };
+        let selection = selections.get(color_palette_ref).unwrap_or(&no_selection);
 
         for item_view_id in children {
             let Ok((
@@ -342,11 +338,7 @@ fn set_highlight(
         HoverState::Unselected => (item_color.darker(0.1), None),
     };
 
-    outer_border_color.0 = if let Some(outer) = outer {
-        outer
-    } else {
-        background_color
-    };
+    outer_border_color.0 = outer.unwrap_or(background_color);
 
     if let Some(mut color_square_border) = children
         .first()

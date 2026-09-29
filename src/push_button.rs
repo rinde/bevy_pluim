@@ -68,7 +68,7 @@ impl PushButton {
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let entity = world.entity(context.entity);
-        let Some(button) = entity.get::<PushButton>() else {
+        let Some(button) = entity.get::<Self>() else {
             return;
         };
         let icon = button

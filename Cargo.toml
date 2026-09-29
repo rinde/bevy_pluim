@@ -31,7 +31,7 @@ single_use_lifetimes = "warn"
 unreachable_pub = "warn"
 unsafe_code = "forbid"
 unstable_features = "forbid"
-unused_crate_dependencies = "allow"    # TODO
+unused_crate_dependencies = "allow"    # per-target: every example/test "misses" the others' deps; `cargo machete` in `just ci` covers it
 unused_extern_crates = "warn"
 unused_import_braces = "warn"
 unused_lifetimes = "warn"
@@ -45,29 +45,27 @@ broken_intra_doc_links = "deny"
 missing_crate_level_docs = "allow" # TODO
 
 [lints.clippy]
-### Complexity
-complexity = { level = "warn", priority = -1 }
-too_many_arguments = "allow"                   # TODO
+### Groups
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
 
-correctness = { level = "deny", priority = -1 }
-perf = { level = "warn", priority = -1 }
-style = { level = "warn", priority = -1 }
-suspicious = { level = "deny", priority = -1 }
+# Bevy-shaped allows: these lints fight how Bevy systems are written.
+too_many_arguments = "allow"     # every system param is an argument
+needless_pass_by_value = "allow" # `In<_>`, `Res<_>` and `Trigger<_>` are taken by value
+type_complexity = "allow"        # nested `Query<(..), (With<_>, Without<_>)>` types
 
-disallowed-types = "deny"
-missing_const_for_fn = "warn"
-
-allow_attributes = "deny"
-allow_attributes_without_reason = "deny"
-
-### Pedantic
-pedantic = { level = "warn", priority = -1 }
-needless_pass_by_value = "allow"             # this is often needed for Bevy
-missing_errors_doc = "allow"                 # TODO
-missing_panics_doc = "allow"                 # TODO
+# Pedantic lints that cost more than they give here.
 too_many_lines = "allow"
 cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
+
+### Individual lints
+disallowed-types = "deny"
+missing_const_for_fn = "deny"
+
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
 
 ### Restrictions
 exit = "warn"

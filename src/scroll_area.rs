@@ -70,7 +70,7 @@ impl ScrollArea {
             },
         };
         (
-            ScrollArea,
+            Self,
             Children::spawn(SpawnWith(move |s: &mut ChildSpawner| {
                 let contents_ref = s
                     .spawn((

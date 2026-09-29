@@ -57,7 +57,7 @@ impl Link {
     }
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let Some(link) = world.entity(context.entity).get::<Link>() else {
+        let Some(link) = world.entity(context.entity).get::<Self>() else {
             return;
         };
         let text = Text::new(&link.label);

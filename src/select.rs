@@ -39,23 +39,23 @@ pub enum Selection {
 
 impl Selection {
     #[must_use]
-    pub const fn reference(selection_ref: Entity) -> Selection {
-        Selection::Ref(selection_ref)
+    pub const fn reference(selection_ref: Entity) -> Self {
+        Self::Ref(selection_ref)
     }
 
     #[must_use]
     pub const fn as_selection(&self) -> Option<&SelectionValue> {
         match self {
-            Selection::Ref(_) => None,
-            Selection::Value(selection) => Some(selection),
+            Self::Ref(_) => None,
+            Self::Value(selection) => Some(selection),
         }
     }
 
     #[must_use]
     pub const fn as_ref(&self) -> Option<&Entity> {
         match self {
-            Selection::Ref(entity) => Some(entity),
-            Selection::Value(_) => None,
+            Self::Ref(entity) => Some(entity),
+            Self::Value(_) => None,
         }
     }
 
@@ -269,14 +269,8 @@ impl SelectionValue {
 
     pub fn iter(&self) -> impl Iterator<Item = Entity> {
         match self {
-            Self::One(selected) => Either::Left(Some(selected).into_iter().copied()),
-            Self::ZeroOrOne(selected) => {
-                let x = match selected {
-                    Some(item) => Some(item).into_iter().copied(),
-                    None => None.into_iter().copied(),
-                };
-                Either::Left(x)
-            }
+            Self::One(selected) => Either::Left(Some(*selected).into_iter()),
+            Self::ZeroOrOne(selected) => Either::Left((*selected).into_iter()),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => {
                 Either::Right(items.iter().copied())
             }
@@ -526,6 +520,12 @@ where
         clippy::disallowed_methods,
         reason = "passes the `Result` on to the caller instead of panicking"
     )]
+    /// The one selection in the query, resolved through any `Selection::Ref`.
+    ///
+    /// # Errors
+    ///
+    /// If the query does not match exactly one entity, or that entity's
+    /// `Selection::Ref` does not point to a value.
     pub fn single(&self) -> Result<(Entity, &SelectionValue), QuerySingleError> {
         self.subset.single().and_then(|(entity, selection)| {
             self.find(entity, selection)
@@ -533,6 +533,11 @@ where
         })
     }
 
+    /// The entity that holds the value of [`Self::single`].
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::single`].
     pub fn single_ref(&self) -> Result<Entity, QuerySingleError> {
         self.single().map(|(selection_ref, _)| selection_ref)
     }
@@ -572,18 +577,13 @@ where
 
     #[must_use]
     pub fn get_item_values(&self, selection_ref: Entity) -> Option<(Entity, &ItemValues)> {
-        if let Some(root_selection_ref) = self.get_ref(selection_ref) {
-            let items_ref = if let Ok((_, ItemsRef(sel))) = self.items_refs.get(root_selection_ref)
-            {
-                *sel
-            } else {
-                root_selection_ref
-            };
+        let root_selection_ref = self.get_ref(selection_ref)?;
+        let items_ref = self
+            .items_refs
+            .get(root_selection_ref)
+            .map_or(root_selection_ref, |(_, ItemsRef(sel))| *sel);
 
-            self.item_values.get(items_ref).ok()
-        } else {
-            None
-        }
+        self.item_values.get(items_ref).ok()
     }
 
     pub fn update_selection_single(
@@ -593,12 +593,11 @@ where
         let Ok((selection_ref, selection)) = self.single() else {
             return false;
         };
-        if let Some(new_selection) = updater(selection) {
-            self.do_update_selection(selection_ref, new_selection);
-            true
-        } else {
-            false
-        }
+        let Some(new_selection) = updater(selection) else {
+            return false;
+        };
+        self.do_update_selection(selection_ref, new_selection);
+        true
     }
 
     pub fn update_selection(
@@ -609,12 +608,11 @@ where
         let Some((selection_ref, selection)) = self.get_with_ref(selection_ref) else {
             return false;
         };
-        if let Some(new_selection) = updater(selection) {
-            self.do_update_selection(selection_ref, new_selection);
-            true
-        } else {
-            false
-        }
+        let Some(new_selection) = updater(selection) else {
+            return false;
+        };
+        self.do_update_selection(selection_ref, new_selection);
+        true
     }
 
     fn do_update_selection(&mut self, selection_ref: Entity, new_selection: SelectionValue) {
@@ -651,7 +649,7 @@ pub struct Item<T> {
 }
 
 impl Item<String> {
-    pub fn new(label: impl Into<String>) -> Item<String> {
+    pub fn new(label: impl Into<String>) -> Self {
         Self { data: label.into() }
     }
 }
