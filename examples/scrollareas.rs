@@ -118,7 +118,11 @@ fn create_squares(
                             should_block_lower: false,
                             ..default()
                         },
-                        BackgroundColor(Color::Srgba(COLORS[i % COLORS.len()])),
+                        BackgroundColor(
+                            COLORS
+                                .get(i % COLORS.len())
+                                .map_or(Color::NONE, |c| Color::Srgba(*c)),
+                        ),
                     ));
                 }
             });

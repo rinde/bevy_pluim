@@ -276,8 +276,9 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                                                 },
                                                 BorderRadius::top(Val::Px(10.0)),
                                                 BackgroundColor(
-                                                    LIGHT_COLORS[(i / 10) % LIGHT_COLORS.len()]
-                                                        .color
+                                                    LIGHT_COLORS
+                                                        .get((i / 10) % LIGHT_COLORS.len())
+                                                        .map_or(Color::NONE, |c| c.color)
                                                 )
                                             ),
                                             (

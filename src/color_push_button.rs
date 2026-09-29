@@ -100,7 +100,7 @@ pub(crate) fn update_theme(
     >,
 ) {
     let it = if let Some(button_id) = button_id.as_ref() {
-        Either::Left([buttons.get_mut(*button_id).unwrap()].into_iter())
+        Either::Left(buttons.get_mut(*button_id).into_iter())
     } else {
         Either::Right(buttons.iter_mut())
     };
@@ -120,8 +120,11 @@ pub(crate) fn update_theme(
         node.border = UiRect::all(theme.border_thickness);
         node.padding = theme.color_button_padding;
 
-        let (mut square_node, mut square_border_radius, mut square_border_color, square_color) =
-            squares.get_mut(*square_ref).unwrap();
+        let Ok((mut square_node, mut square_border_radius, mut square_border_color, square_color)) =
+            squares.get_mut(*square_ref)
+        else {
+            continue;
+        };
 
         if square_color.0.luminance() < 0.5 {
             square_border_color.0 = square_color.0.lighter(0.1);

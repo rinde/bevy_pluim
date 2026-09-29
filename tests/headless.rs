@@ -1,6 +1,12 @@
 //! Headless integration tests for `WidgetsPlugin`: a plain `App` built from
 //! `MinimalPlugins`, with no window or GPU.
 
+#![expect(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "tests may abort loudly"
+)]
+
 use bevy::MinimalPlugins;
 use bevy::input::InputPlugin;
 use bevy::picking::DefaultPickingPlugins;

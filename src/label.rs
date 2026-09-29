@@ -46,7 +46,9 @@ impl Label {
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let this = world.entity(context.entity).get::<Self>().unwrap();
+        let Some(this) = world.entity(context.entity).get::<Self>() else {
+            return;
+        };
         let text = match this {
             Label::Header(text) | Label::Regular(text) => text.clone(),
         };
@@ -63,7 +65,7 @@ fn theme_labels(
     theme: Res<Theme>,
 ) {
     let it = if let Some(button_id) = label_id.as_ref() {
-        Either::Left([labels.get_mut(*button_id).unwrap()].into_iter())
+        Either::Left(labels.get_mut(*button_id).into_iter())
     } else {
         Either::Right(labels.iter_mut())
     };

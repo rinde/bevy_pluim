@@ -32,7 +32,9 @@ pub struct ScrollArea;
 impl ScrollArea {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let mut entity = world.entity_mut(context.entity);
-        let mut node = entity.get_mut::<Node>().unwrap();
+        let Some(mut node) = entity.get_mut::<Node>() else {
+            return;
+        };
 
         node.display = Display::Grid;
         node.grid_template_columns =
@@ -140,7 +142,9 @@ fn handle_hover(
         MouseEvent::Released => theme.colors.selected_item,
         MouseEvent::Out => theme.colors.scroll_thumb_background,
     };
-    *query.get_mut(trigger.target()).unwrap() = BackgroundColor(color);
+    if let Ok(mut background) = query.get_mut(trigger.target()) {
+        *background = BackgroundColor(color);
+    }
 }
 
 fn handle_scroll_change(
@@ -164,15 +168,24 @@ fn scroll_system(
     mut scroll_bars: Query<(&ComputedNode, &Children, &mut Visibility), With<ScrollBar>>,
     mut scroll_thumbs: Query<&mut Node, With<ScrollThumb>>,
 ) {
-    let (scroll_pos, contents_dims, refs) = scroll_contents
-        .get(*changed_scroll_contents_entity)
-        .unwrap();
+    let Ok((scroll_pos, contents_dims, refs)) =
+        scroll_contents.get(*changed_scroll_contents_entity)
+    else {
+        return;
+    };
 
     let mut update_thumb = |entity: Entity, orientation| {
-        let (_, scrollbar_children, mut scrollbar_visibility) =
-            scroll_bars.get_mut(entity).unwrap();
-        let thumb = scrollbar_children.iter().next().unwrap();
-        let mut thumb_node = scroll_thumbs.get_mut(thumb).unwrap();
+        let Ok((_, scrollbar_children, mut scrollbar_visibility)) = scroll_bars.get_mut(entity)
+        else {
+            return;
+        };
+        let Some(mut thumb_node) = scrollbar_children
+            .iter()
+            .next()
+            .and_then(|thumb| scroll_thumbs.get_mut(thumb).ok())
+        else {
+            return;
+        };
 
         let index = match orientation {
             Orientation::Horizontal => 0,
@@ -258,7 +271,7 @@ fn theme_scroll_area(
     >,
 ) {
     let it = if let Some(scroll_area_ref) = scroll_area_ref.as_ref() {
-        Either::Left([scroll_contents.get_mut(*scroll_area_ref).unwrap()].into_iter())
+        Either::Left(scroll_contents.get_mut(*scroll_area_ref).into_iter())
     } else {
         Either::Right(scroll_contents.iter_mut())
     };
@@ -266,8 +279,11 @@ fn theme_scroll_area(
     for (mut background_color, refs) in it {
         background_color.0 = theme.colors.background_primary;
         let mut theme_scrollbar = |entity, orientation| {
-            let (mut sb_node, mut sb_background_color, mut sb_border_radius, children) =
-                scroll_bars.get_mut(entity).unwrap();
+            let Ok((mut sb_node, mut sb_background_color, mut sb_border_radius, children)) =
+                scroll_bars.get_mut(entity)
+            else {
+                return;
+            };
 
             match orientation {
                 Orientation::Horizontal => {
@@ -280,13 +296,18 @@ fn theme_scroll_area(
             sb_background_color.0 = theme.colors.background_secondary;
             *sb_border_radius = BorderRadius::all(theme.corner_radius);
 
-            let thumb_entity = children.iter().next().unwrap();
-            let (
+            let Some((
                 mut thumb_node,
                 mut thumb_background_color,
                 mut thumb_border_radius,
                 mut thumb_border_color,
-            ) = scroll_thumbs.get_mut(thumb_entity).unwrap();
+            )) = children
+                .iter()
+                .next()
+                .and_then(|thumb_entity| scroll_thumbs.get_mut(thumb_entity).ok())
+            else {
+                return;
+            };
 
             match orientation {
                 Orientation::Horizontal => {

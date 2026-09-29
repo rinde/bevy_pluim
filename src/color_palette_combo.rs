@@ -133,8 +133,9 @@ fn on_remove_combo(
     sub_refs: Query<&SubRefs>,
     mut commands: Commands,
 ) {
-    let sub_refs = sub_refs.get(t.target()).unwrap();
-    commands.entity(sub_refs.float_id).despawn();
+    if let Ok(sub_refs) = sub_refs.get(t.target()) {
+        commands.entity(sub_refs.float_id).despawn();
+    }
 }
 
 #[derive(Component, Debug, Copy, Clone)]
@@ -166,7 +167,9 @@ fn on_insert_state(
     state: Query<(&State, &SubRefs)>,
     mut commands: Commands,
 ) {
-    let (&state, &sub_refs) = state.get(t.target()).unwrap();
+    let Ok((&state, &sub_refs)) = state.get(t.target()) else {
+        return;
+    };
 
     let visibility = match state {
         State::Open => Visibility::Visible,
@@ -193,9 +196,16 @@ fn position_float(
     const MARGIN: f32 = 10.0;
     const BUTTON_FLOAT_DIST: f32 = 3.0;
 
-    let (mut node, global_transform, float_computed_node) =
-        dims.get_mut(sub_refs.float_id).unwrap();
-    let (button_computed_node, button_transform) = parent_dims.get(sub_refs.button).unwrap();
+    let (
+        Ok((mut node, global_transform, float_computed_node)),
+        Ok((button_computed_node, button_transform)),
+    ) = (
+        dims.get_mut(sub_refs.float_id),
+        parent_dims.get(sub_refs.button),
+    )
+    else {
+        return;
+    };
 
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let float_size =
@@ -217,7 +227,7 @@ fn position_float(
 
     // set x position
     let Val::Px(current_x) = node.left else {
-        panic!("Unexpected value type for node.left")
+        return;
     };
 
     let delta_x = intended_x - current_x;
@@ -235,7 +245,7 @@ fn position_float(
 
     // set y position
     let Val::Px(current_y) = node.top else {
-        panic!("Unexpected value type for node.top")
+        return;
     };
 
     let delta_y = intended_y - current_y;
@@ -269,18 +279,20 @@ fn on_selection_change(
             }
 
             // TODO make this less brittle
-            let scroll_contents_ref = children
+            let Some(scroll_contents_ref) = children
                 .get(sub_refs.float_id)
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap();
-            let color_palette_ref = children
+                .ok()
+                .and_then(|c| c.iter().next())
+            else {
+                continue;
+            };
+            let Some(color_palette_ref) = children
                 .get(scroll_contents_ref)
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap();
+                .ok()
+                .and_then(|c| c.iter().next())
+            else {
+                continue;
+            };
 
             if selections
                 .get_ref(color_palette_ref)
@@ -292,15 +304,18 @@ fn on_selection_change(
                     .insert(Selection::reference(changed_selection_ref));
             }
 
-            let ColorSquareRef(color_square_id) = color_square_refs.get(sub_refs.button).unwrap();
-            let mut color_square_background = color_squares.get_mut(*color_square_id).unwrap();
+            let Ok(ColorSquareRef(color_square_id)) = color_square_refs.get(sub_refs.button) else {
+                continue;
+            };
+            let Ok(mut color_square_background) = color_squares.get_mut(*color_square_id) else {
+                continue;
+            };
 
             assert!(!selection.allow_multiple(), "Multi selection not supported");
-            let color = if let Some(selected) = selection.single() {
-                items.get(selected).unwrap().data
-            } else {
-                Color::Srgba(Srgba::NONE)
-            };
+            let color = selection
+                .single()
+                .and_then(|selected| items.get(selected).ok())
+                .map_or(Color::Srgba(Srgba::NONE), |item| item.data);
             color_square_background.0 = color;
             commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
         }
@@ -322,13 +337,21 @@ fn close_combos_on_outside_click(
 ) {
     if mouse_button.just_released(MouseButton::Left) {
         for (combo_id, rcp, &combo_state, subs) in combos.iter() {
-            let selection = selections.get(combo_id).unwrap();
+            let Some(selection) = selections.get(combo_id) else {
+                continue;
+            };
+            let over_float = floats
+                .get(subs.float_id)
+                .is_ok_and(RelativeCursorPosition::mouse_over);
             if combo_state == State::Open
                 && !rcp.mouse_over()
-                && !(selection.allow_multiple() && floats.get(subs.float_id).unwrap().mouse_over())
+                && !(selection.allow_multiple() && over_float)
             {
-                let (mut background_color, mut border_color) =
-                    combo_buttons.get_mut(subs.button).unwrap();
+                let Ok((mut background_color, mut border_color)) =
+                    combo_buttons.get_mut(subs.button)
+                else {
+                    continue;
+                };
 
                 *background_color = BackgroundColor(theme.colors.background_primary);
                 *border_color = BorderColor(theme.colors.border);
@@ -348,14 +371,19 @@ fn handle_combo_button_mouse_events(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    let (
+    let Ok((
         SubRefs {
             parent: parent_id, ..
         },
         mut background_color,
         mut border_color,
-    ) = combo_buttons.get_mut(trigger.target()).unwrap();
-    let combo_state = combos.get(*parent_id).unwrap();
+    )) = combo_buttons.get_mut(trigger.target())
+    else {
+        return;
+    };
+    let Ok(combo_state) = combos.get(*parent_id) else {
+        return;
+    };
 
     match (trigger.event(), combo_state) {
         (MouseEvent::Pressed, _) => {
@@ -380,7 +408,7 @@ fn theme_floats(
     mut floats: Query<&mut BorderColor, With<ColorPaletteComboFloat>>,
 ) {
     let it = if let Some(float_id) = float_id.as_ref() {
-        Either::Left([floats.get_mut(*float_id).unwrap()].into_iter())
+        Either::Left(floats.get_mut(*float_id).into_iter())
     } else {
         Either::Right(floats.iter_mut())
     };

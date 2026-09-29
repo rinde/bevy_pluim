@@ -44,14 +44,14 @@ fn selection_change(
                 Selection::Value(_selection) => changed_selection_ref == bread_crumbs_ref,
             };
             if is_changed {
-                let selection = selections.get(changed_selection_ref).unwrap_or_else(|| {
-                    panic!("No selection found for entity {changed_selection_ref}")
-                });
+                let Some(selection) = selections.get(changed_selection_ref) else {
+                    continue;
+                };
 
                 let existing = children
                     .map(|c| {
                         c.iter()
-                            .map(|e| (e, bread_crumb_views.get(e).copied().unwrap()))
+                            .filter_map(|e| Some((e, bread_crumb_views.get(e).ok().copied()?)))
                             .collect()
                     })
                     .unwrap_or(vec![]);
@@ -68,13 +68,13 @@ fn selection_change(
                     .unwrap_or(existing.len())
                     .saturating_sub(1);
 
-                for (existing_bc_view, _) in &existing[first_diff..] {
+                for (existing_bc_view, _) in existing.iter().skip(first_diff) {
                     commands.entity(*existing_bc_view).despawn();
                 }
-                for (index, bc) in selected[first_diff..].iter().enumerate() {
-                    let item = items
-                        .get(bc.0)
-                        .unwrap_or_else(|e| panic!("Item not found {bc:?} {e:?}"));
+                for (index, bc) in selected.iter().skip(first_diff).enumerate() {
+                    let Ok(item) = items.get(bc.0) else {
+                        continue;
+                    };
                     let link = Link::new(item.data.clone());
                     let current_index = index + first_diff;
 

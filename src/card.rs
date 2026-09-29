@@ -47,7 +47,7 @@ fn theme_cards(
     >,
 ) {
     let iter = if let Some(card) = card.0 {
-        Either::Left([cards.get_mut(card).unwrap()].into_iter())
+        Either::Left(cards.get_mut(card).into_iter())
     } else {
         Either::Right(cards.into_iter())
     };

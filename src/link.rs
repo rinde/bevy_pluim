@@ -57,7 +57,9 @@ impl Link {
     }
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let link = world.entity(context.entity).get::<Link>().unwrap();
+        let Some(link) = world.entity(context.entity).get::<Link>() else {
+            return;
+        };
         let text = Text::new(&link.label);
         let mut commands = world.commands();
         let mut entity_commands = commands.entity(context.entity);
@@ -82,7 +84,9 @@ fn on_insert_link_state(
     q: Query<&LinkState>,
     mut commands: Commands,
 ) {
-    let state = q.get(t.target()).unwrap();
+    let Ok(state) = q.get(t.target()) else {
+        return;
+    };
     match state {
         LinkState::Disabled => {
             commands.entity(t.target()).remove::<(Button, Observer)>();
@@ -111,10 +115,18 @@ fn handle_hover(
         MouseEvent::Over | MouseEvent::Released | MouseEvent::Out => theme.colors.link,
         MouseEvent::Pressed => theme.colors.link_selected,
     };
-    let (mut link_bg, children) = links.get_mut(trigger.target()).unwrap();
+    let Ok((mut link_bg, children)) = links.get_mut(trigger.target()) else {
+        return;
+    };
     *link_bg = BackgroundColor(bg_color);
 
-    let mut text_color = link_texts.get_mut(children.iter().next().unwrap()).unwrap();
+    let Some(mut text_color) = children
+        .iter()
+        .next()
+        .and_then(|text_ref| link_texts.get_mut(text_ref).ok())
+    else {
+        return;
+    };
     text_color.0 = link_color;
 }
 
@@ -125,14 +137,19 @@ fn theme_link(
     mut link_texts: Query<&mut TextColor, With<LinkText>>,
 ) {
     let it = if let Some(link_id) = link_id.as_ref() {
-        Either::Left([links.get_mut(*link_id).unwrap()].into_iter())
+        Either::Left(links.get_mut(*link_id).into_iter())
     } else {
         Either::Right(links.iter_mut())
     };
     for (mut link_bg, children, state) in it {
         link_bg.0 = theme.colors.background_primary;
-        let text_ref = children.iter().next().unwrap();
-        let mut text_color = link_texts.get_mut(text_ref).unwrap();
+        let Some(mut text_color) = children
+            .iter()
+            .next()
+            .and_then(|text_ref| link_texts.get_mut(text_ref).ok())
+        else {
+            continue;
+        };
         match state {
             LinkState::Enabled => text_color.0 = theme.colors.link,
             LinkState::Disabled => text_color.0 = theme.colors.text_primary,
