@@ -720,3 +720,409 @@ where
         self.find_item(predicate).map(|(item_ref, _, _)| item_ref)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entity(index: u32) -> Entity {
+        Entity::from_raw(index)
+    }
+
+    // One
+
+    #[test]
+    fn toggling_the_current_selection_in_one_is_a_no_op() {
+        let value = SelectionValue::One(entity(1));
+        assert_eq!(value.toggle_selected(entity(1)), None);
+    }
+
+    #[test]
+    fn toggling_a_different_entity_in_one_replaces_the_selection() {
+        let value = SelectionValue::One(entity(1));
+        assert_eq!(
+            value.toggle_selected(entity(2)),
+            Some(SelectionValue::One(entity(2)))
+        );
+    }
+
+    #[test]
+    fn one_is_never_empty() {
+        assert!(!SelectionValue::One(entity(1)).is_empty());
+        assert_eq!(SelectionValue::One(entity(1)).len(), 1);
+    }
+
+    #[test]
+    fn one_reports_is_selected_only_for_its_entity() {
+        let value = SelectionValue::One(entity(1));
+        assert!(value.is_selected(entity(1)));
+        assert!(!value.is_selected(entity(2)));
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot append to a SelectionValue::One")]
+    fn pushing_to_one_panics() {
+        let _ = SelectionValue::One(entity(1)).push(entity(2));
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot pop a SelectionValue::One")]
+    fn popping_one_panics() {
+        let _ = SelectionValue::One(entity(1)).pop();
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot trim a SelectionValue::One")]
+    fn trimming_one_panics() {
+        let _ = SelectionValue::One(entity(1)).trim_to_length(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot clear SelectionValue::One")]
+    fn clearing_one_panics() {
+        let _ = SelectionValue::One(entity(1)).clear();
+    }
+
+    // ZeroOrOne
+
+    #[test]
+    fn zero_or_one_defaults_to_no_selection() {
+        assert_eq!(SelectionValue::default(), SelectionValue::ZeroOrOne(None));
+    }
+
+    #[test]
+    fn selecting_in_an_empty_zero_or_one_sets_the_selection() {
+        let value = SelectionValue::ZeroOrOne(None);
+        assert_eq!(
+            value.toggle_selected(entity(1)),
+            Some(SelectionValue::ZeroOrOne(Some(entity(1))))
+        );
+    }
+
+    #[test]
+    fn toggling_the_current_selection_in_zero_or_one_clears_it() {
+        let value = SelectionValue::ZeroOrOne(Some(entity(1)));
+        assert_eq!(
+            value.toggle_selected(entity(1)),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+    }
+
+    #[test]
+    fn toggling_a_different_entity_in_zero_or_one_replaces_the_selection() {
+        let value = SelectionValue::ZeroOrOne(Some(entity(1)));
+        assert_eq!(
+            value.toggle_selected(entity(2)),
+            Some(SelectionValue::ZeroOrOne(Some(entity(2))))
+        );
+    }
+
+    #[test]
+    fn zero_or_one_is_empty_only_without_a_selection() {
+        assert!(SelectionValue::ZeroOrOne(None).is_empty());
+        assert!(!SelectionValue::ZeroOrOne(Some(entity(1))).is_empty());
+    }
+
+    #[test]
+    fn appending_one_entity_to_an_empty_zero_or_one_selects_it() {
+        let value = SelectionValue::ZeroOrOne(None);
+        assert_eq!(
+            value.append([entity(1)]),
+            Some(SelectionValue::ZeroOrOne(Some(entity(1))))
+        );
+    }
+
+    #[test]
+    fn appending_nothing_to_zero_or_one_is_a_no_op() {
+        let value = SelectionValue::ZeroOrOne(None);
+        assert_eq!(value.append(std::iter::empty()), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot append more than one entity to a SelectionValue::ZeroOrOne")]
+    fn appending_two_entities_to_zero_or_one_panics() {
+        let _ = SelectionValue::ZeroOrOne(None).append([entity(1), entity(2)]);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cannot append to a SelectionValue::ZeroOrOne if it already has a selection"
+    )]
+    fn appending_to_an_occupied_zero_or_one_panics() {
+        let _ = SelectionValue::ZeroOrOne(Some(entity(1))).append([entity(2)]);
+    }
+
+    #[test]
+    fn popping_an_empty_zero_or_one_is_a_no_op() {
+        assert_eq!(SelectionValue::ZeroOrOne(None).pop(), None);
+    }
+
+    #[test]
+    fn popping_zero_or_one_clears_the_selection() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(Some(entity(1))).pop(),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+    }
+
+    #[test]
+    fn clearing_zero_or_one_removes_the_selection() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(Some(entity(1))).clear(),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+        assert_eq!(SelectionValue::ZeroOrOne(None).clear(), None);
+    }
+
+    #[test]
+    fn trimming_zero_or_one_to_zero_clears_it() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(Some(entity(1))).trim_to_length(0),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+    }
+
+    #[test]
+    fn trimming_zero_or_one_to_one_is_a_no_op() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(Some(entity(1))).trim_to_length(1),
+            None
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot trim SelectionValue::ZeroOrOne to 2")]
+    fn trimming_zero_or_one_beyond_one_panics() {
+        let _ = SelectionValue::ZeroOrOne(Some(entity(1))).trim_to_length(2);
+    }
+
+    // OneOrMore
+
+    #[test]
+    fn toggling_the_only_entity_in_one_or_more_is_a_no_op() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
+        assert_eq!(value.toggle_selected(entity(1)), None);
+    }
+
+    #[test]
+    fn toggling_a_new_entity_into_one_or_more_adds_it() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.toggle_selected(entity(2)),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]))
+        );
+    }
+
+    #[test]
+    fn toggling_a_selected_entity_out_of_one_or_more_removes_it() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(
+            value.toggle_selected(entity(2)),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    fn toggling_an_unselected_entity_into_one_or_more_adds_it() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(
+            value.toggle_selected(entity(3)),
+            Some(SelectionValue::OneOrMore(smallvec![
+                entity(1),
+                entity(2),
+                entity(3)
+            ]))
+        );
+    }
+
+    #[test]
+    fn pushing_a_duplicate_entity_to_one_or_more_is_a_no_op() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
+        assert_eq!(value.push(entity(1)), None);
+    }
+
+    #[test]
+    fn pushing_a_new_entity_to_one_or_more_appends_it() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.push(entity(2)),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]))
+        );
+    }
+
+    #[test]
+    fn popping_a_single_item_one_or_more_is_a_no_op() {
+        assert_eq!(SelectionValue::OneOrMore(smallvec![entity(1)]).pop(), None);
+    }
+
+    #[test]
+    fn popping_one_or_more_removes_the_last_entity() {
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]).pop(),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot clear SelectionValue::OneOrMore")]
+    fn clearing_one_or_more_panics() {
+        let _ = SelectionValue::OneOrMore(smallvec![entity(1)]).clear();
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot trim SelectionValue::OneOrMore to 0")]
+    fn trimming_one_or_more_to_zero_panics() {
+        let _ = SelectionValue::OneOrMore(smallvec![entity(1)]).trim_to_length(0);
+    }
+
+    #[test]
+    fn trimming_one_or_more_beyond_its_length_is_a_no_op() {
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]).trim_to_length(5),
+            None
+        );
+    }
+
+    #[test]
+    fn trimming_one_or_more_truncates_the_trailing_entities() {
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![entity(1), entity(2), entity(3)]).trim_to_length(1),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SelectionValue::OneOrMore needs to have at least one element")]
+    fn setting_one_or_more_to_an_empty_selection_panics() {
+        let _ = SelectionValue::OneOrMore(smallvec![entity(1)]).set_selection(std::iter::empty());
+    }
+
+    #[test]
+    fn setting_one_or_more_to_the_same_entities_is_a_no_op() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(value.set_selection([entity(2), entity(1)]), None);
+    }
+
+    #[test]
+    fn setting_one_or_more_to_different_entities_replaces_the_selection() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.set_selection([entity(2)]),
+            Some(SelectionValue::OneOrMore(smallvec![entity(2)]))
+        );
+    }
+
+    // ZeroOrMore
+
+    #[test]
+    fn zero_or_more_is_empty_only_without_selected_entities() {
+        assert!(SelectionValue::ZeroOrMore(smallvec![]).is_empty());
+        assert!(!SelectionValue::ZeroOrMore(smallvec![entity(1)]).is_empty());
+    }
+
+    #[test]
+    fn toggling_an_unselected_entity_into_zero_or_more_adds_it() {
+        let value = SelectionValue::ZeroOrMore(smallvec![]);
+        assert_eq!(
+            value.toggle_selected(entity(1)),
+            Some(SelectionValue::ZeroOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    fn toggling_a_selected_entity_out_of_zero_or_more_removes_it() {
+        let value = SelectionValue::ZeroOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.toggle_selected(entity(1)),
+            Some(SelectionValue::ZeroOrMore(smallvec![]))
+        );
+    }
+
+    #[test]
+    fn popping_an_empty_zero_or_more_is_a_no_op() {
+        assert_eq!(SelectionValue::ZeroOrMore(smallvec![]).pop(), None);
+    }
+
+    #[test]
+    fn popping_zero_or_more_removes_the_last_entity() {
+        assert_eq!(
+            SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]).pop(),
+            Some(SelectionValue::ZeroOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    fn clearing_an_empty_zero_or_more_is_a_no_op() {
+        assert_eq!(SelectionValue::ZeroOrMore(smallvec![]).clear(), None);
+    }
+
+    #[test]
+    fn clearing_zero_or_more_empties_the_selection() {
+        assert_eq!(
+            SelectionValue::ZeroOrMore(smallvec![entity(1)]).clear(),
+            Some(SelectionValue::ZeroOrMore(smallvec![]))
+        );
+    }
+
+    #[test]
+    fn trimming_zero_or_more_beyond_its_length_is_a_no_op() {
+        assert_eq!(
+            SelectionValue::ZeroOrMore(smallvec![entity(1)]).trim_to_length(5),
+            None
+        );
+    }
+
+    #[test]
+    fn trimming_zero_or_more_truncates_the_trailing_entities() {
+        assert_eq!(
+            SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]).trim_to_length(0),
+            Some(SelectionValue::ZeroOrMore(smallvec![]))
+        );
+    }
+
+    #[test]
+    fn setting_zero_or_more_to_an_empty_selection_empties_it() {
+        let value = SelectionValue::ZeroOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.set_selection(std::iter::empty()),
+            Some(SelectionValue::ZeroOrMore(smallvec![]))
+        );
+    }
+
+    #[test]
+    fn setting_zero_or_more_to_the_same_entities_is_a_no_op() {
+        let value = SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(value.set_selection([entity(2), entity(1)]), None);
+    }
+
+    // Cross-variant behaviour
+
+    #[test]
+    fn single_returns_the_only_selected_entity() {
+        assert_eq!(SelectionValue::One(entity(1)).single(), Some(entity(1)));
+        assert_eq!(SelectionValue::ZeroOrOne(None).single(), None);
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![entity(1)]).single(),
+            Some(entity(1))
+        );
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]).single(),
+            None
+        );
+    }
+
+    #[test]
+    fn last_returns_the_most_recently_selected_entity() {
+        assert_eq!(SelectionValue::ZeroOrMore(smallvec![]).last(), None);
+        assert_eq!(
+            SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]).last(),
+            Some(entity(2))
+        );
+    }
+
+    #[test]
+    fn iter_yields_all_selected_entities_in_order() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(value.iter().collect::<Vec<_>>(), vec![entity(1), entity(2)]);
+    }
+}

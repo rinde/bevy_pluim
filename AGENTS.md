@@ -186,16 +186,40 @@ or run with `--force`, and is idempotent, with progress on stderr.
 
 ## Testing
 
-There are no tests yet; the headless harness is tracked in issue #7. Until it
-lands:
-
-- unit tests go in a `#[cfg(test)] mod tests` next to the code; the pure
-  logic of `SelectionValue` in `select.rs` is the natural first target;
-- integration tests go in `tests/`, driving a headless `App` built from
-  `MinimalPlugins` plus what `WidgetsPlugin` needs, with no window or GPU;
+- unit tests go in a `#[cfg(test)] mod tests` next to the code; `select.rs`'s
+  `SelectionValue` tests are the reference for pure-logic coverage;
+- integration tests go in `tests/`, driving a headless `App`;
 - name tests as sentences: `a_stack_shows_only_the_selected_child`.
 
-Update this section with how to write a headless test once #7 is merged.
+### Writing a headless integration test
+
+`tests/headless.rs` builds an `App` with `MinimalPlugins` plus the plugins
+`WidgetsPlugin`'s systems need to run without panicking on a missing
+resource, none of which need a window or GPU:
+
+- `WindowPlugin { primary_window: None, ..default() }` — registers
+  `WindowEvent` and friends, which `bevy_picking` reads; no window is
+  actually opened.
+- `InputPlugin` — provides `ButtonInput<MouseButton>`, needed by
+  `combo.rs`'s outside-click observer.
+- `DefaultPickingPlugins` — provides `HoverMap`, needed by
+  `list.rs`'s scroll handling.
+- `ClearColor` (via `init_resource`) — normally inserted by the render
+  plugins; `theme.rs`'s `update_theme` writes to it whenever `Theme`
+  changes.
+
+These are all needed unconditionally because `WidgetsPlugin` registers every
+widget's systems regardless of which widgets a given test actually spawns.
+
+Spawn entities on `app.world_mut()` directly (component hooks and `OnAdd`/
+`OnInsert` observers fire synchronously), then call `app.update()` at least
+twice to flush the `Commands` those observers queue and let `Update`-schedule
+systems (like `breadcrumbs.rs`'s `selection_change`) react. Register
+`StackItem` creator systems with `world.register_system`, matching the
+`In<StackChildSpawner>` pattern in `examples/tabs.rs`.
+
+If a widget can't be exercised headlessly because it needs a render or text
+plugin, note it in the PR rather than pulling in a window.
 
 ## Before you call it done
 
