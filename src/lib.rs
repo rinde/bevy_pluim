@@ -72,8 +72,10 @@ fn add_ui_root(
     has_childof: Query<(Has<ChildOf>, Has<Disabled>)>,
     mut commands: Commands,
 ) {
-    let is_root = !has_childof.get(t.target()).unwrap().0;
-    if is_root {
+    let Ok((has_parent, _)) = has_childof.get(t.target()) else {
+        return;
+    };
+    if !has_parent {
         commands
             .entity(t.target())
             .insert(UiRoot)

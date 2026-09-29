@@ -598,7 +598,9 @@ where
         &mut self,
         updater: impl FnOnce(&SelectionValue) -> Option<SelectionValue>,
     ) -> bool {
-        let (selection_ref, selection) = self.single().unwrap();
+        let Ok((selection_ref, selection)) = self.single() else {
+            return false;
+        };
         if let Some(new_selection) = updater(selection) {
             self.do_update_selection(selection_ref, new_selection);
             true
