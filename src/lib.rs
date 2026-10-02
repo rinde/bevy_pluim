@@ -151,10 +151,11 @@ fn observer_transformer<E>(trigger: On<Pointer<E>>, mut commands: Commands)
 where
     E: std::fmt::Debug + Clone + Reflect + ToMouseEvent,
 {
-    let event = trigger.event();
+    // The event bubbles up to the root, rewriting its own target at every hop;
+    // the widget that was actually hit is the original target.
     commands.trigger(MouseEvent {
-        entity: event.entity,
-        kind: event.event.to_mouse_kind(),
+        entity: trigger.original_event_target(),
+        kind: trigger.event().event.to_mouse_kind(),
     });
 }
 

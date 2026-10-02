@@ -9,14 +9,19 @@
 
 use bevy::MinimalPlugins;
 use bevy::camera::ClearColor;
+use bevy::camera::NormalizedRenderTarget;
 use bevy::input::InputPlugin;
 use bevy::picking::DefaultPickingPlugins;
+use bevy::picking::backend::HitData;
+use bevy::picking::events::{Pointer, Press};
+use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::window::WindowPlugin;
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
+use rin_bevy_ui::link::Link;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionValue};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
@@ -257,6 +262,46 @@ fn toggling_theme_light_dark_reaches_a_themed_widget() {
         card_background(&app, card),
         DEFAULT_LIGHT_THEME_COLORS.background_primary
     );
+}
+
+#[test]
+fn a_press_on_a_link_reaches_the_link_through_the_root() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let link = app
+        .world_mut()
+        .spawn((Link::new("link"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let before = *app.world().entity(link).get::<BackgroundColor>().unwrap();
+    app.world_mut().trigger(Pointer {
+        entity: link,
+        pointer_id: PointerId::Mouse,
+        pointer_location: Location {
+            target: NormalizedRenderTarget::None {
+                width: 1,
+                height: 1,
+            },
+            position: Vec2::ZERO,
+        },
+        event: Press {
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        },
+    });
+    app.update();
+
+    let after = *app.world().entity(link).get::<BackgroundColor>().unwrap();
+    let expected = app
+        .world()
+        .get_resource::<Theme>()
+        .unwrap()
+        .colors
+        .background_secondary;
+    assert_ne!(before.0, expected);
+    assert_eq!(after.0, expected);
 }
 
 fn toggle_theme(app: &mut App) {
