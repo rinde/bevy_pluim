@@ -1,3 +1,5 @@
+//! `ColorPalette`: a grid of colour swatches over a selection of [`Item<Color>`](crate::select::Item).
+
 use std::collections::HashMap;
 
 use bevy::prelude::*;
@@ -11,6 +13,9 @@ use crate::theme::Theme;
 
 const COLOR_SQUARE_SIZE: f32 = 35.0;
 
+/// Registers the systems and observers of [`ColorPalette`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ColorPalettePlugin;
 
@@ -30,6 +35,7 @@ impl Plugin for ColorPalettePlugin {
     }
 }
 
+/// A grid of colour swatches for a selection of [`Item<Color>`](crate::select::Item).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[require(
     List,

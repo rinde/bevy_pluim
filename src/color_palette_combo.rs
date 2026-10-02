@@ -1,3 +1,5 @@
+//! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
+
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::window::PrimaryWindow;
@@ -13,6 +15,9 @@ use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
 use crate::{MouseEvent, UiRoot, color_push_button};
 
+/// Registers the systems and observers of [`ColorPaletteCombo`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ColorPaletteComboPlugin;
 
@@ -36,6 +41,7 @@ impl Plugin for ColorPaletteComboPlugin {
 
 #[derive(Component, Debug, Copy, Clone, Default)]
 // #[component(on_add=Self::on_insert)]
+/// A button that opens a [`ColorPalette`] in a popup.
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -145,14 +151,18 @@ struct SubRefs {
     float_id: Entity,
 }
 
+/// Whether the popup of a [`ColorPaletteCombo`] is showing.
 #[derive(Component, Debug, Copy, Clone, Eq, PartialEq)]
 #[component(immutable)]
 pub enum State {
+    /// The popup is showing.
     Open,
+    /// The popup is hidden.
     Closed,
 }
 
 impl State {
+    /// The other state.
     #[must_use]
     pub const fn inverse(&self) -> Self {
         match self {

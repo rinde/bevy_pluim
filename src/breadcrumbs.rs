@@ -1,9 +1,16 @@
+//! `BreadCrumbs`: a trail of [`Link`]s for a `OneOrMore` selection.
+//!
+//! Clicking a crumb trims the selection back to it.
+
 use bevy::prelude::*;
 
 use crate::label::Label;
 use crate::link::{Link, LinkState};
 use crate::select::{Item, Selection, SelectionParam};
 
+/// Registers the systems and observers of [`BreadCrumbs`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct BreadCrumbsPlugin;
 
@@ -13,6 +20,9 @@ impl Plugin for BreadCrumbsPlugin {
     }
 }
 
+/// A trail of links for the `OneOrMore` selection on this entity (or the one it refers to).
+///
+/// Clicking a crumb trims the selection back to it.
 #[derive(Component, Debug, Clone, Copy)]
 #[require(Name::new("BreadCrumbs"), Node{
     ..default()

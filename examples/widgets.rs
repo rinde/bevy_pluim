@@ -1,3 +1,5 @@
+//! A showcase: a scroll area, a list and combos sharing one selection via `Selection::reference`, and buttons that add more items.
+
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::color::palettes::tailwind::{

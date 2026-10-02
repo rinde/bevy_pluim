@@ -1,3 +1,5 @@
+//! `NumericStepper`.
+
 use bevy::prelude::*;
 use bevy::ui::UiDebugOptions;
 use rin_bevy_ui::WidgetsPlugin;

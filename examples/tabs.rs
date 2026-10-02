@@ -1,3 +1,5 @@
+//! A `List` as tab bar driving a `Stack`, with combos, colour palettes and cards inside.
+
 use std::sync::LazyLock;
 
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};

@@ -1,8 +1,16 @@
+//! `Stack`: shows the one child that matches the current selection.
+//!
+//! Children are created lazily by a registered system and hidden, not despawned,
+//! when they are deselected.
+
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
 
 use crate::select::{Item, Selection, SelectionParam};
 
+/// Registers the systems and observers of [`Stack`].
+///
+/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct StackPlugin;
 
@@ -12,9 +20,11 @@ impl Plugin for StackPlugin {
     }
 }
 
+/// Shows the one [`StackItem`] child that matches the selection on `selection_ref`.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[require(Name::new("Stack"), Node::default())]
 pub struct Stack {
+    /// The entity holding the selection that picks the visible child.
     pub selection_ref: Entity,
 }
 
@@ -157,14 +167,17 @@ fn switch_view(
 
 type StackChildCreator = SystemId<In<StackChildSpawner>>;
 
+/// An item that a [`Stack`] can show; its child is created lazily by `create`.
 #[derive(Component, Copy, Clone, Debug)]
 pub struct StackItem {
     entity: Option<Entity>,
+    /// The system that spawns the child, through the [`StackChildSpawner`] it is given.
     pub create: Option<StackChildCreator>,
     id: Option<usize>,
 }
 
 impl StackItem {
+    /// An item whose child is created by `create`.
     #[must_use]
     pub const fn new(create: StackChildCreator) -> Self {
         Self {
@@ -186,6 +199,7 @@ impl StackItem {
         }
     }
 
+    /// An item that reuses the `create` of the item made with [`StackItem::new_with_reference`] and the same `id`.
     #[must_use]
     pub const fn new_reference(id: usize) -> Self {
         Self {
@@ -196,6 +210,7 @@ impl StackItem {
     }
 }
 
+/// Given to the creator system of a [`StackItem`] to spawn its child into the [`Stack`].
 #[derive(Copy, Clone, Debug)]
 pub struct StackChildSpawner {
     parent: Entity,
@@ -203,6 +218,7 @@ pub struct StackChildSpawner {
 }
 
 impl StackChildSpawner {
+    /// Spawns `child` as the child of the stack.
     pub fn spawn(self, commands: &mut Commands, child: impl Bundle) {
         let mut id = Entity::PLACEHOLDER;
         commands.entity(self.parent).with_children(|parent| {

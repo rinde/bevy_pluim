@@ -1,3 +1,5 @@
+//! `ScrollArea`s scrolling vertically, horizontally or both.
+
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::color::palettes::tailwind::{

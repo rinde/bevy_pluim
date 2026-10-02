@@ -1,3 +1,5 @@
+//! `List` layouts and corner styles.
+
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
