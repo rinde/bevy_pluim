@@ -89,22 +89,35 @@ impl Link {
     }
 }
 
-fn on_insert_link_state(t: On<Insert, LinkState>, q: Query<&LinkState>, mut commands: Commands) {
-    let Ok(state) = q.get(t.event().event_target()) else {
+/// The observer entity that runs [`handle_hover`] for an enabled [`Link`].
+///
+/// Kept separate from the link, because an entity holding an `Observer` is hidden from queries.
+#[derive(Component, Clone, Copy, Debug)]
+struct HoverObserver(Entity);
+
+fn on_insert_link_state(
+    t: On<Insert, LinkState>,
+    q: Query<(&LinkState, Option<&HoverObserver>)>,
+    mut commands: Commands,
+) {
+    let link = t.event().event_target();
+    let Ok((state, hover_observer)) = q.get(link) else {
         return;
     };
+    if let Some(HoverObserver(observer)) = hover_observer {
+        commands.entity(*observer).despawn();
+    }
     match state {
         LinkState::Disabled => {
-            commands
-                .entity(t.event().event_target())
-                .remove::<(Button, Observer)>();
+            commands.entity(link).remove::<(Button, HoverObserver)>();
         }
         LinkState::Enabled => {
-            let mut observer = Observer::new(handle_hover);
-            observer.watch_entity(t.event().event_target());
+            let observer = commands
+                .spawn(Observer::new(handle_hover).with_entity(link))
+                .id();
             commands
-                .entity(t.event().event_target())
-                .insert((Button, observer));
+                .entity(link)
+                .insert((Button, HoverObserver(observer)));
         }
     }
 }
