@@ -156,8 +156,8 @@ impl State {
     #[must_use]
     pub const fn inverse(&self) -> Self {
         match self {
-            State::Open => State::Closed,
-            State::Closed => State::Open,
+            Self::Open => Self::Closed,
+            Self::Closed => Self::Open,
         }
     }
 }

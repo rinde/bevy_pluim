@@ -38,11 +38,11 @@ pub enum Label {
 
 impl Label {
     pub fn header(text: impl Into<String>) -> Self {
-        Label::Header(text.into())
+        Self::Header(text.into())
     }
 
     pub fn regular(text: impl Into<String>) -> Self {
-        Label::Regular(text.into())
+        Self::Regular(text.into())
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -50,7 +50,7 @@ impl Label {
             return;
         };
         let text = match this {
-            Label::Header(text) | Label::Regular(text) => text.clone(),
+            Self::Header(text) | Self::Regular(text) => text.clone(),
         };
         world.commands().entity(context.entity).insert(Text(text));
         world

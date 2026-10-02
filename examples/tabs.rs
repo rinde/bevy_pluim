@@ -226,7 +226,7 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
             children![
                 Label::header("Card demo"),
                 (
-                    Node { ..default() },
+                    Node::default(),
                     Pickable {
                         should_block_lower: false,
                         ..default()

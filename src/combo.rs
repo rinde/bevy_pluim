@@ -60,19 +60,19 @@ impl ComboState {
     #[must_use]
     pub const fn inverse(&self) -> Self {
         match self {
-            ComboState::Open => ComboState::Closed,
-            ComboState::Closed => ComboState::Open,
+            Self::Open => Self::Closed,
+            Self::Closed => Self::Open,
         }
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let (state, &ComboSubRefs { list_id, .. }) = world
             .entity(context.entity)
-            .components::<(&ComboState, &ComboSubRefs)>();
+            .components::<(&Self, &ComboSubRefs)>();
 
         let visibility = match state {
-            ComboState::Open => Visibility::Visible,
-            ComboState::Closed => Visibility::Hidden,
+            Self::Open => Visibility::Visible,
+            Self::Closed => Visibility::Hidden,
         };
         world.commands().entity(list_id).insert(visibility);
     }

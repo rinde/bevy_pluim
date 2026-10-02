@@ -137,6 +137,15 @@ Every example has a button that toggles the light and dark theme, and sets
 - **Selections can be shared via `Selection::Ref`**; a widget that displays a
   selection must react when either its own entity or the referenced one
   changes (see `selection_change` in `breadcrumbs.rs` or `list.rs`).
+- **Lint groups are `deny`.** `clippy::all`, `pedantic` and `nursery` (and
+  `missing_const_for_fn`) fail the build, so `just lint` is the bar, not a
+  suggestion. The only allows are the Bevy-shaped ones documented in
+  `Cargo.toml`: `too_many_arguments`, `needless_pass_by_value` and
+  `type_complexity` (systems take many params, `In<_>` / `Res<_>` / `Trigger<_>`
+  by value, and nested `Query` types), plus `too_many_lines` and the numeric
+  cast lints. `unused_crate_dependencies` stays off because it misfires per
+  example / test target; `cargo machete` (in `just ci`) checks dependencies
+  instead. Public functions returning `Result` need a `# Errors` section.
 - **No panics in library code.** `unwrap_used`, `expect_used`, `panic`,
   `todo`, `unimplemented`, `dbg_macro`, `print_stdout`, `print_stderr` and
   `indexing_slicing` are denied in `Cargo.toml`, and `clippy.toml` bans the
