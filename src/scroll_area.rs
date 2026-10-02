@@ -263,21 +263,11 @@ fn theme_scroll_area(
     theme: Res<Theme>,
     mut scroll_contents: Query<(&mut BackgroundColor, &ScrollAreaRefs), With<ScrollContents>>,
     mut scroll_bars: Query<
-        (
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderRadius,
-            &Children,
-        ),
+        (&mut Node, &mut BackgroundColor, &Children),
         (With<ScrollBar>, Without<ScrollContents>),
     >,
     mut scroll_thumbs: Query<
-        (
-            &mut Node,
-            &mut BackgroundColor,
-            &mut BorderRadius,
-            &mut BorderColor,
-        ),
+        (&mut Node, &mut BackgroundColor, &mut BorderColor),
         (
             With<ScrollThumb>,
             Without<ScrollContents>,
@@ -294,8 +284,7 @@ fn theme_scroll_area(
     for (mut background_color, refs) in it {
         background_color.0 = theme.colors.background_primary;
         let mut theme_scrollbar = |entity, orientation| {
-            let Ok((mut sb_node, mut sb_background_color, mut sb_border_radius, children)) =
-                scroll_bars.get_mut(entity)
+            let Ok((mut sb_node, mut sb_background_color, children)) = scroll_bars.get_mut(entity)
             else {
                 return;
             };
@@ -309,17 +298,13 @@ fn theme_scroll_area(
                 }
             }
             sb_background_color.0 = theme.colors.background_secondary;
-            *sb_border_radius = BorderRadius::all(theme.corner_radius);
+            sb_node.border_radius = BorderRadius::all(theme.corner_radius);
 
-            let Some((
-                mut thumb_node,
-                mut thumb_background_color,
-                mut thumb_border_radius,
-                mut thumb_border_color,
-            )) = children
-                .iter()
-                .next()
-                .and_then(|thumb_entity| scroll_thumbs.get_mut(thumb_entity).ok())
+            let Some((mut thumb_node, mut thumb_background_color, mut thumb_border_color)) =
+                children
+                    .iter()
+                    .next()
+                    .and_then(|thumb_entity| scroll_thumbs.get_mut(thumb_entity).ok())
             else {
                 return;
             };
@@ -334,7 +319,7 @@ fn theme_scroll_area(
             }
             // thumb_node.border = UiRect::all(theme.border_thickness);
             thumb_background_color.0 = theme.colors.scroll_thumb_background;
-            *thumb_border_radius = BorderRadius::all(theme.corner_radius);
+            thumb_node.border_radius = BorderRadius::all(theme.corner_radius);
             thumb_border_color.set_all(theme.colors.border);
         };
 

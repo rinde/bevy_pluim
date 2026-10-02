@@ -26,7 +26,7 @@ impl Plugin for CardPlugin {
 
 /// A node with a themed background, border, corner radius and shadow.
 #[derive(Component, Copy, Clone, Debug)]
-#[require(BoxShadow::default(), BorderRadius::default(), Node::default())]
+#[require(BoxShadow::default(), Node::default())]
 #[component(on_insert=Self::on_insert)]
 pub struct Card;
 
@@ -45,7 +45,6 @@ fn theme_cards(
         (
             &mut Node,
             &mut BackgroundColor,
-            &mut BorderRadius,
             &mut BorderColor,
             &mut BoxShadow,
         ),
@@ -58,12 +57,10 @@ fn theme_cards(
         Either::Right(cards.into_iter())
     };
 
-    for (mut node, mut background_color, mut border_radius, mut border_color, mut box_shadow) in
-        iter
-    {
+    for (mut node, mut background_color, mut border_color, mut box_shadow) in iter {
         node.border = UiRect::all(theme.border_thickness);
         background_color.0 = theme.colors.background_primary;
-        *border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.corner_radius);
         border_color.set_all(theme.colors.border);
         *box_shadow = theme.large_shadow().into();
     }

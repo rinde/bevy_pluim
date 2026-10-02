@@ -51,7 +51,7 @@ rustup toolchain install "$toolchain" --profile minimal \
 # The default Bevy feature set (winit windowing, audio, gamepad) needs these
 # to link, as in `.github/workflows/ci.yml`. If the feature list here is ever
 # trimmed the way rails trims it, drop the packages that are no longer needed.
-readonly BEVY_HEADERS=(pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev)
+readonly BEVY_HEADERS=(pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev)
 if command -v apt-get >/dev/null 2>&1 && ! dpkg -s "${BEVY_HEADERS[@]}" >/dev/null 2>&1; then
     log "installing Bevy's system headers: ${BEVY_HEADERS[*]}"
     apt_install() { apt-get install -y --no-install-recommends "${BEVY_HEADERS[@]}" >&2; }

@@ -66,7 +66,6 @@ impl ColorPushButton {
                         ..default()
                     },
                     BackgroundColor::default(),
-                    BorderRadius::default(),
                     ColorSquare,
                     Pickable {
                         should_block_lower: false,
@@ -91,19 +90,13 @@ pub(crate) fn update_theme(
             &ColorSquareRef,
             &mut BackgroundColor,
             &mut BorderColor,
-            &mut BorderRadius,
             &mut BoxShadow,
             &mut Node,
         ),
         With<ColorPushButton>,
     >,
     mut squares: Query<
-        (
-            &mut Node,
-            &mut BorderRadius,
-            &mut BorderColor,
-            &BackgroundColor,
-        ),
+        (&mut Node, &mut BorderColor, &BackgroundColor),
         (With<ColorSquare>, Without<ColorPushButton>),
     >,
 ) {
@@ -116,19 +109,18 @@ pub(crate) fn update_theme(
         ColorSquareRef(square_ref),
         mut background_color,
         mut border_color,
-        mut border_radius,
         mut box_shadow,
         mut node,
     ) in it
     {
         background_color.0 = theme.colors.background_primary;
         border_color.set_all(theme.colors.border);
-        *border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.corner_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
         node.padding = theme.color_button_padding;
 
-        let Ok((mut square_node, mut square_border_radius, mut square_border_color, square_color)) =
+        let Ok((mut square_node, mut square_border_color, square_color)) =
             squares.get_mut(*square_ref)
         else {
             continue;
@@ -141,6 +133,6 @@ pub(crate) fn update_theme(
         }
 
         square_node.border = UiRect::all(Val::Px(1.0));
-        *square_border_radius = BorderRadius::all(Val::Px(5.0));
+        square_node.border_radius = BorderRadius::all(Val::Px(5.0));
     }
 }

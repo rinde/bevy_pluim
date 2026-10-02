@@ -121,6 +121,8 @@ Every example has a button that toggles the light and dark theme, and sets
   all of them with `(|| None::<Entity>).pipe(theme_x).run_if(resource_changed::<Theme>)`.
   `itertools::Either` unifies the two iterators. See `card.rs` for the
   smallest example.
+- **Corner radius is a `Node` field.** Since Bevy 0.18 `BorderRadius` is
+  `Node::border_radius`, not a component; set it on the node.
 - **No hard-coded colours outside `theme.rs` and `tailwind.rs`.** Add a slot
   to `ThemeColors` (both default themes) rather than inlining a colour. One
   `Color::BLACK` border in `color_palette_combo.rs` predates this rule.
