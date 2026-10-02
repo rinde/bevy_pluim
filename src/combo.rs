@@ -2,18 +2,18 @@
 //!
 //! The popup closes again on a click outside of it.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use itertools::Itertools;
 
-use crate::MouseEvent;
 use crate::float::Float;
 use crate::list::{List, NoDefaultItems};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Combo`].
 ///
@@ -138,12 +138,8 @@ impl Combo {
     }
 }
 
-fn on_insert_combo(
-    t: Trigger<OnInsert, Combo>,
-    selections: SelectionParam,
-    mut commands: Commands,
-) {
-    let combo_ref = t.target();
+fn on_insert_combo(t: On<Insert, Combo>, selections: SelectionParam, mut commands: Commands) {
+    let combo_ref = t.event().event_target();
     let Some(combo_selection) = selections.get_ref(combo_ref) else {
         return;
     };
@@ -235,9 +231,9 @@ fn close_combos_on_outside_click(
             };
             let over_list = combo_lists
                 .get(subs.list_id)
-                .is_ok_and(RelativeCursorPosition::mouse_over);
+                .is_ok_and(RelativeCursorPosition::cursor_over);
             if combo_state == ComboState::Open
-                && !rcp.mouse_over()
+                && !rcp.cursor_over()
                 && !(selection_value.allow_multiple() && over_list)
             {
                 let Ok((mut background_color, mut border_color)) =
@@ -247,7 +243,7 @@ fn close_combos_on_outside_click(
                 };
 
                 *background_color = BackgroundColor(theme.colors.background_primary);
-                *border_color = BorderColor(theme.colors.border);
+                *border_color = BorderColor::all(theme.colors.border);
                 commands.entity(combo_ref).insert(ComboState::Closed);
             }
         }
@@ -255,34 +251,36 @@ fn close_combos_on_outside_click(
 }
 
 fn handle_combo_button_mouse_events(
-    trigger: Trigger<MouseEvent>,
+    trigger: On<MouseEvent>,
     combos: Query<(&ComboSubRefs, &ComboState), With<Combo>>,
     mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    let Ok((ComboSubRefs { button_id, .. }, combo_state)) = combos.get(trigger.target()) else {
+    let Ok((ComboSubRefs { button_id, .. }, combo_state)) =
+        combos.get(trigger.event().event_target())
+    else {
         return;
     };
     let Ok((mut background_color, mut border_color)) = combo_buttons.get_mut(*button_id) else {
         return;
     };
 
-    match (trigger.event(), combo_state) {
-        (MouseEvent::Pressed, _) => {
+    match (trigger.event().kind, combo_state) {
+        (MouseKind::Pressed, _) => {
             commands
-                .entity(trigger.target())
+                .entity(trigger.event().event_target())
                 .insert(combo_state.inverse());
         }
-        (MouseEvent::Over, _) | (_, ComboState::Open) => {
+        (MouseKind::Over, _) | (_, ComboState::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor(theme.colors.border_highlight);
+            *border_color = BorderColor::all(theme.colors.border_highlight);
         }
 
-        (MouseEvent::Out, ComboState::Closed) => {
+        (MouseKind::Out, ComboState::Closed) => {
             *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor(theme.colors.border);
+            *border_color = BorderColor::all(theme.colors.border);
         }
-        (MouseEvent::Released, ComboState::Closed) => {}
+        (MouseKind::Released, ComboState::Closed) => {}
     }
 }

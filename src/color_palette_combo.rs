@@ -13,7 +13,7 @@ use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
-use crate::{MouseEvent, UiRoot, color_push_button};
+use crate::{MouseEvent, MouseKind, UiRoot, color_push_button};
 
 /// Registers the systems and observers of [`ColorPaletteCombo`].
 ///
@@ -61,7 +61,7 @@ struct ColorPaletteComboButton;
 struct ColorPaletteComboFloat;
 
 fn on_insert_combo(
-    t: Trigger<OnInsert, ColorPaletteCombo>,
+    t: On<Insert, ColorPaletteCombo>,
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
     root: Single<Entity, With<UiRoot>>,
@@ -69,21 +69,23 @@ fn on_insert_combo(
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
 
-    let list_layout = list_layouts.get(t.target()).ok().copied();
-    commands.entity(t.target()).with_children(|parent| {
-        button_id = parent
-            .spawn((
-                ColorPaletteComboButton,
-                ColorPushButton,
-                NoDefaultHover,
-                // allow mouse events to pass through to parent
-                Pickable {
-                    should_block_lower: false,
-                    ..default()
-                },
-            ))
-            .id();
-    });
+    let list_layout = list_layouts.get(t.event().event_target()).ok().copied();
+    commands
+        .entity(t.event().event_target())
+        .with_children(|parent| {
+            button_id = parent
+                .spawn((
+                    ColorPaletteComboButton,
+                    ColorPushButton,
+                    NoDefaultHover,
+                    // allow mouse events to pass through to parent
+                    Pickable {
+                        should_block_lower: false,
+                        ..default()
+                    },
+                ))
+                .id();
+        });
     let root = *root;
     commands.entity(root).with_children(|parent| {
         float_id = parent
@@ -98,7 +100,7 @@ fn on_insert_combo(
                     border: UiRect::all(Val::Px(1.0)),
                     ..default()
                 },
-                BorderColor(Color::BLACK),
+                BorderColor::all(Color::BLACK),
                 Visibility::Hidden,
                 ScrollArea::bundle(
                     move |parent| {
@@ -120,12 +122,12 @@ fn on_insert_combo(
     });
 
     let sub_refs = SubRefs {
-        parent: t.target(),
+        parent: t.event().event_target(),
         button: button_id,
         float_id,
     };
     commands
-        .entity(t.target())
+        .entity(t.event().event_target())
         .insert((State::Closed, sub_refs));
 
     commands
@@ -135,11 +137,11 @@ fn on_insert_combo(
 }
 
 fn on_remove_combo(
-    t: Trigger<OnRemove, ColorPaletteCombo>,
+    t: On<Remove, ColorPaletteCombo>,
     sub_refs: Query<&SubRefs>,
     mut commands: Commands,
 ) {
-    if let Ok(sub_refs) = sub_refs.get(t.target()) {
+    if let Ok(sub_refs) = sub_refs.get(t.event().event_target()) {
         commands.entity(sub_refs.float_id).despawn();
     }
 }
@@ -172,12 +174,8 @@ impl State {
     }
 }
 
-fn on_insert_state(
-    t: Trigger<OnInsert, State>,
-    state: Query<(&State, &SubRefs)>,
-    mut commands: Commands,
-) {
-    let Ok((&state, &sub_refs)) = state.get(t.target()) else {
+fn on_insert_state(t: On<Insert, State>, state: Query<(&State, &SubRefs)>, mut commands: Commands) {
+    let Ok((&state, &sub_refs)) = state.get(t.event().event_target()) else {
         return;
     };
 
@@ -352,9 +350,9 @@ fn close_combos_on_outside_click(
             };
             let over_float = floats
                 .get(subs.float_id)
-                .is_ok_and(RelativeCursorPosition::mouse_over);
+                .is_ok_and(RelativeCursorPosition::cursor_over);
             if combo_state == State::Open
-                && !rcp.mouse_over()
+                && !rcp.cursor_over()
                 && !(selection.allow_multiple() && over_float)
             {
                 let Ok((mut background_color, mut border_color)) =
@@ -364,7 +362,7 @@ fn close_combos_on_outside_click(
                 };
 
                 *background_color = BackgroundColor(theme.colors.background_primary);
-                *border_color = BorderColor(theme.colors.border);
+                *border_color = BorderColor::all(theme.colors.border);
                 commands.entity(combo_id).insert(State::Closed);
             }
         }
@@ -372,7 +370,7 @@ fn close_combos_on_outside_click(
 }
 
 fn handle_combo_button_mouse_events(
-    trigger: Trigger<MouseEvent>,
+    trigger: On<MouseEvent>,
     mut combo_buttons: Query<
         (&SubRefs, &mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
@@ -387,7 +385,7 @@ fn handle_combo_button_mouse_events(
         },
         mut background_color,
         mut border_color,
-    )) = combo_buttons.get_mut(trigger.target())
+    )) = combo_buttons.get_mut(trigger.event().event_target())
     else {
         return;
     };
@@ -395,20 +393,20 @@ fn handle_combo_button_mouse_events(
         return;
     };
 
-    match (trigger.event(), combo_state) {
-        (MouseEvent::Pressed, _) => {
+    match (trigger.event().kind, combo_state) {
+        (MouseKind::Pressed, _) => {
             commands.entity(*parent_id).insert(combo_state.inverse());
         }
-        (MouseEvent::Over, _) | (_, State::Open) => {
+        (MouseKind::Over, _) | (_, State::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor(theme.colors.border_highlight);
+            *border_color = BorderColor::all(theme.colors.border_highlight);
         }
 
-        (MouseEvent::Out, State::Closed) => {
+        (MouseKind::Out, State::Closed) => {
             *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor(theme.colors.border);
+            *border_color = BorderColor::all(theme.colors.border);
         }
-        (MouseEvent::Released, State::Closed) => {}
+        (MouseKind::Released, State::Closed) => {}
     }
 }
 
@@ -424,6 +422,6 @@ fn theme_floats(
     };
 
     for mut border_color in it {
-        *border_color = BorderColor(theme.colors.border_highlight);
+        *border_color = BorderColor::all(theme.colors.border_highlight);
     }
 }

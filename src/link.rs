@@ -1,12 +1,12 @@
 //! `Link`: a clickable text whose look follows its [`LinkState`].
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Link`].
 ///
@@ -89,43 +89,43 @@ impl Link {
     }
 }
 
-fn on_insert_link_state(
-    t: Trigger<OnInsert, LinkState>,
-    q: Query<&LinkState>,
-    mut commands: Commands,
-) {
-    let Ok(state) = q.get(t.target()) else {
+fn on_insert_link_state(t: On<Insert, LinkState>, q: Query<&LinkState>, mut commands: Commands) {
+    let Ok(state) = q.get(t.event().event_target()) else {
         return;
     };
     match state {
         LinkState::Disabled => {
-            commands.entity(t.target()).remove::<(Button, Observer)>();
+            commands
+                .entity(t.event().event_target())
+                .remove::<(Button, Observer)>();
         }
         LinkState::Enabled => {
             let mut observer = Observer::new(handle_hover);
-            observer.watch_entity(t.target());
-            commands.entity(t.target()).insert((Button, observer));
+            observer.watch_entity(t.event().event_target());
+            commands
+                .entity(t.event().event_target())
+                .insert((Button, observer));
         }
     }
 }
 
 fn handle_hover(
-    trigger: Trigger<MouseEvent>,
+    trigger: On<MouseEvent>,
     mut links: Query<(&mut BackgroundColor, &Children)>,
     mut link_texts: Query<&mut TextColor, With<LinkText>>,
     theme: Res<Theme>,
 ) {
-    let bg_color = match trigger.event() {
-        MouseEvent::Over | MouseEvent::Pressed | MouseEvent::Released => {
+    let bg_color = match trigger.event().kind {
+        MouseKind::Over | MouseKind::Pressed | MouseKind::Released => {
             theme.colors.background_secondary
         }
-        MouseEvent::Out => theme.colors.background_primary,
+        MouseKind::Out => theme.colors.background_primary,
     };
-    let link_color = match trigger.event() {
-        MouseEvent::Over | MouseEvent::Released | MouseEvent::Out => theme.colors.link,
-        MouseEvent::Pressed => theme.colors.link_selected,
+    let link_color = match trigger.event().kind {
+        MouseKind::Over | MouseKind::Released | MouseKind::Out => theme.colors.link,
+        MouseKind::Pressed => theme.colors.link_selected,
     };
-    let Ok((mut link_bg, children)) = links.get_mut(trigger.target()) else {
+    let Ok((mut link_bg, children)) = links.get_mut(trigger.event().event_target()) else {
         return;
     };
     *link_bg = BackgroundColor(bg_color);

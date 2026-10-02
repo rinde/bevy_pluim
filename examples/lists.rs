@@ -4,7 +4,7 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::ui::UiDebugOptions;
+use bevy::ui_render::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
@@ -105,11 +105,11 @@ fn setup(mut commands: Commands) {
 struct ThemeButton;
 
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }

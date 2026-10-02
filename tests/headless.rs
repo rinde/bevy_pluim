@@ -8,10 +8,10 @@
 )]
 
 use bevy::MinimalPlugins;
+use bevy::camera::ClearColor;
 use bevy::input::InputPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::prelude::*;
-use bevy::render::camera::ClearColor;
 use bevy::window::WindowPlugin;
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;

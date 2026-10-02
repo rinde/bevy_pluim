@@ -82,7 +82,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
 
             // filler
             parent.spawn((
-                BorderColor(theme_border_color),
+                BorderColor::all(theme_border_color),
                 Node {
                     max_width: Val::Percent(100.0),
                     border: UiRect::bottom(Val::Px(1.0)),
@@ -326,11 +326,11 @@ fn items() -> impl Iterator<Item = Item<String>> {
 struct ThemeButton;
 
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }

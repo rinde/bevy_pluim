@@ -1,6 +1,6 @@
 //! `ColorPushButton`: a button showing a colour square.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
@@ -122,7 +122,7 @@ pub(crate) fn update_theme(
     ) in it
     {
         background_color.0 = theme.colors.background_primary;
-        border_color.0 = theme.colors.border;
+        border_color.set_all(theme.colors.border);
         *border_radius = BorderRadius::all(theme.corner_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
@@ -135,9 +135,9 @@ pub(crate) fn update_theme(
         };
 
         if square_color.0.luminance() < 0.5 {
-            square_border_color.0 = square_color.0.lighter(0.1);
+            square_border_color.set_all(square_color.0.lighter(0.1));
         } else {
-            square_border_color.0 = square_color.0.darker(0.1);
+            square_border_color.set_all(square_color.0.darker(0.1));
         }
 
         square_node.border = UiRect::all(Val::Px(1.0));

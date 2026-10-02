@@ -1,13 +1,13 @@
 //! `ScrollArea`: scrollable contents with vertical and/or horizontal scroll bars.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`ScrollArea`].
 ///
@@ -147,17 +147,17 @@ struct ScrollThumb;
 
 // TODO wait for 0.17 to implement dragging thumb
 fn handle_hover(
-    trigger: Trigger<MouseEvent>,
+    trigger: On<MouseEvent>,
     mut query: Query<&mut BackgroundColor>,
     theme: Res<Theme>,
 ) {
-    let color = match trigger.event() {
-        MouseEvent::Over => theme.colors.hovered_item,
-        MouseEvent::Pressed => theme.colors.selected_hovered_item,
-        MouseEvent::Released => theme.colors.selected_item,
-        MouseEvent::Out => theme.colors.scroll_thumb_background,
+    let color = match trigger.event().kind {
+        MouseKind::Over => theme.colors.hovered_item,
+        MouseKind::Pressed => theme.colors.selected_hovered_item,
+        MouseKind::Released => theme.colors.selected_item,
+        MouseKind::Out => theme.colors.scroll_thumb_background,
     };
-    if let Ok(mut background) = query.get_mut(trigger.target()) {
+    if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
         *background = BackgroundColor(color);
     }
 }
@@ -224,7 +224,7 @@ fn scroll_system(
         let mut ratio = if max_scroll_offset < f32::EPSILON {
             0.0
         } else {
-            Vec2::from(scroll_pos)[index] / max_scroll_offset
+            scroll_pos.0[index] / max_scroll_offset
         };
 
         // create scrollbar bouncing/shrinking effect when reaching the edges
@@ -335,7 +335,7 @@ fn theme_scroll_area(
             // thumb_node.border = UiRect::all(theme.border_thickness);
             thumb_background_color.0 = theme.colors.scroll_thumb_background;
             *thumb_border_radius = BorderRadius::all(theme.corner_radius);
-            thumb_border_color.0 = theme.colors.border;
+            thumb_border_color.set_all(theme.colors.border);
         };
 
         if let Some(x) = refs.v_scrollbar {

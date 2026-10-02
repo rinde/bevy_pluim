@@ -1,7 +1,7 @@
 //! `NumericStepper`.
 
 use bevy::prelude::*;
-use bevy::ui::UiDebugOptions;
+use bevy::ui_render::UiDebugOptions;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::PushButton;
@@ -52,11 +52,11 @@ fn setup(mut commands: Commands) {
 struct ThemeButton;
 
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }

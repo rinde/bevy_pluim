@@ -119,11 +119,11 @@ fn setup(mut commands: Commands) {
 struct ThemeButton;
 
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }
@@ -140,7 +140,7 @@ fn push_to_selection(
 }
 
 fn pop_on_pointer_release(
-    _: Trigger<Pointer<Released>>,
+    _: On<Pointer<Release>>,
     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
 ) {
     selections.update_selection_single(SelectionValue::pop);
@@ -157,7 +157,7 @@ fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 parent
                     .spawn(PushButton::from_label("Go to Panel A"))
                     .observe(
-                        |_: Trigger<Pointer<Released>>,
+                        |_: On<Pointer<Release>>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
                             push_to_selection(BreadCrumbsAction::PanelA, &mut selections, items);
@@ -167,7 +167,7 @@ fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 parent
                     .spawn(PushButton::from_label("Go to Panel A variant"))
                     .observe(
-                        |_: Trigger<Pointer<Released>>,
+                        |_: On<Pointer<Release>>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
                             push_to_selection(
@@ -181,7 +181,7 @@ fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 parent
                     .spawn(PushButton::from_label("Go to Panel B"))
                     .observe(
-                        |_: Trigger<Pointer<Released>>,
+                        |_: On<Pointer<Release>>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
                             push_to_selection(BreadCrumbsAction::PanelB, &mut selections, items);
@@ -212,7 +212,7 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 parent
                     .spawn(PushButton::from_label("Go to panel A variant"))
                     .observe(
-                        |_: Trigger<Pointer<Released>>,
+                        |_: On<Pointer<Release>>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
                             let Some(item_a_ref) = items
@@ -241,7 +241,7 @@ fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 parent
                     .spawn(PushButton::from_label("Go to panel B sub"))
                     .observe(
-                        |_: Trigger<Pointer<Released>>,
+                        |_: On<Pointer<Release>>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
                             push_to_selection(BreadCrumbsAction::PanelBsub, &mut selections, items);

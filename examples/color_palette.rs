@@ -4,7 +4,7 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::ui::UiDebugOptions;
+use bevy::ui_render::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rin_bevy_ui::WidgetsPlugin;
@@ -201,22 +201,22 @@ struct RemoveComboButton;
 struct ExtraComponentsArea;
 
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }
 
 fn on_press_add_combo_button(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<AddComboButton>>,
     area: Single<Entity, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         commands.entity(*area).with_children(|parent| {
             parent.spawn((
                 ColorPaletteCombo,
@@ -230,12 +230,12 @@ fn on_press_add_combo_button(
 }
 
 fn on_press_remove_combo_button(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<RemoveComboButton>>,
     area: Single<&Children, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
-    if button.get(trigger.target()).is_ok()
+    if button.get(trigger.event().event_target()).is_ok()
         && let Some(last) = area.iter().last()
     {
         commands.entity(last).despawn();

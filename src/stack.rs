@@ -32,12 +32,12 @@ pub struct Stack {
 struct PrevDisplay(Display);
 
 fn on_add_stack(
-    t: Trigger<OnAdd, Stack>,
+    t: On<Add, Stack>,
     stacks: Query<&Stack>,
     selections: SelectionParam,
     mut commands: Commands,
 ) {
-    let stack_ref = t.target();
+    let stack_ref = t.event().event_target();
     let Ok(stack) = stacks.get(stack_ref).copied() else {
         return;
     };
@@ -47,7 +47,7 @@ fn on_add_stack(
     }
 
     commands.entity(stack.selection_ref).observe(
-        move |_: Trigger<OnInsert, Selection>, mut commands: Commands| {
+        move |_: On<Insert, Selection>, mut commands: Commands| {
             commands.run_system_cached_with(switch_view, (stack_ref, stack));
         },
     );
