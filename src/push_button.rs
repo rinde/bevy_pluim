@@ -67,14 +67,14 @@ impl PushButton {
     }
 
     fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let pb = world.entity(context.entity).get::<PushButton>().unwrap();
-        let icon = pb
+        let entity = world.entity(context.entity);
+        let Some(button) = entity.get::<PushButton>() else {
+            return;
+        };
+        let icon = button
             .icon
             .as_ref()
             .map(|s| (Text::new(s), PushButtonIcon, Pickable::IGNORE));
-
-        let entity = world.entity(context.entity);
-        let button = entity.get::<PushButton>().unwrap();
         let label = (Text::new(&button.label), PushButtonLabel, Pickable::IGNORE);
 
         let default_hover = !entity.contains::<NoDefaultHover>();
@@ -119,7 +119,9 @@ fn handle_hover(
         MouseEvent::Released => theme.colors.selected_item,
         MouseEvent::Out => theme.colors.background_primary,
     };
-    *query.get_mut(trigger.target()).unwrap() = BackgroundColor(color);
+    if let Ok(mut background) = query.get_mut(trigger.target()) {
+        *background = BackgroundColor(color);
+    }
 }
 
 fn theme_push_button(
@@ -146,7 +148,7 @@ fn theme_push_button(
     >,
 ) {
     let it = if let Some(button_id) = button_id.as_ref() {
-        Either::Left([buttons.get_mut(*button_id).unwrap()].into_iter())
+        Either::Left(buttons.get_mut(*button_id).into_iter())
     } else {
         Either::Right(buttons.iter_mut())
     };
@@ -167,16 +169,18 @@ fn theme_push_button(
         node.padding = theme.item_padding;
 
         // label
-        let (mut text_color, mut text_font) = labels.get_mut(refs.label_id).unwrap();
-        *text_color = TextColor(theme.colors.text_primary);
-        *text_font = TextFont {
-            font_size: 14.0,
-            ..default()
-        };
+        if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
+            *text_color = TextColor(theme.colors.text_primary);
+            *text_font = TextFont {
+                font_size: 14.0,
+                ..default()
+            };
+        }
 
         // icon
-        if let Some(icon_id) = refs.icon_id {
-            let (mut text_color, mut text_font) = icons.get_mut(icon_id).unwrap();
+        if let Some(icon_id) = refs.icon_id
+            && let Ok((mut text_color, mut text_font)) = icons.get_mut(icon_id)
+        {
             *text_color = TextColor(theme.colors.border);
             *text_font = TextFont {
                 font_size: 14.0,

@@ -40,7 +40,7 @@ fn theme_float(
     mut query: Query<(&mut Node, &mut BoxShadow), With<Float>>,
 ) {
     let iter = if let Some(float_id) = float_id.as_ref() {
-        Either::Left([query.get_mut(*float_id).unwrap()].into_iter())
+        Either::Left(query.get_mut(*float_id).into_iter())
     } else {
         Either::Right(query.iter_mut())
     };

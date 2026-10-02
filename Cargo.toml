@@ -72,6 +72,15 @@ cast_possible_truncation = "allow"
 ### Restrictions
 exit = "warn"
 unreachable = "warn"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+indexing_slicing = "deny"
 
 # Bevy is unusably slow in an unoptimised build, so optimise dependencies but
 # not our own code, which keeps the edit-run loop short.

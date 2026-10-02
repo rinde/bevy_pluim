@@ -55,7 +55,7 @@ fn on_items_changed(
     let existing = children
         .map(|c| {
             c.iter()
-                .map(|c| item_views.get(c).unwrap())
+                .filter_map(|c| item_views.get(c).ok())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -77,9 +77,9 @@ fn on_items_changed(
     }
 
     for item_id in items {
-        let item = items_query.get(item_id).unwrap_or_else(|_| {
-            panic!("Item<Color> not found with id {item_id}");
-        });
+        let Ok(item) = items_query.get(item_id) else {
+            continue;
+        };
         commands.entity(*list_ref).with_children(|spawner| {
             spawner
                 .spawn((
@@ -135,7 +135,9 @@ fn on_insert_selection(
     if color_palettes.get(list_ref).is_err() {
         return;
     }
-    let (values_ref, all_items) = selections.get_item_values(list_ref).unwrap();
+    let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
+        return;
+    };
     if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
         // no change in items ref
         return;
@@ -172,14 +174,19 @@ fn handle_mouse_events(
     mut item_views: Query<&ItemView>,
     mut commands: Commands,
 ) {
-    let ItemView {
+    let Ok(ItemView {
         item_ref: target_item_ref,
         list_ref: target_list_ref,
-    } = item_views.get_mut(t.target()).unwrap();
-    let Item { data: item_color } = color_items.get(*target_item_ref).unwrap();
-    let (selection_ref, selection) = selections
-        .get_with_ref(*target_list_ref)
-        .unwrap_or_else(|| panic!("ColorPalette: No selection found for entity {target_list_ref}"));
+    }) = item_views.get_mut(t.target())
+    else {
+        return;
+    };
+    let Ok(Item { data: item_color }) = color_items.get(*target_item_ref) else {
+        return;
+    };
+    let Some((selection_ref, selection)) = selections.get_with_ref(*target_list_ref) else {
+        return;
+    };
 
     let is_selected = selection.is_selected(*target_item_ref);
 
@@ -218,7 +225,7 @@ fn theme_items(
     mut commands: Commands,
 ) {
     let it = if let Some(list_id) = list_id.as_ref() {
-        Either::Left([color_palettes.get(*list_id).unwrap()].into_iter())
+        Either::Left(color_palettes.get(*list_id).into_iter())
     } else {
         Either::Right(color_palettes.iter())
     };
@@ -235,21 +242,27 @@ fn theme_items(
         };
 
         for item_view_id in children {
-            let (
+            let Ok((
                 children,
                 ItemView { item_ref, .. },
                 mut outer_node,
                 mut outer_background_color,
                 mut outer_border_radius,
-            ) = item_views.get_mut(*item_view_id).unwrap();
+            )) = item_views.get_mut(*item_view_id)
+            else {
+                continue;
+            };
             *outer_border_radius = BorderRadius::all(Val::Px(5.0));
             outer_node.padding = UiRect::all(Val::Px(0.5));
             outer_node.border = UiRect::all(Val::Px(1.0));
             outer_background_color.0 = theme.colors.background_primary;
 
-            let (mut inner_node, mut inner_border_radius) = color_item_views
-                .get_mut(*children.first().unwrap())
-                .unwrap();
+            let Some((mut inner_node, mut inner_border_radius)) = children
+                .first()
+                .and_then(|child| color_item_views.get_mut(*child).ok())
+            else {
+                continue;
+            };
 
             inner_node.border = UiRect::all(Val::Px(1.0));
             *inner_border_radius = BorderRadius::all(Val::Px(5.0));
@@ -259,7 +272,9 @@ fn theme_items(
             } else {
                 HoverState::Unselected
             };
-            let Item { data: item_color } = color_items.get(*item_ref).unwrap();
+            let Ok(Item { data: item_color }) = color_items.get(*item_ref) else {
+                continue;
+            };
             commands
                 .run_system_cached_with(set_highlight, (*item_view_id, *item_color, hover_state));
         }
@@ -285,8 +300,12 @@ fn on_selection_change(
             }
 
             for item_view_id in children {
-                let (item_view, rcp) = item_views.get_mut(*item_view_id).unwrap();
-                let Item { data: item_color } = color_items.get(item_view.item_ref).unwrap();
+                let Ok((item_view, rcp)) = item_views.get_mut(*item_view_id) else {
+                    continue;
+                };
+                let Ok(Item { data: item_color }) = color_items.get(item_view.item_ref) else {
+                    continue;
+                };
                 let hover_state =
                     match (selection.is_selected(item_view.item_ref), rcp.mouse_over()) {
                         (true, true) => HoverState::SelectedHover,
@@ -310,7 +329,9 @@ fn set_highlight(
     theme: Res<Theme>,
 ) {
     let (item_view_ref, item_color, hover_state) = *input;
-    let (children, mut outer_border_color) = item_views.get_mut(item_view_ref).unwrap();
+    let Ok((children, mut outer_border_color)) = item_views.get_mut(item_view_ref) else {
+        return;
+    };
 
     let background_color = theme.colors.background_primary;
     let (inner, outer) = match hover_state {
@@ -327,9 +348,12 @@ fn set_highlight(
         background_color
     };
 
-    let child = children.first().unwrap();
-    let mut color_square_border = color_squares.get_mut(*child).unwrap();
-    color_square_border.0 = inner;
+    if let Some(mut color_square_border) = children
+        .first()
+        .and_then(|child| color_squares.get_mut(*child).ok())
+    {
+        color_square_border.0 = inner;
+    }
 }
 
 fn highlight_color(

@@ -137,6 +137,16 @@ Every example has a button that toggles the light and dark theme, and sets
 - **Selections can be shared via `Selection::Ref`**; a widget that displays a
   selection must react when either its own entity or the referenced one
   changes (see `selection_change` in `breadcrumbs.rs` or `list.rs`).
+- **No panics in library code.** `unwrap_used`, `expect_used`, `panic`,
+  `todo`, `unimplemented`, `dbg_macro`, `print_stdout`, `print_stderr` and
+  `indexing_slicing` are denied in `Cargo.toml`, and `clippy.toml` bans the
+  panicking Bevy accessors (`Query::single(_mut)`, `World::resource(_mut)`).
+  A system or observer that cannot find what it needs uses
+  `let Ok(x) = query.get(e) else { return; };` (`continue` in a loop) and does
+  nothing; a misconfiguration worth reporting is logged with `error!`. The
+  `SelectionValue` methods return `None` for a change the variant does not
+  allow. Integration tests carry a file-level `#![expect(clippy::unwrap_used,
+  …, reason = "tests may abort loudly")]`.
 - **`#[expect(…, reason = "…")]`, never `allow`.** `allow_attributes` and
   `allow_attributes_without_reason` are denied in `Cargo.toml`.
 - `#[derive(Debug)]` on every public type (`missing_debug_implementations`

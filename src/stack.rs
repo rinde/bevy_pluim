@@ -60,18 +60,24 @@ fn switch_view(
         SelectSame,
     }
     let (stack_ref, stack) = *stack_and_ref;
-    let selection = selections.get(stack.selection_ref).unwrap();
+    let Some(selection) = selections.get(stack.selection_ref) else {
+        return;
+    };
 
     let currently_visible_entity = children.get(stack_ref).ok().and_then(|children| {
-        children
-            .iter()
-            .find(|c| nodes.get(*c).unwrap().display != Display::None)
+        children.iter().find(|c| {
+            nodes
+                .get(*c)
+                .is_ok_and(|node| node.display != Display::None)
+        })
     });
 
     let mut show = |node: Option<Entity>| {
         if let Ok(children) = children.get(stack_ref) {
             for c in children.iter().filter(|c| node.is_none_or(|x| x != *c)) {
-                let mut node = nodes.get_mut(c).unwrap();
+                let Ok(mut node) = nodes.get_mut(c) else {
+                    continue;
+                };
                 if node.display != Display::None {
                     commands.entity(c).insert(PrevDisplay(node.display));
                     node.display = Display::None;
@@ -79,62 +85,55 @@ fn switch_view(
             }
         }
 
-        if let Some(node_ref) = node {
-            let mut node = nodes.get_mut(node_ref).unwrap();
-            let prev = prev_displays
-                .get(node_ref)
-                .unwrap_or_else(|e| panic!("{}: {e}", stack_and_ref.0.0));
+        if let Some(node_ref) = node
+            && let (Ok(mut node), Ok(prev)) = (nodes.get_mut(node_ref), prev_displays.get(node_ref))
+        {
             node.display = prev.0;
         }
     };
 
-    let action = (|| {
+    let action = (|| -> Option<Action> {
         let Some(selected_item_ref) = selection.last() else {
-            return Action::HideAll;
+            return Some(Action::HideAll);
         };
         if selected_item_ref == Entity::PLACEHOLDER {
-            return Action::HideAll;
+            return Some(Action::HideAll);
         }
-        let selected_stack_item = items
-            .get(selected_item_ref)
-            .unwrap_or_else(|_| {
-                panic!("Selected stack item {selected_item_ref} not found");
-            })
-            .0;
+        let selected_stack_item = items.get(selected_item_ref).ok()?.0;
         if let Some(existing_node_ref) = selected_stack_item.entity {
-            return if currently_visible_entity == Some(existing_node_ref) {
+            return Some(if currently_visible_entity == Some(existing_node_ref) {
                 Action::SelectSame
             } else {
                 Action::SelectDifferent(existing_node_ref)
-            };
+            });
         }
         if let Some(creator) = selected_stack_item.create {
-            return Action::CreateNew(selected_item_ref, creator);
+            return Some(Action::CreateNew(selected_item_ref, creator));
         }
-        let item_values = selections.get_item_values(stack.selection_ref).unwrap().1;
+        let item_values = selections.get_item_values(stack.selection_ref)?.1;
 
-        let referenced_stack_item = item_values
-            .iter()
-            .find_map(|item_ref| {
-                let stack_item = items.get(item_ref).unwrap();
-                (stack_item.0.id == selected_stack_item.id && stack_item.0.create.is_some())
-                    .then_some((item_ref, stack_item))
-            })
-            .unwrap();
+        let (referenced_ref, referenced_stack_item) = item_values.iter().find_map(|item_ref| {
+            let (stack_item, _) = items.get(item_ref).ok()?;
+            (stack_item.id == selected_stack_item.id && stack_item.create.is_some())
+                .then_some((item_ref, *stack_item))
+        })?;
 
-        if let Some(existing_entity) = referenced_stack_item.1.0.entity {
-            if currently_visible_entity == Some(existing_entity) {
+        if let Some(existing_entity) = referenced_stack_item.entity {
+            Some(if currently_visible_entity == Some(existing_entity) {
                 Action::SelectSame
             } else {
                 Action::SelectDifferentRef(selected_item_ref, existing_entity)
-            }
+            })
         } else {
-            Action::CreateNew(
-                referenced_stack_item.0,
-                referenced_stack_item.1.0.create.unwrap(),
-            )
+            Some(Action::CreateNew(
+                referenced_ref,
+                referenced_stack_item.create?,
+            ))
         }
     })();
+    let Some(action) = action else {
+        return;
+    };
     match action {
         Action::HideAll => show(None),
         Action::CreateNew(selected_item_ref, creator) => {
@@ -148,8 +147,9 @@ fn switch_view(
         Action::SelectDifferent(new_selected) => show(Some(new_selected)),
         Action::SelectDifferentRef(selected_item_ref, new_selected) => {
             show(Some(new_selected));
-            let mut mutable_selected_stack_item = items.get_mut(selected_item_ref).unwrap().0;
-            mutable_selected_stack_item.entity = Some(new_selected);
+            if let Ok((mut mutable_selected_stack_item, _)) = items.get_mut(selected_item_ref) {
+                mutable_selected_stack_item.entity = Some(new_selected);
+            }
         }
         Action::SelectSame => (),
     }
@@ -216,8 +216,9 @@ impl StackChildSpawner {
 
 fn update_stack_item(input: In<(Entity, Entity)>, mut stack_items: Query<&mut StackItem>) {
     let (stack_item_ref, new_child_ref) = *input;
-    let mut stack_item = stack_items.get_mut(stack_item_ref).unwrap();
-    stack_item.entity = Some(new_child_ref);
+    if let Ok(mut stack_item) = stack_items.get_mut(stack_item_ref) {
+        stack_item.entity = Some(new_child_ref);
+    }
 }
 
 #[derive(Component, Clone, Copy, Debug)]

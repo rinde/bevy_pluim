@@ -125,7 +125,9 @@ fn on_insert_combo(
     mut commands: Commands,
 ) {
     let combo_ref = t.target();
-    let combo_selection = selections.get_ref(combo_ref).unwrap();
+    let Some(combo_selection) = selections.get_ref(combo_ref) else {
+        return;
+    };
     commands.run_system_cached_with(update_selection, (combo_selection, combo_ref));
 }
 
@@ -158,8 +160,11 @@ fn update_selection(
     mut commands: Commands,
 ) {
     let (selection_ref, combo_ref) = *input;
-    let sub_refs = combo_sub_refs.get(combo_ref).unwrap();
-    let selection = selections.get(selection_ref).unwrap();
+    let (Ok(sub_refs), Some(selection)) =
+        (combo_sub_refs.get(combo_ref), selections.get(selection_ref))
+    else {
+        return;
+    };
 
     if selections
         .get_ref(sub_refs.list_id)
@@ -171,8 +176,12 @@ fn update_selection(
             .insert(Selection::reference(selection_ref));
     }
 
-    let PushButtonRefs { label_id, .. } = pblr.get(sub_refs.button_id).unwrap();
-    let mut text = labels.get_mut(*label_id).unwrap();
+    let Ok(PushButtonRefs { label_id, .. }) = pblr.get(sub_refs.button_id) else {
+        return;
+    };
+    let Ok(mut text) = labels.get_mut(*label_id) else {
+        return;
+    };
     let label = if selection.is_empty() {
         PLACEHOLDER_TEXT.to_string()
     } else {
@@ -182,7 +191,7 @@ fn update_selection(
                 if item == Entity::PLACEHOLDER {
                     ""
                 } else {
-                    &items.get(item).unwrap().data
+                    items.get(item).map_or("", |item| item.data.as_str())
                 }
             })
             .join(", ")
@@ -202,14 +211,21 @@ fn close_combos_on_outside_click(
 ) {
     if mouse_button.just_released(MouseButton::Left) {
         for (combo_ref, rcp, &combo_state, subs) in combos.iter() {
-            let selection_value = selections.get(combo_ref).unwrap();
+            let Some(selection_value) = selections.get(combo_ref) else {
+                continue;
+            };
+            let over_list = combo_lists
+                .get(subs.list_id)
+                .is_ok_and(RelativeCursorPosition::mouse_over);
             if combo_state == ComboState::Open
                 && !rcp.mouse_over()
-                && !(selection_value.allow_multiple()
-                    && combo_lists.get(subs.list_id).unwrap().mouse_over())
+                && !(selection_value.allow_multiple() && over_list)
             {
-                let (mut background_color, mut border_color) =
-                    combo_buttons.get_mut(subs.button_id).unwrap();
+                let Ok((mut background_color, mut border_color)) =
+                    combo_buttons.get_mut(subs.button_id)
+                else {
+                    continue;
+                };
 
                 *background_color = BackgroundColor(theme.colors.background_primary);
                 *border_color = BorderColor(theme.colors.border);
@@ -226,8 +242,12 @@ fn handle_combo_button_mouse_events(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    let (ComboSubRefs { button_id, .. }, combo_state) = combos.get(trigger.target()).unwrap();
-    let (mut background_color, mut border_color) = combo_buttons.get_mut(*button_id).unwrap();
+    let Ok((ComboSubRefs { button_id, .. }, combo_state)) = combos.get(trigger.target()) else {
+        return;
+    };
+    let Ok((mut background_color, mut border_color)) = combo_buttons.get_mut(*button_id) else {
+        return;
+    };
 
     match (trigger.event(), combo_state) {
         (MouseEvent::Pressed, _) => {

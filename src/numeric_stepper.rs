@@ -34,7 +34,9 @@ impl NumericStepper {
         let (value, value_ref) = if let Some(value) = world.entity(context.entity).get::<Value>() {
             (*value, ValueRef(context.entity))
         } else if let Some(value_ref) = world.entity(context.entity).get::<ValueRef>().copied() {
-            let value = *world.entity(value_ref.0).get::<Value>().unwrap();
+            let Some(value) = world.entity(value_ref.0).get::<Value>().copied() else {
+                return;
+            };
             world.commands().entity(context.entity).insert(value_ref);
             (value, value_ref)
         } else {
@@ -235,7 +237,7 @@ fn theme_numeric_stepper(
     theme: Res<Theme>,
 ) {
     let it = if let Some(numeric_stepper_ref) = numeric_stepper_ref.as_ref() {
-        Either::Left([numeric_steppers.get_mut(*numeric_stepper_ref).unwrap()].into_iter())
+        Either::Left(numeric_steppers.get_mut(*numeric_stepper_ref).into_iter())
     } else {
         Either::Right(numeric_steppers.iter_mut())
     };
@@ -254,12 +256,16 @@ fn on_press(
     mut values: Query<&mut Value>,
 ) {
     if let Ok(vr) = decrease.get(trigger.target()) {
-        let mut value = values.get_mut(vr.0).unwrap();
+        let Ok(mut value) = values.get_mut(vr.0) else {
+            return;
+        };
         if value.can_decrement() {
             value.decrement();
         }
     } else if let Ok(vr) = increase.get(trigger.target()) {
-        let mut value = values.get_mut(vr.0).unwrap();
+        let Ok(mut value) = values.get_mut(vr.0) else {
+            return;
+        };
         if value.can_increment() {
             value.increment();
         }

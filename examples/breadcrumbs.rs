@@ -131,7 +131,9 @@ fn push_to_selection(
     selections: &mut SelectionParam<With<BreadCrumbsSelection>>,
     items: ItemParam<String, &BreadCrumbsAction>,
 ) {
-    let item_a_ref = items.find_item_ref(|_, bca| **bca == target).unwrap();
+    let Some(item_a_ref) = items.find_item_ref(|_, bca| **bca == target) else {
+        return;
+    };
     selections.update_selection_single(|selection| selection.push(item_a_ref));
 }
 
@@ -211,13 +213,12 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
                         |_: Trigger<Pointer<Released>>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
-                            let item_a_ref = items
+                            let Some(item_a_ref) = items
                                 .find_item_ref(|_, bca| **bca == BreadCrumbsAction::PanelAvariant)
-                                .unwrap();
-                            selections.update_selection_single(|x| {
-                                let x = x.pop().unwrap();
-                                x.push(item_a_ref)
-                            });
+                            else {
+                                return;
+                            };
+                            selections.update_selection_single(|x| x.pop()?.push(item_a_ref));
                         },
                     );
             })),

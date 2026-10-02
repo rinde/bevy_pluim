@@ -78,7 +78,9 @@ impl List {
         //     "Cannot override Node for List"
         // );
 
-        let layout = world.entity(context.entity).get::<ListLayout>().unwrap();
+        let Some(layout) = world.entity(context.entity).get::<ListLayout>() else {
+            return;
+        };
         let grid_auto_flow = match layout {
             ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => {
                 GridAutoFlow::RowDense
@@ -131,16 +133,19 @@ fn handle_mouse_events(
     mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
-    let (
+    let Ok((
         ItemView {
             item_ref: target_item_entity,
             list_ref,
         },
         mut background_color,
-    ) = item_views.get_mut(t.target()).unwrap();
-    let selection = selections
-        .get(*list_ref)
-        .unwrap_or_else(|| panic!("No selection found for entity {list_ref}"));
+    )) = item_views.get_mut(t.target())
+    else {
+        return;
+    };
+    let Some(selection) = selections.get(*list_ref) else {
+        return;
+    };
     let is_selected = selection.is_selected(*target_item_entity);
 
     match (t.event(), is_selected) {
@@ -185,13 +190,16 @@ fn selection_change(
                 Selection::Value(_selection) => changed_selection_ref == list_ref,
             };
             if is_changed {
-                let selection = selections.get(changed_selection_ref).unwrap_or_else(|| {
-                    panic!("No selection found for entity {changed_selection_ref}")
-                });
+                let Some(selection) = selections.get(changed_selection_ref) else {
+                    continue;
+                };
 
                 for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
-                    let (item_view, rcp, mut bg, mut border_color) =
-                        item_views.get_mut(item_view_id).unwrap();
+                    let Ok((item_view, rcp, mut bg, mut border_color)) =
+                        item_views.get_mut(item_view_id)
+                    else {
+                        continue;
+                    };
 
                     let is_selected = selection.is_selected(item_view.item_ref);
                     match (is_selected, rcp.mouse_over()) {
@@ -232,7 +240,7 @@ fn on_items_changed(
     let existing = children
         .map(|c| {
             c.iter()
-                .map(|c| item_views.get(c).unwrap())
+                .filter_map(|c| item_views.get(c).ok())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -248,7 +256,9 @@ fn on_items_changed(
     }
 
     for item_ref in items {
-        let item = items_query.get(item_ref).unwrap();
+        let Ok(item) = items_query.get(item_ref) else {
+            continue;
+        };
         commands.entity(*list_ref).with_children(|spawner| {
             spawner
                 .spawn((
@@ -295,7 +305,9 @@ fn on_insert_selection(
         return;
     }
 
-    let (values_ref, all_items) = selections.get_item_values(list_ref).unwrap();
+    let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
+        return;
+    };
     if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
         // no change in items ref
         return;
@@ -342,7 +354,7 @@ fn theme_items(
     selections: SelectionParam,
 ) {
     let iter = if let Some(list_id) = list_id.0 {
-        Either::Left([lists.get(list_id).unwrap()].into_iter())
+        Either::Left(lists.get(list_id).into_iter())
     } else {
         Either::Right(lists.into_iter())
     };
@@ -363,8 +375,16 @@ fn theme_items(
         };
 
         for (i, item_view_id) in children.iter().enumerate() {
-            let (ItemView { item_ref, .. }, mut node, mut bg, mut border_radius, mut border_color) =
-                item_views.get_mut(item_view_id).unwrap();
+            let Ok((
+                ItemView { item_ref, .. },
+                mut node,
+                mut bg,
+                mut border_radius,
+                mut border_color,
+            )) = item_views.get_mut(item_view_id)
+            else {
+                continue;
+            };
 
             let is_selected = selection.is_selected(*item_ref);
 
@@ -397,7 +417,7 @@ fn theme_item_labels(
     theme: Res<Theme>,
 ) {
     let it = if let Some(item_label_ref) = item_label.as_ref() {
-        Either::Left([item_labels.get_mut(*item_label_ref).unwrap()].into_iter())
+        Either::Left(item_labels.get_mut(*item_label_ref).into_iter())
     } else {
         Either::Right(item_labels.iter_mut())
     };
@@ -450,9 +470,10 @@ fn theme_lists(
     };
 
     if let Some(list_id) = *list {
-        let (mut node, mut bg, mut bc, mut br, layout, corner_style) =
-            lists.get_mut(list_id).unwrap();
-        theme_list(&mut node, &mut bg, &mut bc, &mut br, *layout, *corner_style);
+        if let Ok((mut node, mut bg, mut bc, mut br, layout, corner_style)) = lists.get_mut(list_id)
+        {
+            theme_list(&mut node, &mut bg, &mut bc, &mut br, *layout, *corner_style);
+        }
     } else {
         for (mut node, mut bg, mut bc, mut br, layout, corner_style) in &mut lists {
             theme_list(&mut node, &mut bg, &mut bc, &mut br, *layout, *corner_style);
