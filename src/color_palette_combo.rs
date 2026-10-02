@@ -192,9 +192,9 @@ fn on_insert_state(t: On<Insert, State>, state: Query<(&State, &SubRefs)>, mut c
 fn position_float(
     sub_refs: In<SubRefs>,
     window: Single<&Window, With<PrimaryWindow>>,
-    mut dims: Query<(&mut Node, &GlobalTransform, &ComputedNode), With<ColorPaletteComboFloat>>,
+    mut dims: Query<(&mut Node, &UiGlobalTransform, &ComputedNode), With<ColorPaletteComboFloat>>,
     parent_dims: Query<
-        (&ComputedNode, &GlobalTransform),
+        (&ComputedNode, &UiGlobalTransform),
         (
             With<ColorPaletteComboButton>,
             Without<ColorPaletteComboFloat>,
@@ -218,14 +218,9 @@ fn position_float(
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let float_size =
         float_computed_node.content_size() * float_computed_node.inverse_scale_factor();
-    let translation = Vec2::new(
-        global_transform.translation().x,
-        global_transform.translation().y,
-    ) * float_computed_node.inverse_scale_factor();
-    let button_translation = Vec2::new(
-        button_transform.translation().x,
-        button_transform.translation().y,
-    ) * button_computed_node.inverse_scale_factor();
+    let translation = global_transform.translation * float_computed_node.inverse_scale_factor();
+    let button_translation =
+        button_transform.translation * button_computed_node.inverse_scale_factor();
 
     let min_coord = translation - (float_size / 2.0);
     let max_coord = translation + (float_size / 2.0);
