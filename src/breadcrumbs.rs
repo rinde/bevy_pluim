@@ -41,7 +41,7 @@ fn selection_change(
     mut commands: Commands,
 ) {
     let create_observer = |selection_ref: Entity, new_length: usize| {
-        move |_: Trigger<Pointer<Released>>, mut selections: SelectionParam| {
+        move |_: On<Pointer<Release>>, mut selections: SelectionParam| {
             selections.update_selection(selection_ref, |s| s.trim_to_length(new_length));
         }
     };

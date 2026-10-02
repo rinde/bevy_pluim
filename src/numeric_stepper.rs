@@ -1,6 +1,6 @@
 //! `NumericStepper`: a value with a decrease and an increase button.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
@@ -276,23 +276,23 @@ fn theme_numeric_stepper(
         node.column_gap = Val::Px(10.0);
         node.border = UiRect::all(theme.border_thickness);
         *border_radius = BorderRadius::all(theme.corner_radius);
-        border_color.0 = theme.colors.border;
+        border_color.set_all(theme.colors.border);
     }
 }
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     decrease: Query<&ValueRef, With<Decrease>>,
     increase: Query<&ValueRef, With<Increase>>,
     mut values: Query<&mut Value>,
 ) {
-    if let Ok(vr) = decrease.get(trigger.target()) {
+    if let Ok(vr) = decrease.get(trigger.event().event_target()) {
         let Ok(mut value) = values.get_mut(vr.0) else {
             return;
         };
         if value.can_decrement() {
             value.decrement();
         }
-    } else if let Ok(vr) = increase.get(trigger.target()) {
+    } else if let Ok(vr) = increase.get(trigger.event().event_target()) {
         let Ok(mut value) = values.get_mut(vr.0) else {
             return;
         };
@@ -313,15 +313,18 @@ fn on_change(
                 text.0 = value.to_string();
             }
         }
-        commands
-            .entity(value_ref)
-            .trigger(ValueChange { value: *value });
+        commands.trigger(ValueChange {
+            entity: value_ref,
+            value: *value,
+        });
     }
 }
 
 /// Triggered on the entity holding a [`Value`] after a stepper button changed it.
-#[derive(Event, Debug, Clone, Copy)]
+#[derive(EntityEvent, Debug, Clone, Copy)]
 pub struct ValueChange {
+    /// The entity holding the [`Value`].
+    pub entity: Entity,
     /// The new value.
     pub value: Value,
 }

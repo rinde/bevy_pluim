@@ -1,12 +1,12 @@
 //! `Link`: a clickable text whose look follows its [`LinkState`].
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Link`].
 ///
@@ -89,43 +89,56 @@ impl Link {
     }
 }
 
+/// The observer entity that runs [`handle_hover`] for an enabled [`Link`].
+///
+/// Kept separate from the link, because an entity holding an `Observer` is hidden from queries.
+#[derive(Component, Clone, Copy, Debug)]
+struct HoverObserver(Entity);
+
 fn on_insert_link_state(
-    t: Trigger<OnInsert, LinkState>,
-    q: Query<&LinkState>,
+    t: On<Insert, LinkState>,
+    q: Query<(&LinkState, Option<&HoverObserver>)>,
     mut commands: Commands,
 ) {
-    let Ok(state) = q.get(t.target()) else {
+    let link = t.event().event_target();
+    let Ok((state, hover_observer)) = q.get(link) else {
         return;
     };
+    if let Some(HoverObserver(observer)) = hover_observer {
+        commands.entity(*observer).despawn();
+    }
     match state {
         LinkState::Disabled => {
-            commands.entity(t.target()).remove::<(Button, Observer)>();
+            commands.entity(link).remove::<(Button, HoverObserver)>();
         }
         LinkState::Enabled => {
-            let mut observer = Observer::new(handle_hover);
-            observer.watch_entity(t.target());
-            commands.entity(t.target()).insert((Button, observer));
+            let observer = commands
+                .spawn(Observer::new(handle_hover).with_entity(link))
+                .id();
+            commands
+                .entity(link)
+                .insert((Button, HoverObserver(observer)));
         }
     }
 }
 
 fn handle_hover(
-    trigger: Trigger<MouseEvent>,
+    trigger: On<MouseEvent>,
     mut links: Query<(&mut BackgroundColor, &Children)>,
     mut link_texts: Query<&mut TextColor, With<LinkText>>,
     theme: Res<Theme>,
 ) {
-    let bg_color = match trigger.event() {
-        MouseEvent::Over | MouseEvent::Pressed | MouseEvent::Released => {
+    let bg_color = match trigger.event().kind {
+        MouseKind::Over | MouseKind::Pressed | MouseKind::Released => {
             theme.colors.background_secondary
         }
-        MouseEvent::Out => theme.colors.background_primary,
+        MouseKind::Out => theme.colors.background_primary,
     };
-    let link_color = match trigger.event() {
-        MouseEvent::Over | MouseEvent::Released | MouseEvent::Out => theme.colors.link,
-        MouseEvent::Pressed => theme.colors.link_selected,
+    let link_color = match trigger.event().kind {
+        MouseKind::Over | MouseKind::Released | MouseKind::Out => theme.colors.link,
+        MouseKind::Pressed => theme.colors.link_selected,
     };
-    let Ok((mut link_bg, children)) = links.get_mut(trigger.target()) else {
+    let Ok((mut link_bg, children)) = links.get_mut(trigger.event().event_target()) else {
         return;
     };
     *link_bg = BackgroundColor(bg_color);

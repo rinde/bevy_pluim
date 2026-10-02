@@ -9,7 +9,7 @@ use bevy::color::palettes::tailwind::{
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::ui::UiDebugOptions;
+use bevy::ui_render::UiDebugOptions;
 use bevy_egui::EguiPlugin;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::combo::Combo;
@@ -163,14 +163,14 @@ fn setup(mut commands: Commands) {
 
     commands.entity(root).with_children(|spawner| {
         spawner.spawn(PushButton::from_label("Add List")).observe(
-            move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
+            move |_: On<Pointer<Press>>, mut commands: Commands| {
                 commands
                     .entity(root)
                     .with_child((List, Selection::reference(country_selection)));
             },
         );
         spawner.spawn(PushButton::from_label("Add Combo")).observe(
-            move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
+            move |_: On<Pointer<Press>>, mut commands: Commands| {
                 commands
                     .entity(root)
                     .with_child((Combo, Selection::reference(country_selection)));
@@ -178,13 +178,11 @@ fn setup(mut commands: Commands) {
         );
         spawner
             .spawn(PushButton::from_label("Add PushButton"))
-            .observe(
-                move |_: Trigger<Pointer<Pressed>>, mut commands: Commands| {
-                    commands
-                        .entity(root)
-                        .with_child(PushButton::from_label("Hello"));
-                },
-            );
+            .observe(move |_: On<Pointer<Press>>, mut commands: Commands| {
+                commands
+                    .entity(root)
+                    .with_child(PushButton::from_label("Hello"));
+            });
     });
 }
 
@@ -192,11 +190,11 @@ fn setup(mut commands: Commands) {
 struct ThemeButton;
 
 fn on_press(
-    trigger: Trigger<Pointer<Released>>,
+    trigger: On<Pointer<Release>>,
     button: Query<(), With<ThemeButton>>,
     mut theme: ResMut<Theme>,
 ) {
-    if button.get(trigger.target()).is_ok() {
+    if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }

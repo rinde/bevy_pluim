@@ -1,6 +1,6 @@
 //! `Float`: an absolutely positioned popup layer, used by combos.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;

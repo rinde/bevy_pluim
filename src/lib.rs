@@ -74,16 +74,16 @@ impl Plugin for WidgetsPlugin {
 }
 
 fn add_ui_root(
-    t: Trigger<OnAdd, Node>,
+    t: On<Add, Node>,
     has_childof: Query<(Has<ChildOf>, Has<Disabled>)>,
     mut commands: Commands,
 ) {
-    let Ok((has_parent, _)) = has_childof.get(t.target()) else {
+    let Ok((has_parent, _)) = has_childof.get(t.event().event_target()) else {
         return;
     };
     if !has_parent {
         commands
-            .entity(t.target())
+            .entity(t.event().event_target())
             .insert(UiRoot)
             .observe_and_transform_mouse_events();
     }
@@ -103,48 +103,60 @@ fn setup(root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
 #[require(Name::new("UiRoot"))]
 pub struct UiRoot;
 
-#[derive(Event, Copy, Clone, Debug)]
-enum MouseEvent {
+/// What the pointer did to a widget.
+#[derive(Copy, Clone, Debug)]
+enum MouseKind {
     Over,
     Pressed,
     Released,
     Out,
 }
 
+/// A pointer interaction with `entity`, re-triggered from Bevy's `Pointer<_>` events.
+#[derive(EntityEvent, Copy, Clone, Debug)]
+struct MouseEvent {
+    entity: Entity,
+    kind: MouseKind,
+}
+
 trait ToMouseEvent {
-    fn to_mouse_event(&self) -> MouseEvent;
+    fn to_mouse_kind(&self) -> MouseKind;
 }
 
 impl ToMouseEvent for Over {
-    fn to_mouse_event(&self) -> MouseEvent {
-        MouseEvent::Over
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Over
     }
 }
 
-impl ToMouseEvent for Pressed {
-    fn to_mouse_event(&self) -> MouseEvent {
-        MouseEvent::Pressed
+impl ToMouseEvent for Press {
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Pressed
     }
 }
 
-impl ToMouseEvent for Released {
-    fn to_mouse_event(&self) -> MouseEvent {
-        MouseEvent::Released
+impl ToMouseEvent for Release {
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Released
     }
 }
 
 impl ToMouseEvent for Out {
-    fn to_mouse_event(&self) -> MouseEvent {
-        MouseEvent::Out
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Out
     }
 }
 
-fn observer_transformer<E>(trigger: Trigger<Pointer<E>>, mut commands: Commands)
+fn observer_transformer<E>(trigger: On<Pointer<E>>, mut commands: Commands)
 where
     E: std::fmt::Debug + Clone + Reflect + ToMouseEvent,
 {
-    let e: MouseEvent = trigger.event().event.to_mouse_event();
-    commands.trigger_targets(e, trigger.target);
+    // The event bubbles up to the root, rewriting its own target at every hop;
+    // the widget that was actually hit is the original target.
+    commands.trigger(MouseEvent {
+        entity: trigger.original_event_target(),
+        kind: trigger.event().event.to_mouse_kind(),
+    });
 }
 
 trait EntityCommandsExt {
@@ -154,8 +166,8 @@ trait EntityCommandsExt {
 impl EntityCommandsExt for EntityCommands<'_> {
     fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
         self.observe(observer_transformer::<Over>)
-            .observe(observer_transformer::<Pressed>)
-            .observe(observer_transformer::<Released>)
+            .observe(observer_transformer::<Press>)
+            .observe(observer_transformer::<Release>)
             .observe(observer_transformer::<Out>);
         self
     }
@@ -164,8 +176,8 @@ impl EntityCommandsExt for EntityCommands<'_> {
 impl EntityCommandsExt for EntityWorldMut<'_> {
     fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
         self.observe(observer_transformer::<Over>)
-            .observe(observer_transformer::<Pressed>)
-            .observe(observer_transformer::<Released>)
+            .observe(observer_transformer::<Press>)
+            .observe(observer_transformer::<Release>)
             .observe(observer_transformer::<Out>);
         self
     }

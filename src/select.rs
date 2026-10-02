@@ -159,13 +159,13 @@ impl SelectionBuilderWithValue {
 }
 
 fn on_add_selection(
-    t: Trigger<OnInsert, Selection>,
+    t: On<Insert, Selection>,
     selections: Query<(&Selection, Option<&ItemsRef>, Option<&ItemValues>)>,
     item_values_query: Query<&ItemValues>,
     mut commands: Commands,
     mut r: ResMut<SelectionResource>,
 ) {
-    let selection_ref = t.target();
+    let selection_ref = t.event().event_target();
     let Ok((selection, selection_of, item_values)) = selections.get(selection_ref) else {
         return;
     };
@@ -584,7 +584,9 @@ where
     pub fn single(&self) -> Result<(Entity, &SelectionValue), QuerySingleError> {
         self.subset.single().and_then(|(entity, selection)| {
             self.find(entity, selection)
-                .ok_or(QuerySingleError::NoEntities(DANGLING_SELECTION_REF))
+                .ok_or(QuerySingleError::NoEntities(DebugName::borrowed(
+                    DANGLING_SELECTION_REF,
+                )))
         })
     }
 
@@ -732,12 +734,20 @@ impl<T: Into<String>> From<T> for Item<String> {
 }
 
 /// Triggered on an [`ItemValues`] entity when its items change; holds the new items.
-#[derive(Event, Debug, Clone)]
-pub struct ItemsChanged(pub ItemValues);
+#[derive(EntityEvent, Debug, Clone)]
+pub struct ItemsChanged {
+    /// The [`ItemValues`] entity whose items changed.
+    pub entity: Entity,
+    /// The new items.
+    pub items: ItemValues,
+}
 
 fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut commands: Commands) {
     for (items_ref, items) in q {
-        commands.trigger_targets(ItemsChanged(items.clone()), items_ref);
+        commands.trigger(ItemsChanged {
+            entity: items_ref,
+            items: items.clone(),
+        });
     }
 }
 
@@ -776,7 +786,7 @@ where
     pub fn find_item(
         &self,
         predicate: impl Fn(&Item<T>, &ROQueryItem<D>) -> bool,
-    ) -> Option<(Entity, &Item<T>, ROQueryItem<'_, D>)> {
+    ) -> Option<(Entity, &Item<T>, ROQueryItem<'_, '_, D>)> {
         self.items
             .iter()
             .find(|(_, item, e_value)| predicate(item, e_value))
@@ -796,7 +806,7 @@ mod tests {
     use super::*;
 
     fn entity(index: u32) -> Entity {
-        Entity::from_raw(index)
+        Entity::from_raw_u32(index).unwrap_or(Entity::PLACEHOLDER)
     }
 
     // One

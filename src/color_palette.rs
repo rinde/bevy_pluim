@@ -6,10 +6,10 @@ use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::list::{CornerStyle, ItemView, ItemsChangedInput, List, ListLayout, NoDefaultItems};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 const COLOR_SQUARE_SIZE: f32 = 35.0;
 
@@ -131,13 +131,13 @@ fn on_items_changed(
 }
 
 fn on_insert_selection(
-    t: Trigger<OnInsert, Selection>,
+    t: On<Insert, Selection>,
     color_palettes: Query<&Selection, With<ColorPalette>>,
     selections: SelectionParam,
     mut commands: Commands,
     mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
 ) {
-    let list_ref = t.target();
+    let list_ref = t.event().event_target();
     if color_palettes.get(list_ref).is_err() {
         return;
     }
@@ -153,12 +153,12 @@ fn on_insert_selection(
     // register observer for items change event
     commands
         .entity(values_ref)
-        .observe(move |t: Trigger<ItemsChanged>, mut commands: Commands| {
+        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
             commands.run_system_cached_with(
                 on_items_changed,
                 ItemsChangedInput {
                     list_ref,
-                    items: t.event().0.iter().collect(),
+                    items: t.event().items.iter().collect(),
                 },
             );
         });
@@ -174,7 +174,7 @@ fn on_insert_selection(
 }
 
 fn handle_mouse_events(
-    t: Trigger<MouseEvent>,
+    t: On<MouseEvent>,
     mut selections: SelectionParam,
     color_items: Query<&Item<Color>>,
     mut item_views: Query<&ItemView>,
@@ -183,7 +183,7 @@ fn handle_mouse_events(
     let Ok(ItemView {
         item_ref: target_item_ref,
         list_ref: target_list_ref,
-    }) = item_views.get_mut(t.target())
+    }) = item_views.get_mut(t.event().event_target())
     else {
         return;
     };
@@ -196,12 +196,12 @@ fn handle_mouse_events(
 
     let is_selected = selection.is_selected(*target_item_ref);
 
-    let highlight = match (t.event(), is_selected) {
-        (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => Some(HoverState::SelectedHover),
-        (MouseEvent::Over, false) => Some(HoverState::Hover),
-        (MouseEvent::Out, true) => Some(HoverState::Selected),
-        (MouseEvent::Out, false) => Some(HoverState::Unselected),
-        (MouseEvent::Released, _) => {
+    let highlight = match (t.event().kind, is_selected) {
+        (MouseKind::Pressed, _) | (MouseKind::Over, true) => Some(HoverState::SelectedHover),
+        (MouseKind::Over, false) => Some(HoverState::Hover),
+        (MouseKind::Out, true) => Some(HoverState::Selected),
+        (MouseKind::Out, false) => Some(HoverState::Unselected),
+        (MouseKind::Released, _) => {
             selections.update_selection(selection_ref, |selection| {
                 selection.toggle_selected(*target_item_ref)
             });
@@ -210,7 +210,10 @@ fn handle_mouse_events(
     };
 
     if let Some(hover_state) = highlight {
-        commands.run_system_cached_with(set_highlight, (t.target(), *item_color, hover_state));
+        commands.run_system_cached_with(
+            set_highlight,
+            (t.event().event_target(), *item_color, hover_state),
+        );
     }
 }
 
@@ -309,7 +312,7 @@ fn on_selection_change(
                     continue;
                 };
                 let hover_state =
-                    match (selection.is_selected(item_view.item_ref), rcp.mouse_over()) {
+                    match (selection.is_selected(item_view.item_ref), rcp.cursor_over()) {
                         (true, true) => HoverState::SelectedHover,
                         (true, false) => HoverState::Selected,
                         (false, true) => HoverState::Hover,
@@ -344,13 +347,13 @@ fn set_highlight(
         HoverState::Unselected => (item_color.darker(0.1), None),
     };
 
-    outer_border_color.0 = outer.unwrap_or(background_color);
+    outer_border_color.set_all(outer.unwrap_or(background_color));
 
     if let Some(mut color_square_border) = children
         .first()
         .and_then(|child| color_squares.get_mut(*child).ok())
     {
-        color_square_border.0 = inner;
+        color_square_border.set_all(inner);
     }
 }
 

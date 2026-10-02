@@ -2,13 +2,13 @@
 //!
 //! This is the reference widget for how widgets in this crate are put together.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`PushButton`].
 ///
@@ -124,17 +124,17 @@ impl PushButton {
 }
 
 fn handle_hover(
-    trigger: Trigger<MouseEvent>,
+    trigger: On<MouseEvent>,
     mut query: Query<&mut BackgroundColor>,
     theme: Res<Theme>,
 ) {
-    let color = match trigger.event() {
-        MouseEvent::Over => theme.colors.hovered_item,
-        MouseEvent::Pressed => theme.colors.selected_hovered_item,
-        MouseEvent::Released => theme.colors.selected_item,
-        MouseEvent::Out => theme.colors.background_primary,
+    let color = match trigger.event().kind {
+        MouseKind::Over => theme.colors.hovered_item,
+        MouseKind::Pressed => theme.colors.selected_hovered_item,
+        MouseKind::Released => theme.colors.selected_item,
+        MouseKind::Out => theme.colors.background_primary,
     };
-    if let Ok(mut background) = query.get_mut(trigger.target()) {
+    if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
         *background = BackgroundColor(color);
     }
 }
@@ -177,7 +177,7 @@ fn theme_push_button(
     ) in it
     {
         background_color.0 = theme.colors.background_primary;
-        border_color.0 = theme.colors.border;
+        border_color.set_all(theme.colors.border);
         *border_radius = BorderRadius::all(theme.corner_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);

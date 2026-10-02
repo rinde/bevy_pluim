@@ -4,7 +4,9 @@
 set shell := ["bash", "-uc"]
 
 # Bevy's own linter lags Bevy releases and needs a pinned nightly; see the
-# `bevy-lint` recipe. v0.4.0 is the release that targets Bevy 0.16.
+# `bevy-lint` recipe. v0.4.0 targets Bevy 0.16, so these pins are stale
+# since the move to Bevy 0.17: bump them to the release that targets it
+# before running the recipe.
 BEVY_LINT_VERSION := "v0.4.0"
 BEVY_LINT_TOOLCHAIN := "nightly-2025-06-26"
 

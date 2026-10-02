@@ -1,6 +1,6 @@
 //! `Card`: a themed background, border, radius and shadow on a node.
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use itertools::Either;
@@ -64,7 +64,7 @@ fn theme_cards(
         node.border = UiRect::all(theme.border_thickness);
         background_color.0 = theme.colors.background_primary;
         *border_radius = BorderRadius::all(theme.corner_radius);
-        border_color.0 = theme.colors.border;
+        border_color.set_all(theme.colors.border);
         *box_shadow = theme.large_shadow().into();
     }
 }

@@ -3,7 +3,7 @@
 #![expect(clippy::used_underscore_binding, reason = "Caused by Reflect")]
 use std::collections::HashMap;
 
-use bevy::ecs::component::HookContext;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
@@ -11,9 +11,9 @@ use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use itertools::Either;
 
-use crate::MouseEvent;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 pub(crate) struct ListPlugin;
 
@@ -148,7 +148,7 @@ impl ItemLabel {
 }
 
 fn handle_mouse_events(
-    t: Trigger<MouseEvent>,
+    t: On<MouseEvent>,
     mut selections: SelectionParam,
     mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
     theme: Res<Theme>,
@@ -159,7 +159,7 @@ fn handle_mouse_events(
             list_ref,
         },
         mut background_color,
-    )) = item_views.get_mut(t.target())
+    )) = item_views.get_mut(t.event().event_target())
     else {
         return;
     };
@@ -168,20 +168,20 @@ fn handle_mouse_events(
     };
     let is_selected = selection.is_selected(*target_item_entity);
 
-    match (t.event(), is_selected) {
-        (MouseEvent::Pressed, _) | (MouseEvent::Over, true) => {
+    match (t.event().kind, is_selected) {
+        (MouseKind::Pressed, _) | (MouseKind::Over, true) => {
             background_color.0 = theme.colors.selected_hovered_item;
         }
-        (MouseEvent::Over, false) => {
+        (MouseKind::Over, false) => {
             background_color.0 = theme.colors.hovered_item;
         }
-        (MouseEvent::Out, true) => {
+        (MouseKind::Out, true) => {
             background_color.0 = theme.colors.selected_item;
         }
-        (MouseEvent::Out, false) => {
+        (MouseKind::Out, false) => {
             background_color.0 = theme.colors.background_primary;
         }
-        (MouseEvent::Released, _) => {
+        (MouseKind::Released, _) => {
             selections.update_selection(*list_ref, |selection| {
                 selection.toggle_selected(*target_item_entity)
             });
@@ -222,7 +222,7 @@ fn selection_change(
                     };
 
                     let is_selected = selection.is_selected(item_view.item_ref);
-                    match (is_selected, rcp.mouse_over()) {
+                    match (is_selected, rcp.cursor_over()) {
                         (true, true) => bg.0 = theme.colors.selected_hovered_item,
                         (true, false) => bg.0 = theme.colors.selected_item,
                         (false, true) => bg.0 = theme.colors.hovered_item,
@@ -230,9 +230,9 @@ fn selection_change(
                     }
 
                     if is_selected {
-                        border_color.0 = theme.colors.border_highlight;
+                        border_color.set_all(theme.colors.border_highlight);
                     } else {
-                        border_color.0 = theme.colors.border;
+                        border_color.set_all(theme.colors.border);
                     }
                 }
             }
@@ -314,13 +314,13 @@ fn on_items_changed(
 }
 
 fn on_insert_selection(
-    t: Trigger<OnInsert, Selection>,
+    t: On<Insert, Selection>,
     lists: Query<(), (With<List>, With<Selection>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
     mut commands: Commands,
     mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
 ) {
-    let list_ref = t.target();
+    let list_ref = t.event().event_target();
     if lists.get(list_ref).is_err() {
         return;
     }
@@ -337,12 +337,12 @@ fn on_insert_selection(
     // register observer for items change event
     commands
         .entity(values_ref)
-        .observe(move |t: Trigger<ItemsChanged>, mut commands: Commands| {
+        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
             commands.run_system_cached_with(
                 on_items_changed,
                 ItemsChangedInput {
                     list_ref,
-                    items: t.event().0.iter().collect(),
+                    items: t.event().items.iter().collect(),
                 },
             );
         });
@@ -406,11 +406,11 @@ fn theme_items(
 
             if is_selected {
                 bg.0 = theme.colors.selected_item;
-                border_color.0 = theme.colors.border_highlight;
+                border_color.set_all(theme.colors.border_highlight);
             } else {
                 bg.0 = theme.colors.background_primary;
             }
-            border_color.0 = theme.colors.border;
+            border_color.set_all(theme.colors.border);
 
             theme_item_border(
                 &mut node,
@@ -470,7 +470,7 @@ fn theme_lists(
             CornerStyle::Tabs => UiRect::ZERO,
         };
         bg.0 = theme.colors.background_primary;
-        bc.0 = theme.colors.border;
+        bc.set_all(theme.colors.border);
 
         let radius = match corner_style {
             CornerStyle::FollowLayout => BorderRadius::all(theme.corner_radius),
@@ -499,7 +499,7 @@ fn theme_lists(
 
 /// Updates the scroll position of scrollable nodes in response to mouse input
 pub fn update_scroll_position(
-    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut mouse_wheel_events: MessageReader<MouseWheel>,
     hover_map: Res<HoverMap>,
     mut scrolled_node_query: Query<&mut ScrollPosition>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -519,8 +519,8 @@ pub fn update_scroll_position(
         for (_pointer, pointer_map) in hover_map.iter() {
             for (entity, _hit) in pointer_map {
                 if let Ok(mut scroll_position) = scrolled_node_query.get_mut(*entity) {
-                    scroll_position.offset_x -= dx;
-                    scroll_position.offset_y -= dy;
+                    scroll_position.x -= dx;
+                    scroll_position.y -= dy;
                 }
             }
         }
