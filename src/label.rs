@@ -84,7 +84,7 @@ fn theme_labels(
         };
         *text_color = TextColor(theme.colors.text_primary);
         *text_font = TextFont {
-            font_size,
+            font_size: FontSize::Px(font_size),
             ..default()
         };
     }

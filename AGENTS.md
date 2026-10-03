@@ -84,7 +84,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 
 Every example has a button that toggles the light and dark theme, and sets
-`UiDebugOptions`, which is why `bevy_ui_debug` is switched on in
+`GlobalUiDebugOptions`, which is why `bevy_ui_debug` is switched on in
 `[dev-dependencies]`.
 
 ## How the pieces fit

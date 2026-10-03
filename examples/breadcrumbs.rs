@@ -19,7 +19,7 @@ fn main() {
         .add_plugins(WidgetsPlugin)
         .add_plugins(EguiPlugin::default())
         // .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::new())
-        .insert_resource(UiDebugOptions {
+        .insert_resource(GlobalUiDebugOptions {
             enabled: false,
             line_width: 1.0,
             show_hidden: false,

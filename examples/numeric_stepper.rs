@@ -1,7 +1,7 @@
 //! `NumericStepper`.
 
 use bevy::prelude::*;
-use bevy::ui_render::UiDebugOptions;
+use bevy::ui_render::GlobalUiDebugOptions;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::PushButton;
@@ -12,7 +12,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
         // .add_plugins(WorldInspectorPlugin::new())
-        .insert_resource(UiDebugOptions {
+        .insert_resource(GlobalUiDebugOptions {
             enabled: false,
             line_width: 1.0,
             show_hidden: false,
