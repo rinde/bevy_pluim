@@ -117,9 +117,9 @@ fn on_items_changed(
                             border: UiRect::all(Val::Px(1.0)),
                             width: Val::Px(COLOR_SQUARE_SIZE),
                             height: Val::Px(COLOR_SQUARE_SIZE),
+                            border_radius: BorderRadius::all(Val::Px(5.0)),
                             ..default()
                         },
-                        BorderRadius::all(Val::Px(5.0)),
                         BackgroundColor(item.data),
                         Pickable::IGNORE,
                     ));
@@ -222,14 +222,8 @@ fn theme_items(
     theme: Res<Theme>,
     color_palettes: Query<(Entity, Option<&Children>), With<ColorPalette>>,
     selections: SelectionParam,
-    mut item_views: Query<(
-        &Children,
-        &ItemView,
-        &mut Node,
-        &mut BackgroundColor,
-        &mut BorderRadius,
-    )>,
-    mut color_item_views: Query<(&mut Node, &mut BorderRadius), Without<ItemView>>,
+    mut item_views: Query<(&Children, &ItemView, &mut Node, &mut BackgroundColor)>,
+    mut color_item_views: Query<&mut Node, Without<ItemView>>,
     color_items: Query<&Item<Color>>,
     mut commands: Commands,
 ) {
@@ -252,17 +246,16 @@ fn theme_items(
                 ItemView { item_ref, .. },
                 mut outer_node,
                 mut outer_background_color,
-                mut outer_border_radius,
             )) = item_views.get_mut(*item_view_id)
             else {
                 continue;
             };
-            *outer_border_radius = BorderRadius::all(Val::Px(5.0));
+            outer_node.border_radius = BorderRadius::all(Val::Px(5.0));
             outer_node.padding = UiRect::all(Val::Px(0.5));
             outer_node.border = UiRect::all(Val::Px(1.0));
             outer_background_color.0 = theme.colors.background_primary;
 
-            let Some((mut inner_node, mut inner_border_radius)) = children
+            let Some(mut inner_node) = children
                 .first()
                 .and_then(|child| color_item_views.get_mut(*child).ok())
             else {
@@ -270,7 +263,7 @@ fn theme_items(
             };
 
             inner_node.border = UiRect::all(Val::Px(1.0));
-            *inner_border_radius = BorderRadius::all(Val::Px(5.0));
+            inner_node.border_radius = BorderRadius::all(Val::Px(5.0));
 
             let hover_state = if selection.is_selected(*item_ref) {
                 HoverState::Selected

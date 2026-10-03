@@ -23,6 +23,7 @@ fn main() {
             line_width: 1.0,
             show_hidden: false,
             show_clipped: false,
+            ..default()
         })
         .add_observer(on_press)
         .add_systems(Startup, setup)

@@ -29,6 +29,7 @@ fn main() {
             line_width: 1.0,
             show_hidden: false,
             show_clipped: false,
+            ..default()
         })
         .add_observer(on_press)
         .add_systems(Update, update_theme.run_if(resource_changed::<Theme>))
@@ -274,9 +275,9 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                                                     top: Val::Px(0.0),
                                                     height: Val::Percent(50.0),
                                                     width: Val::Percent(100.0),
+                                                    border_radius: BorderRadius::top(Val::Px(10.0)),
                                                     ..default()
                                                 },
-                                                BorderRadius::top(Val::Px(10.0)),
                                                 BackgroundColor(
                                                     LIGHT_COLORS
                                                         .get((i / 10) % LIGHT_COLORS.len())
@@ -285,7 +286,6 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                                             ),
                                             (
                                                 CardBackground,
-                                                BorderRadius::top(Val::Px(5.0)),
                                                 BackgroundColor(background_color),
                                                 Pickable {
                                                     should_block_lower: false,
@@ -293,6 +293,7 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                                                 },
                                                 Node {
                                                     padding: UiRect::px(5.0, 5.0, 3.0, 3.0),
+                                                    border_radius: BorderRadius::top(Val::Px(5.0)),
                                                     ..default()
                                                 },
                                                 children![Label::regular(format!("{i}")),]

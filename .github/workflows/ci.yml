@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev
+            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev
       - uses: taiki-e/install-action@just
       - name: Read pinned Rust toolchain version
         id: toolchain
@@ -47,7 +47,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev
+            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev
       - uses: taiki-e/install-action@just
       - name: Read pinned Rust toolchain version
         id: toolchain

@@ -260,10 +260,7 @@ struct NumericStepperLabel;
 
 fn theme_numeric_stepper(
     numeric_stepper_ref: In<Option<Entity>>,
-    mut numeric_steppers: Query<
-        (&mut Node, &mut BorderColor, &mut BorderRadius),
-        With<NumericStepper>,
-    >,
+    mut numeric_steppers: Query<(&mut Node, &mut BorderColor), With<NumericStepper>>,
     theme: Res<Theme>,
 ) {
     let it = if let Some(numeric_stepper_ref) = numeric_stepper_ref.as_ref() {
@@ -272,10 +269,10 @@ fn theme_numeric_stepper(
         Either::Right(numeric_steppers.iter_mut())
     };
 
-    for (mut node, mut border_color, mut border_radius) in it {
+    for (mut node, mut border_color) in it {
         node.column_gap = Val::Px(10.0);
         node.border = UiRect::all(theme.border_thickness);
-        *border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.corner_radius);
         border_color.set_all(theme.colors.border);
     }
 }

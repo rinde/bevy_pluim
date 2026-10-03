@@ -146,7 +146,6 @@ fn theme_push_button(
         (
             &mut BackgroundColor,
             &mut BorderColor,
-            &mut BorderRadius,
             &mut BoxShadow,
             &mut Node,
             &PushButtonRefs,
@@ -167,18 +166,10 @@ fn theme_push_button(
     } else {
         Either::Right(buttons.iter_mut())
     };
-    for (
-        mut background_color,
-        mut border_color,
-        mut border_radius,
-        mut box_shadow,
-        mut node,
-        refs,
-    ) in it
-    {
+    for (mut background_color, mut border_color, mut box_shadow, mut node, refs) in it {
         background_color.0 = theme.colors.background_primary;
         border_color.set_all(theme.colors.border);
-        *border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.corner_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
         node.padding = theme.item_padding;

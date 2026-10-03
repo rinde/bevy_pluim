@@ -35,9 +35,9 @@ impl Plugin for LinkPlugin {
         justify_self: JustifySelf::Center,
         margin: UiRect::all(Val::Px(4.0)),
         padding: UiRect::all(Val::Px(4.0)),
+        border_radius: BorderRadius::all(Val::Px(4.0)),
         ..default()
     },
-    BorderRadius::all(Val::Px(4.0)),
     Name::new("Link"),
     LinkState::Enabled,
 )]
