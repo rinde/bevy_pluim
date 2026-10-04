@@ -178,7 +178,7 @@ fn theme_push_button(
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
             *text_color = TextColor(theme.colors.text_primary);
             *text_font = TextFont {
-                font_size: 14.0,
+                font_size: FontSize::Px(14.0),
                 ..default()
             };
         }
@@ -189,7 +189,7 @@ fn theme_push_button(
         {
             *text_color = TextColor(theme.colors.border);
             *text_font = TextFont {
-                font_size: 14.0,
+                font_size: FontSize::Px(14.0),
                 ..default()
             };
         }

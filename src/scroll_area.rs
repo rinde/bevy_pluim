@@ -90,6 +90,10 @@ impl ScrollArea {
                             width: Val::Percent(100.0),
                             height: Val::Percent(100.0),
                             overflow,
+                            // Keep children at their natural size: a child stretched to
+                            // this node's height reports no overflow when it is a grid
+                            // (taffy 0.10), which would leave nothing to scroll.
+                            align_items: AlignItems::FlexStart,
                             ..default()
                         },
                     ))

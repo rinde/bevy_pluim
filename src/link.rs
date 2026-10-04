@@ -76,7 +76,7 @@ impl Link {
         entity_commands.with_child((
             text,
             TextFont {
-                font_size: 18.0,
+                font_size: FontSize::Px(18.0),
                 ..default()
             },
             LinkText,

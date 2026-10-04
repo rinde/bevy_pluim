@@ -1,6 +1,5 @@
 //! `List`: renders the items of a [`Selection`] as views and keeps them in sync.
 
-#![expect(clippy::used_underscore_binding, reason = "Caused by Reflect")]
 use std::collections::HashMap;
 
 use bevy::ecs::lifecycle::HookContext;
@@ -421,7 +420,7 @@ fn theme_item_labels(
 
     for (mut text_color, mut text_font) in it {
         text_color.0 = theme.colors.text_primary;
-        text_font.font_size = theme.font_size;
+        text_font.font_size = FontSize::Px(theme.font_size);
     }
 }
 

@@ -84,7 +84,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 
 Every example has a button that toggles the light and dark theme, and sets
-`UiDebugOptions`, which is why `bevy_ui_debug` is switched on in
+`GlobalUiDebugOptions`, which is why `bevy_ui_debug` is switched on in
 `[dev-dependencies]`.
 
 ## How the pieces fit
@@ -107,6 +107,11 @@ Every example has a button that toggles the light and dark theme, and sets
   one; `Stack` takes the selection entity directly in `selection_ref`.
 - **Shared items.** `ItemsRef(entity)` lets several selections draw from one
   `ItemValues`.
+- **Scroll area contents keep their natural size.** `ScrollContents` uses
+  `align_items: FlexStart` instead of stretching its children. Taffy 0.10
+  (Bevy 0.19) reports no overflow for a grid whose items overflow it, so a
+  `List` or palette stretched to the area's height would leave nothing to
+  scroll. For the same reason, don't give scroll contents `height: 100%`.
 
 ## Conventions
 

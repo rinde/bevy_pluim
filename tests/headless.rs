@@ -276,21 +276,22 @@ fn a_press_on_a_link_reaches_the_link_through_the_root() {
     app.update();
 
     let before = *app.world().entity(link).get::<BackgroundColor>().unwrap();
-    app.world_mut().trigger(Pointer {
-        entity: link,
-        pointer_id: PointerId::Mouse,
-        pointer_location: Location {
+    app.world_mut().trigger(Pointer::new(
+        PointerId::Mouse,
+        Location {
             target: NormalizedRenderTarget::None {
                 width: 1,
                 height: 1,
             },
             position: Vec2::ZERO,
         },
-        event: Press {
+        Press {
+            count: 1,
             button: PointerButton::Primary,
             hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
         },
-    });
+        link,
+    ));
     app.update();
 
     let after = *app.world().entity(link).get::<BackgroundColor>().unwrap();
