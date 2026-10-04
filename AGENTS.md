@@ -107,6 +107,11 @@ Every example has a button that toggles the light and dark theme, and sets
   one; `Stack` takes the selection entity directly in `selection_ref`.
 - **Shared items.** `ItemsRef(entity)` lets several selections draw from one
   `ItemValues`.
+- **Scroll area contents keep their natural size.** `ScrollContents` uses
+  `align_items: FlexStart` instead of stretching its children. Taffy 0.10
+  (Bevy 0.19) reports no overflow for a grid whose items overflow it, so a
+  `List` or palette stretched to the area's height would leave nothing to
+  scroll. For the same reason, don't give scroll contents `height: 100%`.
 
 ## Conventions
 

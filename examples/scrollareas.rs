@@ -103,8 +103,6 @@ fn create_squares(
                     row_gap: Val::Px(2.0),
                     column_gap: Val::Px(2.0),
                     // padding: UiRect::all(Val::Px(4.0)),
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
                     // overflow: Overflow::scroll(),
                     ..default()
                 },
