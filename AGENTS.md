@@ -566,8 +566,9 @@ a file can check any `Reflect` type of the app by short type path.
   300, 11 columns, sharing `palette`'s selection through its inner
   `Component("ColorPalette")`). Swatches have no text: they are `ItemView`s,
   reached by position as `Nth(60, Within(Name("palette"),
-  Component("ItemView")))` (the `Nth` counts all matches, then `Within`
-  narrows them; 60 is red-500, the order of `tailwind::COLORS`). A selected
+  Component("ItemView")))` (`Within` first narrows the `ItemView`s to those
+  below `palette`, in document order, and `Nth` then counts in that list; 60
+  is red-500, the order of `tailwind::COLORS`). A selected
   swatch has a `BorderColor.top` other than `background_primary`. A combo's
   button is its `ColorPushButton` and the colour it shows the
   `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the root,
