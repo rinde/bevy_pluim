@@ -1,0 +1,17 @@
+// The ScrollAreas screen fits the default window: the pointer can move to the
+// middle of every scroll area and to "Change theme", which the tester only
+// allows for a widget that is not outside the window (the screen once had its
+// button below it).
+(
+    format_version: 3,
+    name: "every scroll area and the theme button are inside the window",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("two-way scroll area")),
+        MoveTo(Name("vertical scroll area")),
+        MoveTo(Name("horizontal scroll area")),
+        MoveTo(Name("fitting scroll area")),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)
