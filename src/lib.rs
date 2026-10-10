@@ -2,7 +2,7 @@
 //! combos, scroll areas, tabs, breadcrumbs, colour palettes and a numeric stepper,
 //! all themed from one [`Theme`] resource.
 //!
-//! Add [`WidgetsPlugin`] to an app and spawn exactly one root [`Node`].
+//! Add [`WidgetsPlugin`] to an app and spawn exactly one root [`Node`] for the app's UI.
 //!
 //! The crate takes Bevy types only: anything that knows what a picked item
 //! *means* belongs in the application that uses the widgets.
@@ -25,7 +25,6 @@ pub mod stack;
 pub mod tailwind;
 pub mod theme;
 
-use bevy::ecs::entity_disabling::Disabled;
 use bevy::prelude::*;
 
 use crate::breadcrumbs::BreadCrumbsPlugin;
@@ -75,30 +74,36 @@ impl Plugin for WidgetsPlugin {
 
 fn add_ui_root(
     t: On<Add, Node>,
-    has_childof: Query<(Has<ChildOf>, Has<Disabled>)>,
+    app_root: Query<(), (Without<ChildOf>, Without<UiTargetCamera>)>,
     mut commands: Commands,
 ) {
-    let Ok((has_parent, _)) = has_childof.get(t.event().event_target()) else {
-        return;
-    };
-    if !has_parent {
+    let entity = t.event().event_target();
+    if app_root.contains(entity) {
         commands
-            .entity(t.event().event_target())
+            .entity(entity)
             .insert(UiRoot)
             .observe_and_transform_mouse_events();
     }
 }
 
-fn setup(root_node: Query<Entity, (With<Node>, Without<ChildOf>)>) {
-    assert!(
-        root_node.iter().count() == 1,
-        "Exactly one root node is required"
-    );
+fn setup(root_nodes: Query<Entity, (With<Node>, Without<ChildOf>, Without<UiTargetCamera>)>) {
+    let count = root_nodes.iter().count();
+    if count != 1 {
+        error!(
+            "Exactly one root node is required for the app's UI, found {count}; \
+             root nodes aimed at another camera (`UiTargetCamera`) are not counted"
+        );
+    }
 }
 
 /// Marks the one node without a parent that all other UI hangs off.
 ///
-/// Inserted automatically on any [`Node`] that has no parent.
+/// Inserted automatically on a [`Node`] that has no parent and no
+/// [`UiTargetCamera`], when the node is added. Root nodes aimed at another camera
+/// (a second window's UI, an overlay) belong to someone else and are left alone.
+/// A [`UiTargetCamera`] inserted after the [`Node`] is not seen, so insert it in
+/// the same bundle. If the app does not end up with exactly one such root at
+/// startup, an error is logged.
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("UiRoot"))]
 pub struct UiRoot;

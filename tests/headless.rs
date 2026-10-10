@@ -69,6 +69,34 @@ fn add_ui_root_inserts_ui_root_on_the_single_root_node() {
 }
 
 #[test]
+fn a_root_node_aimed_at_another_camera_is_not_the_ui_root() {
+    let mut app = headless_app();
+    let camera = app.world_mut().spawn_empty().id();
+    let foreign_root = app
+        .world_mut()
+        .spawn((Node::default(), UiTargetCamera(camera)))
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+
+    app.update();
+
+    assert!(!app.world().entity(foreign_root).contains::<UiRoot>());
+    assert!(app.world().entity(root).contains::<UiRoot>());
+}
+
+#[test]
+fn two_app_root_nodes_are_reported_instead_of_panicking() {
+    let mut app = headless_app();
+    let first = app.world_mut().spawn(Node::default()).id();
+    let second = app.world_mut().spawn(Node::default()).id();
+
+    app.update();
+
+    assert!(app.world().entity(first).contains::<UiRoot>());
+    assert!(app.world().entity(second).contains::<UiRoot>());
+}
+
+#[test]
 fn a_stack_shows_only_the_selected_child_and_switches_on_selection_change() {
     let mut app = headless_app();
     let create_a = app.world_mut().register_system(spawn_panel_a);
