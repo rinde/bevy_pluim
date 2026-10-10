@@ -152,6 +152,17 @@ Every example has a button that toggles the light and dark theme, and sets
 `GlobalUiDebugOptions`, which is why `bevy_ui_debug` is switched on in
 `[dev-dependencies]`.
 
+### Tests
+
+| Target | Holds |
+| --- | --- |
+| `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
+| `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
+| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, and a smoke test that every `WidgetsSetup` screen builds |
+| `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
+| `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
+| `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per example |
+
 ## How the pieces fit
 
 - **`UiRoot`.** An observer on `OnAdd, Node` inserts `UiRoot` on a node
@@ -403,9 +414,47 @@ after using the UI.
   `press`, `release`) takes one frame and a `Step::check` none, so a check right
   after the step sees its effect, `MouseEvent` observers included; add
   `Step::wait(n)` only for something that needs more frames.
+- **Start from a screen.** `.app_setup(WidgetsSetup::Buttons)` (or `setup:
+  App(Buttons)` in a file) instead of a `.setup(..)` closure, when a screen of
+  `tests/widgets_setup/mod.rs` has the widgets the scenario needs. `mod
+  widgets_setup;` next to `mod common;` pulls it in; it is its own module,
+  not part of `common`, because `common` items an including target does not
+  use fail `dead_code`.
 - **Prove the assertion is real.** When you write a scenario, break the
   expectation once (a different theme slot, say) and see it fail before
   trusting it.
+
+### Scenario files
+
+A scenario can be data: `tests/ron/NAME.ron` is read by `tests/ron_scenarios.rs`,
+a `harness = false` target (`[[test]]` in `Cargo.toml`) that calls the tester's
+`run_ron_tests`, so every file is one test named after it and the output reads
+like libtest's. `cargo test --test ron_scenarios push_button` runs the files
+whose name contains `push_button`; `just test` runs them with everything else.
+Each file runs in a fresh `common::widgets_app()` after `Registry::install`, so
+a file can check any `Reflect` type of the app by short type path.
+
+- **The format** is the tester's RON script (`format_version: 3`); see its
+  README and `tests/ron/*.ron` there. The same file also plays in the tester's
+  gallery and recorder. Write or record it there, then drop it in `tests/ron/`.
+  A colour in a check is `Srgba((red:..,green:..,blue:..,alpha:..))`; to get
+  the numbers of a theme slot, build the scenario in Rust and print
+  `to_ron()`.
+- **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
+  `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
+  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`),
+  which spawns a `Camera2d`, the one root `Node` and a screen modelled on the
+  example of that name, each with a "Change theme" button. A variant is
+  found by Bevy's automatic registration, so adding one needs no registration
+  call; add it to the smoke test in `tests/scenarios.rs` as well. `Buttons`
+  also keeps the `Clicks` resource, the clicks on "Add". `AppSetup::capture`
+  (recording a session from the app as it is) is not implemented: only the
+  tester's gallery and recorder call it, which these tests do not run, so it
+  would go untested.
+- **Observers on a screen's entities** are added with `.observe(..)` on the
+  spawned entity. `Observer::new(..)` in a bundle is a global observer.
+- **Prove it fails** as with Rust scenarios: change an expected value in the
+  file and see the test fail before trusting it.
 
 ## Before you call it done
 

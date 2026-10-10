@@ -1,0 +1,43 @@
+// The first scenario of tests/scenarios.rs as data: a push button follows the
+// light theme under the pointer, and the click is counted. The colours are the
+// slots of DEFAULT_LIGHT_THEME_COLORS: background_primary, hovered_item,
+// selected_hovered_item and selected_item, in the order the steps reach them.
+(
+    format_version: 3,
+    name: "a push button follows the theme under the pointer",
+    setup: App(Buttons),
+    steps: [
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        MoveTo(Role(role: Button, label: "Add")),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+        Press(Left),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        Release(Left),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
+        )),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        MoveTo(Role(role: Button, label: "Other")),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(1))],
+)
