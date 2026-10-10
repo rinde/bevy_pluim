@@ -1,0 +1,36 @@
+// Each thumb of the two-way scroll area moves its own axis: the second thumb,
+// the horizontal bar's, scrolls the contents sideways and leaves them where
+// they were vertically; the first, the vertical bar's, does the reverse.
+(
+    format_version: 3,
+    name: "each thumb of a two-way scroll area scrolls its own axis",
+    setup: App(ScrollAreas),
+    steps: [
+        Drag(
+            from: Nth(1, Within(Name("two-way scroll area"), Name("ScrollThumb"))),
+            to: Screen((180.0, 216.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("two-way scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Gt(0.0),
+        )),
+        Check(Component(
+            target: Within(Name("two-way scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(0.0),
+        )),
+        Drag(
+            from: Nth(0, Within(Name("two-way scroll area"), Name("ScrollThumb"))),
+            to: Screen((216.0, 180.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("two-way scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Gt(0.0),
+        )),
+    ],
+    expect: [],
+)

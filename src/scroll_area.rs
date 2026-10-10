@@ -137,7 +137,10 @@ impl ScrollBar {
             .commands()
             .entity(context.entity)
             .with_children(|spawner| {
-                spawner.spawn(ScrollThumb).observe(handle_hover);
+                spawner
+                    .spawn(ScrollThumb)
+                    .observe(handle_hover)
+                    .observe(handle_thumb_drag);
             });
     }
 }
@@ -148,11 +151,11 @@ impl ScrollBar {
     Node {
         position_type: PositionType::Absolute,
         ..default()
-    }
+    },
+    Name::new("ScrollThumb")
 )]
 struct ScrollThumb;
 
-// TODO wait for 0.17 to implement dragging thumb
 fn handle_hover(
     trigger: On<MouseEvent>,
     mut query: Query<&mut BackgroundColor>,
@@ -167,6 +170,51 @@ fn handle_hover(
     if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
         *background = BackgroundColor(color);
     }
+}
+
+/// Scrolls the contents by as much as the thumb moved along its scroll bar.
+fn handle_thumb_drag(
+    drag: On<Pointer<Drag>>,
+    thumbs: Query<&ChildOf, With<ScrollThumb>>,
+    scroll_bars: Query<&ScrollBar>,
+    mut scroll_contents: Query<(&mut ScrollPosition, &ComputedNode, &ScrollAreaRefs)>,
+) {
+    let Ok(scroll_bar_entity) = thumbs.get(drag.event_target()).map(ChildOf::parent) else {
+        return;
+    };
+    let Ok(scroll_bar) = scroll_bars.get(scroll_bar_entity) else {
+        return;
+    };
+    let (index, is_this_bar): (usize, fn(&ScrollAreaRefs) -> Option<Entity>) = match scroll_bar.0 {
+        Orientation::Horizontal => (0, |refs| refs.h_scrollbar),
+        Orientation::Vertical => (1, |refs| refs.v_scrollbar),
+    };
+    let Some((mut scroll_position, contents_dims, _)) = scroll_contents
+        .iter_mut()
+        .find(|(_, _, refs)| is_this_bar(refs) == Some(scroll_bar_entity))
+    else {
+        return;
+    };
+
+    let contents_length =
+        contents_dims.content_size()[index] * contents_dims.inverse_scale_factor();
+    let visible_length = contents_dims.size()[index] * contents_dims.inverse_scale_factor();
+    let max_scroll_offset = contents_length - visible_length;
+    // The thumb is as long as the visible part is of the contents (see
+    // `scroll_system`), so it travels the rest of the visible length.
+    let track_length = visible_length * (1.0 - visible_length / contents_length);
+    if max_scroll_offset < f32::EPSILON || track_length < f32::EPSILON {
+        return;
+    }
+    // Start from the current `ScrollPosition`, not from where the layout last
+    // showed the contents (`ComputedNode::scroll_position`): that is floored
+    // and only refreshed by the next layout pass, so the several drags a
+    // frame can hold would each start from the same value and only the last
+    // would count. The wheel can leave `ScrollPosition` past either end, so
+    // clamp it first.
+    let start = scroll_position.0[index].clamp(0.0, max_scroll_offset);
+    scroll_position.0[index] = (start + drag.delta[index] * max_scroll_offset / track_length)
+        .clamp(0.0, max_scroll_offset);
 }
 
 fn handle_scroll_change(

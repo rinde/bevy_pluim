@@ -1,0 +1,49 @@
+// The wheel over the vertical scroll area scrolls its contents down and back
+// up, never past the top, and not sideways: the area only scrolls vertically.
+// A positive wheel y is "up", so the scroll position moves by the opposite
+// amount.
+// The scroll position read is the one the layout settles on
+// (ComputedNode.scroll_position), clamped to what overflows; the ScrollPosition
+// component itself takes whatever the wheel adds.
+(
+    format_version: 3,
+    name: "the wheel scrolls a vertical scroll area",
+    setup: App(ScrollAreas),
+    steps: [
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(0.0),
+        )),
+        MoveTo(Name("vertical scroll area")),
+        Wheel(x: 0.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(100.0),
+        )),
+        Wheel(x: 0.0, y: 40.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(60.0),
+        )),
+        Wheel(x: 0.0, y: 500.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(0.0),
+        )),
+        Wheel(x: -100.0, y: 0.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Eq(0.0),
+        )),
+    ],
+    expect: [],
+)

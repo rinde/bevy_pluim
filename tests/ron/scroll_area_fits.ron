@@ -1,0 +1,32 @@
+// Contents that fit in their scroll area do not scroll: the wheel over the
+// fitting scroll area, three squares in a 200 by 200 area, leaves it where it
+// was, and both of its scroll bars stay hidden. The scroll position that counts
+// is the one the layout settles on (ComputedNode.scroll_position), clamped to
+// what overflows; the ScrollPosition component itself takes whatever the wheel
+// adds.
+(
+    format_version: 3,
+    name: "contents that fit do not scroll",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("fitting scroll area")),
+        Wheel(x: -100.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("fitting scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position",
+            is: Eq((0.0, 0.0)),
+        )),
+        Check(Component(
+            target: Nth(0, Within(Name("fitting scroll area"), Name("ScrollBar"))),
+            path: "Visibility",
+            is: Eq(Hidden),
+        )),
+        Check(Component(
+            target: Nth(1, Within(Name("fitting scroll area"), Name("ScrollBar"))),
+            path: "Visibility",
+            is: Eq(Hidden),
+        )),
+    ],
+    expect: [],
+)

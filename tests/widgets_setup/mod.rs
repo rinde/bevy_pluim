@@ -53,8 +53,10 @@ pub enum WidgetsSetup {
     /// Lists in several layouts and corner styles, some sharing a selection,
     /// and "Change theme".
     Lists,
-    /// Scroll areas scrolling vertically, horizontally and both, and "Change
-    /// theme".
+    /// Four 200 by 200 scroll areas, each named after what it does
+    /// (`two-way scroll area`, `vertical scroll area`, `horizontal scroll
+    /// area` and `fitting scroll area`, whose three squares fit and so
+    /// never scroll), and "Change theme".
     ScrollAreas,
     /// A breadcrumb trail over a stack of four panels with buttons that go
     /// further in or back, and "Change theme".
@@ -273,26 +275,44 @@ fn squares(num: usize, grid_auto_flow: GridAutoFlow) -> impl FnOnce(&mut ChildSp
     }
 }
 
+/// The size of every scroll area of the [`WidgetsSetup::ScrollAreas`] screen.
+///
+/// Four of them and "Change theme" fit side by side in the default 1280 by 720
+/// window, so a scenario can reach each one without scrolling the page.
+const SCROLL_AREA_SIZE: f32 = 200.0;
+
+/// A scroll area of the [`SCROLL_AREA_SIZE`] named `name`.
+fn sized_scroll_area(name: &'static str, area: impl Bundle) -> impl Bundle {
+    (
+        Name::new(name),
+        Node {
+            width: px(SCROLL_AREA_SIZE),
+            height: px(SCROLL_AREA_SIZE),
+            ..default()
+        },
+        area,
+    )
+}
+
 fn scroll_areas(world: &mut World) {
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
-        root.spawn((
-            Node {
-                width: px(200),
-                height: px(200),
-                ..default()
-            },
+        root.spawn(sized_scroll_area(
+            "two-way scroll area",
             ScrollArea::bundle(squares(300, GridAutoFlow::Row), true, true),
         ));
-        root.spawn(ScrollArea::bundle(
-            squares(50, GridAutoFlow::Row),
-            true,
-            false,
+        root.spawn(sized_scroll_area(
+            "vertical scroll area",
+            ScrollArea::bundle(squares(50, GridAutoFlow::Row), true, false),
         ));
-        root.spawn(ScrollArea::bundle(
-            squares(200, GridAutoFlow::Column),
-            true,
-            true,
+        root.spawn(sized_scroll_area(
+            "horizontal scroll area",
+            ScrollArea::bundle(squares(200, GridAutoFlow::Column), false, true),
+        ));
+        // Three squares in a row are smaller than the area, so nothing scrolls.
+        root.spawn(sized_scroll_area(
+            "fitting scroll area",
+            ScrollArea::bundle(squares(3, GridAutoFlow::Row), true, true),
         ));
         spawn_theme_button(root);
     });

@@ -14,11 +14,12 @@ use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::list::List;
+use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui_tester::{
-    AppCheck, Check, CheckResult, NoiseFilter, Probe, Scenario, ScenarioReport, Step, Target,
-    WidgetRole, WorldSnapshot, suggest_checks,
+    AppCheck, Check, CheckResult, NoiseFilter, Probe, Scenario, ScenarioReport, Step,
+    SyntheticInput, Target, WidgetRole, WorldSnapshot, resolve, suggest_checks,
 };
 
 use common::{spawn_camera_and_root, widgets_app};
@@ -479,5 +480,75 @@ fn clicking_items_changes_what_selected_reports_in_a_scenario() {
             .any(|failure| failure.contains(r#"["Netherlands"] selected, not ["Canada"]"#)),
         "{:#?}",
         report.failures()
+    );
+}
+
+/// The vertical scroll area's thumb of the [`WidgetsSetup::ScrollAreas`]
+/// screen.
+fn vertical_thumb() -> Target {
+    Target::within(
+        Target::name("vertical scroll area"),
+        Target::name("ScrollThumb"),
+    )
+}
+
+/// The contents of the vertical scroll area of the
+/// [`WidgetsSetup::ScrollAreas`] screen.
+fn vertical_contents() -> Target {
+    Target::within(
+        Target::name("vertical scroll area"),
+        Target::component::<ScrollContents>(),
+    )
+}
+
+#[test]
+fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
+    // The scenario ends with the left button held on the thumb, so what
+    // follows is a drag in progress.
+    let grab = Scenario::new("grab the thumb")
+        .app_setup(WidgetsSetup::ScrollAreas)
+        .steps([
+            Step::wait(2),
+            Step::move_to(vertical_thumb()),
+            Step::press(),
+        ]);
+    let mut app = widgets_app();
+    let report = grab.run_in(&mut app);
+    assert!(report.passed(), "{:#?}", report.failures());
+
+    let thumb = resolve(app.world(), &vertical_thumb()).unwrap().position;
+    let contents = resolve(app.world(), &vertical_contents())
+        .unwrap()
+        .widget
+        .unwrap();
+    let scroll_y = |app: &App| app.world().get::<ScrollPosition>(contents).unwrap().0.y;
+    let before = scroll_y(&app);
+
+    // The thumb moves along a track of `visible * (1 - visible / contents)`
+    // and the contents by `overflow / track` times as much.
+    let node = app.world().get::<ComputedNode>(contents).unwrap();
+    let scale = node.inverse_scale_factor();
+    let visible = node.size().y * scale;
+    let total = node.content_size().y * scale;
+    let track = visible * (1.0 - visible / total);
+    let per_pixel = (total - visible) / track;
+
+    // Three moves in one frame, as a high-rate mouse delivers them. Each
+    // must count, not only the last.
+    let step = 5.0;
+    let mut input = app
+        .world_mut()
+        .get_resource_mut::<SyntheticInput>()
+        .unwrap();
+    for moves in 1..=3_u8 {
+        input.move_cursor(thumb + Vec2::new(0.0, step * f32::from(moves)));
+    }
+    app.update();
+
+    let scrolled = scroll_y(&app) - before;
+    let wanted = 3.0 * step * per_pixel;
+    assert!(
+        (scrolled - wanted).abs() < 1.0,
+        "scrolled {scrolled}, wanted {wanted} (three moves of {step} px at {per_pixel} per pixel)"
     );
 }
