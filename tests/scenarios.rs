@@ -2,30 +2,14 @@
 //! scripted pointer input in a headless app, and checks what they did.
 
 mod common;
+mod widgets_setup;
 
 use bevy::prelude::*;
-use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui_tester::{Check, Scenario, ScenarioReport, Step, Target, WidgetRole};
 
-use common::{spawn_camera_and_root, widgets_app};
-
-/// How many times the "Add" button was clicked.
-#[derive(Resource, Default, Reflect)]
-#[reflect(Resource)]
-struct Clicks(u32);
-
-/// Spawns a camera and a root holding an "Add" and an "Other" button, and
-/// counts the clicks on "Add" in [`Clicks`].
-fn spawn_two_buttons(world: &mut World) {
-    world.init_resource::<Clicks>();
-    let root = spawn_camera_and_root(world);
-    world.entity_mut(root).with_children(|root| {
-        root.spawn(PushButton::from_label("Add"))
-            .observe(|_: On<Pointer<Click>>, mut clicks: ResMut<Clicks>| clicks.0 += 1);
-        root.spawn(PushButton::from_label("Other"));
-    });
-}
+use common::widgets_app;
+use widgets_setup::{Clicks, WidgetsSetup};
 
 fn add_button() -> Target {
     Target::role(WidgetRole::Button, "Add")
@@ -44,7 +28,7 @@ fn play(scenario: &Scenario) -> ScenarioReport {
 /// expecting `colors` to give the background at each point.
 fn hover_and_click(colors: &ThemeColors) -> Scenario {
     Scenario::new("a push button follows the theme under the pointer")
-        .setup(spawn_two_buttons)
+        .app_setup(WidgetsSetup::Buttons)
         .steps([
             Step::check(background_is(colors.background_primary)),
             Step::move_to(add_button()),
@@ -81,4 +65,27 @@ fn a_scenario_expecting_the_wrong_theme_colours_fails() {
         "{:#?}",
         report.failures()
     );
+}
+
+#[test]
+fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
+    // The screens the scenario files start from must build without a window
+    // and lay out inside it. A screen added to `WidgetsSetup` goes in here.
+    let screens = [
+        WidgetsSetup::Buttons,
+        WidgetsSetup::Combos,
+        WidgetsSetup::Lists,
+        WidgetsSetup::ScrollAreas,
+        WidgetsSetup::BreadCrumbs,
+        WidgetsSetup::Tabs,
+        WidgetsSetup::ColorPalette,
+        WidgetsSetup::NumericStepper,
+    ];
+    for screen in screens {
+        let scenario = Scenario::new(format!("{screen:?}"))
+            .app_setup(screen)
+            .steps([Step::wait(2), Step::check(Check::shows("Change theme"))]);
+        let report = play(&scenario);
+        assert!(report.passed(), "{screen:?}: {:#?}", report.failures());
+    }
 }

@@ -24,6 +24,12 @@ bevy-inspector-egui = "0.37.0"
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "a3366c452281a646aa172d98a95b96f5e95804ff" }
 
+# Plays every `.ron` file in tests/ron, one test per file, with the tester's own
+# `main` instead of libtest.
+[[test]]
+name = "ron_scenarios"
+harness = false
+
 [lints.rust]
 macro_use_extern_crate = "warn"
 meta_variable_misuse = "warn"
