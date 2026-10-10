@@ -304,10 +304,14 @@ scenario harness lands (#29) nothing uses it, so it is listed under
   the repository secret `TESTER_REPO_TOKEN` (a token with read access to
   `rinde/rin-bevy-ui-tester`, for example a fine-grained personal access token
   with "Contents: read" on that repository only) for that repository. The
-  `lint`, `test` and `cross-check` jobs use it, because they build the tests;
-  `unused-deps` needs nothing. Without the secret those jobs fail early with a
-  message saying so. Pull requests from forks get no secrets, so they cannot
-  build the tests; that is expected for a private project.
+  `lint`, `test`, `unused-deps` and `cross-check` jobs all use it: the first,
+  second and fourth build the tests, and `unused-deps` runs
+  `cargo machete --with-metadata`, whose `cargo metadata` call (without
+  `--no-deps`) reads the manifest of every package in the graph, so Cargo
+  fetches the private repository there too. Without the secret those jobs fail
+  early with a message saying so. Pull requests from forks get no secrets, so
+  none of the four jobs can run for them; that is expected for a private
+  project.
 - **In cloud sessions**, `.claude/hooks/session-start.sh` exports the same
   variable and fetches the dependency with the container's git credentials.
 

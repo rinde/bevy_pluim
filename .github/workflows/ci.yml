@@ -72,6 +72,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # `cargo machete --with-metadata` runs `cargo metadata` over the whole
+      # dependency graph, so Cargo fetches the private dev-dependency here too.
+      - uses: ./.github/actions/private-deps
+        with:
+          token: ${{ secrets.TESTER_REPO_TOKEN }}
       - uses: taiki-e/install-action@v2
         with:
           tool: just,cargo-machete
