@@ -86,8 +86,8 @@ fn add_ui_root(
     }
 }
 
-fn setup(root_nodes: Query<Entity, (With<Node>, Without<ChildOf>, Without<UiTargetCamera>)>) {
-    let count = root_nodes.iter().count();
+fn setup(roots: Query<(), With<UiRoot>>) {
+    let count = roots.iter().count();
     if count != 1 {
         error!(
             "Exactly one root node is required for the app's UI, found {count}; \

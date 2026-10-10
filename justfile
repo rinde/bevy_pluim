@@ -33,6 +33,12 @@ check:
 example NAME *ARGS:
     cargo run --example {{NAME}} -- {{ARGS}}
 
+# Play every scenario of tests/ron in the gallery's real window, one by one,
+# and exit non-zero, naming what failed, if any did. Needs a display; not part
+# of `just ci`.
+gallery-test:
+    cargo run --quiet --example gallery -- --run-all
+
 # Run the whole test suite, doc tests included.
 test *ARGS:
     cargo test --quiet --all-targets {{ARGS}}

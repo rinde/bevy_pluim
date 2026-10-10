@@ -147,10 +147,46 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `lists` | `List` layouts and corner styles |
 | `numeric_stepper` | `NumericStepper` |
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
+| `gallery` | the tester's gallery: the widgets in one window, and a **Scenarios** window listing every file of `tests/ron/` (one group per widget) to watch play, step, take over or record; see [The gallery](#the-gallery) |
 
-Every example has a button that toggles the light and dark theme, and sets
-`GlobalUiDebugOptions`, which is why `bevy_ui_debug` is switched on in
-`[dev-dependencies]`.
+Every example has a button that toggles the light and dark theme (the gallery's
+is on its screens), and all but `gallery` set `GlobalUiDebugOptions`, which is
+why `bevy_ui_debug` is switched on in `[dev-dependencies]`.
+
+### The gallery
+
+`examples/gallery.rs` uses the tester's `gallery` feature (switched on for the
+`[dev-dependencies]` entry in `Cargo.toml`, so it also builds with the tests).
+It needs a display, and `just gallery-test` (`--run-all`) plays every scenario
+once in a real window and exits non-zero naming the failures; it is not part of
+`just ci`. Words after `--run-all` keep only the files whose name contains one
+of them (`just example gallery -- --run-all stack link`).
+
+- **The tests' enums are shared, not copied.** The example pulls
+  `tests/common/mod.rs`, `tests/widgets_setup/mod.rs` and
+  `tests/widgets_check/mod.rs` in with `#[path = "../tests/.."] mod ..;`, so the
+  scenario files run against the same `WidgetsSetup` and `WidgetsCheck`, and the
+  library depends on nothing of the tester.
+- **The catalogue is `tests/ron/`**, read when the example starts, grouped by
+  the start of the file name (`GROUPS` in the example; a new widget's files need
+  a row there or land in "Selection"). A file that does not load is skipped
+  with a warning.
+- **The reset hook** (`GalleryPlugin::with_reset`) despawns every `UiRoot`, every
+  `Camera2d` and every `Selection` and `ItemOf` entity that is not
+  `NotUnderTest` (setups spawn selections beside the UI, not under it), and puts
+  `Theme` back; the scenario's `WidgetsSetup` builds the screen again. Leave
+  the selections out and stale ones make later scenarios fail.
+- **The window has a scale factor of 1** (temporary, rinde/rin-bevy-ui#104) (`scale_factor_override`). The files
+  check pixel values such as `ComputedNode.scroll_position`, which are physical
+  pixels, and on a 2x display every one of them doubles.
+- **`leave_gallery_roots_alone` is temporary** (rinde/rin-bevy-ui-tester#86,
+  rinde/rin-bevy-ui#101): it takes `UiRoot` off the cursor overlay's roots.
+  Drop it once they stop getting `UiRoot`.
+- **`AppSetup::capture`** returns the `WidgetsSetup` the app was last built from
+  (kept in the `CurrentScreen` resource), so **Record** and **New: current
+  state** write `setup: App(Lists)` and the file loads back. What was done to
+  the screen before recording started is not captured. There is no `AppView`:
+  the widgets have no view to name.
 
 ### Tests
 
@@ -173,7 +209,10 @@ Every example has a button that toggles the light and dark theme, and sets
   left alone. The camera is read when the `Node` is added, so a
   `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
   `PostStartup` system logs an `error!` (it does not panic) unless there is
-  exactly one such root; an app should spawn one. Two roots both get `UiRoot`.
+  exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`.
+  The tester's cursor overlay is aimed at the app's default camera and so has
+  roots without a `UiTargetCamera`; they carry `NotUnderTest`, and the gallery
+  example takes `UiRoot` off whatever has it.
 - **Mouse events.** `UiRoot` observes Bevy's `Pointer<Over | Pressed |
   Released | Out>` and re-triggers each as a `MouseEvent` on the original
   target. `MouseEvent` is crate-private: it is how widgets inside this crate
@@ -297,6 +336,7 @@ of it. You need `just` and, for `unused-deps`, `cargo-machete`.
 | Lint | `just lint` | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items` |
 | Test | `just test` | `cargo test --all-targets` then `cargo test --doc` |
 | Run an example | `just example NAME` | `cargo run --example NAME` |
+| Play every scenario in a real window | `just gallery-test` | `cargo run --example gallery -- --run-all` |
 | Record the scenarios | `just record` | `cargo test --test recorded_scenarios_gpu --features record -- --include-ignored`; needs a GPU, see [Recording the scenarios](#recording-the-scenarios) |
 | All of CI | `just ci` | lint, test, `cargo machete --with-metadata` |
 
