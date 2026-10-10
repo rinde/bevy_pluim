@@ -26,7 +26,8 @@ fn update_theme(mut clear_color: ResMut<ClearColor>, theme: Res<Theme>) {
 /// How every widget looks.
 ///
 /// Changing the resource restyles all widgets, and keeps [`ClearColor`] in step with the background.
-#[derive(Resource, Clone, Copy, Debug, Educe)]
+#[derive(Resource, Clone, Copy, Debug, Educe, Reflect)]
+#[reflect(Resource)]
 #[educe(Default)]
 pub struct Theme {
     /// The radius of rounded corners.
@@ -92,7 +93,7 @@ impl Theme {
 }
 
 /// The colour slots of a [`Theme`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub struct ThemeColors {
     /// The background of widgets and the window.
     pub background_primary: Color,

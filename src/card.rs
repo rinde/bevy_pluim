@@ -25,7 +25,8 @@ impl Plugin for CardPlugin {
 }
 
 /// A node with a themed background, border, corner radius and shadow.
-#[derive(Component, Copy, Clone, Debug)]
+#[derive(Component, Copy, Clone, Debug, Reflect)]
+#[reflect(Component)]
 #[require(BoxShadow::default(), Node::default())]
 #[component(on_insert=Self::on_insert)]
 pub struct Card;

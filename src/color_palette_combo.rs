@@ -39,7 +39,8 @@ impl Plugin for ColorPaletteComboPlugin {
     }
 }
 
-#[derive(Component, Debug, Copy, Clone, Default)]
+#[derive(Component, Debug, Copy, Clone, Default, Reflect)]
+#[reflect(Component)]
 // #[component(on_add=Self::on_insert)]
 /// A button that opens a [`ColorPalette`] in a popup.
 #[require(
@@ -154,7 +155,8 @@ struct SubRefs {
 }
 
 /// Whether the popup of a [`ColorPaletteCombo`] is showing.
-#[derive(Component, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Component, Debug, Copy, Clone, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[component(immutable)]
 pub enum State {
     /// The popup is showing.

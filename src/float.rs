@@ -26,7 +26,8 @@ impl Plugin for FloatPlugin {
 
 /// Component that modifies the position and appearance of a node to create a
 /// floating effect.
-#[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Component, Copy, Clone, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[require(GlobalZIndex(1000), BoxShadow::default())]
 #[component(on_insert=Self::on_insert)]
 pub struct Float;

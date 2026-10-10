@@ -31,7 +31,8 @@ impl Plugin for ComboPlugin {
 /// A button that opens a [`List`] in a [`Float`].
 ///
 /// The popup closes again on a click outside of it.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
 #[component(on_add=Self::on_add)]
 #[require(
     Node {
@@ -46,7 +47,8 @@ impl Plugin for ComboPlugin {
 pub struct Combo;
 
 /// Marks the button of a [`Combo`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 #[require(Name::new("ComboButton"))]
 pub struct ComboButton;
 
@@ -60,12 +62,14 @@ pub struct ComboSubRefs {
 }
 
 /// Marks the list inside the popup of a [`Combo`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 #[require(Name::new("ComboList"))]
 pub struct ComboList;
 
 /// Whether the popup of a [`Combo`] is showing.
-#[derive(Component, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Component, Debug, Copy, Clone, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[component(immutable, on_insert=Self::on_insert)]
 pub enum ComboState {
     /// The popup is showing.

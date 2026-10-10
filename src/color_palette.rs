@@ -36,7 +36,8 @@ impl Plugin for ColorPalettePlugin {
 }
 
 /// A grid of colour swatches for a selection of [`Item<Color>`](crate::select::Item).
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+#[reflect(Component)]
 #[require(
     List,
     ListLayout::VerticalGrid { columns: 6 },

@@ -28,7 +28,8 @@ impl Plugin for PushButtonPlugin {
 }
 
 /// A themed button with a label and an optional icon.
-#[derive(Component, Clone, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[component(on_add = Self::on_add)]
 #[require(BoxShadow::default(),
     Node {

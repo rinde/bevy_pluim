@@ -154,9 +154,13 @@ Every example has a button that toggles the light and dark theme, and sets
 
 ## How the pieces fit
 
-- **`UiRoot`.** An observer on `OnAdd, Node` inserts `UiRoot` on any node
-  without a parent. A `PostStartup` system asserts there is exactly one root
-  node, so an app must spawn one.
+- **`UiRoot`.** An observer on `OnAdd, Node` inserts `UiRoot` on a node
+  without a parent and without a `UiTargetCamera`, so root nodes aimed at
+  another camera (a second window's UI, an overlay) are not the app's and are
+  left alone. The camera is read when the `Node` is added, so a
+  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
+  `PostStartup` system logs an `error!` (it does not panic) unless there is
+  exactly one such root; an app should spawn one. Two roots both get `UiRoot`.
 - **Mouse events.** `UiRoot` observes Bevy's `Pointer<Over | Pressed |
   Released | Out>` and re-triggers each as a `MouseEvent` on the original
   target. `MouseEvent` is crate-private: it is how widgets inside this crate
@@ -201,6 +205,13 @@ Every example has a button that toggles the light and dark theme, and sets
   `on_insert` where re-inserting should re-run it (`Card`, `Label`, `List`,
   `ScrollArea`, `Float`, `NumericStepper`, `ComboState`). Default `Node`
   styling and a `Name` go in `#[require(…)]`.
+- **Public widget components, their state and `Theme` derive `Reflect`**, with
+  `#[reflect(Component)]` (`#[reflect(Resource)]` for `Theme`), so the type
+  registry knows them by name (Bevy's `reflect_auto_register`). A field that
+  cannot be reflected gets `#[reflect(ignore)]` with a comment saying why.
+  `tests/reflection.rs` fails when a derive is dropped; add a new widget there.
+  The short type paths `Label` and `ScrollArea` are also Bevy's own, so a lookup
+  by short path is ambiguous for those two; use the full path.
 - **State is an immutable component**; a transition inserts a new value
   (`ComboState`, `LinkState`, `Selection`, the palette combo's `State`).
 - **Composite widgets keep their children in a refs component**

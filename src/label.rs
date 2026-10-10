@@ -21,7 +21,8 @@ impl Plugin for LabelPlugin {
 }
 
 /// Themed text.
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
 #[require(
     Name::new("Label"),
