@@ -542,6 +542,22 @@ a file can check any `Reflect` type of the app by short type path.
   is read with `Component(target: Name(..), path: "ComboState", is: Eq(Open))`;
   `Visible` of the list (or one item) says whether it shows. A click on empty
   space is `MoveTo(Screen((900.0, 500.0)))` then `Click(Left)`.
+- **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
+  `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
+  is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:
+  "Home"))`); the last is a disabled `Link` with no role: reach it by
+  `Nth(i, Within(Name("BreadCrumbs"), Name("Link")))` (the text inside is
+  `Pickable::IGNORE`, so a `MoveTo` to the text is "covered by `Link`") and
+  read its `BackgroundColor.0`; the colour of its label is `TextColor.0` of
+  `Text("..")`. A `Stack` panel hidden by `Display::None` still exists
+  but is left out of a `Tree(..)` snapshot, which also accepts extra
+  siblings, so say that a panel is hidden with `Not(Visible(Within(Name("Stack"),
+  Text("Panel A"))))` and that one was never created with `Not(Exists(..))`.
+  The panels that were created are counted by `Count` of `PushButton`s
+  (`stack_shows_only_the_selected_item`); the `Tabs` screen's number list
+  keeps its selection while its panel is hidden
+  (`stack_keeps_state_of_hidden_item`). The tabs are the `Button`s
+  `Panel A`, `Panel B` and `Card demo`.
 
 ## Before you call it done
 

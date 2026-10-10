@@ -1,0 +1,36 @@
+// A `Stack` hides a deselected child and shows the very same one when it is
+// selected again: nothing is despawned and made anew. Panel B holds a list of
+// numbers with a selection of its own, which starts on "1". Choosing "3" there
+// and leaving Panel B by way of the other tabs would reset that selection
+// if the panel were created again; it survives. So does the number of item
+// views (596 on this screen, those of the hidden panels included), which a
+// second copy of a panel would add to.
+(
+    format_version: 3,
+    name: "a deselected stack item keeps its state when it is shown again",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(App(Selected(of: Within(Name("Stack"), Role(role: Button, label: "3")), items: ["1"]))),
+        MoveTo(Within(Name("Stack"), Role(role: Button, label: "3"))), Click(Left),
+        Check(App(Selected(of: Within(Name("Stack"), Role(role: Button, label: "3")), items: ["3"]))),
+        Check(Count(with: ["rin_bevy_ui::list::ItemView"], is: Eq(596))),
+
+        // Away to the cards, and to Panel A, and back.
+        MoveTo(Role(role: Button, label: "Card demo")), Click(Left),
+        Wait(2),
+        Check(Not(Visible(Within(Name("Stack"), Role(role: Button, label: "3"))))),
+        MoveTo(Role(role: Button, label: "Panel A")), Click(Left),
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(Visible(Within(Name("Stack"), Role(role: Button, label: "3")))),
+        Check(App(Selected(of: Within(Name("Stack"), Role(role: Button, label: "3")), items: ["3"]))),
+        Check(Count(with: ["rin_bevy_ui::list::ItemView"], is: Eq(596))),
+    ],
+    expect: [
+        App(Selected(of: Within(Name("Stack"), Role(role: Button, label: "3")), items: ["3"])),
+    ],
+)

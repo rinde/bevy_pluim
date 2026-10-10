@@ -1,0 +1,96 @@
+// A `Link` shows its hover state on over and out. An enabled crumb (a button)
+// has the background of `background_primary` (gray-50) and the text colour
+// `link` (blue-600); under the pointer the background is `background_secondary`
+// (gray-200); pressed, the text is `link_selected` (blue-800); and when the
+// pointer leaves, even with the button still down, it is back to the first. The
+// current crumb is a disabled link, plain text in `text_primary` (gray-900),
+// which does not react to the pointer at all.
+(
+    format_version: 3,
+    name: "a link highlights under the pointer and not when disabled",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        // Home > Panel A: "Home" is a link, "Panel A" the current crumb.
+        MoveTo(Role(role: Button, label: "Go to Panel A")), Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        // Over: the background changes, the text colour stays.
+        MoveTo(Within(Name("BreadCrumbs"), Role(role: Button, label: "Home"))),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        // Pressed: the text takes the colour of a selected link.
+        Press(Left),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.11764706,green:0.2509804,blue:0.6862745,alpha:1.0))),
+        )),
+        // Out with the button down: the link is released from the pointer
+        // without being clicked, so the trail stays as it is.
+        MoveTo(Screen((900.0, 500.0))),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Release(Left),
+        Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel A"]))),
+
+        // The current crumb is a disabled link: plain text, not hover-aware.
+        Check(Not(Exists(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel A"))))),
+        Check(Component(
+            target: Nth(1, Within(Name("BreadCrumbs"), Name("Link"))),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Panel A")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        MoveTo(Nth(1, Within(Name("BreadCrumbs"), Name("Link")))),
+        Check(Component(
+            target: Nth(1, Within(Name("BreadCrumbs"), Name("Link"))),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Panel A")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        // Clicking it changes nothing.
+        Click(Left),
+        Wait(2),
+        Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel A"]))),
+    ],
+    expect: [App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel A"]))],
+)
