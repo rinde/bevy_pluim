@@ -270,13 +270,44 @@ a loop, and note that examples need a display.
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
 
+### The private tester dependency
+
+`rin_bevy_ui_tester` (`github.com/rinde/rin-bevy-ui-tester`, private) is a
+`[dev-dependencies]` git dependency pinned to a revision in `Cargo.toml`; it
+drives scripted pointer and keyboard scenarios against the widgets. Until the
+scenario harness lands (#29) nothing uses it, so it is listed under
+`[package.metadata.cargo-machete] ignored`; drop that entry with the first use.
+
+- **Bumping it** means changing `rev` in `Cargo.toml` and `Cargo.lock`
+  together (`cargo update -p rin_bevy_ui_tester`); `--locked` in CI fails if
+  they disagree.
+- **Bevy upgrades land in the tester first.** It pins `bevy = "=0.19.1"`
+  exactly, so this crate's `bevy` requirement must resolve to the same version;
+  upgrade Bevy in the tester (and rails), bump the `rev` here, then raise
+  `bevy` here.
+- **Locally**, Cargo needs your git credentials for the private repository:
+  set `CARGO_NET_GIT_FETCH_WITH_CLI=true` so it uses the `git` binary (and so
+  your credential helper or SSH agent) instead of its built-in client.
+- **In CI**, `ci.yml` sets `CARGO_NET_GIT_FETCH_WITH_CLI=true` for every job
+  and the local action `.github/actions/private-deps` configures git to send
+  the repository secret `TESTER_REPO_TOKEN` (a token with read access to
+  `rinde/rin-bevy-ui-tester`, for example a fine-grained personal access token
+  with "Contents: read" on that repository only) for that repository. The
+  `lint`, `test` and `cross-check` jobs use it, because they build the tests;
+  `unused-deps` needs nothing. Without the secret those jobs fail early with a
+  message saying so. Pull requests from forks get no secrets, so they cannot
+  build the tests; that is expected for a private project.
+- **In cloud sessions**, `.claude/hooks/session-start.sh` exports the same
+  variable and fetches the dependency with the container's git credentials.
+
 ### Claude Code on the web
 
 `.claude/hooks/session-start.sh`, registered in `.claude/settings.json` under
 `SessionStart`, prepares a fresh cloud container: it installs the pinned
 toolchain with `clippy` and `rustfmt`, `just` and `cargo-machete` at pinned
 versions, the Bevy system headers `.github/workflows/ci.yml` also installs,
-then warms the build cache with `cargo build --all-targets` so the first real
+then fetches the dependencies (the private tester included, see above) and
+warms the build cache with `cargo build --all-targets` so the first real
 build isn't a cold Bevy compile. It is a no-op unless `CLAUDE_CODE_REMOTE=true`
 or run with `--force`, and is idempotent, with progress on stderr.
 

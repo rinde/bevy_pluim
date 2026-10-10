@@ -4,7 +4,9 @@
 # Installs the Rust toolchain pinned in rust-toolchain.toml with clippy and
 # rustfmt, `just` and `cargo-machete` at pinned versions, the system headers
 # Bevy's default features need, then warms the build cache so the first real
-# build is not a cold Bevy compile. Safe to run more than once: every step
+# build is not a cold Bevy compile. Cargo fetches the private
+# rin-bevy-ui-tester dev-dependency with the `git` binary, so it uses the
+# container's git credentials. Safe to run more than once: every step
 # checks whether it already has what it needs.
 #
 # Runs automatically as a SessionStart hook in Claude Code on the web. Pass
@@ -103,8 +105,15 @@ install_tool cargo-machete "$MACHETE_VERSION" \
 
 # ------------------------------------------------------------------ sources
 
-log "fetching dependencies"
-cargo fetch --locked >&2
+# The tester is a private git dependency. Cargo's built-in git client ignores
+# the container's git credential configuration; the `git` binary honours it.
+export CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+log "fetching dependencies (including the private rin-bevy-ui-tester)"
+if ! cargo fetch --locked >&2; then
+    log "could not fetch dependencies; if rin-bevy-ui-tester was refused, git has no read access to rinde/rin-bevy-ui-tester"
+    exit 1
+fi
 
 # A cold build of the Bevy tree takes minutes. Doing it here means it lands in
 # the cached container image instead of in the first thing the agent runs.
@@ -117,6 +126,7 @@ fi
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     echo "export PATH=\"$BIN:\$PATH\"" >>"$CLAUDE_ENV_FILE"
     echo 'export CARGO_TERM_COLOR=always' >>"$CLAUDE_ENV_FILE"
+    echo 'export CARGO_NET_GIT_FETCH_WITH_CLI=true' >>"$CLAUDE_ENV_FILE"
 fi
 
 echo "rin-bevy-ui dev environment ready: rustc $(rustc --version | cut -d' ' -f2), $(just --version), cargo-machete $(cargo machete --version 2>/dev/null | head -1). Run 'just ci' for everything CI checks."
