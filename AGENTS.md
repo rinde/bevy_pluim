@@ -45,6 +45,71 @@ the PR exists and check whether it needs a rebase onto `main`.
 Whenever asked to work on a ticket, always make sure that the ticket has the 
 label "In progress" assigned to it, if not, assign it before starting any work.
 
+Issues labelled `ready-for-agent` can be run by agents end to end with
+`/coordinate`; see [Agents](#agents).
+
+## Agents
+
+A **coordinator** picks up issues that are ready, an **implementer** turns
+each into a pull request, a **reviewer** approves it or requests changes, and
+the coordinator sends it back or merges it. They live in `.claude/agents/` and
+`.claude/skills/` and follow the same rules as anyone else: this file. Nothing
+runs on GitHub's side; the coordinator starts every agent, in its own session.
+
+| Agent | Model | Does |
+| --- | --- | --- |
+| `coordinator` | Sonnet | Decides what is ready, dispatches implementers and reviewers, checks on GitHub that each did its job, merges. Writes no code. |
+| `implementer-sonnet`, `implementer-opus` | Sonnet, Opus | Implements one issue in a worktree under `.claude/worktrees/` on a branch `issue-<number>/-<slug>`, opens a pull request that `Closes #N`, and follows it up on review, red CI or a merge conflict. Runs the `implement-issue` skill. |
+| `reviewer-sonnet`, `reviewer-opus` | Sonnet, Opus | Reviews one pull request in a worktree of its own, makes sure CI passed on its head, and posts one review that approves or requests changes, with inline comments. Runs the `review-pr` skill. |
+
+The variants differ only in their model; the instructions are the skills, which
+also run by hand: `/implement-issue 24`, `/review-pr 25 opus`.
+
+| Label | Meaning |
+| --- | --- |
+| `ready-for-agent` | The coordinator may start the issue. Agents leave every other issue alone. |
+| `opus` | The Opus implementer, and an Opus approval. Without it, Sonnet. |
+| `require-human-review` | A human approves and merges; no agent approves or merges it. |
+| `In progress` | Someone is working on it; set on dispatch. |
+| `Needs refinement` | Not ready. An implementer that finds the issue ambiguous asks on it, sets this and removes `ready-for-agent`. |
+
+An issue starts only when everything it depends on is **closed as completed**:
+the issues blocking it in its *Relationships*, its open sub-issues, and any
+issue its body names as `Depends on #N`, `Blocked by #N` or `After #N`. A
+dependency closed as not planned waits for a human.
+
+**The review verdict.** A reviewer approves only when CI passed on the pull
+request's head: GitHub's **Format, clippy and docs**, **Tests** and **Unused
+dependencies** jobs, which together are `just ci`. Where one did not run —
+missing, cancelled, queued, or failed for billing reasons because the
+account's Actions minutes ran out, which shows as a billing annotation rather
+than a step's output — the reviewer runs `just ci` on the head itself. Every
+agent review starts with a marker the coordinator reads:
+
+```
+<!-- agent-review verdict=<approve|request_changes> reviewer=<sonnet|opus> sha=<commit> ci=<github|local|none> -->
+```
+
+A verdict counts only for the commit it names, so a push makes it stale. An
+approved pull request with CI passed and no conflict is squash-merged unless
+the issue has `require-human-review`. After three rounds of changes requested,
+the coordinator stops, comments and takes `ready-for-agent` off the issue.
+
+| How | What |
+| --- | --- |
+| `/coordinate` | Passes until nothing is left to do, then a report. |
+| `/coordinate #24 #25` | Only those issues and their pull requests. |
+| `/coordinate max 5` | Five implementers at once instead of three. |
+| `/coordinate dry-run` | Report what it would do and change nothing. |
+| `/loop 30m /coordinate` | Keep coordinating every half hour. |
+| `claude --agent coordinator` | The coordinator as the session's main agent. |
+
+Agents talk to GitHub through `gh api` and its REST endpoints, because cloud
+sessions block the GraphQL API that `gh issue` and `gh pr` use. An unattended
+run needs its tools allowed, or it stops at the first permission prompt. Each
+worktree starts with an empty `target/`; the skills point cargo at the main
+checkout's build so Bevy is not compiled again.
+
 ## Where to find what
 
 | Module | Holds |
