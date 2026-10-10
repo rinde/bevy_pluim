@@ -444,6 +444,7 @@ dependencies = [
  "bevy_derive",
  "bevy_ecs",
  "bevy_reflect",
+ "serde",
 ]
 
 [[package]]
@@ -1062,6 +1063,7 @@ dependencies = [
  "bevy_reflect",
  "derive_more",
  "log",
+ "serde",
  "smol_str",
  "thiserror 2.0.21",
 ]
@@ -1275,6 +1277,7 @@ dependencies = [
  "glam",
  "half",
  "hexasphere",
+ "serde",
  "thiserror 2.0.21",
  "tracing",
  "wgpu-types",
@@ -1764,6 +1767,7 @@ dependencies = [
  "bevy_window",
  "derive_more",
  "parley",
+ "serde",
  "smallvec",
  "swash",
  "taffy",
@@ -3145,6 +3149,7 @@ dependencies = [
  "cfg-if",
  "crunchy",
  "num-traits",
+ "serde",
  "zerocopy",
 ]
 
@@ -4858,8 +4863,19 @@ dependencies = [
  "derive_more",
  "educe",
  "itertools",
+ "rin_bevy_ui_tester",
  "smallvec",
  "strum",
+]
+
+[[package]]
+name = "rin_bevy_ui_tester"
+version = "0.1.0"
+source = "git+https://github.com/rinde/rin-bevy-ui-tester?rev=a3366c452281a646aa172d98a95b96f5e95804ff#a3366c452281a646aa172d98a95b96f5e95804ff"
+dependencies = [
+ "bevy",
+ "ron",
+ "serde",
 ]
 
 [[package]]
