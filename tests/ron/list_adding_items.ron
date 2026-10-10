@@ -1,0 +1,43 @@
+// Spawning an item into the shared items ("Add country") triggers
+// ItemsChanged, and every list drawing from them gets a view of it: the
+// "one-or-more list", its grid and the two lists with their own selection over
+// the same items. The lists with items of their own ("one list", "zero-or-more
+// grid list") do not. The new item can be selected like any other.
+(
+    format_version: 3,
+    name: "an item added to shared items shows in every list that draws from them",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Check(Count(with: ["rin_bevy_ui::list::ItemView"], is: Eq(42))),
+        Check(Not(Exists(Within(Name("one-or-more list"), Text("Suriname"))))),
+        Check(Not(Exists(Within(Name("one-or-more grid list"), Text("Suriname"))))),
+        Check(Not(Exists(Within(Name("zero-or-one list"), Text("Suriname"))))),
+        Check(Not(Exists(Within(Name("zero-or-more list"), Text("Suriname"))))),
+        MoveTo(Role(role: Button, label: "Add country")), Click(Left),
+        Wait(2),
+        Check(Exists(Within(Name("one-or-more list"), Text("Suriname")))),
+        Check(Exists(Within(Name("one-or-more grid list"), Text("Suriname")))),
+        Check(Exists(Within(Name("zero-or-one list"), Text("Suriname")))),
+        Check(Exists(Within(Name("zero-or-more list"), Text("Suriname")))),
+        // Lists with items of their own do not get it, nor does the rest.
+        Check(Not(Exists(Within(Name("zero-or-more grid list"), Text("Suriname"))))),
+        Check(Not(Exists(Within(Name("one list"), Text("Suriname"))))),
+        Check(Not(Exists(Within(Name("scrolling list"), Text("Suriname"))))),
+        // 42 item views before (six lists of five and one of twelve),
+        // one more in each of the four lists drawing from the shared items.
+        Check(Count(with: ["rin_bevy_ui::list::ItemView"], is: Eq(46))),
+        // The next click adds the next one.
+        MoveTo(Role(role: Button, label: "Add country")), Click(Left),
+        Wait(2),
+        Check(Exists(Within(Name("one-or-more list"), Text("Chile")))),
+        Check(Exists(Within(Name("zero-or-more list"), Text("Chile")))),
+        // The new item is selectable, and the lists sharing a selection follow.
+        MoveTo(Within(Name("one-or-more grid list"), Role(role: Button, label: "Suriname"))), Click(Left),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Suriname"]))),
+        Check(App(Selected(of: Name("one-or-more grid list"), items: ["Netherlands", "Suriname"]))),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Chile"))), Click(Left),
+        Check(App(Selected(of: Name("zero-or-more list"), items: ["Chile"]))),
+    ],
+    expect: [App(Selected(of: Name("zero-or-more list"), items: ["Chile"]))],
+)
