@@ -1,0 +1,66 @@
+// Clicking a swatch of a palette selects its colour and marks it. The
+// palette's selection holds at most one colour (`ZeroOrOne`): another swatch
+// replaces it and a second click on the selected one clears it. A selected
+// swatch gets a border of its own (for a dark colour such as red-500, black
+// under the light theme); an unselected one has the colour of the theme's
+// `background_primary` (gray-50) as its border. Index 60 is red-500
+// and 5 is slate-500 of the Tailwind colours in `COLORS`.
+(
+    format_version: 3,
+    name: "clicking a swatch selects its colour and marks it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("palette"), items: []))),
+        Check(Component(
+            target: Nth(60, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        MoveTo(Nth(60, Within(Name("palette"), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("palette"), items: ["red-500"]))),
+        // Marked even when the pointer is somewhere else; the others are not.
+        MoveTo(Screen((1100.0, 600.0))),
+        Check(Component(
+            target: Nth(60, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Nth(5, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        // Another swatch replaces it, and the first is no longer marked.
+        MoveTo(Nth(5, Within(Name("palette"), Component("ItemView")))),
+        Click(Left),
+        MoveTo(Screen((1100.0, 600.0))),
+        Check(App(Selected(of: Name("palette"), items: ["slate-500"]))),
+        Check(Component(
+            target: Nth(5, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Ne(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Nth(60, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        // A second click clears it.
+        MoveTo(Nth(5, Within(Name("palette"), Component("ItemView")))),
+        Click(Left),
+        MoveTo(Screen((1100.0, 600.0))),
+        Check(App(Selected(of: Name("palette"), items: []))),
+        Check(Component(
+            target: Nth(5, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        // The last swatch can be reached too.
+        MoveTo(Nth(241, Within(Name("palette"), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("palette"), items: ["rose-950"]))),
+    ],
+    expect: [App(Selected(of: Name("palette"), items: ["rose-950"]))],
+)

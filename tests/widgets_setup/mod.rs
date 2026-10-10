@@ -73,8 +73,12 @@ pub enum WidgetsSetup {
     BreadCrumbs,
     /// A list as tab bar over a stack of three panels, and "Change theme".
     Tabs,
-    /// Colour palettes and palette combos over the Tailwind colours, and
-    /// "Change theme".
+    /// Three palette combos (`first palette combo` and `second palette
+    /// combo` share one selection, `own palette combo` has a selection of its
+    /// own) and "Change theme" in a row, then below it a `palette` of all 242
+    /// Tailwind colours in 22 columns and a 300 by 300 `palette scroll
+    /// area` with 11 columns, both showing one selection. The combos choose
+    /// from the same items.
     ColorPalette,
     /// Numeric steppers, each named after its type or role (`default
     /// stepper`, `u16 stepper`, `u32 stepper`, `f32 stepper`, `stepper by
@@ -778,6 +782,11 @@ fn tabs(world: &mut World) {
 
 fn color_palette(world: &mut World) {
     let root = row_root(world);
+    if let Some(mut node) = world.entity_mut(root).get_mut::<Node>() {
+        // Keep the rows at the top instead of stretching them over the window,
+        // so where a popup opens does not depend on how much room is left.
+        node.align_content = AlignContent::FlexStart;
+    }
     let selection_ref = world
         .spawn(
             Selection::builder()
@@ -793,17 +802,54 @@ fn color_palette(world: &mut World) {
         )
         .id();
     world.entity_mut(root).with_children(|root| {
+        // The combos come first so that their popups open below them, over the
+        // palettes. The row is as wide as the window, which puts the palettes
+        // on the next line.
+        root.spawn(Node {
+            width: percent(100),
+            align_items: AlignItems::FlexStart,
+            justify_content: JustifyContent::Center,
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|controls| {
+            controls.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::reference(combo_selection_ref),
+                Name::new("first palette combo"),
+            ));
+            controls.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::reference(combo_selection_ref),
+                Name::new("second palette combo"),
+            ));
+            controls.spawn((
+                ColorPaletteCombo,
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items_ref(selection_ref),
+                Name::new("own palette combo"),
+            ));
+            spawn_theme_button(controls);
+        });
+        // 22 columns of 11 rows keep the whole palette (836 by 418) inside the
+        // window; 11 columns of 22 rows, as in the example, are taller than it.
         root.spawn((
             ColorPalette,
-            ListLayout::VerticalGrid { columns: 11 },
+            ListLayout::VerticalGrid { columns: 22 },
             Selection::reference(selection_ref),
+            Name::new("palette"),
         ));
         root.spawn((
             Node {
-                width: px(430),
+                width: px(300),
                 height: px(300),
                 ..default()
             },
+            Name::new("palette scroll area"),
             ScrollArea::bundle(
                 move |parent| {
                     parent.spawn((
@@ -817,19 +863,6 @@ fn color_palette(world: &mut World) {
                 true,
             ),
         ));
-        root.spawn((
-            ColorPaletteCombo,
-            ListLayout::VerticalGrid { columns: 11 },
-            Selection::reference(combo_selection_ref),
-        ));
-        root.spawn((
-            ColorPaletteCombo,
-            ListLayout::VerticalGrid { columns: 11 },
-            Selection::builder()
-                .zero_or_one()
-                .build_with_items_ref(selection_ref),
-        ));
-        spawn_theme_button(root);
     });
 }
 

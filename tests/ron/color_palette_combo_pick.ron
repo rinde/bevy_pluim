@@ -1,0 +1,73 @@
+// Picking a colour in an open palette combo selects it, closes the popup and
+// shows the colour in the square of the combo's `ColorPushButton` (the
+// `BackgroundColor` of its `ColorSquare`, transparent while nothing is
+// selected). "first palette combo" and "second palette combo" share the
+// selection; "own palette combo" and the palette have selections of their own.
+// Index 60 is red-500 and 5 is slate-500 of `COLORS`; the popup is 250 high,
+// which shows the first six rows, so both are in view.
+(
+    format_version: 3,
+    name: "picking a colour closes the popup and the button shows it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("first palette combo"), items: []))),
+        Check(Component(
+            target: Within(Name("first palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Visible(Nth(0, Name("ColorPaletteComboFloat")))),
+        MoveTo(Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("first palette combo"), items: ["red-500"]))),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(Not(Visible(Nth(0, Name("ColorPaletteComboFloat"))))),
+        Check(Component(
+            target: Within(Name("first palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9372549,green:0.26666668,blue:0.26666668,alpha:1.0))),
+        )),
+        // The combo that shares the selection shows it as well; the combo and
+        // the palette with selections of their own do not.
+        Check(App(Selected(of: Name("second palette combo"), items: ["red-500"]))),
+        Check(Component(
+            target: Within(Name("second palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9372549,green:0.26666668,blue:0.26666668,alpha:1.0))),
+        )),
+        Check(App(Selected(of: Name("own palette combo"), items: []))),
+        Check(Component(
+            target: Within(Name("own palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        Check(App(Selected(of: Name("palette"), items: []))),
+        // Open it again: the colour is marked in the popup. Pick another one.
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Check(Component(
+            target: Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:1.0))),
+        )),
+        MoveTo(Nth(5, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-500"]))),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(Component(
+            target: Within(Name("first palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.39215687,green:0.45490196,blue:0.54509807,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("second palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.39215687,green:0.45490196,blue:0.54509807,alpha:1.0))),
+        )),
+    ],
+    expect: [App(Selected(of: Name("first palette combo"), items: ["slate-500"]))],
+)

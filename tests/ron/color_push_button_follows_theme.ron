@@ -1,0 +1,44 @@
+// A `ColorPushButton` (the button of a palette combo) takes its background
+// from the theme (`background_primary`: gray-50 in the light theme, gray-950 in
+// the dark one) while its square keeps the colour that was picked.
+(
+    format_version: 3,
+    name: "a colour push button follows the theme and keeps its colour",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        MoveTo(Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))),
+        Click(Left),
+        // Away from the button, so that its hover colour does not show.
+        MoveTo(Screen((1100.0, 600.0))),
+        Check(Component(
+            target: Within(Name("first palette combo"), Component("ColorPushButton")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Click(Left),
+        Wait(2),
+        MoveTo(Screen((1100.0, 600.0))),
+        Check(Component(
+            target: Within(Name("first palette combo"), Component("ColorPushButton")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("first palette combo"), Component("ColorSquare")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9372549,green:0.26666668,blue:0.26666668,alpha:1.0))),
+        )),
+        // The palette's swatches follow the theme as well: an unselected
+        // swatch has the new background colour as its border.
+        Check(Component(
+            target: Nth(5, Within(Name("palette"), Component("ItemView"))),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+    ],
+    expect: [App(Selected(of: Name("first palette combo"), items: ["red-500"]))],
+)

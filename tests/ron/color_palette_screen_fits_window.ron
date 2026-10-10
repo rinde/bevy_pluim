@@ -1,0 +1,23 @@
+// The ColorPalette screen fits the default 1280 by 720 window: the tester only
+// moves the pointer to a widget that is inside the window, so every palette,
+// combo button and the theme button the other scenarios click can be reached.
+// The example this screen is modelled on has 22 rows of swatches, which are
+// taller than the window; the screen shows them in 22 columns instead.
+(
+    format_version: 3,
+    name: "every palette and combo of the colour palette screen is inside the window",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        MoveTo(Name("palette")),
+        MoveTo(Name("palette scroll area")),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        MoveTo(Within(Name("second palette combo"), Component("ColorPushButton"))),
+        MoveTo(Within(Name("own palette combo"), Component("ColorPushButton"))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        // The first and the last swatch of the big palette.
+        MoveTo(Nth(0, Within(Name("palette"), Component("ItemView")))),
+        MoveTo(Nth(241, Within(Name("palette"), Component("ItemView")))),
+    ],
+    expect: [],
+)
