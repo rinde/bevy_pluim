@@ -80,6 +80,9 @@ fn start_screen(world: &mut World) {
     }
 }
 
+/// Temporary workaround for rinde/rin-bevy-ui-tester#86 (and rinde/rin-bevy-ui#101):
+/// remove it when the overlay's roots no longer get `UiRoot`.
+///
 /// Takes `UiRoot` off the gallery's own top-level nodes (the cursor overlay and
 /// caption strip), which are marked `NotUnderTest` but, aimed at the app's
 /// default camera, carry no `UiTargetCamera` for `UiRoot` to go by. Without
@@ -203,8 +206,9 @@ fn main() -> AppExit {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "rin-bevy-ui".into(),
-                // The scenario files check pixel positions (a scroll
-                // position, say) as they are at a scale factor of 1.
+                // Temporary, rinde/rin-bevy-ui#104: the scenario files check
+                // pixel positions (a scroll position, say) as they are at a
+                // scale factor of 1. Remove when they no longer depend on it.
                 resolution: WindowResolution::default().with_scale_factor_override(1.0),
                 ..default()
             }),

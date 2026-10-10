@@ -176,9 +176,12 @@ of them (`just example gallery -- --run-all stack link`).
   `NotUnderTest` (setups spawn selections beside the UI, not under it), and puts
   `Theme` back; the scenario's `WidgetsSetup` builds the screen again. Leave
   the selections out and stale ones make later scenarios fail.
-- **The window has a scale factor of 1** (`scale_factor_override`). The files
+- **The window has a scale factor of 1** (temporary, rinde/rin-bevy-ui#104) (`scale_factor_override`). The files
   check pixel values such as `ComputedNode.scroll_position`, which are physical
   pixels, and on a 2x display every one of them doubles.
+- **`leave_gallery_roots_alone` is temporary** (rinde/rin-bevy-ui-tester#86,
+  rinde/rin-bevy-ui#101): it takes `UiRoot` off the cursor overlay's roots.
+  Drop it once they stop getting `UiRoot`.
 - **`AppSetup::capture`** returns the `WidgetsSetup` the app was last built from
   (kept in the `CurrentScreen` resource), so **Record** and **New: current
   state** write `setup: App(Lists)` and the file loads back. What was done to
@@ -193,6 +196,7 @@ of them (`just example gallery -- --run-all stack link`).
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
 | `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, and the tests of `WidgetsCheck` |
 | `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
+| `tests/recorded_scenarios_gpu.rs` | needs `--features record` and a GPU, and is `#[ignore]`d: records every `tests/ron/` file offscreen, see [Recording the scenarios](#recording-the-scenarios) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
 | `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per widget, each modelled on its example |
 | `tests/widgets_check/mod.rs` | `WidgetsCheck`, the checks about widget state the tester's built-in ones cannot say (`Selected`) |
@@ -333,6 +337,7 @@ of it. You need `just` and, for `unused-deps`, `cargo-machete`.
 | Test | `just test` | `cargo test --all-targets` then `cargo test --doc` |
 | Run an example | `just example NAME` | `cargo run --example NAME` |
 | Play every scenario in a real window | `just gallery-test` | `cargo run --example gallery -- --run-all` |
+| Record the scenarios | `just record` | `cargo test --test recorded_scenarios_gpu --features record -- --include-ignored`; needs a GPU, see [Recording the scenarios](#recording-the-scenarios) |
 | All of CI | `just ci` | lint, test, `cargo machete --with-metadata` |
 
 **The first build is slow.** Bevy takes many minutes to compile from cold;
@@ -629,6 +634,36 @@ a file can check any `Reflect` type of the app by short type path.
   a label with `TextColor.0` of `Text("..")`. Read a widget the pointer is not
   on: "Change theme" stays hovered after its click, and a hovered item has
   hover colours.
+
+### Recording the scenarios
+
+`just record` plays every file of `tests/ron/` in the tester's offscreen
+recorder (`Recorder`, feature `record`, which this crate's `record` feature
+turns on) and writes to `target/recordings/` (`RECORD_DIR` overrides it): per
+scenario PNGs at the step boundaries and every tenth frame, `filmstrip.png`,
+`scenario.gif` and `trace.html`, and one `index.html` with the failures first.
+Open the index and look; no picture is compared with a golden one. It needs a
+GPU, or lavapipe (`mesa-vulkan-drivers libvulkan1` and `WGPU_BACKEND=vulkan`),
+so the test is `#[ignore]`d, its target needs the `record` feature, and
+`just test` and `just ci` never build it; lint it with `cargo clippy --test
+recorded_scenarios_gpu --features record`.
+
+- **A drawn recording is not the headless one.** The recorder's cameras render
+  to an `Image`, and Bevy computes `RelativeCursorPosition` only for cameras
+  that render to a window, so widgets that read it (combos, palette combos,
+  hover colours in lists and palettes) misbehave in a recording (#100). The
+  scenarios that fail only there are listed in `FAILS_WHEN_RECORDED` in the test,
+  with their issues; the test fails for any other scenario, and also when a
+  listed one passes, so remove a name when its issue is fixed. One of them
+  (#103: the `Tabs` screen's Card demo palettes never appear in the recording)
+  is unexplained and may share a cause with #100.
+- **The overlay's roots.** The recorder's `CursorOverlayPlugin` spawns root
+  `Node`s without a `UiTargetCamera`, so `UiRoot` counts them and logs its
+  one-root `error!` (#101; the recorder adds no `LogPlugin`, so it is not
+  shown). They are `Pickable::IGNORE`, so nothing breaks.
+- **CI.** The `record` job of `ci.yml` runs `just record` on lavapipe and uploads
+  `target/recordings` as the `recordings` workflow artifact. It is not part of
+  `just ci`, and it was written without being run on GitHub.
 
 ## Before you call it done
 

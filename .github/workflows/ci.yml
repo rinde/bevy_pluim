@@ -104,3 +104,39 @@ jobs:
           toolchain: ${{ steps.toolchain.outputs.version }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-targets --locked
+
+  # Renders every scenario of tests/ron offscreen on a software GPU (lavapipe)
+  # and keeps the recordings. Not part of `just ci`, and it has not been run on
+  # GitHub yet: see AGENTS.md.
+  record:
+    name: Record scenarios
+    runs-on: ubuntu-latest
+    env:
+      WGPU_BACKEND: vulkan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/private-deps
+        with:
+          token: ${{ secrets.TESTER_REPO_TOKEN }}
+      - name: Install system dependencies and software Vulkan (lavapipe)
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev \
+            mesa-vulkan-drivers libvulkan1
+      - uses: taiki-e/install-action@just
+      - name: Read pinned Rust toolchain version
+        id: toolchain
+        run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      - run: just record
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recordings
+          path: target/recordings
+          if-no-files-found: warn
+          retention-days: 14

@@ -76,6 +76,14 @@ bevy-lint:
         --tag lint-{{BEVY_LINT_VERSION}} --locked bevy_lint
     bevy_lint --all-targets
 
+# Record every scenario of tests/ron offscreen for review: PNGs, a filmstrip and
+# a GIF per scenario, a trace.html, and an index.html with the failures first,
+# in target/recordings (RECORD_DIR overrides it). Needs a GPU, or lavapipe with
+# WGPU_BACKEND=vulkan; not part of `just ci`.
+record:
+    cargo test --quiet --test recorded_scenarios_gpu --features record -- --include-ignored --nocapture
+    @echo "open target/recordings/index.html"
+
 # Everything CI would run.
 ci: lint test unused-deps
 
