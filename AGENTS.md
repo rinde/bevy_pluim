@@ -483,6 +483,19 @@ a file can check any `Reflect` type of the app by short type path.
   value with `TextOf(Name("u16 stepper"), Exact("- 11 +"))` (the "-", value
   and "+" labels). Move the pointer to the button before every click: a wider
   value moves the buttons.
+- **The `Lists` screen** names every list after its selection so a file can
+  reach it: `one-or-more list` and `one-or-more grid list` (one shared
+  `Selection::reference`), `one list` (own items), `zero-or-one list` and
+  `zero-or-more list` (own selections over the shared items, `ItemsRef`),
+  `zero-or-more grid list` (own items), and `scrolling list` (twelve rows
+  inside the `list scroll area`, 100 pixels high). "Add country" spawns the
+  next of Suriname, Chile and Kenya into the shared items. A file reaches an
+  item with `Within(Name("one list"), Role(role: Button, label: "CA"))`
+  (an `ItemView` is a `Button`; target it, not its text, which the pointer
+  passes through). `lists_screen_fits_window` keeps all of it inside the
+  window. A list does not scroll itself: the wheel moves the `ScrollContents`
+  of the area around it, read as `ComputedNode.scroll_position` (the
+  `ScrollPosition` component is never clamped).
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the

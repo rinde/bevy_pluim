@@ -1,0 +1,26 @@
+// A list over a `One` selection always has exactly one item selected: clicking
+// another item replaces the selection, and clicking the selected one changes
+// nothing. The "one list" starts on its first item. The pointer moves to an
+// item before every click because the items sit side by side.
+(
+    format_version: 3,
+    name: "clicking an item of a list over One replaces the selection",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("one list"), items: ["NL"]))),
+        MoveTo(Within(Name("one list"), Role(role: Button, label: "CA"))), Click(Left),
+        Check(App(Selected(of: Name("one list"), items: ["CA"]))),
+        // The selected item cannot be deselected.
+        Click(Left),
+        Check(App(Selected(of: Name("one list"), items: ["CA"]))),
+        MoveTo(Within(Name("one list"), Role(role: Button, label: "BE"))), Click(Left),
+        Check(App(Selected(of: Name("one list"), items: ["BE"]))),
+        MoveTo(Within(Name("one list"), Role(role: Button, label: "NL"))), Click(Left),
+        Check(App(Selected(of: Name("one list"), items: ["NL"]))),
+        // The other lists have selections of their own.
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
+        Check(App(Selected(of: Name("zero-or-one list"), items: []))),
+    ],
+    expect: [App(Selected(of: Name("one list"), items: ["NL"]))],
+)

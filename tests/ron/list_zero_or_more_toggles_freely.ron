@@ -1,0 +1,30 @@
+// A list over a `ZeroOrMore` selection starts with nothing selected and lets
+// every item be toggled on and off, so it can end up empty again. It is the
+// "zero-or-more list", which draws from the items of the "one-or-more list"
+// but keeps its selection to itself.
+(
+    format_version: 3,
+    name: "items of a list over ZeroOrMore toggle freely",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("zero-or-more list"), items: []))),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Canada"))), Click(Left),
+        Check(App(Selected(of: Name("zero-or-more list"), items: ["Canada"]))),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Portugal"))), Click(Left),
+        Check(App(Selected(of: Name("zero-or-more list"), items: ["Canada", "Portugal"]))),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Canada"))), Click(Left),
+        Check(App(Selected(of: Name("zero-or-more list"), items: ["Portugal"]))),
+        // The last one can go too.
+        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Portugal"))), Click(Left),
+        Check(App(Selected(of: Name("zero-or-more list"), items: []))),
+        // Toggling the other ZeroOrMore list, a grid with items of its own.
+        MoveTo(Within(Name("zero-or-more grid list"), Role(role: Button, label: "Belgium"))), Click(Left),
+        Check(App(Selected(of: Name("zero-or-more grid list"), items: ["Belgium"]))),
+        Click(Left),
+        Check(App(Selected(of: Name("zero-or-more grid list"), items: []))),
+        // The lists drawing from the same items are not affected.
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
+    ],
+    expect: [App(Selected(of: Name("zero-or-more list"), items: []))],
+)

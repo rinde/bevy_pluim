@@ -1,0 +1,20 @@
+// The Lists screen fits the default 1280 by 720 window: the tester only moves
+// the pointer to a widget that is inside the window, so every list and button
+// the other scenarios click can be reached.
+(
+    format_version: 3,
+    name: "every list and button of the lists screen is inside the window",
+    setup: App(Lists),
+    steps: [
+        MoveTo(Name("one-or-more list")),
+        MoveTo(Name("one list")),
+        MoveTo(Name("one-or-more grid list")),
+        MoveTo(Name("zero-or-one list")),
+        MoveTo(Name("zero-or-more list")),
+        MoveTo(Name("zero-or-more grid list")),
+        MoveTo(Name("list scroll area")),
+        MoveTo(Role(role: Button, label: "Add country")),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)

@@ -32,7 +32,9 @@ use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::select::{Item, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue};
+use rin_bevy_ui::select::{
+    Item, ItemOf, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue,
+};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::theme::Theme;
@@ -50,8 +52,13 @@ pub enum WidgetsSetup {
     /// Three combos over one list of countries, two of them sharing one
     /// selection, and "Change theme".
     Combos,
-    /// Lists in several layouts and corner styles, some sharing a selection,
-    /// and "Change theme".
+    /// Lists in several layouts and corner styles, one per kind of selection
+    /// (`one list`, `zero-or-one list`, `zero-or-more list`,
+    /// `zero-or-more grid list` and the `one-or-more list` that the
+    /// `one-or-more grid list` shares its selection with, while the
+    /// `zero-or-one list` and `zero-or-more list` choose from the same items),
+    /// a `scrolling list` taller than its `list scroll area`, "Add country",
+    /// which adds a country to the shared items, and "Change theme".
     Lists,
     /// Scroll areas scrolling vertically, horizontally and both, and "Change
     /// theme".
@@ -166,6 +173,13 @@ fn combos(world: &mut World) {
     });
 }
 
+/// The countries the "Add country" button of the [`WidgetsSetup::Lists`]
+/// screen adds, one per click, in this order and then again.
+const MORE_COUNTRIES: [&str; 3] = ["Suriname", "Chile", "Kenya"];
+
+/// The rows of the list in a scroll area on the [`WidgetsSetup::Lists`] screen.
+const SCROLLING_LIST_ROWS: usize = 12;
+
 fn lists(world: &mut World) {
     let root = row_root(world);
     let selection_ref = world
@@ -176,8 +190,13 @@ fn lists(world: &mut World) {
         )
         .id();
     world.entity_mut(root).with_children(|root| {
-        root.spawn((List, Selection::reference(selection_ref)));
         root.spawn((
+            Name::new("one-or-more list"),
+            List,
+            Selection::reference(selection_ref),
+        ));
+        root.spawn((
+            Name::new("one list"),
             List,
             ListLayout::Horizontal,
             Selection::builder()
@@ -185,11 +204,13 @@ fn lists(world: &mut World) {
                 .build_with_items(["NL", "CA", "ID", "PT", "BE"].map(Item::new)),
         ));
         root.spawn((
+            Name::new("one-or-more grid list"),
             List,
             ListLayout::VerticalGrid { columns: 3 },
             Selection::reference(selection_ref),
         ));
         root.spawn((
+            Name::new("zero-or-one list"),
             List,
             CornerStyle::Tabs,
             Selection::builder()
@@ -197,6 +218,7 @@ fn lists(world: &mut World) {
                 .build_with_items_ref(selection_ref),
         ));
         root.spawn((
+            Name::new("zero-or-more list"),
             List,
             ListLayout::Horizontal,
             CornerStyle::Tabs,
@@ -205,6 +227,7 @@ fn lists(world: &mut World) {
                 .build_with_items_ref(selection_ref),
         ));
         root.spawn((
+            Name::new("zero-or-more grid list"),
             List,
             ListLayout::VerticalGrid { columns: 3 },
             CornerStyle::Tabs,
@@ -212,6 +235,39 @@ fn lists(world: &mut World) {
                 .zero_or_more()
                 .build_with_items(countries()),
         ));
+        // A list taller than its scroll area, which the wheel scrolls: the
+        // list itself does not scroll, the area around it does.
+        root.spawn((
+            Name::new("list scroll area"),
+            Node {
+                width: px(200),
+                height: px(100),
+                ..default()
+            },
+            ScrollArea::bundle(
+                |parent: &mut ChildSpawner| {
+                    parent.spawn((
+                        Name::new("scrolling list"),
+                        List,
+                        Selection::builder().one().build_with_items(
+                            (1..=SCROLLING_LIST_ROWS).map(|row| Item::new(format!("Row {row}"))),
+                        ),
+                    ));
+                },
+                true,
+                false,
+            ),
+        ));
+        root.spawn(PushButton::from_label("Add country")).observe(
+            move |_: On<Pointer<Click>>, mut commands: Commands, mut added: Local<usize>| {
+                let Some(country) = MORE_COUNTRIES.get(*added % MORE_COUNTRIES.len()) else {
+                    return;
+                };
+                *added += 1;
+                // The lists drawing from the shared items show it.
+                commands.spawn((Item::new(*country), ItemOf(selection_ref)));
+            },
+        );
         spawn_theme_button(root);
     });
 }

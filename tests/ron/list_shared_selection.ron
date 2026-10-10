@@ -1,0 +1,45 @@
+// The "one-or-more list" and the "one-or-more grid list" hold
+// `Selection::reference` to one selection, so they stay in step: a click in
+// either selects the item in both, in the same order, and the item views of
+// both show it as selected. The lists that only draw from the same items do not
+// follow.
+(
+    format_version: 3,
+    name: "two lists sharing one selection stay in step",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
+        Check(App(Selected(of: Name("one-or-more grid list"), items: ["Netherlands"]))),
+        // A click in the grid ...
+        MoveTo(Within(Name("one-or-more grid list"), Role(role: Button, label: "Portugal"))), Click(Left),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Portugal"]))),
+        Check(App(Selected(of: Name("one-or-more grid list"), items: ["Netherlands", "Portugal"]))),
+        // ... shows in the list: the item view is selected there too.
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Check(Component(
+            target: Within(Name("one-or-more list"), Role(role: Button, label: "Portugal")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
+        )),
+        // A click in the list ...
+        MoveTo(Within(Name("one-or-more list"), Role(role: Button, label: "Netherlands"))), Click(Left),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Portugal"]))),
+        Check(App(Selected(of: Name("one-or-more grid list"), items: ["Portugal"]))),
+        // ... shows in the grid: Netherlands is no longer selected there.
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Check(Component(
+            target: Within(Name("one-or-more grid list"), Role(role: Button, label: "Netherlands")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        // Lists with a selection of their own do not follow.
+        Check(App(Selected(of: Name("zero-or-one list"), items: []))),
+        Check(App(Selected(of: Name("zero-or-more list"), items: []))),
+        Check(App(Selected(of: Name("one list"), items: ["NL"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("one-or-more list"), items: ["Portugal"])),
+        App(Selected(of: Name("one-or-more grid list"), items: ["Portugal"])),
+    ],
+)
