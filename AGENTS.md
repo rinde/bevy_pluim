@@ -198,17 +198,23 @@ Every example has a button that toggles the light and dark theme, and sets
 - **A scroll area's scroll position is `ComputedNode::scroll_position`.** The
   `ScrollPosition` component is not clamped (the wheel adds to it past either
   end); the layout clamps to what overflows into `ComputedNode`, which is what
-  is on screen. Read that in a scenario (`ComputedNode.scroll_position.y`), and
-  start a drag of the thumb from it, as `handle_thumb_drag` does.
+  is on screen. Read that in a scenario (`ComputedNode.scroll_position.y`). It
+  is floored and only refreshed by the next layout pass, so
+  `handle_thumb_drag` starts each drag event from the current `ScrollPosition`
+  (clamped to what overflows) instead: a frame can hold several drag events,
+  and each must add to the last.
 
 ## Conventions
 
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Two places still
-  observe `Pointer<Released>` directly (the crumbs in `breadcrumbs.rs` and the
-  buttons in `numeric_stepper.rs`); do not add more. `MouseEvent` has no drag,
-  so the scroll thumb observes `Pointer<Drag>`.
+- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Three places still
+  observe a raw `Pointer<…>`: the crumbs in `breadcrumbs.rs` and the buttons in
+  `numeric_stepper.rs` (`Pointer<Released>`), and the scroll thumb in
+  `scroll_area.rs` (`Pointer<Drag>`); do not add more. The thumb is there
+  because `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so
+  `MouseEvent` cannot carry a drag; a `MouseKind::Drag` would let it move
+  over.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for

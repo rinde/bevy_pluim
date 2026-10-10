@@ -206,10 +206,14 @@ fn handle_thumb_drag(
     if max_scroll_offset < f32::EPSILON || track_length < f32::EPSILON {
         return;
     }
-    // Start from where the layout shows the contents, not from the raw
-    // `ScrollPosition`, which the wheel can leave past either end.
-    let shown = contents_dims.scroll_position[index] * contents_dims.inverse_scale_factor();
-    scroll_position.0[index] = (shown + drag.delta[index] * max_scroll_offset / track_length)
+    // Start from the current `ScrollPosition`, not from where the layout last
+    // showed the contents (`ComputedNode::scroll_position`): that is floored
+    // and only refreshed by the next layout pass, so the several drags a
+    // frame can hold would each start from the same value and only the last
+    // would count. The wheel can leave `ScrollPosition` past either end, so
+    // clamp it first.
+    let start = scroll_position.0[index].clamp(0.0, max_scroll_offset);
+    scroll_position.0[index] = (start + drag.delta[index] * max_scroll_offset / track_length)
         .clamp(0.0, max_scroll_offset);
 }
 
