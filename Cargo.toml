@@ -7,6 +7,11 @@ repository = "https://github.com/rinde/rin-bevy-ui"
 # Private software: never publish to a registry.
 publish = false
 
+[features]
+# Records the scenarios in tests/ron offscreen for review (`just record`). Only
+# the `recorded_scenarios_gpu` test target uses it, and it needs a GPU.
+record = ["rin_bevy_ui_tester/record"]
+
 [dependencies]
 bevy = "0.19.1"
 derive_more = { version = "2.0.1", features = ["deref"] }
@@ -29,6 +34,12 @@ rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev 
 [[test]]
 name = "ron_scenarios"
 harness = false
+
+# Renders every scenario of tests/ron offscreen. Needs a (software) GPU, so it
+# is only built with the `record` feature, and its test is `#[ignore]`d.
+[[test]]
+name = "recorded_scenarios_gpu"
+required-features = ["record"]
 
 [lints.rust]
 macro_use_extern_crate = "warn"
