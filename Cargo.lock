@@ -4874,6 +4874,8 @@ version = "0.1.0"
 source = "git+https://github.com/rinde/rin-bevy-ui-tester?rev=a3366c452281a646aa172d98a95b96f5e95804ff#a3366c452281a646aa172d98a95b96f5e95804ff"
 dependencies = [
  "bevy",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
  "ron",
  "serde",
 ]

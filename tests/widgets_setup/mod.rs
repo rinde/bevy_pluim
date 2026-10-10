@@ -16,6 +16,8 @@
     reason = "`pub` is the only visibility clippy accepts in a private test module"
 )]
 
+use std::path::Path;
+
 use bevy::color::palettes::tailwind::{
     AMBER_600, BLUE_600, CYAN_600, EMERALD_600, FUCHSIA_600, GREEN_600, INDIGO_600, LIME_600,
     ORANGE_600, PINK_600, PURPLE_600, ROSE_600, SKY_600, YELLOW_600,
@@ -94,6 +96,7 @@ pub enum WidgetsSetup {
 
 impl AppSetup for WidgetsSetup {
     fn build(&self, world: &mut World) -> Result<(), String> {
+        world.insert_resource(CurrentScreen(*self));
         match self {
             Self::Buttons => buttons(world),
             Self::Combos => combos(world),
@@ -107,7 +110,20 @@ impl AppSetup for WidgetsSetup {
         }
         Ok(())
     }
+
+    /// The screen the app was last built from, so a recording started from the
+    /// app as it is loads back as that screen. What was done to it since (a
+    /// selection, an open combo) is not captured: a script starts from the
+    /// screen as built.
+    fn capture(world: &mut World, _dir: &Path, _stem: &str) -> Result<Option<Self>, String> {
+        Ok(world.get_resource::<CurrentScreen>().map(|screen| screen.0))
+    }
 }
+
+/// The [`WidgetsSetup`] that built the screen now on show, kept by
+/// [`WidgetsSetup::build`] for [`AppSetup::capture`].
+#[derive(Resource, Debug, Clone, Copy)]
+pub struct CurrentScreen(pub WidgetsSetup);
 
 /// How many times the "Add" button of the [`WidgetsSetup::Buttons`] screen
 /// was clicked.

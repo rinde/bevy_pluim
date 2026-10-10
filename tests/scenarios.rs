@@ -9,6 +9,8 @@ mod widgets_setup;
 
 use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
 use bevy::ecs::system::RunSystemOnce;
+use std::path::Path;
+
 use bevy::prelude::*;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -18,7 +20,7 @@ use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui_tester::{
-    AppCheck, Check, CheckResult, NoiseFilter, Probe, Scenario, ScenarioReport, Step,
+    AppCheck, AppSetup, Check, CheckResult, NoiseFilter, Probe, Scenario, ScenarioReport, Step,
     SyntheticInput, Target, WidgetRole, WorldSnapshot, resolve, suggest_checks,
 };
 
@@ -103,6 +105,24 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
             .steps([Step::wait(2), Step::check(Check::shows("Change theme"))]);
         let report = play(&scenario);
         assert!(report.passed(), "{screen:?}: {:#?}", report.failures());
+    }
+}
+
+#[test]
+fn a_widgets_setup_captures_as_the_screen_it_built() {
+    // What a recording started from the app as it is writes as its setup: the
+    // screen the app was last built from, and nothing before one was built.
+    let mut world = World::new();
+    assert_eq!(
+        WidgetsSetup::capture(&mut world, Path::new("."), "x"),
+        Ok(None)
+    );
+    for screen in [WidgetsSetup::Lists, WidgetsSetup::Themed] {
+        screen.build(&mut world).unwrap();
+        assert_eq!(
+            WidgetsSetup::capture(&mut world, Path::new("."), "x"),
+            Ok(Some(screen))
+        );
     }
 }
 
