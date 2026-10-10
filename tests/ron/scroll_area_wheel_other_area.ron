@@ -1,0 +1,36 @@
+// The wheel scrolls the scroll area under the pointer and no other: after
+// scrolling the vertical area, the other three still show their top left.
+// The scroll position read is the one the layout settles on
+// (ComputedNode.scroll_position), clamped to what overflows; the ScrollPosition
+// component itself takes whatever the wheel adds.
+(
+    format_version: 3,
+    name: "the wheel over one scroll area does not scroll another",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("vertical scroll area")),
+        Wheel(x: -30.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(100.0),
+        )),
+        Check(Component(
+            target: Within(Name("two-way scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position",
+            is: Eq((0.0, 0.0)),
+        )),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position",
+            is: Eq((0.0, 0.0)),
+        )),
+        Check(Component(
+            target: Within(Name("fitting scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position",
+            is: Eq((0.0, 0.0)),
+        )),
+    ],
+    expect: [],
+)

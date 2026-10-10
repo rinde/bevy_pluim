@@ -122,7 +122,7 @@ checkout's build so Bevy is not compiled again.
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click |
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
-| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb |
+| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged (the wheel is handled by `list.rs`'s `update_scroll_position`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle`: renders the items of its `Selection` as `ItemView`s and keeps them in sync |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup |
@@ -193,14 +193,28 @@ Every example has a button that toggles the light and dark theme, and sets
   (Bevy 0.19) reports no overflow for a grid whose items overflow it, so a
   `List` or palette stretched to the area's height would leave nothing to
   scroll. For the same reason, don't give scroll contents `height: 100%`.
+  The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
+  wheel and thumb scenarios fail.
+- **A scroll area's scroll position is `ComputedNode::scroll_position`.** The
+  `ScrollPosition` component is not clamped (the wheel adds to it past either
+  end); the layout clamps to what overflows into `ComputedNode`, which is what
+  is on screen. Read that in a scenario (`ComputedNode.scroll_position.y`). It
+  is floored and only refreshed by the next layout pass, so
+  `handle_thumb_drag` starts each drag event from the current `ScrollPosition`
+  (clamped to what overflows) instead: a frame can hold several drag events,
+  and each must add to the last.
 
 ## Conventions
 
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Two places still
-  observe `Pointer<Released>` directly (the crumbs in `breadcrumbs.rs` and the
-  buttons in `numeric_stepper.rs`); do not add more.
+- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Three places still
+  observe a raw `Pointer<…>`: the crumbs in `breadcrumbs.rs` and the buttons in
+  `numeric_stepper.rs` (`Pointer<Released>`), and the scroll thumb in
+  `scroll_area.rs` (`Pointer<Drag>`); do not add more. The thumb is there
+  because `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so
+  `MouseEvent` cannot carry a drag; a `MouseKind::Drag` would let it move
+  over.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for
@@ -494,8 +508,20 @@ a file can check any `Reflect` type of the app by short type path.
   (an `ItemView` is a `Button`; target it, not its text, which the pointer
   passes through). `lists_screen_fits_window` keeps all of it inside the
   window. A list does not scroll itself: the wheel moves the `ScrollContents`
-  of the area around it, read as `ComputedNode.scroll_position` (the
-  `ScrollPosition` component is never clamped).
+  of the area around it; read where it scrolled to as the scroll area's
+  position above describes.
+- **Targets on the `ScrollAreas` screen.** Four 200 by 200 areas side by side
+  (they and "Change theme" fit the default 1280 by 720 window, which every
+  scenario runs in), each with a `Name`: `two-way scroll area`, `vertical
+  scroll area`, `horizontal scroll area` and `fitting scroll area` (three
+  squares that never overflow). `MoveTo(Name("vertical scroll area"))` puts
+  the pointer over the squares, so `Wheel(x: 0.0, y: -100.0)` scrolls it down
+  (a positive wheel y scrolls up). Reach contents with `Within(Name(".."),
+  Component("ScrollContents"))` and a thumb with `Within(Name(".."),
+  Name("ScrollThumb"))` (`Nth(0, ..)` is the vertical bar's, `Nth(1, ..)` the
+  horizontal one's in the two-way area). A horizontal-only area has no
+  usable horizontal bar (it ends up 0 wide at the top of the area, a layout
+  bug this does not fix), so scroll it with the wheel.
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the

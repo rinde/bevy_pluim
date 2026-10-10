@@ -1,0 +1,26 @@
+// The wheel over the two-way scroll area scrolls its contents along both
+// axes at once.
+// The scroll position read is the one the layout settles on
+// (ComputedNode.scroll_position), clamped to what overflows; the ScrollPosition
+// component itself takes whatever the wheel adds.
+(
+    format_version: 3,
+    name: "the wheel scrolls a two-way scroll area along both axes",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("two-way scroll area")),
+        Wheel(x: -80.0, y: -150.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("two-way scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Eq(80.0),
+        )),
+        Check(Component(
+            target: Within(Name("two-way scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(150.0),
+        )),
+    ],
+    expect: [],
+)

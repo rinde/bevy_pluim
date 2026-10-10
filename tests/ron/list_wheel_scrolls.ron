@@ -28,13 +28,13 @@
             is: Eq(40.0),
         )),
         // Further down, to the end of the rows, however far the wheel turns: the
-        // ScrollPosition component goes to 2040, the layout stops at the overflow.
+        // ScrollPosition component goes to 2040, the layout stops at the overflow, 298.
         Wheel(x: 0.0, y: -2000.0),
         Wait(2),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
             path: "ComputedNode.scroll_position.y",
-            is: Between(250.0, 350.0),
+            is: Eq(298.0),
         )),
         // Back up, to the first row.
         Wheel(x: 0.0, y: 5000.0),

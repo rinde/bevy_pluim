@@ -1,0 +1,48 @@
+// Dragging the thumb of the vertical scroll area scrolls its contents by the
+// share of what overflows that the thumb travelled of its track: partway down,
+// to the end, which stops at the last of the contents however far the pointer
+// goes, and back to the top. The scroll position that counts is the one the
+// layout settles on (ComputedNode.scroll_position).
+(
+    format_version: 3,
+    name: "dragging the thumb scrolls the contents",
+    setup: App(ScrollAreas),
+    steps: [
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(0.0),
+        )),
+        Drag(
+            from: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            to: Screen((436.0, 140.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Between(100.0, 200.0),
+        )),
+        Drag(
+            from: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            to: Screen((436.0, 400.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(214.0),
+        )),
+        Drag(
+            from: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            to: Screen((436.0, 0.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(0.0),
+        )),
+    ],
+    expect: [],
+)
