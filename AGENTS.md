@@ -451,6 +451,15 @@ a file can check any `Reflect` type of the app by short type path.
   (recording a session from the app as it is) is not implemented: only the
   tester's gallery and recorder call it, which these tests do not run, so it
   would go untested.
+- **Targets on a screen with several of one widget.** The `NumericStepper`
+  screen puts a `Name` on every stepper (`default stepper`, `u16 stepper`,
+  `u32 stepper`, `f32 stepper`, `stepper by two`, and `shared stepper` with
+  the `first mirror stepper` and `second mirror stepper` that point to it
+  through `ValueRef`), so a file reaches one stepper's button with
+  `Within(Name("u16 stepper"), Role(role: Button, label: "+"))` and reads its
+  value with `TextOf(Name("u16 stepper"), Exact("- 11 +"))` (the "-", value
+  and "+" labels). Move the pointer to the button before every click: a wider
+  value moves the buttons.
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the

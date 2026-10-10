@@ -1,0 +1,42 @@
+// Each stepper of the NumericStepper screen moves by its own step: 1 for the
+// default, u16 and u32 steppers, 0.5 for the f32 one and 2 for the u8 one. The
+// shown text is the stepper's "-", value and "+" labels, read with TextOf. The
+// pointer moves to the button before every click because a wider value moves
+// the buttons.
+(
+    format_version: 3,
+    name: "clicking plus and minus moves a numeric stepper by its step",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("- 1 +"))),
+        MoveTo(Within(Name("default stepper"), Role(role: Button, label: "+"))), Click(Left),
+        Check(TextOf(Name("default stepper"), Exact("- 2 +"))),
+        MoveTo(Within(Name("default stepper"), Role(role: Button, label: "+"))), Click(Left),
+        Check(TextOf(Name("default stepper"), Exact("- 3 +"))),
+        MoveTo(Within(Name("default stepper"), Role(role: Button, label: "-"))), Click(Left),
+        Check(TextOf(Name("default stepper"), Exact("- 2 +"))),
+        Check(TextOf(Name("u16 stepper"), Exact("- 10 +"))),
+        MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "+"))), Click(Left),
+        Check(TextOf(Name("u16 stepper"), Exact("- 11 +"))),
+        MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "-"))), Click(Left),
+        Check(TextOf(Name("u16 stepper"), Exact("- 9 +"))),
+        Check(TextOf(Name("u32 stepper"), Exact("- 10 +"))),
+        MoveTo(Within(Name("u32 stepper"), Role(role: Button, label: "+"))), Click(Left),
+        Check(TextOf(Name("u32 stepper"), Exact("- 11 +"))),
+        Check(TextOf(Name("f32 stepper"), Exact("- 10.0 +"))),
+        MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Click(Left),
+        Check(TextOf(Name("f32 stepper"), Exact("- 10.5 +"))),
+        MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "-"))), Click(Left),
+        Check(TextOf(Name("f32 stepper"), Exact("- 9.0 +"))),
+        Check(TextOf(Name("stepper by two"), Exact("- 5 +"))),
+        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "+"))), Click(Left),
+        Check(TextOf(Name("stepper by two"), Exact("- 7 +"))),
+        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Click(Left),
+        Check(TextOf(Name("stepper by two"), Exact("- 3 +"))),
+    ],
+    expect: [TextOf(Name("default stepper"), Exact("- 2 +"))],
+)

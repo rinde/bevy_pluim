@@ -29,7 +29,7 @@ use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::select::{Item, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue};
@@ -64,7 +64,11 @@ pub enum WidgetsSetup {
     /// Colour palettes and palette combos over the Tailwind colours, and
     /// "Change theme".
     ColorPalette,
-    /// Numeric steppers of several types, and "Change theme".
+    /// Numeric steppers, each named after its type or role (`default
+    /// stepper`, `u16 stepper`, `u32 stepper`, `f32 stepper`, `stepper by
+    /// two`), three of them showing one value (`shared stepper` holds it,
+    /// `first mirror stepper` and `second mirror stepper` point to it), and
+    /// "Change theme".
     NumericStepper,
 }
 
@@ -727,10 +731,48 @@ fn color_palette(world: &mut World) {
 fn numeric_stepper(world: &mut World) {
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
-        root.spawn(NumericStepper);
-        root.spawn((NumericStepper, Value::new_u16(10, 5, 15, 1)));
-        root.spawn((NumericStepper, Value::new_u32(10, 5, 15, 1)));
-        root.spawn((NumericStepper, Value::new_f32(10.0, 5.0, 15.0, 0.5)));
+        root.spawn((NumericStepper, Name::new("default stepper")));
+        root.spawn((
+            NumericStepper,
+            Value::new_u16(10, 5, 15, 1),
+            Name::new("u16 stepper"),
+        ));
+        root.spawn((
+            NumericStepper,
+            Value::new_u32(10, 5, 15, 1),
+            Name::new("u32 stepper"),
+        ));
+        root.spawn((
+            NumericStepper,
+            Value::new_f32(10.0, 5.0, 15.0, 0.5),
+            Name::new("f32 stepper"),
+        ));
+        // A step that does not divide the range: from 7 one more step would
+        // pass the maximum of 8, and from 1 one fewer the minimum of 0.
+        root.spawn((
+            NumericStepper,
+            Value::new_u8(5, 0, 8, 2),
+            Name::new("stepper by two"),
+        ));
+        // One value shown by three steppers: the first holds it, the other two
+        // point to it through `ValueRef`.
+        let shared = root
+            .spawn((
+                NumericStepper,
+                Value::new_u32(3, 0, 6, 1),
+                Name::new("shared stepper"),
+            ))
+            .id();
+        root.spawn((
+            NumericStepper,
+            ValueRef(shared),
+            Name::new("first mirror stepper"),
+        ));
+        root.spawn((
+            NumericStepper,
+            ValueRef(shared),
+            Name::new("second mirror stepper"),
+        ));
         spawn_theme_button(root);
     });
 }
