@@ -95,6 +95,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Tabs,
         WidgetsSetup::ColorPalette,
         WidgetsSetup::NumericStepper,
+        WidgetsSetup::Themed,
     ];
     for screen in screens {
         let scenario = Scenario::new(format!("{screen:?}"))

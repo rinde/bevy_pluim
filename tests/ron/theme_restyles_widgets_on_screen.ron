@@ -1,0 +1,238 @@
+// Widgets that are already on screen restyle when the theme changes: each
+// widget's theme_* system runs when the Theme resource does. A PushButton, a
+// Card and a List, which has the first item selected, are read in the light
+// theme, in the dark one after "Change theme", and in the light theme again
+// after a second click, which restores every colour. The slots read are
+// background_primary, border, text_primary, selected_item, border_highlight,
+// small_shadow and large_shadow of DEFAULT_LIGHT_THEME_COLORS (Tailwind
+// gray-50, gray-200, gray-900, blue-500, blue-400) and of
+// DEFAULT_DARK_THEME_COLORS (gray-950, gray-700, gray-100, blue-800, blue-800).
+// The pointer rests on "Change theme", which is none of the widgets read, so
+// no hover colour shows.
+(
+    format_version: 3,
+    name: "widgets on screen restyle when the theme is toggled",
+    setup: App(Themed),
+    steps: [
+        Wait(2),
+        // The light theme.
+        Check(Component(
+            target: Name("themed button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Text("Other"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BoxShadow.0[0].color",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.05))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BoxShadow.0[0].color",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.15))),
+        )),
+        Check(Component(
+            target: Text("A card"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed list"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed list"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "One")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "One")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "Two")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "Two")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        // The dark theme: every widget has restyled.
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.21568628,green:0.25490198,blue:0.31764707,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Text("Other"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.9529412,green:0.95686275,blue:0.9647059,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BoxShadow.0[0].color",
+            is: Eq(Srgba((red:1.0,green:1.0,blue:1.0,alpha:0.03))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.21568628,green:0.25490198,blue:0.31764707,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BoxShadow.0[0].color",
+            is: Eq(Srgba((red:1.0,green:1.0,blue:1.0,alpha:0.05))),
+        )),
+        Check(Component(
+            target: Text("A card"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.9529412,green:0.95686275,blue:0.9647059,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed list"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed list"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.21568628,green:0.25490198,blue:0.31764707,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "One")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.11764706,green:0.2509804,blue:0.6862745,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "One")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.11764706,green:0.2509804,blue:0.6862745,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "Two")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "Two")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.21568628,green:0.25490198,blue:0.31764707,alpha:1.0))),
+        )),
+        // The light theme again.
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Text("Other"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BoxShadow.0[0].color",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.05))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed card"),
+            path: "BoxShadow.0[0].color",
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.15))),
+        )),
+        Check(Component(
+            target: Text("A card"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed list"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed list"),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "One")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "One")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "Two")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("themed list"), Role(role: Button, label: "Two")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+    ],
+    expect: [],
+)

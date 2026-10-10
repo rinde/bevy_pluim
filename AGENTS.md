@@ -458,7 +458,7 @@ a file can check any `Reflect` type of the app by short type path.
   `to_ron()`.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
-  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`),
+  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Themed`),
   which spawns a `Camera2d`, the one root `Node` and a screen of the widget it is
   named after, following the example of that name (the `NumericStepper` one adds
   steppers the example lacks), each with a "Change theme" button. A variant is
@@ -578,6 +578,18 @@ a file can check any `Reflect` type of the app by short type path.
   Component("ItemView")))`; the combo's state is `Component(target:
   Name("first palette combo"), path: "State", is: Eq(Open))` and the popup's
   position the `UiGlobalTransform.0.translation` (the centre) of the float.
+- **The `Themed` screen and the theme scenarios.** One of each widget that
+  follows the theme in a row: `themed button` (a `PushButton` "Other"),
+  `themed card`, `themed list` (`One`, `Two`, `Three`, the first selected) and
+  "Change theme". The theme scenarios start here because it is the only screen
+  with a `Card`. `Theme.colors` is checked whole with
+  `Resource(path: "Theme.colors", is: Eq((background_primary: Srgba(..), ..)))`
+  (build the scenario in Rust and print `to_ron()` for the numbers),
+  `ClearColor` with `Resource(path: "ClearColor.0", ..)`, a shadow with
+  `Component(target: .., path: "BoxShadow.0[0].color", ..)` and the colour of
+  a label with `TextColor.0` of `Text("..")`. Read a widget the pointer is not
+  on: "Change theme" stays hovered after its click, and a hovered item has
+  hover colours.
 
 ## Before you call it done
 

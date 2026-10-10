@@ -1,0 +1,21 @@
+// ClearColor, the colour of the window behind the UI, follows the theme's
+// background_primary (gray-50 in the light theme, gray-950 in the dark one),
+// through update_theme, which runs when the Theme changes. It is set from the
+// light theme as soon as the app starts, then follows each toggle.
+(
+    format_version: 3,
+    name: "the clear colour follows the background of the theme",
+    setup: App(Themed),
+    steps: [
+        Wait(2),
+        Check(Resource(path: "ClearColor.0", is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "ClearColor.0", is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))))),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "ClearColor.0", is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))))),
+    ],
+    expect: [Resource(path: "ClearColor.0", is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))))],
+)
