@@ -26,9 +26,11 @@ use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui_tester::{Recorder, Registry, load_ron_file, ron_files};
 
 /// Scenarios that pass headless but fail in a recording, because of a bug in a
-/// widget that only shows with UI drawn to an image (#100) or a timing
-/// difference (#103). They are still recorded, and show as failures in the
-/// index; remove each name when its issue is fixed.
+/// widget that only shows with UI drawn to an image (#100), or for a reason not
+/// yet explained (#103: the Card demo's palettes never appear in the recording,
+/// which may share a cause with #100). They are still recorded, and show as
+/// failures in the index. The test fails when one of them passes, so remove
+/// each name when its issue is fixed.
 const FAILS_WHEN_RECORDED: [&str; 12] = [
     "a palette combo opens its popup under its button",
     "a click outside an open palette combo closes it without changing the selection",
@@ -75,6 +77,17 @@ fn gpu_records_every_ron_scenario() {
         .filter(|scenario| !FAILS_WHEN_RECORDED.contains(&scenario.name.as_str()))
         .map(|scenario| scenario.name.clone())
         .collect();
+    let fixed: Vec<_> = recording
+        .scenarios
+        .iter()
+        .filter(|scenario| scenario.passed())
+        .filter(|scenario| FAILS_WHEN_RECORDED.contains(&scenario.name.as_str()))
+        .map(|scenario| scenario.name.clone())
+        .collect();
+    assert!(
+        fixed.is_empty(),
+        "these scenarios pass when recorded now: remove them from FAILS_WHEN_RECORDED: {fixed:?}"
+    );
     assert!(
         failed.is_empty(),
         "scenarios failed that did not fail before (see {}): {failed:?}",

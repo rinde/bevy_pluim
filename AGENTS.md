@@ -613,8 +613,10 @@ recorded_scenarios_gpu --features record`.
   that render to a window, so widgets that read it (combos, palette combos,
   hover colours in lists and palettes) misbehave in a recording (#100). The
   scenarios that fail only there are listed in `FAILS_WHEN_RECORDED` in the test,
-  with their issues; the test fails for any other scenario. Remove a name from
-  the list when its issue is fixed.
+  with their issues; the test fails for any other scenario, and also when a
+  listed one passes, so remove a name when its issue is fixed. One of them
+  (#103: the `Tabs` screen's Card demo palettes never appear in the recording)
+  is unexplained and may share a cause with #100.
 - **The overlay's roots.** The recorder's `CursorOverlayPlugin` spawns root
   `Node`s without a `UiTargetCamera`, so `UiRoot` counts them and logs its
   one-root `error!` (#101; the recorder adds no `LogPlugin`, so it is not
