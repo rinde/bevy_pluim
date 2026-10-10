@@ -158,10 +158,11 @@ Every example has a button that toggles the light and dark theme, and sets
 | --- | --- |
 | `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
-| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, and a smoke test that every `WidgetsSetup` screen builds |
+| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, and the tests of `WidgetsCheck` |
 | `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
 | `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per example |
+| `tests/widgets_check/mod.rs` | `WidgetsCheck`, the checks about widget state the tester's built-in ones cannot say (`Selected`) |
 
 ## How the pieces fit
 
@@ -409,7 +410,8 @@ after using the UI.
 - **Checks are data.** There are no check closures. Read widget state with
   `Check::component::<C>(target, ".field")` and `Check::resource::<R>(".field")`
   (the type must derive `Reflect`, with `#[reflect(Component)]` /
-  `#[reflect(Resource)]`), or write the app's own `#[reflect(AppCheck)]` enum.
+  `#[reflect(Resource)]`), or write the app's own `#[reflect(AppCheck)]` enum (the tests have one,
+  `WidgetsCheck`; see [Scenario files](#scenario-files)).
 - **Frames.** Time is fixed at 1/60 s a frame. A pointer step (`move_to`,
   `press`, `release`) takes one frame and a `Step::check` none, so a check right
   after the step sees its effect, `MouseEvent` observers included; add
@@ -451,6 +453,26 @@ a file can check any `Reflect` type of the app by short type path.
   (recording a session from the app as it is) is not implemented: only the
   tester's gallery and recorder call it, which these tests do not run, so it
   would go untested.
+- **The check** is `App(Selected(of: .., items: [..]))`: `WidgetsCheck`, the
+  one `#[reflect(AppCheck)]` enum of the tests, in `tests/widgets_check/mod.rs`
+  (Rust: `Check::app(WidgetsCheck::Selected { .. })`; `mod widgets_check;`
+  pulls it in, like `widgets_setup`, and it stays out of `common` for the
+  same `dead_code` reason). A `Selection` holds entities, which mean nothing
+  in a script, so `Selected` names the selected items by what they show, in
+  the order they were selected: an `Item<String>` by its text, an
+  `Item<Color>` by its Tailwind colour (`blue-500`) when it is one. `of` is
+  any target that resolves to a widget: the selection is the first on it or
+  above it, and a `Selection::Ref` is followed, so the `List`, `Combo`,
+  `BreadCrumbs` or `ColorPalette` that shares a selection reports it. It goes
+  through `resolve`, which needs the widget laid out (a scenario waits a
+  frame or two after its setup) and a `Node`; a bare selection entity
+  without one cannot be named, but every widget referring to it can. A
+  failure says `<target> has ["b"] selected, not ["a"]`. `facts` proposes a
+  `Selected` for each list, combo, trail and palette that one target leads
+  back to (the type's `Component(..)` when it is alone, else `Nth(i, ..)`),
+  so a recording suggests the selections that changed. Add a variant here
+  when a claim about widgets cannot be said with `Component(..)` or
+  `Resource(..)`.
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
