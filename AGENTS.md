@@ -285,9 +285,8 @@ needs a pinned nightly and trails Bevy releases.
 
 `rin_bevy_ui_tester` (`github.com/rinde/rin-bevy-ui-tester`, private) is a
 `[dev-dependencies]` git dependency pinned to a revision in `Cargo.toml`; it
-drives scripted pointer and keyboard scenarios against the widgets. Until the
-scenario harness lands (#29) nothing uses it, so it is listed under
-`[package.metadata.cargo-machete] ignored`; drop that entry with the first use.
+drives scripted pointer and keyboard scenarios against the widgets
+(`tests/scenarios.rs`, see [Writing a scenario](#writing-a-scenario)).
 
 - **Bumping it** means changing `rev` in `Cargo.toml` and `Cargo.lock`
   together (`cargo update -p rin_bevy_ui_tester`); `--locked` in CI fails if
@@ -362,6 +361,51 @@ systems (like `breadcrumbs.rs`'s `selection_change`) react. Register
 
 If a widget can't be exercised headlessly because it needs a render or text
 plugin, note it in the PR rather than pulling in a window.
+
+### Writing a scenario
+
+A scenario drives the widgets with scripted pointer and keyboard input through
+`rin_bevy_ui_tester` (see its README for the `Step`, `Target` and `Check`
+vocabulary) and asserts on what they did. Prefer it to hand-written
+`Pointer<..>` triggers whenever the claim is about what a person would see
+after using the UI.
+
+- **Where.** Scenarios go in `tests/scenarios.rs`, a test target of its own, so
+  `tests/headless.rs` stays as it is. Shared code lives in `tests/common/mod.rs`
+  and is pulled in with `mod common;`. Its items are `pub` under a file-level
+  `#![expect(unreachable_pub, ..)]`, because clippy's `redundant_pub_crate`
+  rejects `pub(crate)` there. Keep it small: a helper that is not used by every
+  target that pulls the module in fails `dead_code` in the ones that do not.
+- **The header.** If a scenario file unwraps (a `Result` from `from_ron`, say),
+  give it the same file-level `#![expect(clippy::unwrap_used,
+  clippy::indexing_slicing, reason = "tests may abort loudly")]` as the other
+  integration tests; `expect`, never `allow`. Leave it off a file that needs
+  none, because an unfulfilled `expect` is itself an error under `-D warnings`.
+- **Build the app with `common::widgets_app()`**: the tester's
+  `HeadlessPlugins` (a virtual window, fixed 1/60 s frames, picking, UI, no
+  GPU) plus `WidgetsPlugin`, with `ClearColor` initialised (`HeadlessPlugins`
+  does not insert it and `theme.rs`'s `update_theme` writes it), finished and
+  cleaned up. Do not use `Scenario::headless_app()`: its app is already
+  finished and refuses `add_plugins`. Play with
+  `scenario.run_in(&mut widgets_app())`, which returns a `ScenarioReport`;
+  assert `report.passed()` with `report.failures()` as the message.
+- **Setup.** The scenario's `.setup(|world| ..)` closure builds the UI and runs
+  before the first update. It must spawn a `Camera2d` and exactly one root
+  `Node` (`common::spawn_camera_and_root` does both and returns the root), or
+  `UiRoot`'s `PostStartup` check finds no root.
+- **Targets.** `PushButton` inserts Bevy's `Button`, so
+  `Target::role(WidgetRole::Button, "Add")` finds it by its label.
+- **Checks are data.** There are no check closures. Read widget state with
+  `Check::component::<C>(target, ".field")` and `Check::resource::<R>(".field")`
+  (the type must derive `Reflect`, with `#[reflect(Component)]` /
+  `#[reflect(Resource)]`), or write the app's own `#[reflect(AppCheck)]` enum.
+- **Frames.** Time is fixed at 1/60 s a frame. A pointer step (`move_to`,
+  `press`, `release`) takes one frame and a `Step::check` none, so a check right
+  after the step sees its effect, `MouseEvent` observers included; add
+  `Step::wait(n)` only for something that needs more frames.
+- **Prove the assertion is real.** When you write a scenario, break the
+  expectation once (a different theme slot, say) and see it fail before
+  trusting it.
 
 ## Before you call it done
 

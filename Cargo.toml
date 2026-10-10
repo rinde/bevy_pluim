@@ -24,11 +24,6 @@ bevy-inspector-egui = "0.37.0"
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "a3366c452281a646aa172d98a95b96f5e95804ff" }
 
-# Declared but not used until the scenario harness lands (#29); drop this entry
-# then.
-[package.metadata.cargo-machete]
-ignored = ["rin_bevy_ui_tester"]
-
 [lints.rust]
 macro_use_extern_crate = "warn"
 meta_variable_misuse = "warn"
