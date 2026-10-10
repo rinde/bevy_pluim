@@ -1,0 +1,20 @@
+// Clicking an item of a list selects it, and `Selected` reports it from every
+// widget that shares the selection. `WidgetsCheck::Selected` is the test app's
+// own check (tests/widgets_check/mod.rs), written as `App(Selected(..))`.
+(
+    format_version: 3,
+    name: "clicking an item selects it and Selected reports it",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Nth(0, Component("List")), items: ["Netherlands"]))),
+        MoveTo(Nth(1, Within(Nth(0, Component("List")), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Nth(0, Component("List")), items: ["Netherlands", "Canada"]))),
+        // The third list refers to the first one's selection.
+        Check(App(Selected(of: Nth(2, Component("List")), items: ["Netherlands", "Canada"]))),
+        // The second list has a selection of its own.
+        Check(App(Selected(of: Nth(1, Component("List")), items: ["NL"]))),
+    ],
+    expect: [App(Selected(of: Nth(0, Component("List")), items: ["Netherlands", "Canada"]))],
+)

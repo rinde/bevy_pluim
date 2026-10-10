@@ -7,6 +7,7 @@
 //! contains `push_button`.
 
 mod common;
+mod widgets_check;
 mod widgets_setup;
 
 use std::process::ExitCode;
