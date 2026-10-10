@@ -1,0 +1,60 @@
+// A `List` used as a tab bar drives a `Stack`: the stack's `selection_ref` is
+// the list's own selection, so choosing a tab shows its panel and hides the
+// others. The panels are created the first time their tab is chosen: Panel A
+// is the selected tab at the start, so Panel B and "Card demo" do not exist
+// until they are clicked. The tabs are buttons (`ItemView`s) of the list.
+(
+    format_version: 3,
+    name: "choosing a tab in a list shows its panel in the stack",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Role(role: Button, label: "Panel A"), items: ["Panel A"]))),
+        Check(Visible(Within(Name("Stack"), Text("Panel A")))),
+        Check(Not(Exists(Within(Name("Stack"), Text("Panel B"))))),
+        Check(Not(Exists(Within(Name("Stack"), Text("Card demo"))))),
+
+        // Panel B is created on its first click.
+        MoveTo(Role(role: Button, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(App(Selected(of: Role(role: Button, label: "Panel B"), items: ["Panel B"]))),
+        Check(Visible(Within(Name("Stack"), Text("Panel B")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
+        Check(Not(Exists(Within(Name("Stack"), Text("Card demo"))))),
+
+        // So are the cards.
+        MoveTo(Role(role: Button, label: "Card demo")), Click(Left),
+        Wait(2),
+        Check(App(Selected(of: Role(role: Button, label: "Card demo"), items: ["Card demo"]))),
+        Check(Visible(Within(Name("Stack"), Text("Card demo")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
+        Check(Tree(of: Name("Stack"), matches: r#"
+            - panel "Stack":
+              - panel "StackItem":
+                - text "Card demo"
+                - panel:
+                  - panel:
+                    - text "0"
+                  - panel:
+                    - text "11"
+        "#)),
+
+        // Back to the first tab, which is shown again, and to Panel B.
+        MoveTo(Role(role: Button, label: "Panel A")), Click(Left),
+        Wait(2),
+        Check(App(Selected(of: Role(role: Button, label: "Panel A"), items: ["Panel A"]))),
+        Check(Visible(Within(Name("Stack"), Text("Panel A")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
+        MoveTo(Role(role: Button, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(Visible(Within(Name("Stack"), Text("Panel B")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
+    ],
+    expect: [
+        App(Selected(of: Role(role: Button, label: "Panel B"), items: ["Panel B"])),
+        Visible(Within(Name("Stack"), Text("Panel B"))),
+    ],
+)
