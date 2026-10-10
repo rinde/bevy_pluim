@@ -458,10 +458,12 @@ a file can check any `Reflect` type of the app by short type path.
   `to_ron()`.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
-  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Themed`),
-  which spawns a `Camera2d`, the one root `Node` and a screen of the widget it is
-  named after, following the example of that name (the `NumericStepper` one adds
-  steppers the example lacks), each with a "Change theme" button. A variant is
+  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`,
+  `Themed`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  with a "Change theme" button. Every screen but `Themed` is of the widget it is
+  named after, following the example of that name (some add widgets the example
+  lacks, for instance the `NumericStepper` one); `Themed` has no example: it
+  puts one of each widget that restyles with the theme on one screen. A variant is
   found by Bevy's automatic registration, so adding one needs no registration
   call; add it to the smoke test in `tests/scenarios.rs` as well. `Buttons`
   also keeps the `Clicks` resource, the clicks on "Add". `AppSetup::capture`
