@@ -401,8 +401,8 @@ fn theme_items(
                 border_color.set_all(theme.colors.border_highlight);
             } else {
                 bg.0 = theme.colors.background_primary;
+                border_color.set_all(theme.colors.border);
             }
-            border_color.set_all(theme.colors.border);
 
             theme_item_border(&mut node, *corner_style, *layout, i, last, &theme);
 

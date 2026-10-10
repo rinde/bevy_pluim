@@ -1,0 +1,15 @@
+// The Themed screen fits the default 1280 by 720 window: the tester only moves
+// the pointer to a widget that is inside the window, so every widget the theme
+// scenarios read can be reached.
+(
+    format_version: 3,
+    name: "every widget of the themed screen is inside the window",
+    setup: App(Themed),
+    steps: [
+        MoveTo(Name("themed button")),
+        MoveTo(Name("themed card")),
+        MoveTo(Name("themed list")),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)

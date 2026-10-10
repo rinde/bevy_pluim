@@ -86,6 +86,10 @@ pub enum WidgetsSetup {
     /// `first mirror stepper` and `second mirror stepper` point to it), and
     /// "Change theme".
     NumericStepper,
+    /// One of each widget whose colours follow the theme, side by side: a
+    /// `themed button` ("Other"), a `themed card` and a `themed list` of
+    /// three items (the first selected), then "Change theme".
+    Themed,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -99,6 +103,7 @@ impl AppSetup for WidgetsSetup {
             Self::Tabs => tabs(world),
             Self::ColorPalette => color_palette(world),
             Self::NumericStepper => numeric_stepper(world),
+            Self::Themed => themed(world),
         }
         Ok(())
     }
@@ -910,6 +915,33 @@ fn numeric_stepper(world: &mut World) {
             NumericStepper,
             ValueRef(shared),
             Name::new("second mirror stepper"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn themed(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((Name::new("themed button"), PushButton::from_label("Other")));
+        root.spawn((
+            Name::new("themed card"),
+            Card,
+            Node {
+                width: px(200),
+                height: px(100),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            children![Label::regular("A card")],
+        ));
+        root.spawn((
+            Name::new("themed list"),
+            List,
+            Selection::builder()
+                .one()
+                .build_with_items(["One", "Two", "Three"].map(Item::new)),
         ));
         spawn_theme_button(root);
     });
