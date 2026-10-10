@@ -25,7 +25,8 @@ impl Plugin for ColorPushButtonPlugin {
 }
 
 /// A button that shows a colour square instead of a label.
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[component(on_add = Self::on_add)]
 #[require(BoxShadow::default(),
     Node{
@@ -38,7 +39,8 @@ impl Plugin for ColorPushButtonPlugin {
 pub struct ColorPushButton;
 
 /// Marks the colour square of a [`ColorPushButton`].
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub struct ColorSquare;
 
 /// The colour square of a [`ColorPushButton`].

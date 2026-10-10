@@ -44,7 +44,8 @@ impl Plugin for ListPlugin {
 /// Renders the items of a [`Selection`] as views, one per item, and keeps them in sync.
 ///
 /// Use [`ListLayout`] and [`CornerStyle`] to change how they are laid out.
-#[derive(Component, Debug, Copy, Clone, Default)]
+#[derive(Component, Debug, Copy, Clone, Default, Reflect)]
+#[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
 #[require(
     Name::new("List"),
@@ -59,6 +60,7 @@ pub struct List;
 
 /// How the item views of a [`List`] are arranged.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub enum ListLayout {
     /// One item per row.
     Vertical,
@@ -73,6 +75,7 @@ pub enum ListLayout {
 
 /// Which corners of a [`List`] and its item views are rounded.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub enum CornerStyle {
     /// Round the outer corners of the list.
     FollowLayout,
@@ -126,6 +129,7 @@ impl List {
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
 #[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 #[require(RelativeCursorPosition::default())]
 pub struct ItemView {
     /// The item this view shows.

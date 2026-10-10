@@ -23,7 +23,8 @@ impl Plugin for BreadCrumbsPlugin {
 /// A trail of links for the `OneOrMore` selection on this entity (or the one it refers to).
 ///
 /// Clicking a crumb trims the selection back to it.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
 #[require(Name::new("BreadCrumbs"), Node{
     ..default()
 })]

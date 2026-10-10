@@ -27,7 +27,8 @@ impl Plugin for LinkPlugin {
 }
 
 /// Clickable text. Whether it reacts is up to its [`LinkState`].
-#[derive(Component, Clone, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[component(on_add = Self::on_add)]
 #[require(BoxShadow::default(),
     Node {
@@ -49,7 +50,8 @@ pub struct Link {
 struct LinkText;
 
 /// Whether a [`Link`] can be clicked.
-#[derive(Component, Clone, Debug, Copy, Eq, PartialEq)]
+#[derive(Component, Clone, Debug, Copy, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 #[component(immutable)]
 pub enum LinkState {
     /// The link highlights on hover and can be clicked.

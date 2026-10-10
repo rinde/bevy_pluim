@@ -30,7 +30,8 @@ impl Plugin for ScrollAreaPlugin {
 }
 
 /// A node with scroll bars. Build one with [`ScrollArea::bundle`].
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 #[require(Node::default(), Name::new("ScrollArea"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollArea;
@@ -50,7 +51,8 @@ impl ScrollArea {
 }
 
 /// Marks the node holding the scrolled contents of a [`ScrollArea`].
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub struct ScrollContents;
 
 #[derive(Component, Clone, Copy, Debug, Reflect)]
@@ -114,6 +116,7 @@ impl ScrollArea {
 
 /// A scroll bar with a thumb, along the given [`Orientation`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 #[require(Node::default(), Visibility::Inherited, Name::new("ScrollBar"))]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollBar(pub Orientation);

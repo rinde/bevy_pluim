@@ -32,7 +32,8 @@ impl Plugin for NumericStepperPlugin {
 /// A [`Value`] with a decrease and an increase button.
 ///
 /// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
 #[require(Node::default())]
 pub struct NumericStepper;
@@ -78,7 +79,8 @@ impl NumericStepper {
 pub struct ValueRef(pub Entity);
 
 /// A number with bounds and a step size.
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub enum Value {
     /// A floating point value.
     F32 {
@@ -327,7 +329,7 @@ pub struct ValueChange {
 }
 
 /// An unsigned integer with bounds and a step size.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Reflect)]
 pub struct UIntValue<T> {
     /// The current value.
     pub value: T,
