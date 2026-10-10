@@ -1,0 +1,45 @@
+// Combos and a list that share a selection through Selection::Ref show the
+// same item, whichever of them it is picked in. "own combo" draws from the
+// same items but selects on its own.
+(
+    format_version: 3,
+    name: "a combo shares its selection with a list and the other combos",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        // The list inside each combo refers to the combo's selection.
+        Check(App(Selected(of: Within(Name("first combo"), Component("ComboList")), items: []))),
+        // Pick in the list: the combos follow.
+        MoveTo(Within(Name("country list"), Role(role: Button, label: "Indonesia"))),
+        Click(Left),
+        Check(App(Selected(of: Name("country list"), items: ["Indonesia"]))),
+        Check(App(Selected(of: Name("first combo"), items: ["Indonesia"]))),
+        Check(App(Selected(of: Name("third combo"), items: ["Indonesia"]))),
+        Check(App(Selected(of: Within(Name("first combo"), Component("ComboList")), items: ["Indonesia"]))),
+        Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Indonesia"))),
+        Check(TextOf(Within(Name("third combo"), Component("ComboButton")), StartsWith("Indonesia"))),
+        Check(App(Selected(of: Name("own combo"), items: []))),
+        Check(TextOf(Within(Name("own combo"), Component("ComboButton")), StartsWith("Select.."))),
+        // Pick in the third combo: the list and the first combo follow.
+        MoveTo(Within(Name("third combo"), Component("ComboButton"))),
+        Click(Left),
+        MoveTo(Within(Name("third combo"), Role(role: Button, label: "Belgium"))),
+        Click(Left),
+        Check(App(Selected(of: Name("third combo"), items: ["Belgium"]))),
+        Check(App(Selected(of: Name("country list"), items: ["Belgium"]))),
+        Check(App(Selected(of: Name("first combo"), items: ["Belgium"]))),
+        Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Belgium"))),
+        Check(App(Selected(of: Name("own combo"), items: []))),
+        // Pick in the combo with a selection of its own: the others stay.
+        MoveTo(Within(Name("own combo"), Component("ComboButton"))),
+        Click(Left),
+        MoveTo(Within(Name("own combo"), Role(role: Button, label: "Canada"))),
+        Click(Left),
+        Check(App(Selected(of: Name("own combo"), items: ["Canada"]))),
+        Check(TextOf(Within(Name("own combo"), Component("ComboButton")), StartsWith("Canada"))),
+        Check(App(Selected(of: Name("country list"), items: ["Belgium"]))),
+        Check(App(Selected(of: Name("first combo"), items: ["Belgium"]))),
+        Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Belgium"))),
+    ],
+    expect: [App(Selected(of: Name("country list"), items: ["Belgium"]))],
+)
