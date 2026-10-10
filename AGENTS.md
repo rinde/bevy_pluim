@@ -558,6 +558,26 @@ a file can check any `Reflect` type of the app by short type path.
   keeps its selection while its panel is hidden
   (`stack_keeps_state_of_hidden_item`). The tabs are the `Button`s
   `Panel A`, `Panel B` and `Card demo`.
+- **Targets on the `ColorPalette` screen.** A row of `first palette combo`,
+  `second palette combo` (the two share one selection) and `own palette combo`
+  (its own, over the same colours) and "Change theme"; below it `palette` (all
+  242 Tailwind colours, 22 columns so that it, 836 by 418, fits the window; the
+  example's 11 columns are taller than it) and `palette scroll area` (300 by
+  300, 11 columns, sharing `palette`'s selection through its inner
+  `Component("ColorPalette")`). Swatches have no text: they are `ItemView`s,
+  reached by position as `Nth(60, Within(Name("palette"),
+  Component("ItemView")))` (`Within` first narrows the `ItemView`s to those
+  below `palette`, in document order, and `Nth` then counts in that list; 60
+  is red-500, the order of `tailwind::COLORS`). A selected
+  swatch has a `BorderColor.top` other than `background_primary`. A combo's
+  button is its `ColorPushButton` and the colour it shows the
+  `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the root,
+  not of the combo, and has no name of its own, so it is
+  `Nth(i, Name("ColorPaletteComboFloat"))` in spawn order (first, second, own)
+  and its swatches `Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")),
+  Component("ItemView")))`; the combo's state is `Component(target:
+  Name("first palette combo"), path: "State", is: Eq(Open))` and the popup's
+  position the `UiGlobalTransform.0.translation` (the centre) of the float.
 
 ## Before you call it done
 
