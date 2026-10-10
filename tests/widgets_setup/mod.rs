@@ -49,8 +49,11 @@ pub enum WidgetsSetup {
     /// "Add", "Other" and "Change theme" push buttons; the clicks on "Add"
     /// are counted in [`Clicks`].
     Buttons,
-    /// Three combos over one list of countries, two of them sharing one
-    /// selection, and "Change theme".
+    /// Three combos over one list of countries (`first combo` and `third
+    /// combo` share one selection, `own combo` has a selection of its own over
+    /// the same items), a button ("Underneath") and a list sharing the first
+    /// selection (`country list`), both below the combos, so an open combo
+    /// floats over them, and "Change theme".
     Combos,
     /// Lists in several layouts and corner styles, one per kind of selection
     /// (`one list`, `zero-or-one list`, `zero-or-more list`,
@@ -154,7 +157,7 @@ fn buttons(world: &mut World) {
 }
 
 fn combos(world: &mut World) {
-    let root = row_root(world);
+    let root = spawn_camera_and_root(world);
     let selection_ref = world
         .spawn(
             Selection::builder()
@@ -163,15 +166,41 @@ fn combos(world: &mut World) {
         )
         .id();
     world.entity_mut(root).with_children(|root| {
-        root.spawn((Combo, Selection::reference(selection_ref)));
+        root.spawn(Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Combo,
+                Name::new("first combo"),
+                Selection::reference(selection_ref),
+            ));
+            row.spawn((
+                Combo,
+                Name::new("own combo"),
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items_ref(selection_ref),
+            ));
+            row.spawn((
+                Combo,
+                Name::new("third combo"),
+                Selection::reference(selection_ref),
+            ));
+            spawn_theme_button(row);
+        });
+        // Below the combos, so the lists they open float over them. A button
+        // takes the pointer from what is under it, so a list that is not above
+        // it cannot be clicked.
+        root.spawn(PushButton::from_label("Underneath"));
         root.spawn((
-            Combo,
-            Selection::builder()
-                .zero_or_one()
-                .build_with_items_ref(selection_ref),
+            List,
+            Name::new("country list"),
+            Selection::reference(selection_ref),
         ));
-        root.spawn((Combo, Selection::reference(selection_ref)));
-        spawn_theme_button(root);
     });
 }
 

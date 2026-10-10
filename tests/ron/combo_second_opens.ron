@@ -1,0 +1,45 @@
+// Only one combo is open at a time: opening a second closes the first, because
+// the press that opens it is a click outside the first. The second combo has a
+// selection of its own, so picking in it leaves the shared one untouched.
+(
+    format_version: 3,
+    name: "opening a second combo closes the first",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("first combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        Check(Visible(Within(Name("first combo"), Component("ComboList")))),
+        Check(Component(target: Name("own combo"), path: "ComboState", is: Eq(Closed))),
+        MoveTo(Within(Name("own combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("own combo"), path: "ComboState", is: Eq(Open))),
+        Check(Visible(Within(Name("own combo"), Component("ComboList")))),
+        Check(Visible(Nth(0, Within(Name("own combo"), Component("ItemView"))))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
+        // The same from the second to the third.
+        MoveTo(Within(Name("third combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("third combo"), path: "ComboState", is: Eq(Open))),
+        Check(Visible(Within(Name("third combo"), Component("ComboList")))),
+        Check(Component(target: Name("own combo"), path: "ComboState", is: Eq(Closed))),
+        Check(Not(Visible(Within(Name("own combo"), Component("ComboList"))))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        // Back to the second, and pick in it.
+        MoveTo(Within(Name("own combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("own combo"), path: "ComboState", is: Eq(Open))),
+        Check(Component(target: Name("third combo"), path: "ComboState", is: Eq(Closed))),
+        MoveTo(Within(Name("own combo"), Role(role: Button, label: "Portugal"))),
+        Click(Left),
+        Check(App(Selected(of: Name("own combo"), items: ["Portugal"]))),
+        Check(TextOf(Within(Name("own combo"), Component("ComboButton")), StartsWith("Portugal"))),
+        Check(Component(target: Name("own combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("first combo"), items: []))),
+        Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Select.."))),
+        Check(App(Selected(of: Name("country list"), items: []))),
+    ],
+    expect: [App(Selected(of: Name("own combo"), items: ["Portugal"]))],
+)

@@ -526,6 +526,22 @@ a file can check any `Reflect` type of the app by short type path.
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
+- **Targets on the `Combos` screen.** A row of `first combo`, `own combo` and
+  `third combo` (`first` and `third` share one selection through
+  `Selection::reference`, `own` has a selection of its own over the same
+  items) and "Change theme", then below it an "Underneath" button and the
+  `country list`, which shares the first selection. An open combo's list
+  floats over "Underneath", whose `PushButton` blocks the pointer: that is
+  what makes the Float's `GlobalZIndex` testable, because the tester's
+  actionability walk skips nodes with `should_block_lower: false`, which the
+  `List` and its `ItemView`s are, so only a button can cover a list item.
+  Reach the button with `Within(Name("first combo"), Component("ComboButton"))`,
+  its list with `Component("ComboList")` and an item with
+  `Within(Name("first combo"), Role(role: Button, label: "Canada"))` (the
+  hidden lists hold the same labels, so always narrow by combo). `ComboState`
+  is read with `Component(target: Name(..), path: "ComboState", is: Eq(Open))`;
+  `Visible` of the list (or one item) says whether it shows. A click on empty
+  space is `MoveTo(Screen((900.0, 500.0)))` then `Click(Left)`.
 
 ## Before you call it done
 

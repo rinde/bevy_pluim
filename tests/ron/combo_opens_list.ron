@@ -1,0 +1,30 @@
+// Clicking a combo's button opens its list. The list is a Float, so it is laid
+// out over the "Underneath" button below the combos and its items still
+// receive the pointer: a button takes the pointer from whatever lies under it,
+// so the MoveTo to an item only gets there if the Float is above the button.
+(
+    format_version: 3,
+    name: "clicking a combo button opens its list above the rest of the UI",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
+        Check(Not(Visible(Nth(0, Within(Name("first combo"), Component("ItemView")))))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Select.."))),
+        MoveTo(Within(Name("first combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        Check(Visible(Within(Name("first combo"), Component("ComboList")))),
+        Check(Visible(Nth(0, Within(Name("first combo"), Component("ItemView"))))),
+        Check(Visible(Nth(4, Within(Name("first combo"), Component("ItemView"))))),
+        // The other combos stay closed.
+        Check(Not(Visible(Within(Name("own combo"), Component("ComboList"))))),
+        Check(Not(Visible(Within(Name("third combo"), Component("ComboList"))))),
+        // The middle of "Canada" of the floating list is over "Underneath". MoveTo
+        // waits until the item is the topmost node that takes the pointer there.
+        MoveTo(Within(Name("first combo"), Role(role: Button, label: "Canada"))),
+        Check(Hovered(Within(Name("first combo"), Role(role: Button, label: "Canada")))),
+    ],
+    expect: [Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))],
+)
