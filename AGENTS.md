@@ -161,7 +161,7 @@ Every example has a button that toggles the light and dark theme, and sets
 | `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, and the tests of `WidgetsCheck` |
 | `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
-| `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per example |
+| `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per widget, each modelled on its example |
 | `tests/widgets_check/mod.rs` | `WidgetsCheck`, the checks about widget state the tester's built-in ones cannot say (`Selected`) |
 
 ## How the pieces fit
@@ -445,8 +445,9 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`),
-  which spawns a `Camera2d`, the one root `Node` and a screen modelled on the
-  example of that name, each with a "Change theme" button. A variant is
+  which spawns a `Camera2d`, the one root `Node` and a screen of the widget it is
+  named after, following the example of that name (the `NumericStepper` one adds
+  steppers the example lacks), each with a "Change theme" button. A variant is
   found by Bevy's automatic registration, so adding one needs no registration
   call; add it to the smoke test in `tests/scenarios.rs` as well. `Buttons`
   also keeps the `Clicks` resource, the clicks on "Add". `AppSetup::capture`
@@ -473,6 +474,15 @@ a file can check any `Reflect` type of the app by short type path.
   so a recording suggests the selections that changed. Add a variant here
   when a claim about widgets cannot be said with `Component(..)` or
   `Resource(..)`.
+- **Targets on a screen with several of one widget.** The `NumericStepper`
+  screen puts a `Name` on every stepper (`default stepper`, `u16 stepper`,
+  `u32 stepper`, `f32 stepper`, `stepper by two`, and `shared stepper` with
+  the `first mirror stepper` and `second mirror stepper` that point to it
+  through `ValueRef`), so a file reaches one stepper's button with
+  `Within(Name("u16 stepper"), Role(role: Button, label: "+"))` and reads its
+  value with `TextOf(Name("u16 stepper"), Exact("- 11 +"))` (the "-", value
+  and "+" labels). Move the pointer to the button before every click: a wider
+  value moves the buttons.
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
