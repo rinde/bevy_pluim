@@ -279,6 +279,22 @@ of them (`just example gallery -- --run-all stack link`).
   locator without a label reaches all of them, so the scenarios use `Nth(..)`); a
   Tailwind colour has a name (`blue-500`) but an `Item<Color>` does not carry one,
   so naming swatches is left to the accessibility follow-up.
+- **Combo buttons open on `Activate` and say whether the popup is open.** The
+  `ComboButton` and the `ColorPushButton` of a `ColorPaletteCombo` are `Button`s;
+  the combo toggles its `ComboState` (the palette combo its `State`) on their
+  `Activate`, so on release and on Enter / Space for a focused button, and a
+  press alone opens nothing. Hover and press colours stay `MouseEvent`, observed
+  on the combo, which gets the pointer because the button has `should_block_lower:
+  false`. The outside-click systems read `ButtonInput<MouseButton>` and
+  `RelativeCursorPosition`, not `Activate`, and a click on the button is inside
+  the combo, so they never close what the same click opens. The state is also
+  `aria-expanded` on the button's `AccessibilityNode` (`set_expanded`), set where
+  `ComboState` / `State` is inserted (the hook, the observer). Scenarios keep
+  checking `ComboState` / `State`: the tester reads components, not the
+  accessibility node, and there is no marker just for it. The popup is still the
+  home-made `Float`, not `bevy_ui_widgets`' `MenuButton` / popover: that would
+  change positioning, z-index and outside-click behaviour, so it is a ticket of
+  its own if wanted.
 - **Selections are immutable components.** Change one by going through
   `SelectionParam::update_selection` / `update_selection_single`, whose
   closures return `Option<SelectionValue>` from methods such as

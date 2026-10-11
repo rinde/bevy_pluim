@@ -1,7 +1,9 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
+use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use itertools::Either;
 
@@ -134,7 +136,8 @@ fn on_insert_combo(
     commands
         .entity(button_id)
         .insert(sub_refs)
-        .observe(handle_combo_button_mouse_events);
+        .observe(handle_combo_button_mouse_events)
+        .observe(toggle_on_activate);
 }
 
 fn on_remove_combo(
@@ -176,7 +179,12 @@ impl State {
     }
 }
 
-fn on_insert_state(t: On<Insert, State>, state: Query<(&State, &SubRefs)>, mut commands: Commands) {
+fn on_insert_state(
+    t: On<Insert, State>,
+    state: Query<(&State, &SubRefs)>,
+    mut accessibility_nodes: Query<&mut AccessibilityNode>,
+    mut commands: Commands,
+) {
     let Ok((&state, &sub_refs)) = state.get(t.event().event_target()) else {
         return;
     };
@@ -186,6 +194,9 @@ fn on_insert_state(t: On<Insert, State>, state: Query<(&State, &SubRefs)>, mut c
         State::Closed => Visibility::Hidden,
     };
     commands.entity(sub_refs.float_id).insert(visibility);
+    if let Ok(mut node) = accessibility_nodes.get_mut(sub_refs.button) {
+        node.set_expanded(state == State::Open);
+    }
     if state == State::Open {
         commands.run_system_cached_with(position_float, sub_refs);
     }
@@ -374,7 +385,6 @@ fn handle_combo_button_mouse_events(
     >,
     combos: Query<&State, With<ColorPaletteCombo>>,
     theme: Res<Theme>,
-    mut commands: Commands,
 ) {
     let Ok((
         SubRefs {
@@ -391,10 +401,7 @@ fn handle_combo_button_mouse_events(
     };
 
     match (trigger.event().kind, combo_state) {
-        (MouseKind::Pressed, _) => {
-            commands.entity(*parent_id).insert(combo_state.inverse());
-        }
-        (MouseKind::Over, _) | (_, State::Open) => {
+        (MouseKind::Over | MouseKind::Pressed, _) | (_, State::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);
             *border_color = BorderColor::all(theme.colors.border_highlight);
         }
@@ -405,6 +412,22 @@ fn handle_combo_button_mouse_events(
         }
         (MouseKind::Released, State::Closed) => {}
     }
+}
+
+/// Opens the popup of a [`ColorPaletteCombo`] whose button was activated, or closes it.
+fn toggle_on_activate(
+    activate: On<Activate>,
+    buttons: Query<&SubRefs, With<ColorPaletteComboButton>>,
+    states: Query<&State, With<ColorPaletteCombo>>,
+    mut commands: Commands,
+) {
+    let Ok(&SubRefs { parent, .. }) = buttons.get(activate.event_target()) else {
+        return;
+    };
+    let Ok(state) = states.get(parent) else {
+        return;
+    };
+    commands.entity(parent).insert(state.inverse());
 }
 
 fn theme_floats(
