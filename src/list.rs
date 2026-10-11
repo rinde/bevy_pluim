@@ -226,7 +226,7 @@ fn handle_mouse_events(
 /// but the release of that click deselects it, see `handle_mouse_events`.
 fn on_value_change(
     t: On<ValueChange<Entity>>,
-    lists: Query<(), (With<List>, Without<NoDefaultItems>)>,
+    lists: Query<(), With<List>>,
     item_views: Query<(&ItemView, Has<Selected>)>,
     mut selections: SelectionParam,
 ) {
@@ -246,7 +246,12 @@ fn on_value_change(
 }
 
 /// Puts [`Selected`] on a view, or takes it off, to match its item.
-fn sync_selected(commands: &mut Commands, view: Entity, was_selected: bool, is_selected: bool) {
+pub(crate) fn sync_selected(
+    commands: &mut Commands,
+    view: Entity,
+    was_selected: bool,
+    is_selected: bool,
+) {
     match (was_selected, is_selected) {
         (false, true) => {
             commands.entity(view).insert(Selected);
@@ -259,7 +264,7 @@ fn sync_selected(commands: &mut Commands, view: Entity, was_selected: bool, is_s
 }
 
 /// Puts [`ListBoxMultiSelect`] on a list, or takes it off, to match its selection.
-fn sync_multi_select(
+pub(crate) fn sync_multi_select(
     commands: &mut Commands,
     list: Entity,
     was_multi: bool,

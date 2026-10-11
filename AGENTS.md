@@ -124,7 +124,7 @@ checkout's build so Bevy is not compiled again.
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged (the wheel is handled by `list.rs`'s `update_scroll_position`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle`: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
-| `color_palette.rs` | `ColorPalette`: a grid of colour swatches over a selection of `Item<Color>` |
+| `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled` |
@@ -270,8 +270,15 @@ of them (`just example gallery -- --run-all stack link`).
   that floats over other widgets blocks the pointer itself (`Combo`'s list has
   `Pickable::default()`).
   A `ColorPalette` is a `List` with `NoDefaultItems`, so it is a `ListBox` of
-  `ListItem`s as well, but `list.rs` leaves it alone: its swatches do not get
-  `Selected`, and its clicks stay its own, until it follows this pattern (#110).
+  `ListItem`s as well and follows the same pattern: `color_palette.rs` puts
+  `Selected` on its swatches (and `ListBoxMultiSelect` on the palette) from its
+  `on_selection_change`, using `list.rs`'s `sync_selected` / `sync_multi_select`,
+  `list.rs`'s `on_value_change` turns the `ListBox`'s pick into a selection update
+  for palettes too, and the swatch's release deselects a swatch that is `Selected`.
+  A swatch has no text, so it has no accessible name (a `Role(role: ListItem)`
+  locator without a label reaches all of them, so the scenarios use `Nth(..)`); a
+  Tailwind colour has a name (`blue-500`) but an `Item<Color>` does not carry one,
+  so naming swatches is left to the accessibility follow-up.
 - **Selections are immutable components.** Change one by going through
   `SelectionParam::update_selection` / `update_selection_single`, whose
   closures return `Option<SelectionValue>` from methods such as
@@ -673,7 +680,8 @@ a file can check any `Reflect` type of the app by short type path.
   Component("ItemView")))` (`Within` first narrows the `ItemView`s to those
   below `palette`, in document order, and `Nth` then counts in that list; 60
   is red-500, the order of `tailwind::COLORS`). A selected
-  swatch has a `BorderColor.top` other than `background_primary`. A combo's
+  swatch is `Selected` (`Check(Selected(Nth(60, ..)))`) and has a `BorderColor.top`
+  other than `background_primary`. A combo's
   button is its `ColorPushButton` and the colour it shows the
   `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the root,
   not of the combo, and has no name of its own, so it is

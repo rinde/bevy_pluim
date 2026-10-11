@@ -4,7 +4,8 @@
 // a border other than the theme's `background_primary`, gray-50). The combos
 // choose from the same colours but keep selections of their own, so they do
 // not change. Index 60 is red-500 and 8 is slate-800 of `COLORS`; the scroll
-// area is 300 wide, which shows the first seven columns of swatches.
+// area is 300 wide, which shows the first seven columns of swatches. `Selected`
+// follows the shared selection in both.
 (
     format_version: 3,
     name: "palettes that share a selection show the same colour",
@@ -16,6 +17,10 @@
         MoveTo(Screen((1100.0, 600.0))),
         Check(App(Selected(of: Within(Name("palette scroll area"), Component("ColorPalette")), items: ["red-500"]))),
         Check(App(Selected(of: Name("palette"), items: ["red-500"]))),
+        Check(Selected(Nth(60, Within(Name("palette"), Component("ItemView"))))),
+        Check(Selected(Nth(60, Within(Name("palette scroll area"), Component("ItemView"))))),
+        Check(Not(Selected(Nth(8, Within(Name("palette"), Component("ItemView")))))),
+        Check(Not(Selected(Nth(8, Within(Name("palette scroll area"), Component("ItemView")))))),
         Check(Component(
             target: Nth(60, Within(Name("palette"), Component("ItemView"))),
             path: "BorderColor.top",
@@ -33,6 +38,10 @@
         Click(Left),
         MoveTo(Screen((1100.0, 600.0))),
         Check(App(Selected(of: Name("palette"), items: ["slate-800"]))),
+        Check(Selected(Nth(8, Within(Name("palette"), Component("ItemView"))))),
+        Check(Selected(Nth(8, Within(Name("palette scroll area"), Component("ItemView"))))),
+        Check(Not(Selected(Nth(60, Within(Name("palette"), Component("ItemView")))))),
+        Check(Not(Selected(Nth(60, Within(Name("palette scroll area"), Component("ItemView")))))),
         Check(App(Selected(of: Within(Name("palette scroll area"), Component("ColorPalette")), items: ["slate-800"]))),
         Check(Component(
             target: Nth(60, Within(Name("palette scroll area"), Component("ItemView"))),

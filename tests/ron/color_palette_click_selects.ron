@@ -4,7 +4,10 @@
 // swatch gets a border of its own (for a dark colour such as red-500, black
 // under the light theme); an unselected one has the colour of the theme's
 // `background_primary` (gray-50) as its border. Index 60 is red-500
-// and 5 is slate-500 of the Tailwind colours in `COLORS`.
+// and 5 is slate-500 of the Tailwind colours in `COLORS`. A swatch is a
+// `ListItem` and the selected one is `Selected`, which follows the selection:
+// the border and `[selected]` agree. A swatch has no label, so it is reached by
+// position.
 (
     format_version: 3,
     name: "clicking a swatch selects its colour and marks it",
@@ -17,9 +20,12 @@
             path: "BorderColor.top",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
+        Check(Not(Selected(Nth(60, Within(Name("palette"), Component("ItemView")))))),
         MoveTo(Nth(60, Within(Name("palette"), Component("ItemView")))),
         Click(Left),
         Check(App(Selected(of: Name("palette"), items: ["red-500"]))),
+        Check(Selected(Nth(60, Within(Name("palette"), Component("ItemView"))))),
+        Check(Not(Selected(Nth(5, Within(Name("palette"), Component("ItemView")))))),
         // Marked even when the pointer is somewhere else; the others are not.
         MoveTo(Screen((1100.0, 600.0))),
         Check(Component(
@@ -37,6 +43,8 @@
         Click(Left),
         MoveTo(Screen((1100.0, 600.0))),
         Check(App(Selected(of: Name("palette"), items: ["slate-500"]))),
+        Check(Selected(Nth(5, Within(Name("palette"), Component("ItemView"))))),
+        Check(Not(Selected(Nth(60, Within(Name("palette"), Component("ItemView")))))),
         Check(Component(
             target: Nth(5, Within(Name("palette"), Component("ItemView"))),
             path: "BorderColor.top",
@@ -52,6 +60,7 @@
         Click(Left),
         MoveTo(Screen((1100.0, 600.0))),
         Check(App(Selected(of: Name("palette"), items: []))),
+        Check(Not(Selected(Nth(5, Within(Name("palette"), Component("ItemView")))))),
         Check(Component(
             target: Nth(5, Within(Name("palette"), Component("ItemView"))),
             path: "BorderColor.top",
@@ -61,6 +70,10 @@
         MoveTo(Nth(241, Within(Name("palette"), Component("ItemView")))),
         Click(Left),
         Check(App(Selected(of: Name("palette"), items: ["rose-950"]))),
+        Check(Selected(Nth(241, Within(Name("palette"), Component("ItemView"))))),
     ],
-    expect: [App(Selected(of: Name("palette"), items: ["rose-950"]))],
+    expect: [
+        App(Selected(of: Name("palette"), items: ["rose-950"])),
+        Selected(Nth(241, Within(Name("palette"), Component("ItemView")))),
+    ],
 )

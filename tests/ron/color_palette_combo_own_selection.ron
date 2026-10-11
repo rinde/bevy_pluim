@@ -1,7 +1,7 @@
 // A palette combo with a selection of its own picks a colour without moving
 // the other combos or the palette: the combos choose from the same colours
 // but select separately. The popups are the third "ColorPaletteComboFloat"
-// for the own combo. Index 60 is red-500.
+// for the own combo. Index 60 is red-500. Only the own popup's swatch is `Selected`.
 (
     format_version: 3,
     name: "a combo with its own selection leaves the others alone",
@@ -25,6 +25,9 @@
         Check(App(Selected(of: Name("first palette combo"), items: []))),
         Check(App(Selected(of: Name("second palette combo"), items: []))),
         Check(App(Selected(of: Name("palette"), items: []))),
+        Check(Selected(Nth(60, Within(Nth(2, Name("ColorPaletteComboFloat")), Component("ItemView"))))),
+        Check(Not(Selected(Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))))),
+        Check(Not(Selected(Nth(60, Within(Name("palette"), Component("ItemView")))))),
         Check(Component(
             target: Within(Name("first palette combo"), Component("ColorSquare")),
             path: "BackgroundColor.0",
