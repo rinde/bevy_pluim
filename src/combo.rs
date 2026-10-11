@@ -2,10 +2,12 @@
 //!
 //! The popup closes again on a click outside of it.
 
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use bevy::ui_widgets::Activate;
 use itertools::Itertools;
 
 use crate::float::Float;
@@ -30,7 +32,9 @@ impl Plugin for ComboPlugin {
 
 /// A button that opens a [`List`] in a [`Float`].
 ///
-/// The popup closes again on a click outside of it.
+/// The popup closes again on a click outside of it. The button toggles it when
+/// it is [`Activate`]d (a click, or Enter or Space on a focused button) and says
+/// whether it is open as `aria-expanded` on its [`AccessibilityNode`].
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 #[component(on_add=Self::on_add)]
@@ -89,7 +93,7 @@ impl ComboState {
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let (state, &ComboSubRefs { list_id, .. }) = world
+        let (&state, &ComboSubRefs { list_id, button_id }) = world
             .entity(context.entity)
             .components::<(&Self, &ComboSubRefs)>();
 
@@ -98,6 +102,9 @@ impl ComboState {
             Self::Closed => Visibility::Hidden,
         };
         world.commands().entity(list_id).insert(visibility);
+        if let Some(mut node) = world.get_mut::<AccessibilityNode>(button_id) {
+            node.set_expanded(state == Self::Open);
+        }
     }
 }
 
@@ -138,11 +145,19 @@ impl Combo {
             });
         });
 
+        let combo_id = context.entity;
         world
             .commands()
-            .entity(context.entity)
+            .entity(combo_id)
             .insert((ComboState::Closed, ComboSubRefs { button_id, list_id }))
             .observe(handle_combo_button_mouse_events);
+        world.commands().entity(button_id).observe(
+            move |_: On<Activate>, states: Query<&ComboState>, mut commands: Commands| {
+                if let Ok(state) = states.get(combo_id) {
+                    commands.entity(combo_id).insert(state.inverse());
+                }
+            },
+        );
     }
 }
 
@@ -263,7 +278,6 @@ fn handle_combo_button_mouse_events(
     combos: Query<(&ComboSubRefs, &ComboState), With<Combo>>,
     mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
-    mut commands: Commands,
 ) {
     let Ok((ComboSubRefs { button_id, .. }, combo_state)) =
         combos.get(trigger.event().event_target())
@@ -275,12 +289,7 @@ fn handle_combo_button_mouse_events(
     };
 
     match (trigger.event().kind, combo_state) {
-        (MouseKind::Pressed, _) => {
-            commands
-                .entity(trigger.event().event_target())
-                .insert(combo_state.inverse());
-        }
-        (MouseKind::Over, _) | (_, ComboState::Open) => {
+        (MouseKind::Over | MouseKind::Pressed, _) | (_, ComboState::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);
             *border_color = BorderColor::all(theme.colors.border_highlight);
         }

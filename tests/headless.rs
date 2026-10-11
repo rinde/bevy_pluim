@@ -8,6 +8,7 @@
 )]
 
 use bevy::MinimalPlugins;
+use bevy::a11y::AccessibilityNode;
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::input::InputPlugin;
@@ -18,12 +19,15 @@ use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
-use bevy::window::WindowPlugin;
+use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
+use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
+use rin_bevy_ui::color_push_button::ColorPushButton;
+use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{ItemView, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
@@ -548,6 +552,146 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
     assert_eq!(label_color(&app), colors.text_primary);
+}
+
+/// Whether the [`AccessibilityNode`] of `entity` says `aria-expanded`, or nothing.
+fn expanded(app: &App, entity: Entity) -> Option<bool> {
+    app.world()
+        .entity(entity)
+        .get::<AccessibilityNode>()
+        .unwrap()
+        .is_expanded()
+}
+
+/// A press, then the release that makes it a click.
+fn click(app: &mut App, target: Entity) {
+    press(app, target);
+    click_and_release(app, target);
+}
+
+/// A combo over two items in a root node, returning it and its button.
+fn spawn_combo(app: &mut App) -> (Entity, Entity) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let button = app
+        .world()
+        .entity(combo)
+        .get::<ComboSubRefs>()
+        .unwrap()
+        .button_id;
+    (combo, button)
+}
+
+/// A colour palette combo over two colours in a root node, returning it and its button.
+fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            ColorPaletteCombo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data })),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    (combo, single_entity_with::<ColorPushButton>(app))
+}
+
+#[test]
+fn a_combo_button_says_whether_its_popup_is_open() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    assert_eq!(expanded(&app, button), Some(false), "closed to begin with");
+
+    click(&mut app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Open)
+    );
+    assert_eq!(expanded(&app, button), Some(true));
+
+    click(&mut app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Closed)
+    );
+    assert_eq!(expanded(&app, button), Some(false));
+}
+
+#[test]
+fn a_color_palette_combo_button_says_whether_its_popup_is_open() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let (combo, button) = spawn_palette_combo(&mut app);
+    assert_eq!(expanded(&app, button), Some(false), "closed to begin with");
+
+    click(&mut app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<PaletteComboState>(),
+        Some(&PaletteComboState::Open)
+    );
+    assert_eq!(expanded(&app, button), Some(true));
+
+    click(&mut app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<PaletteComboState>(),
+        Some(&PaletteComboState::Closed)
+    );
+    assert_eq!(expanded(&app, button), Some(false));
+}
+
+#[test]
+fn a_combo_opens_when_its_button_is_activated_and_not_when_it_is_only_pressed() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+
+    press(&mut app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Closed),
+        "a press is not yet an Activate"
+    );
+    assert_eq!(expanded(&app, button), Some(false));
+
+    activate(&mut app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Open),
+        "Enter or Space on a focused button is an Activate too"
+    );
+    assert_eq!(expanded(&app, button), Some(true));
+}
+
+#[test]
+fn a_disabled_combo_button_does_not_open_its_popup() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+
+    click(&mut app, button);
+
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Closed)
+    );
+    assert_eq!(expanded(&app, button), Some(false));
 }
 
 /// A stepper over a `u8` from 0 to 3, starting at `initial`, returning it and its
