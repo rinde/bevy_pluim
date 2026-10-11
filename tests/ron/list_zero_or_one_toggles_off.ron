@@ -9,9 +9,9 @@
     steps: [
         Wait(2),
         Check(App(Selected(of: Name("zero-or-one list"), items: []))),
-        MoveTo(Within(Name("zero-or-one list"), Role(role: Button, label: "Canada"))), Click(Left),
+        MoveTo(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Canada"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-one list"), items: ["Canada"]))),
-        MoveTo(Within(Name("zero-or-one list"), Role(role: Button, label: "Indonesia"))), Click(Left),
+        MoveTo(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Indonesia"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-one list"), items: ["Indonesia"]))),
         Click(Left),
         Check(App(Selected(of: Name("zero-or-one list"), items: []))),

@@ -1,0 +1,49 @@
+// The items of a list are `ListItem`s, and one that is in the selection says
+// `[selected]` in a `Tree(..)` snapshot: Bevy's `Selected`, which follows the
+// `Selection`, the single source of truth. A list that shares a selection shows it
+// too, and an item that leaves the selection loses it.
+(
+    format_version: 3,
+    name: "the items of the selection are selected, in every list that shows it",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        // "one-or-more list" and "one-or-more grid list" share a selection that starts on
+        // the first item.
+        Check(Tree(of: Name("one-or-more list"), matches: r#"
+            - panel "one-or-more list":
+              - list-item "Netherlands" [selected]
+        "#)),
+        Check(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands")))),
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))))),
+        Check(Selected(Within(Name("one-or-more grid list"), Role(role: ListItem, label: "Netherlands")))),
+        // Click another item: it is selected beside the first, in both lists.
+        MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))), Click(Left),
+        Check(Tree(of: Name("one-or-more list"), matches: r#"
+            - panel "one-or-more list":
+              - list-item "Netherlands" [selected]
+              - list-item "Portugal" [selected]
+        "#)),
+        Check(Selected(Within(Name("one-or-more grid list"), Role(role: ListItem, label: "Portugal")))),
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada"))))),
+        // Click it again: it leaves the selection, and `Selected` leaves with it.
+        Click(Left),
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))))),
+        Check(Not(Selected(Within(Name("one-or-more grid list"), Role(role: ListItem, label: "Portugal"))))),
+        Check(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands")))),
+        // A list over a selection of its own: nothing is selected until a click, and
+        // picking another item moves `Selected`.
+        Check(Not(Selected(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Canada"))))),
+        MoveTo(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Canada"))), Click(Left),
+        Check(Selected(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Canada")))),
+        MoveTo(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Indonesia"))), Click(Left),
+        Check(Not(Selected(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Canada"))))),
+        Check(Selected(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Indonesia")))),
+        // The shared selection is not touched by it.
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Indonesia"))))),
+    ],
+    expect: [
+        Selected(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Indonesia"))),
+        App(Selected(of: Name("zero-or-one list"), items: ["Indonesia"])),
+    ],
+)

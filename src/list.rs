@@ -7,7 +7,8 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
+use bevy::ui::{RelativeCursorPosition, Selected};
+use bevy::ui_widgets::{ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use itertools::Either;
 
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
@@ -35,6 +36,7 @@ impl Plugin for ListPlugin {
                 ),
             )
             .add_observer(on_insert_selection)
+            .add_observer(on_value_change)
             .register_type::<ItemView>()
             .register_type::<ListLayout>()
             .register_type::<CornerStyle>();
@@ -43,12 +45,18 @@ impl Plugin for ListPlugin {
 
 /// Renders the items of a [`Selection`] as views, one per item, and keeps them in sync.
 ///
+/// It is a [`ListBox`] and its item views are [`ListItem`]s, so an item of the
+/// selection carries [`Selected`]. The [`Selection`] stays the one source of truth:
+/// [`Selected`] follows it, and [`ListBoxMultiSelect`] is on the list while the selection
+/// holds more than one item (`OneOrMore`, `ZeroOrMore`).
+///
 /// Use [`ListLayout`] and [`CornerStyle`] to change how they are laid out.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
 #[require(
     Name::new("List"),
+    ListBox,
     ListLayout::Vertical,
     CornerStyle::FollowLayout,
     Pickable {
@@ -128,9 +136,11 @@ impl List {
 }
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
+///
+/// It is a [`ListItem`]: it carries [`Selected`] while its item is selected.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(RelativeCursorPosition::default())]
+#[require(RelativeCursorPosition::default(), ListItem)]
 pub struct ItemView {
     /// The item this view shows.
     pub item_ref: Entity,
@@ -153,7 +163,7 @@ impl ItemLabel {
 fn handle_mouse_events(
     t: On<MouseEvent>,
     mut selections: SelectionParam,
-    mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
+    mut item_views: Query<(&ItemView, &mut BackgroundColor, Has<Selected>)>,
     theme: Res<Theme>,
 ) {
     let Ok((
@@ -162,6 +172,7 @@ fn handle_mouse_events(
             list_ref,
         },
         mut background_color,
+        is_marked_selected,
     )) = item_views.get_mut(t.event().event_target())
     else {
         return;
@@ -170,6 +181,20 @@ fn handle_mouse_events(
         return;
     };
     let is_selected = selection.is_selected(*target_item_entity);
+
+    if matches!(t.event().kind, MouseKind::Released) {
+        // The `ListBox` leaves a click on a `Selected` row alone, so deselecting is ours.
+        // Selecting is the `ListBox`'s: it sends a `ValueChange`, see `on_value_change`.
+        // Both go by the `Selected` the `ListBox` saw, not by the `Selection`: the release
+        // can be handled after the `ValueChange` of the same click has changed the
+        // `Selection`, and the click would undo itself.
+        if is_marked_selected {
+            selections.update_selection(*list_ref, |selection| {
+                selection.toggle_selected(*target_item_entity)
+            });
+        }
+        return;
+    }
 
     match (t.event().kind, is_selected) {
         (MouseKind::Pressed, _) | (MouseKind::Over, true) => {
@@ -184,28 +209,97 @@ fn handle_mouse_events(
         (MouseKind::Out, false) => {
             background_color.0 = theme.colors.background_primary;
         }
-        (MouseKind::Released, _) => {
-            selections.update_selection(*list_ref, |selection| {
-                selection.toggle_selected(*target_item_entity)
-            });
+        (MouseKind::Released, _) => {}
+    }
+}
+
+/// Selects the item whose row the [`ListBox`] picked (a click, or Enter or Space on the
+/// active row), as far as the [`Selection`] allows.
+///
+/// The `ListBox` sends a [`ValueChange`] for a row that is not [`Selected`], and
+/// does nothing more: `listbox_update_selection`, which would insert and remove
+/// [`Selected`] by itself, past the rules of the [`Selection`], is not registered.
+/// [`Selected`] is put on the rows by `selection_change` once the selection has changed.
+///
+/// A row that already carries [`Selected`] is left alone: the `ListBox` may still send a
+/// change for it (a click on any selected row but the first one of a multiple selection),
+/// but the release of that click deselects it, see `handle_mouse_events`.
+fn on_value_change(
+    t: On<ValueChange<Entity>>,
+    lists: Query<(), (With<List>, Without<NoDefaultItems>)>,
+    item_views: Query<(&ItemView, Has<Selected>)>,
+    mut selections: SelectionParam,
+) {
+    let ValueChange { source, value, .. } = *t.event();
+    if lists.get(source).is_err() {
+        return;
+    }
+    let Ok((item_view, is_marked_selected)) = item_views.get(value) else {
+        return;
+    };
+    if is_marked_selected {
+        return;
+    }
+    selections.update_selection(source, |selection| {
+        selection.toggle_selected(item_view.item_ref)
+    });
+}
+
+/// Puts [`Selected`] on a view, or takes it off, to match its item.
+fn sync_selected(commands: &mut Commands, view: Entity, was_selected: bool, is_selected: bool) {
+    match (was_selected, is_selected) {
+        (false, true) => {
+            commands.entity(view).insert(Selected);
         }
+        (true, false) => {
+            commands.entity(view).remove::<Selected>();
+        }
+        (false, false) | (true, true) => {}
+    }
+}
+
+/// Puts [`ListBoxMultiSelect`] on a list, or takes it off, to match its selection.
+fn sync_multi_select(
+    commands: &mut Commands,
+    list: Entity,
+    was_multi: bool,
+    selection: &SelectionValue,
+) {
+    match (was_multi, selection.allow_multiple()) {
+        (false, true) => {
+            commands.entity(list).insert(ListBoxMultiSelect);
+        }
+        (true, false) => {
+            commands.entity(list).remove::<ListBoxMultiSelect>();
+        }
+        (false, false) | (true, true) => {}
     }
 }
 
 fn selection_change(
     q: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
-    lists: Query<(Entity, Option<&Children>, &Selection), (With<List>, Without<NoDefaultItems>)>,
+    lists: Query<
+        (
+            Entity,
+            Option<&Children>,
+            &Selection,
+            Has<ListBoxMultiSelect>,
+        ),
+        (With<List>, Without<NoDefaultItems>),
+    >,
     mut item_views: Query<(
         &ItemView,
         &RelativeCursorPosition,
         &mut BackgroundColor,
         &mut BorderColor,
+        Has<Selected>,
     )>,
     theme: Res<Theme>,
+    mut commands: Commands,
 ) {
     for changed_selection_ref in q {
-        for (list_ref, children, list_selection) in lists {
+        for (list_ref, children, list_selection, is_multi) in lists {
             let is_changed = match list_selection {
                 Selection::Ref(entity) => {
                     changed_selection_ref == *entity || changed_selection_ref == list_ref
@@ -216,15 +310,17 @@ fn selection_change(
                 let Some(selection) = selections.get(changed_selection_ref) else {
                     continue;
                 };
+                sync_multi_select(&mut commands, list_ref, is_multi, selection);
 
                 for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
-                    let Ok((item_view, rcp, mut bg, mut border_color)) =
+                    let Ok((item_view, rcp, mut bg, mut border_color, was_selected)) =
                         item_views.get_mut(item_view_id)
                     else {
                         continue;
                     };
 
                     let is_selected = selection.is_selected(item_view.item_ref);
+                    sync_selected(&mut commands, item_view_id, was_selected, is_selected);
                     match (is_selected, rcp.cursor_over()) {
                         (true, true) => bg.0 = theme.colors.selected_hovered_item,
                         (true, false) => bg.0 = theme.colors.selected_item,
@@ -254,11 +350,13 @@ fn on_items_changed(
     mut commands: Commands,
     lists: Query<Option<&Children>, (With<List>, Without<NoDefaultItems>)>,
     item_views: Query<(Entity, &ItemView)>,
+    selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
     let Ok(children) = lists.get(*list_ref) else {
         return;
     };
+    let selection = selections.get(*list_ref);
 
     let existing = children
         .map(|c| {
@@ -282,34 +380,35 @@ fn on_items_changed(
         let Ok(item) = items_query.get(item_ref) else {
             continue;
         };
+        let is_selected = selection.is_some_and(|selection| selection.is_selected(item_ref));
         commands.entity(*list_ref).with_children(|spawner| {
-            spawner
-                .spawn((
-                    Name::new("ItemView"),
-                    Button,
-                    // Allow scrolling
-                    Pickable {
-                        should_block_lower: false,
-                        ..default()
-                    },
-                    Node {
-                        display: Display::Flex,
-                        justify_self: JustifySelf::Stretch,
-                        // flex_grow: 1.0,
-                        justify_content: JustifyContent::Stretch,
-                        align_items: AlignItems::Stretch,
-                        padding: UiRect::ZERO,
-                        ..default()
-                    },
-                    ItemView {
-                        item_ref,
-                        list_ref: *list_ref,
-                    },
-                ))
-                .observe(handle_mouse_events)
-                .with_children(|parent| {
-                    parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
-                });
+            let mut view = spawner.spawn((
+                Name::new("ItemView"),
+                // Allow scrolling
+                Pickable {
+                    should_block_lower: false,
+                    ..default()
+                },
+                Node {
+                    display: Display::Flex,
+                    justify_self: JustifySelf::Stretch,
+                    // flex_grow: 1.0,
+                    justify_content: JustifyContent::Stretch,
+                    align_items: AlignItems::Stretch,
+                    padding: UiRect::ZERO,
+                    ..default()
+                },
+                ItemView {
+                    item_ref,
+                    list_ref: *list_ref,
+                },
+            ));
+            view.observe(handle_mouse_events).with_children(|parent| {
+                parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
+            });
+            if is_selected {
+                view.insert(Selected);
+            }
         });
     }
 

@@ -32,7 +32,7 @@
         Click(Left),
         Check(Component(target: Name("own combo"), path: "ComboState", is: Eq(Open))),
         Check(Component(target: Name("third combo"), path: "ComboState", is: Eq(Closed))),
-        MoveTo(Within(Name("own combo"), Role(role: Button, label: "Portugal"))),
+        MoveTo(Within(Name("own combo"), Role(role: ListItem, label: "Portugal"))),
         Click(Left),
         Check(App(Selected(of: Name("own combo"), items: ["Portugal"]))),
         Check(TextOf(Within(Name("own combo"), Component("ComboButton")), StartsWith("Portugal"))),

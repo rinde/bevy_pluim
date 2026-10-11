@@ -9,23 +9,26 @@
     setup: App(Tabs),
     steps: [
         Wait(2),
-        Check(App(Selected(of: Role(role: Button, label: "Panel A"), items: ["Panel A"]))),
+        Check(App(Selected(of: Role(role: ListItem, label: "Panel A"), items: ["Panel A"]))),
+        Check(Selected(Role(role: ListItem, label: "Panel A"))),
         Check(Visible(Within(Name("Stack"), Text("Panel A")))),
         Check(Not(Exists(Within(Name("Stack"), Text("Panel B"))))),
         Check(Not(Exists(Within(Name("Stack"), Text("Card demo"))))),
 
         // Panel B is created on its first click.
-        MoveTo(Role(role: Button, label: "Panel B")), Click(Left),
+        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
         Wait(2),
-        Check(App(Selected(of: Role(role: Button, label: "Panel B"), items: ["Panel B"]))),
+        Check(App(Selected(of: Role(role: ListItem, label: "Panel B"), items: ["Panel B"]))),
+        Check(Selected(Role(role: ListItem, label: "Panel B"))),
+        Check(Not(Selected(Role(role: ListItem, label: "Panel A")))),
         Check(Visible(Within(Name("Stack"), Text("Panel B")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
         Check(Not(Exists(Within(Name("Stack"), Text("Card demo"))))),
 
         // So are the cards.
-        MoveTo(Role(role: Button, label: "Card demo")), Click(Left),
+        MoveTo(Role(role: ListItem, label: "Card demo")), Click(Left),
         Wait(2),
-        Check(App(Selected(of: Role(role: Button, label: "Card demo"), items: ["Card demo"]))),
+        Check(App(Selected(of: Role(role: ListItem, label: "Card demo"), items: ["Card demo"]))),
         Check(Visible(Within(Name("Stack"), Text("Card demo")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
@@ -41,20 +44,20 @@
         "#)),
 
         // Back to the first tab, which is shown again, and to Panel B.
-        MoveTo(Role(role: Button, label: "Panel A")), Click(Left),
+        MoveTo(Role(role: ListItem, label: "Panel A")), Click(Left),
         Wait(2),
-        Check(App(Selected(of: Role(role: Button, label: "Panel A"), items: ["Panel A"]))),
+        Check(App(Selected(of: Role(role: ListItem, label: "Panel A"), items: ["Panel A"]))),
         Check(Visible(Within(Name("Stack"), Text("Panel A")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
         Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
-        MoveTo(Role(role: Button, label: "Panel B")), Click(Left),
+        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
         Wait(2),
         Check(Visible(Within(Name("Stack"), Text("Panel B")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
         Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
     ],
     expect: [
-        App(Selected(of: Role(role: Button, label: "Panel B"), items: ["Panel B"])),
+        App(Selected(of: Role(role: ListItem, label: "Panel B"), items: ["Panel B"])),
         Visible(Within(Name("Stack"), Text("Panel B"))),
     ],
 )

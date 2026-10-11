@@ -9,14 +9,14 @@
     steps: [
         Wait(2),
         Check(App(Selected(of: Name("one list"), items: ["NL"]))),
-        MoveTo(Within(Name("one list"), Role(role: Button, label: "CA"))), Click(Left),
+        MoveTo(Within(Name("one list"), Role(role: ListItem, label: "CA"))), Click(Left),
         Check(App(Selected(of: Name("one list"), items: ["CA"]))),
         // The selected item cannot be deselected.
         Click(Left),
         Check(App(Selected(of: Name("one list"), items: ["CA"]))),
-        MoveTo(Within(Name("one list"), Role(role: Button, label: "BE"))), Click(Left),
+        MoveTo(Within(Name("one list"), Role(role: ListItem, label: "BE"))), Click(Left),
         Check(App(Selected(of: Name("one list"), items: ["BE"]))),
-        MoveTo(Within(Name("one list"), Role(role: Button, label: "NL"))), Click(Left),
+        MoveTo(Within(Name("one list"), Role(role: ListItem, label: "NL"))), Click(Left),
         Check(App(Selected(of: Name("one list"), items: ["NL"]))),
         // The other lists have selections of their own.
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),

@@ -18,7 +18,7 @@
             path: "ComputedNode.scroll_position.y",
             is: Eq(0.0),
         )),
-        MoveTo(Within(Name("scrolling list"), Role(role: Button, label: "Row 1"))),
+        MoveTo(Within(Name("scrolling list"), Role(role: ListItem, label: "Row 1"))),
         // Down: negative y moves the contents up.
         Wheel(x: 0.0, y: -40.0),
         Wait(2),

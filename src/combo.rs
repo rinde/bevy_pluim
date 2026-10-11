@@ -126,6 +126,10 @@ impl Combo {
                     .spawn((
                         List,
                         Float,
+                        // A popup floats over what is below it, so it takes the pointer from
+                        // there: a `List` lets it through, and a click on an item would
+                        // click the item beneath it as well.
+                        Pickable::default(),
                         Visibility::Hidden,
                         ComboList,
                         RelativeCursorPosition::default(),

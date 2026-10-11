@@ -16,17 +16,20 @@ use bevy::picking::backend::HitData;
 use bevy::picking::events::{Click, Pointer, Press, Release};
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, Pressed};
-use bevy::ui_widgets::{Activate, Button};
+use bevy::ui::{InteractionDisabled, Pressed, Selected};
+use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use bevy::window::WindowPlugin;
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::link::{Link, LinkState};
+use rin_bevy_ui::list::{ItemView, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
-use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionValue};
+use rin_bevy_ui::select::{
+    Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionValue,
+};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
 
@@ -652,4 +655,295 @@ fn no_entity_with<T: Component>(app: &mut App) -> bool {
     let world = app.world_mut();
     let mut query = world.query_filtered::<Entity, With<T>>();
     query.iter(world).next().is_none()
+}
+
+// ---- List ----
+
+/// A list over a selection of its own on `labels`, in a root node: the list, its
+/// item views in the order of the labels, and the selection.
+fn spawn_list(
+    app: &mut App,
+    selection: SelectionBuilderWithValue,
+    labels: &[&str],
+) -> (Entity, Vec<Entity>, Entity) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items: Vec<_> = labels.iter().map(|label| Item::new(*label)).collect();
+    let selection_ref = app
+        .world_mut()
+        .spawn(selection.build_with_items(items))
+        .id();
+    let list = spawn_list_on(app, root, selection_ref);
+    let views = item_views(app, list);
+    (list, views, selection_ref)
+}
+
+/// A list sharing the selection of `selection_ref`.
+fn spawn_list_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
+    let list = app
+        .world_mut()
+        .spawn((List, Selection::reference(selection_ref), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    list
+}
+
+fn item_views(app: &App, list: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(list)
+        .get::<Children>()
+        .map(|children| {
+            children
+                .iter()
+                .filter(|child| app.world().entity(*child).contains::<ItemView>())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn item_label(app: &App, item: Entity) -> String {
+    app.world()
+        .entity(item)
+        .get::<Item<String>>()
+        .unwrap()
+        .data
+        .clone()
+}
+
+/// What the views of `list` that carry [`Selected`] show, in the order of the list.
+fn selected_labels(app: &App, list: Entity) -> Vec<String> {
+    item_views(app, list)
+        .into_iter()
+        .filter(|view| app.world().entity(*view).contains::<Selected>())
+        .map(|view| {
+            let item_ref = app.world().entity(view).get::<ItemView>().unwrap().item_ref;
+            item_label(app, item_ref)
+        })
+        .collect()
+}
+
+/// The items that `selection_ref` selects, as their labels.
+fn selection_labels(app: &App, selection_ref: Entity) -> Vec<String> {
+    let Selection::Value(selection) = app
+        .world()
+        .entity(selection_ref)
+        .get::<Selection>()
+        .unwrap()
+    else {
+        return Vec::new();
+    };
+    selection.iter().map(|item| item_label(app, item)).collect()
+}
+
+/// What the `ListBox` sends when it picks `row`: a click on a row that is not
+/// `Selected`, or Enter on the active row.
+fn list_box_picks(app: &mut App, list: Entity, row: Entity) {
+    app.world_mut().trigger(ValueChange::<Entity> {
+        source: list,
+        value: row,
+        is_final: true,
+    });
+    app.update();
+}
+
+/// A click on `row` as the picking sends it: `Click`, then `Release`.
+fn click_row(app: &mut App, row: Entity) {
+    click_and_release(app, row);
+    app.update();
+}
+
+#[test]
+fn a_list_is_a_list_box_and_its_items_are_list_items() {
+    let mut app = headless_app();
+    let (list, views, _) = spawn_list(&mut app, Selection::builder().one(), &["a", "b"]);
+
+    assert!(app.world().entity(list).contains::<ListBox>());
+    assert_eq!(views.len(), 2);
+    for view in views {
+        assert!(app.world().entity(view).contains::<ListItem>());
+    }
+}
+
+#[test]
+fn the_items_of_the_selection_are_selected_and_the_others_are_not() {
+    let mut app = headless_app();
+    let (list, views, selection_ref) =
+        spawn_list(&mut app, Selection::builder().one(), &["a", "b", "c"]);
+    assert_eq!(selected_labels(&app, list), ["a"]);
+
+    // Selected follows the selection when something else changes it as well.
+    let c = app
+        .world()
+        .entity(views[2])
+        .get::<ItemView>()
+        .unwrap()
+        .item_ref;
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::One(c)));
+    app.update();
+
+    assert_eq!(selected_labels(&app, list), ["c"]);
+}
+
+#[test]
+fn lists_sharing_a_selection_all_show_it_as_selected() {
+    let mut app = headless_app();
+    let (first, _, selection_ref) =
+        spawn_list(&mut app, Selection::builder().zero_or_more(), &["a", "b"]);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let second = spawn_list_on(&mut app, root, selection_ref);
+    assert!(selected_labels(&app, second).is_empty());
+
+    let views = item_views(&app, first);
+    list_box_picks(&mut app, first, views[1]);
+
+    assert_eq!(selected_labels(&app, first), ["b"]);
+    assert_eq!(selected_labels(&app, second), ["b"]);
+}
+
+#[test]
+fn a_list_box_multi_select_is_on_a_list_over_a_selection_of_many() {
+    let mut app = headless_app();
+    for (selection, multiple) in [
+        (Selection::builder().one(), false),
+        (Selection::builder().zero_or_one(), false),
+        (Selection::builder().one_or_more(), true),
+        (Selection::builder().zero_or_more(), true),
+    ] {
+        let (list, _, _) = spawn_list(&mut app, selection, &["a", "b"]);
+
+        assert_eq!(
+            app.world().entity(list).contains::<ListBoxMultiSelect>(),
+            multiple
+        );
+    }
+}
+
+#[test]
+fn clicking_an_item_selects_it_and_replaces_the_selection_of_a_one_list() {
+    let mut app = headless_app();
+    let (list, views, selection_ref) =
+        spawn_list(&mut app, Selection::builder().one(), &["a", "b"]);
+
+    click_row(&mut app, views[1]);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["b"]);
+    assert_eq!(selected_labels(&app, list), ["b"]);
+
+    // The selected item cannot be deselected.
+    click_row(&mut app, views[1]);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["b"]);
+    assert_eq!(selected_labels(&app, list), ["b"]);
+}
+
+#[test]
+fn clicking_the_selected_item_of_a_zero_or_one_list_deselects_it() {
+    let mut app = headless_app();
+    let (list, views, selection_ref) =
+        spawn_list(&mut app, Selection::builder().zero_or_one(), &["a", "b"]);
+
+    click_row(&mut app, views[0]);
+    assert_eq!(selected_labels(&app, list), ["a"]);
+
+    click_row(&mut app, views[1]);
+    assert_eq!(selected_labels(&app, list), ["b"]);
+
+    click_row(&mut app, views[1]);
+
+    assert!(selection_labels(&app, selection_ref).is_empty());
+    assert!(selected_labels(&app, list).is_empty());
+}
+
+#[test]
+fn clicking_a_selected_item_that_is_not_the_first_deselects_it() {
+    // The `ListBox` sends a change for every selected row but the first one, and
+    // the release of the same click deselects it: the click must not undo itself.
+    let mut app = headless_app();
+    let (list, views, selection_ref) = spawn_list(
+        &mut app,
+        Selection::builder().zero_or_more(),
+        &["a", "b", "c"],
+    );
+    for view in &views[..2] {
+        click_row(&mut app, *view);
+    }
+    assert_eq!(selected_labels(&app, list), ["a", "b"]);
+
+    click_row(&mut app, views[1]);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["a"]);
+    assert_eq!(selected_labels(&app, list), ["a"]);
+}
+
+#[test]
+fn the_last_selected_item_of_a_one_or_more_list_stays_selected() {
+    let mut app = headless_app();
+    let (list, views, selection_ref) =
+        spawn_list(&mut app, Selection::builder().one_or_more(), &["a", "b"]);
+    assert_eq!(selected_labels(&app, list), ["a"]);
+
+    click_row(&mut app, views[0]);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["a"]);
+    assert_eq!(selected_labels(&app, list), ["a"]);
+
+    click_row(&mut app, views[1]);
+    click_row(&mut app, views[0]);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["b"]);
+    assert_eq!(selected_labels(&app, list), ["b"]);
+}
+
+#[test]
+fn what_the_list_box_picks_is_selected_as_far_as_the_selection_allows() {
+    // Enter or Space on the active row sends the same change as a click.
+    let mut app = headless_app();
+    let (list, views, selection_ref) =
+        spawn_list(&mut app, Selection::builder().one_or_more(), &["a", "b"]);
+
+    list_box_picks(&mut app, list, views[1]);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["a", "b"]);
+    assert_eq!(selected_labels(&app, list), ["a", "b"]);
+
+    // A change for a row that is not an item of the list is ignored.
+    let stranger = app.world_mut().spawn_empty().id();
+    list_box_picks(&mut app, list, stranger);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["a", "b"]);
+}
+
+#[test]
+fn a_view_for_a_new_item_starts_unselected_unless_the_item_is_in_the_selection() {
+    let mut app = headless_app();
+    let (list, _, selection_ref) =
+        spawn_list(&mut app, Selection::builder().zero_or_more(), &["a"]);
+    assert_eq!(item_views(&app, list).len(), 1);
+
+    // A new item that is not in the selection gets a view without `Selected`.
+    app.world_mut()
+        .spawn((Item::new("b"), ItemOf(selection_ref)));
+    app.update();
+    app.update();
+
+    assert_eq!(item_views(&app, list).len(), 2);
+    assert!(selected_labels(&app, list).is_empty());
+
+    // A new item that the selection already holds gets a view with `Selected`.
+    let item_c = app
+        .world_mut()
+        .spawn((Item::new("c"), ItemOf(selection_ref)))
+        .id();
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::ZeroOrMore(
+            smallvec::smallvec![item_c],
+        )));
+    app.update();
+    app.update();
+
+    assert_eq!(item_views(&app, list).len(), 3);
+    assert_eq!(selected_labels(&app, list), ["c"]);
 }

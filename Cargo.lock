@@ -4889,7 +4889,7 @@ dependencies = [
 [[package]]
 name = "rin_bevy_ui_tester"
 version = "0.1.0"
-source = "git+https://github.com/rinde/rin-bevy-ui-tester?rev=a3366c452281a646aa172d98a95b96f5e95804ff#a3366c452281a646aa172d98a95b96f5e95804ff"
+source = "git+https://github.com/rinde/rin-bevy-ui-tester?rev=db402f12682b9d4c1f704be86c1f926522f4d32d#db402f12682b9d4c1f704be86c1f926522f4d32d"
 dependencies = [
  "bevy",
  "image",

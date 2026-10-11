@@ -23,8 +23,8 @@
         Check(Not(Visible(Within(Name("third combo"), Component("ComboList"))))),
         // The middle of "Canada" of the floating list is over "Underneath". MoveTo
         // waits until the item is the topmost node that takes the pointer there.
-        MoveTo(Within(Name("first combo"), Role(role: Button, label: "Canada"))),
-        Check(Hovered(Within(Name("first combo"), Role(role: Button, label: "Canada")))),
+        MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
+        Check(Hovered(Within(Name("first combo"), Role(role: ListItem, label: "Canada")))),
     ],
     expect: [Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))],
 )

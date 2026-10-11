@@ -26,7 +26,7 @@ pub mod tailwind;
 pub mod theme;
 
 use bevy::prelude::*;
-use bevy::ui_widgets::ButtonPlugin;
+use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin};
 
 use crate::breadcrumbs::BreadCrumbsPlugin;
 use crate::card::CardPlugin;
@@ -56,6 +56,9 @@ impl Plugin for WidgetsPlugin {
         // twice would panic, so add them only when they are missing.
         if !app.is_plugin_added::<ButtonPlugin>() {
             app.add_plugins(ButtonPlugin);
+        }
+        if !app.is_plugin_added::<ListBoxPlugin>() {
+            app.add_plugins(ListBoxPlugin);
         }
         app.init_resource::<Theme>()
             .add_plugins(ListPlugin)
