@@ -209,7 +209,10 @@ of them (`just example gallery -- --run-all stack link`).
   left alone. The camera is read when the `Node` is added, so a
   `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
   `PostStartup` system logs an `error!` (it does not panic) unless there is
-  exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`.
+  exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`,
+  so a widget must not take `Single<.., With<UiRoot>>`: `ColorPaletteCombo`
+  spawns its popup under its own topmost ancestor instead (and logs an `error!`
+  if it has no parent).
   The tester's cursor overlay is aimed at the app's default camera and so has
   roots without a `UiTargetCamera`; they carry `NotUnderTest`, and the gallery
   example takes `UiRoot` off whatever has it.
@@ -699,8 +702,9 @@ a file can check any `Reflect` type of the app by short type path.
   swatch is `Selected` (`Check(Selected(Nth(60, ..)))`) and has a `BorderColor.top`
   other than `background_primary`. A combo's
   button is its `ColorPushButton` and the colour it shows the
-  `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the root,
-  not of the combo, and has no name of its own, so it is
+  `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the combo's
+  topmost ancestor (its screen's root), not of the combo, and has no name of
+  its own, so it is
   `Nth(i, Name("ColorPaletteComboFloat"))` in spawn order (first, second, own)
   and its swatches `Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")),
   Component("ItemView")))`; the combo's state is `Component(target:
@@ -738,9 +742,11 @@ recorded_scenarios_gpu --features record`.
   hover colours in lists and palettes) misbehave in a recording (#100). The
   scenarios that fail only there are listed in `FAILS_WHEN_RECORDED` in the test,
   with their issues; the test fails for any other scenario, and also when a
-  listed one passes, so remove a name when its issue is fixed. One of them
-  (#103: the `Tabs` screen's Card demo palettes never appear in the recording)
-  is unexplained and may share a cause with #100.
+  listed one passes, so remove a name when its issue is fixed. #103 (the
+  `Tabs` screen's palette combos got no popup, because the overlay's extra roots
+  made `on_insert_combo` skip them) is fixed in the library and tested
+  headless; `a deselected stack item keeps its state when it is shown again`
+  stays listed until `just record` shows it passing.
 - **The overlay's roots.** The recorder's `CursorOverlayPlugin` spawns root
   `Node`s without a `UiTargetCamera`, so `UiRoot` counts them and logs its
   one-root `error!` (#101; the recorder adds no `LogPlugin`, so it is not

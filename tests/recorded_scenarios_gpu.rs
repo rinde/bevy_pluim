@@ -26,11 +26,12 @@ use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui_tester::{Recorder, Registry, load_ron_file, ron_files};
 
 /// Scenarios that pass headless but fail in a recording, because of a bug in a
-/// widget that only shows with UI drawn to an image (#100), or for a reason not
-/// yet explained (#103: the Card demo's palettes never appear in the recording,
-/// which may share a cause with #100). They are still recorded, and show as
-/// failures in the index. The test fails when one of them passes, so remove
-/// each name when its issue is fixed.
+/// widget that only shows with UI drawn to an image (#100). The Card demo
+/// scenario is listed for #103 (palette combos got no popup when the app had
+/// more than one `UiRoot`), fixed in the library but not yet seen passing in a
+/// recording. They are still recorded, and show as failures in the index. The
+/// test fails when one of them passes, so remove each name when its issue is
+/// fixed.
 const FAILS_WHEN_RECORDED: [&str; 12] = [
     "a palette combo opens its popup under its button",
     "a click outside an open palette combo closes it without changing the selection",
