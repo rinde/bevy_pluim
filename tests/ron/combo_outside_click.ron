@@ -21,7 +21,7 @@
         // With "Canada" selected.
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
-        MoveTo(Within(Name("first combo"), Role(role: Button, label: "Canada"))),
+        MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
         Click(Left),
         Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),

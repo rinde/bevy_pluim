@@ -33,10 +33,10 @@
         Check(Exists(Within(Name("one-or-more list"), Text("Chile")))),
         Check(Exists(Within(Name("zero-or-more list"), Text("Chile")))),
         // The new item is selectable, and the lists sharing a selection follow.
-        MoveTo(Within(Name("one-or-more grid list"), Role(role: Button, label: "Suriname"))), Click(Left),
+        MoveTo(Within(Name("one-or-more grid list"), Role(role: ListItem, label: "Suriname"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Suriname"]))),
         Check(App(Selected(of: Name("one-or-more grid list"), items: ["Netherlands", "Suriname"]))),
-        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Chile"))), Click(Left),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: ListItem, label: "Chile"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-more list"), items: ["Chile"]))),
     ],
     expect: [App(Selected(of: Name("zero-or-more list"), items: ["Chile"]))],

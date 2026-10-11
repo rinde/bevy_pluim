@@ -9,17 +9,17 @@
     steps: [
         Wait(2),
         Check(App(Selected(of: Name("zero-or-more list"), items: []))),
-        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Canada"))), Click(Left),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: ListItem, label: "Canada"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-more list"), items: ["Canada"]))),
-        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Portugal"))), Click(Left),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: ListItem, label: "Portugal"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-more list"), items: ["Canada", "Portugal"]))),
-        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Canada"))), Click(Left),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: ListItem, label: "Canada"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-more list"), items: ["Portugal"]))),
         // The last one can go too.
-        MoveTo(Within(Name("zero-or-more list"), Role(role: Button, label: "Portugal"))), Click(Left),
+        MoveTo(Within(Name("zero-or-more list"), Role(role: ListItem, label: "Portugal"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-more list"), items: []))),
         // Toggling the other ZeroOrMore list, a grid with items of its own.
-        MoveTo(Within(Name("zero-or-more grid list"), Role(role: Button, label: "Belgium"))), Click(Left),
+        MoveTo(Within(Name("zero-or-more grid list"), Role(role: ListItem, label: "Belgium"))), Click(Left),
         Check(App(Selected(of: Name("zero-or-more grid list"), items: ["Belgium"]))),
         Click(Left),
         Check(App(Selected(of: Name("zero-or-more grid list"), items: []))),

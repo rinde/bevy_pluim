@@ -10,7 +10,7 @@
         // The list inside each combo refers to the combo's selection.
         Check(App(Selected(of: Within(Name("first combo"), Component("ComboList")), items: []))),
         // Pick in the list: the combos follow.
-        MoveTo(Within(Name("country list"), Role(role: Button, label: "Indonesia"))),
+        MoveTo(Within(Name("country list"), Role(role: ListItem, label: "Indonesia"))),
         Click(Left),
         Check(App(Selected(of: Name("country list"), items: ["Indonesia"]))),
         Check(App(Selected(of: Name("first combo"), items: ["Indonesia"]))),
@@ -23,7 +23,7 @@
         // Pick in the third combo: the list and the first combo follow.
         MoveTo(Within(Name("third combo"), Component("ComboButton"))),
         Click(Left),
-        MoveTo(Within(Name("third combo"), Role(role: Button, label: "Belgium"))),
+        MoveTo(Within(Name("third combo"), Role(role: ListItem, label: "Belgium"))),
         Click(Left),
         Check(App(Selected(of: Name("third combo"), items: ["Belgium"]))),
         Check(App(Selected(of: Name("country list"), items: ["Belgium"]))),
@@ -33,7 +33,7 @@
         // Pick in the combo with a selection of its own: the others stay.
         MoveTo(Within(Name("own combo"), Component("ComboButton"))),
         Click(Left),
-        MoveTo(Within(Name("own combo"), Role(role: Button, label: "Canada"))),
+        MoveTo(Within(Name("own combo"), Role(role: ListItem, label: "Canada"))),
         Click(Left),
         Check(App(Selected(of: Name("own combo"), items: ["Canada"]))),
         Check(TextOf(Within(Name("own combo"), Component("ComboButton")), StartsWith("Canada"))),

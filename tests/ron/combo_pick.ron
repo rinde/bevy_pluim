@@ -13,7 +13,7 @@
         Click(Left),
         Check(Visible(Within(Name("first combo"), Component("ComboList")))),
         // Over the "Underneath" button.
-        MoveTo(Within(Name("first combo"), Role(role: Button, label: "Canada"))),
+        MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
         Click(Left),
         Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
@@ -30,7 +30,7 @@
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
         Check(Visible(Within(Name("first combo"), Component("ComboList")))),
-        MoveTo(Within(Name("first combo"), Role(role: Button, label: "Belgium"))),
+        MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Belgium"))),
         Click(Left),
         Check(App(Selected(of: Name("first combo"), items: ["Belgium"]))),
         Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),

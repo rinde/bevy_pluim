@@ -123,7 +123,7 @@ checkout's build so Bevy is not compiled again.
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click |
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged (the wheel is handled by `list.rs`'s `update_scroll_position`) |
-| `list.rs` | `List` with `ListLayout` and `CornerStyle`: renders the items of its `Selection` as `ItemView`s and keeps them in sync |
+| `list.rs` | `List` with `ListLayout` and `CornerStyle`: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
@@ -224,8 +224,8 @@ of them (`just example gallery -- --run-all stack link`).
   `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot starve
   it.
 - **Buttons are `bevy::ui_widgets::Button`.** `PushButton`, `ColorPushButton` and
-  `Link` (the other widgets still use `bevy::ui::Button`, until they are moved
-  over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate` on
+  `Link` (`NumericStepper`'s buttons are `PushButton`s; the other widgets still
+  use `bevy::ui::Button`, until they are moved over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate` on
   release over the button and on Enter / Space for a focused one, never while
   `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` unless the app
   already has it (`DefaultPlugins` and the tester's `HeadlessPlugins` add all of
@@ -243,6 +243,33 @@ of them (`just example gallery -- --run-all stack link`).
   hover.
   The crumbs of `BreadCrumbs` observe `Activate`; the current crumb is a
   disabled `Link`.
+- **Lists are `ListBox`es, and `Selection` keeps the last word.** A `List` is a
+  `bevy::ui_widgets::ListBox` and its `ItemView`s are `ListItem`s (`Selectable`,
+  `Role::ListItem`); `WidgetsPlugin` adds `ListBoxPlugin` unless the app has it.
+  `Selected` is Bevy's marker for an item in the selection, and `selection_change`
+  in `list.rs` keeps it in step with the `Selection` (own or `Selection::Ref`), so
+  it is on exactly the items of the selection, and `ListBoxMultiSelect` is on the
+  list while the selection allows more than one item (`OneOrMore`, `ZeroOrMore`).
+  **The choice:** the `ListBox` observers send `ValueChange<Entity>` for a click
+  on a row that is not `Selected`, and for Enter / Space on the active row, and
+  insert and remove `Selected` only if the app registers `listbox_update_selection`.
+  We do not register it: `on_value_change` turns the `ValueChange` into a
+  `SelectionParam::update_selection` instead, so `One`, `ZeroOrOne`, `OneOrMore`
+  and `ZeroOrMore` (and `None` for a disallowed change) keep deciding, and
+  `Selected` can never disagree with the `Selection`. The `ListBox` ignores a click
+  on a selected row, and so deselecting is the item's `MouseEvent::Released`. Both go by
+  the `Selected` the `ListBox` saw, not by the `Selection`: a release is handled after
+  the `ValueChange` of the same click, and one that read the `Selection` would undo
+  it. Hover and selected colours stay on `MouseEvent`. A `ListBox` also sets an
+  `ActiveDescendant` on a click and handles the arrow keys, Home and End once the
+  list has focus; a `List` is not focusable yet, so the keys do nothing, and the
+  active row is not drawn. `ItemView`s keep `should_block_lower: false` so the wheel
+  reaches the scroll area, which also lets a click through to what is below: a popup
+  that floats over other widgets blocks the pointer itself (`Combo`'s list has
+  `Pickable::default()`).
+  A `ColorPalette` is a `List` with `NoDefaultItems`, so it is a `ListBox` of
+  `ListItem`s as well, but `list.rs` leaves it alone: its swatches do not get
+  `Selected`, and its clicks stay its own, until it follows this pattern (#110).
 - **Selections are immutable components.** Change one by going through
   `SelectionParam::update_selection` / `update_selection_single`, whose
   closures return `Option<SelectionValue>` from methods such as
@@ -574,8 +601,9 @@ a file can check any `Reflect` type of the app by short type path.
   inside the `list scroll area`, 100 pixels high). "Add country" spawns the
   next of Suriname, Chile and Kenya into the shared items. A file reaches an
   item with `Within(Name("one list"), Role(role: Button, label: "CA"))`
-  (an `ItemView` is a `Button`; target it, not its text, which the pointer
-  passes through). `lists_screen_fits_window` keeps all of it inside the
+  (an `ItemView` is a `ListItem`; target it, not its text, which the pointer
+  passes through; `Selected(..)` and `Not(Selected(..))` say whether it is in the
+  selection, and a `Tree(..)` shows `list-item "CA" [selected]`). `lists_screen_fits_window` keeps all of it inside the
   window. A list does not scroll itself: the wheel moves the `ScrollContents`
   of the area around it; read where it scrolled to as the scroll area's
   position above describes.
@@ -603,10 +631,12 @@ a file can check any `Reflect` type of the app by short type path.
   floats over "Underneath", whose `PushButton` blocks the pointer: that is
   what makes the Float's `GlobalZIndex` testable, because the tester's
   actionability walk skips nodes with `should_block_lower: false`, which the
-  `List` and its `ItemView`s are, so only a button can cover a list item.
+  `List` and its `ItemView`s are, so only a button can cover a list item (the
+  `Combo`'s list itself blocks, so a click on it does not reach the `country list`
+  underneath it).
   Reach the button with `Within(Name("first combo"), Component("ComboButton"))`,
   its list with `Component("ComboList")` and an item with
-  `Within(Name("first combo"), Role(role: Button, label: "Canada"))` (the
+  `Within(Name("first combo"), Role(role: ListItem, label: "Canada"))` (the
   hidden lists hold the same labels, so always narrow by combo). `ComboState`
   is read with `Component(target: Name(..), path: "ComboState", is: Eq(Open))`;
   `Visible` of the list (or one item) says whether it shows. A click on empty
@@ -628,7 +658,7 @@ a file can check any `Reflect` type of the app by short type path.
   The panels that were created are counted by `Count` of `PushButton`s
   (`stack_shows_only_the_selected_item`); the `Tabs` screen's number list
   keeps its selection while its panel is hidden
-  (`stack_keeps_state_of_hidden_item`). The tabs are the `Button`s
+  (`stack_keeps_state_of_hidden_item`). The tabs are the `ListItem`s
   `Panel A`, `Panel B` and `Card demo`.
 - **Targets on the `ColorPalette` screen.** A row of `first palette combo`,
   `second palette combo` (the two share one selection) and `own palette combo`
