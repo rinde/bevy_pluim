@@ -9,7 +9,7 @@
         Wait(2),
         MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
         Click(Left),
-        MoveTo(Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))),
+        MoveTo(Nth(60, Within(Name("first palette combo popup"), Component("ItemView")))),
         Click(Left),
         // Away from the button, so that its hover colour does not show.
         MoveTo(Screen((1100.0, 600.0))),
