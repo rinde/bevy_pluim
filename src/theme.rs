@@ -113,6 +113,8 @@ pub struct ThemeColors {
     pub border_highlight: Color,
     /// The colour of text.
     pub text_primary: Color,
+    /// The colour of the text of a disabled widget.
+    pub text_disabled: Color,
     /// The colour of a link.
     pub link: Color,
     /// The colour of a link while it is pressed.
@@ -147,6 +149,7 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     border: Color::Srgba(GRAY_200),
     border_highlight: Color::Srgba(BLUE_400),
     text_primary: Color::Srgba(GRAY_900),
+    text_disabled: Color::Srgba(GRAY_400),
     link: Color::Srgba(BLUE_600),
     link_selected: Color::Srgba(BLUE_800),
     large_shadow: SHADOW_LG,
@@ -169,6 +172,7 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     border: Color::Srgba(GRAY_700),
     border_highlight: Color::Srgba(BLUE_800),
     text_primary: Color::Srgba(GRAY_100),
+    text_disabled: Color::Srgba(GRAY_600),
     link: Color::Srgba(BLUE_400),
     link_selected: Color::Srgba(BLUE_200),
     large_shadow: SHADOW_LG_DARK_MODE,

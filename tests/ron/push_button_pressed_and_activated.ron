@@ -1,0 +1,26 @@
+// A push button is Bevy's `Button`: it is `Pressed` while the mouse button is
+// held, and `Activate` is triggered when it is let go over the button (the
+// Buttons screen counts the activations of "Add" in `Clicks`). Pressing and then
+// moving away does not activate it.
+(
+    format_version: 3,
+    name: "a push button is pressed while held and activated on release",
+    setup: App(Buttons),
+    steps: [
+        Check(Not(Pressed(Role(role: Button, label: "Add")))),
+        MoveTo(Role(role: Button, label: "Add")),
+        Press(Left),
+        Check(Pressed(Role(role: Button, label: "Add"))),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        Release(Left),
+        Check(Not(Pressed(Role(role: Button, label: "Add")))),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        // Pressed on "Add" but let go over "Other": nothing is activated.
+        Press(Left),
+        MoveTo(Role(role: Button, label: "Other")),
+        Release(Left),
+        Check(Not(Pressed(Role(role: Button, label: "Add")))),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(1))],
+)
