@@ -661,15 +661,20 @@ fn two_color_selection() -> impl Bundle {
         .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data }))
 }
 
-/// The entities named `ColorPaletteComboFloat`, the popups of palette combos.
-fn palette_combo_floats(app: &mut App) -> Vec<Entity> {
+/// The entities named `entity_name`.
+fn entities_named(app: &mut App, entity_name: &str) -> Vec<Entity> {
     let world = app.world_mut();
     let mut query = world.query::<(Entity, &Name)>();
     query
         .iter(world)
-        .filter(|(_, name)| name.as_str() == "ColorPaletteComboFloat")
+        .filter(|(_, name)| name.as_str() == entity_name)
         .map(|(entity, _)| entity)
         .collect()
+}
+
+/// The popups of palette combos that kept their default name.
+fn palette_combo_floats(app: &mut App) -> Vec<Entity> {
+    entities_named(app, "ColorPaletteCombo popup")
 }
 
 #[test]
@@ -693,6 +698,35 @@ fn a_color_palette_combo_gets_its_popup_when_the_app_has_two_ui_roots() {
     );
     let floats = palette_combo_floats(&mut app);
     assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
+}
+
+#[test]
+fn a_color_palette_combo_popup_is_named_after_its_combo() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    for name in ["first", "second"] {
+        app.world_mut().spawn((
+            ColorPaletteCombo,
+            Name::new(name),
+            two_color_selection(),
+            ChildOf(root),
+        ));
+    }
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+
+    app.update();
+    app.update();
+
+    for popup in ["first popup", "second popup", "ColorPaletteCombo popup"] {
+        let popups = entities_named(&mut app, popup);
+        assert_eq!(popups.len(), 1, "one {popup:?}, got {popups:?}");
+        assert_eq!(
+            app.world().entity(popups[0]).get::<ChildOf>().map(|c| c.0),
+            Some(root),
+            "{popup:?} stays a child of the root"
+        );
+    }
 }
 
 #[test]

@@ -703,10 +703,11 @@ a file can check any `Reflect` type of the app by short type path.
   other than `background_primary`. A combo's
   button is its `ColorPushButton` and the colour it shows the
   `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the combo's
-  topmost ancestor (its screen's root), not of the combo, and has no name of
-  its own, so it is
-  `Nth(i, Name("ColorPaletteComboFloat"))` in spawn order (first, second, own)
-  and its swatches `Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")),
+  topmost ancestor (its screen's root), not of the combo, and is named after
+  it when it is spawned (`first palette combo popup`, `second palette combo
+  popup`, `own palette combo popup`; a combo with only its default name has
+  `ColorPaletteCombo popup`), whatever order the combos are in. Its swatches
+  are `Nth(60, Within(Name("first palette combo popup"),
   Component("ItemView")))`; the combo's state is `Component(target:
   Name("first palette combo"), path: "State", is: Eq(Open))` and the popup's
   position the `UiGlobalTransform.0.translation` (the centre) of the float.

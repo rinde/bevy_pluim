@@ -1,0 +1,22 @@
+// A palette combo's popup is named after its combo, so a file reaches it by
+// name whatever order the combos were spawned in: opening "own palette combo"
+// (the third) shows "own palette combo popup" and leaves the popups of the
+// first and second combos hidden.
+(
+    format_version: 3,
+    name: "a palette combo popup is found by the name of its combo",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Check(Not(Visible(Name("first palette combo popup")))),
+        Check(Not(Visible(Name("second palette combo popup")))),
+        Check(Not(Visible(Name("own palette combo popup")))),
+        MoveTo(Within(Name("own palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("own palette combo"), path: "State", is: Eq(Open))),
+        Check(Visible(Name("own palette combo popup"))),
+        Check(Not(Visible(Name("first palette combo popup")))),
+        Check(Not(Visible(Name("second palette combo popup")))),
+    ],
+    expect: [],
+)

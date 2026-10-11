@@ -59,8 +59,8 @@ pub struct ColorPaletteCombo;
 #[derive(Component, Debug, Copy, Clone)]
 struct ColorPaletteComboButton;
 
+/// Marks the popup of a [`ColorPaletteCombo`].
 #[derive(Component, Debug, Copy, Clone)]
-#[require(Name::new("ColorPaletteComboFloat"))]
 struct ColorPaletteComboFloat;
 
 /// Builds a [`ColorPaletteCombo`]: its button, as a child, and its popup.
@@ -72,11 +72,16 @@ struct ColorPaletteComboFloat;
 /// screen. The parent must be there when the combo is inserted, so spawn the
 /// combo as a child. A combo without a parent has no such root, so it logs an
 /// `error!` and gets neither button nor popup.
+///
+/// The popup is named after its combo, `<combo name> popup`, so that a scenario
+/// or a query finds it by name whatever the order the combos were spawned in.
+/// The name is taken now: renaming the combo later does not rename its popup.
 fn on_insert_combo(
     t: On<Insert, ColorPaletteCombo>,
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
     parents: Query<&ChildOf>,
+    names: Query<&Name>,
 ) {
     let combo = t.event().event_target();
     if !parents.contains(combo) {
@@ -87,6 +92,7 @@ fn on_insert_combo(
         return;
     }
     let root = parents.root_ancestor(combo);
+    let popup_name = popup_name(names.get(combo).ok());
 
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
@@ -111,6 +117,7 @@ fn on_insert_combo(
             .spawn((
                 Float,
                 ColorPaletteComboFloat,
+                popup_name,
                 Node {
                     left: Val::Px(0.0),
                     top: Val::Px(40.0),
@@ -152,6 +159,14 @@ fn on_insert_combo(
         .insert(sub_refs)
         .observe(handle_combo_button_mouse_events)
         .observe(toggle_on_activate);
+}
+
+/// The name of the popup of a combo called `combo_name`.
+fn popup_name(combo_name: Option<&Name>) -> Name {
+    Name::new(format!(
+        "{} popup",
+        combo_name.map_or("ColorPaletteCombo", Name::as_str)
+    ))
 }
 
 fn on_remove_combo(
