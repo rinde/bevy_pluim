@@ -1,4 +1,5 @@
-// A press that would pass a bound leaves the value alone, for each value type.
+// A button that would pass a bound is disabled and a press on it (forced, the
+// tester refuses to click a disabled button) leaves the value alone, for each value type.
 // The u8 stepper has a step of 2 over 0 to 8: from 7 another step would reach 9,
 // from 1 one back would underflow, and both must stay put. After every
 // refused press one press the other way proves the stepper still works.
@@ -9,7 +10,7 @@
     steps: [
         MoveTo(Within(Name("default stepper"), Role(role: Button, label: "-"))), Click(Left),
         Check(TextOf(Name("default stepper"), Exact("- 0 +"))),
-        MoveTo(Within(Name("default stepper"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("default stepper"), Role(role: Button, label: "-"))), Check(Disabled(Within(Name("default stepper"), Role(role: Button, label: "-")))), Force(Click(Left)),
         Check(TextOf(Name("default stepper"), Exact("- 0 +"))),
         MoveTo(Within(Name("default stepper"), Role(role: Button, label: "+"))), Click(Left),
         Check(TextOf(Name("default stepper"), Exact("- 1 +"))),
@@ -19,7 +20,7 @@
         MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "+"))), Click(Left),
         MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "+"))), Click(Left),
         Check(TextOf(Name("u16 stepper"), Exact("- 15 +"))),
-        MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "+"))), Click(Left),
+        MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "+"))), Check(Disabled(Within(Name("u16 stepper"), Role(role: Button, label: "+")))), Force(Click(Left)),
         Check(TextOf(Name("u16 stepper"), Exact("- 15 +"))),
         MoveTo(Within(Name("u16 stepper"), Role(role: Button, label: "-"))), Click(Left),
         Check(TextOf(Name("u16 stepper"), Exact("- 14 +"))),
@@ -29,7 +30,7 @@
         MoveTo(Within(Name("u32 stepper"), Role(role: Button, label: "-"))), Click(Left),
         MoveTo(Within(Name("u32 stepper"), Role(role: Button, label: "-"))), Click(Left),
         Check(TextOf(Name("u32 stepper"), Exact("- 5 +"))),
-        MoveTo(Within(Name("u32 stepper"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("u32 stepper"), Role(role: Button, label: "-"))), Check(Disabled(Within(Name("u32 stepper"), Role(role: Button, label: "-")))), Force(Click(Left)),
         Check(TextOf(Name("u32 stepper"), Exact("- 5 +"))),
         MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Click(Left),
         MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Click(Left),
@@ -42,18 +43,18 @@
         MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Click(Left),
         MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Click(Left),
         Check(TextOf(Name("f32 stepper"), Exact("- 15.0 +"))),
-        MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Click(Left),
+        MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "+"))), Check(Disabled(Within(Name("f32 stepper"), Role(role: Button, label: "+")))), Force(Click(Left)),
         Check(TextOf(Name("f32 stepper"), Exact("- 15.0 +"))),
         MoveTo(Within(Name("f32 stepper"), Role(role: Button, label: "-"))), Click(Left),
         Check(TextOf(Name("f32 stepper"), Exact("- 14.5 +"))),
         MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "+"))), Click(Left),
-        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "+"))), Click(Left),
+        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "+"))), Check(Disabled(Within(Name("stepper by two"), Role(role: Button, label: "+")))), Force(Click(Left)),
         Check(TextOf(Name("stepper by two"), Exact("- 7 +"))),
         MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Click(Left),
         MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Click(Left),
         MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Click(Left),
         Check(TextOf(Name("stepper by two"), Exact("- 1 +"))),
-        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Click(Left),
+        MoveTo(Within(Name("stepper by two"), Role(role: Button, label: "-"))), Check(Disabled(Within(Name("stepper by two"), Role(role: Button, label: "-")))), Force(Click(Left)),
         Check(TextOf(Name("stepper by two"), Exact("- 1 +"))),
     ],
     expect: [TextOf(Name("stepper by two"), Exact("- 1 +"))],

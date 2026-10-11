@@ -1,8 +1,12 @@
 //! `NumericStepper`: a value with a decrease and an increase button.
 
 use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::relationship::RelatedSpawner;
+use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::ui::InteractionDisabled;
+use bevy::ui_widgets::Activate;
 use itertools::Either;
 
 use crate::label::Label;
@@ -17,7 +21,7 @@ pub struct NumericStepperPlugin;
 
 impl Plugin for NumericStepperPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_press).add_systems(
+        app.add_observer(on_activate).add_systems(
             Update,
             (
                 on_change,
@@ -32,6 +36,10 @@ impl Plugin for NumericStepperPlugin {
 /// A [`Value`] with a decrease and an increase button.
 ///
 /// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
+///
+/// The buttons are [`PushButton`]s that change the value when they are
+/// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
+/// [`InteractionDisabled`] until the value moves away from that bound again.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
@@ -58,15 +66,28 @@ impl NumericStepper {
             (default_value, value_ref)
         };
 
-        world.commands().entity(context.entity).insert(children![
-            (PushButton::from_label("-"), Decrease, value_ref),
-            (
-                Label::regular(value.to_string()),
-                NumericStepperLabel,
-                value_ref
-            ),
-            (PushButton::from_label("+"), Increase, value_ref),
-        ]);
+        world
+            .commands()
+            .entity(context.entity)
+            .insert(Children::spawn(SpawnWith(
+                move |spawner: &mut RelatedSpawner<ChildOf>| {
+                    let mut decrease =
+                        spawner.spawn((PushButton::from_label("-"), Decrease, value_ref));
+                    if !value.can_decrement() {
+                        decrease.insert(InteractionDisabled);
+                    }
+                    spawner.spawn((
+                        Label::regular(value.to_string()),
+                        NumericStepperLabel,
+                        value_ref,
+                    ));
+                    let mut increase =
+                        spawner.spawn((PushButton::from_label("+"), Increase, value_ref));
+                    if !value.can_increment() {
+                        increase.insert(InteractionDisabled);
+                    }
+                },
+            )));
 
         world
             .commands()
@@ -186,23 +207,15 @@ impl Value {
     /// Whether [`Self::increment`] would change the value.
     #[must_use]
     pub fn can_increment(&self) -> bool {
-        match self {
-            Self::F32 { value, max, .. } => value < max,
-            Self::U8(uint_value) => uint_value.value < uint_value.max,
-            Self::U16(uint_value) => uint_value.value < uint_value.max,
-            Self::U32(uint_value) => uint_value.value < uint_value.max,
-        }
+        let mut stepped = *self;
+        stepped.increment()
     }
 
     /// Whether [`Self::decrement`] would change the value.
     #[must_use]
     pub fn can_decrement(&self) -> bool {
-        match self {
-            Self::F32 { value, min, .. } => value > min,
-            Self::U8(uint_value) => uint_value.value > uint_value.min,
-            Self::U16(uint_value) => uint_value.value > uint_value.min,
-            Self::U32(uint_value) => uint_value.value > uint_value.min,
-        }
+        let mut stepped = *self;
+        stepped.decrement()
     }
 
     /// The value as an `f32`, if it is one.
@@ -278,20 +291,21 @@ fn theme_numeric_stepper(
         border_color.set_all(theme.colors.border);
     }
 }
-fn on_press(
-    trigger: On<Pointer<Release>>,
+fn on_activate(
+    trigger: On<Activate>,
     decrease: Query<&ValueRef, With<Decrease>>,
     increase: Query<&ValueRef, With<Increase>>,
     mut values: Query<&mut Value>,
 ) {
-    if let Ok(vr) = decrease.get(trigger.event().event_target()) {
+    let button = trigger.event().event_target();
+    if let Ok(vr) = decrease.get(button) {
         let Ok(mut value) = values.get_mut(vr.0) else {
             return;
         };
         if value.can_decrement() {
             value.decrement();
         }
-    } else if let Ok(vr) = increase.get(trigger.event().event_target()) {
+    } else if let Ok(vr) = increase.get(button) {
         let Ok(mut value) = values.get_mut(vr.0) else {
             return;
         };
@@ -304,6 +318,8 @@ fn on_press(
 fn on_change(
     changed_values: Query<(Entity, &Value), Changed<Value>>,
     mut numeric_stepper_labels: Query<(&ValueRef, &mut Text), With<NumericStepperLabel>>,
+    decrease: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Decrease>>,
+    increase: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Increase>>,
     mut commands: Commands,
 ) {
     for (value_ref, value) in &changed_values {
@@ -312,10 +328,29 @@ fn on_change(
                 text.0 = value.to_string();
             }
         }
+        for (button, button_value_ref, disabled) in &decrease {
+            if button_value_ref.0 == value_ref {
+                set_disabled(&mut commands, button, disabled, !value.can_decrement());
+            }
+        }
+        for (button, button_value_ref, disabled) in &increase {
+            if button_value_ref.0 == value_ref {
+                set_disabled(&mut commands, button, disabled, !value.can_increment());
+            }
+        }
         commands.trigger(ValueChange {
             entity: value_ref,
             value: *value,
         });
+    }
+}
+
+/// Makes `button` [`InteractionDisabled`] or not, touching it only if that changes.
+fn set_disabled(commands: &mut Commands, button: Entity, is_disabled: bool, should_be: bool) {
+    if should_be && !is_disabled {
+        commands.entity(button).insert(InteractionDisabled);
+    } else if !should_be && is_disabled {
+        commands.entity(button).remove::<InteractionDisabled>();
     }
 }
 
