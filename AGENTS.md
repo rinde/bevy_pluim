@@ -213,10 +213,31 @@ of them (`just example gallery -- --run-all stack link`).
   The tester's cursor overlay is aimed at the app's default camera and so has
   roots without a `UiTargetCamera`; they carry `NotUnderTest`, and the gallery
   example takes `UiRoot` off whatever has it.
-- **Mouse events.** `UiRoot` observes Bevy's `Pointer<Over | Pressed |
-  Released | Out>` and re-triggers each as a `MouseEvent` on the original
-  target. `MouseEvent` is crate-private: it is how widgets inside this crate
-  react to the pointer.
+- **Mouse events.** Global observers (registered by `WidgetsPlugin`, not on
+  `UiRoot`) watch Bevy's `Pointer<Over | Press | Release | Out>` and re-trigger
+  each as a `MouseEvent` on the original target, on the first hop of the
+  event only. `MouseEvent` is crate-private: it is how widgets inside this
+  crate react to the pointer. They are global because Bevy's `Button` calls
+  `propagate(false)` on `Press`, `Release`, `Click`, `DragEnd` and `Cancel`: an
+  observer on `UiRoot` would never see those for a button. `Over` and `Out`
+  are not stopped. The combo's outside-click handler reads
+  `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot starve
+  it.
+- **Buttons are `bevy::ui_widgets::Button`.** `PushButton` and `ColorPushButton`
+  (the other widgets still use `bevy::ui::Button`, until they are moved over) are
+  headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate` on
+  release over the button and on Enter / Space for a focused one, never while
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` unless the app
+  already has it (`DefaultPlugins` and the tester's `HeadlessPlugins` add all of
+  `UiWidgetsPlugins`; adding twice panics). **`Activate` and `MouseEvent`:**
+  "the button was used" is `Activate`, so an action observes `Activate` (on the
+  button, or on an ancestor: it bubbles); how the button *looks* under the
+  pointer (hover and press colours) is `MouseEvent`. Never do both for one
+  thing. The `Pointer<Release>` observers in the examples and in
+  `numeric_stepper.rs` predate this and fire on a release that does not
+  activate (the button was pressed elsewhere); move them to `Activate` when
+  touching them. A disabled `PushButton` (insert `InteractionDisabled`) shows
+  its text in `ThemeColors::text_disabled` and ignores hover.
 - **Selections are immutable components.** Change one by going through
   `SelectionParam::update_selection` / `update_selection_single`, whose
   closures return `Option<SelectionValue>` from methods such as
@@ -508,7 +529,7 @@ a file can check any `Reflect` type of the app by short type path.
   puts one of each widget that restyles with the theme on one screen. A variant is
   found by Bevy's automatic registration, so adding one needs no registration
   call; add it to the smoke test in `tests/scenarios.rs` as well. `Buttons`
-  also keeps the `Clicks` resource, the clicks on "Add". `AppSetup::capture`
+  also keeps the `Clicks` resource, the `Activate`s of "Add". `AppSetup::capture`
   (recording a session from the app as it is) is not implemented: only the
   tester's gallery and recorder call it, which these tests do not run, so it
   would go untested.

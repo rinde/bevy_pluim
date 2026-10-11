@@ -24,6 +24,7 @@ use bevy::color::palettes::tailwind::{
 };
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
+use bevy::ui_widgets::Activate;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -175,7 +176,7 @@ fn buttons(world: &mut World) {
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn(PushButton::from_label("Add"))
-            .observe(|_: On<Pointer<Click>>, mut clicks: ResMut<Clicks>| clicks.0 += 1);
+            .observe(|_: On<Activate>, mut clicks: ResMut<Clicks>| clicks.0 += 1);
         root.spawn(PushButton::from_label("Other"));
         spawn_theme_button(root);
     });

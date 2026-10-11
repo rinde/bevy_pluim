@@ -13,15 +13,18 @@ use bevy::camera::NormalizedRenderTarget;
 use bevy::input::InputPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
-use bevy::picking::events::{Pointer, Press};
+use bevy::picking::events::{Click, Pointer, Press, Release};
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
+use bevy::ui::{InteractionDisabled, Pressed};
+use bevy::ui_widgets::Activate;
 use bevy::window::WindowPlugin;
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::link::Link;
+use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionValue};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
@@ -293,7 +296,7 @@ fn toggling_theme_light_dark_reaches_a_themed_widget() {
 }
 
 #[test]
-fn a_press_on_a_link_reaches_the_link_through_the_root() {
+fn a_press_on_a_link_restyles_it() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
@@ -331,6 +334,148 @@ fn a_press_on_a_link_reaches_the_link_through_the_root() {
         .background_secondary;
     assert_ne!(before.0, expected);
     assert_eq!(after.0, expected);
+}
+
+/// The `Activate`s of the button that [`spawn_push_button`] spawned.
+#[derive(Resource, Default)]
+struct Activations(u32);
+
+/// A push button in a root node, counting its [`Activate`]s in [`Activations`].
+fn spawn_push_button(app: &mut App) -> Entity {
+    app.init_resource::<Activations>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("Go"), ChildOf(root)))
+        .observe(|_: On<Activate>, mut activations: ResMut<Activations>| activations.0 += 1)
+        .id();
+    app.update();
+    app.update();
+    button
+}
+
+const fn pointer_location() -> Location {
+    Location {
+        target: NormalizedRenderTarget::None {
+            width: 1,
+            height: 1,
+        },
+        position: Vec2::ZERO,
+    }
+}
+
+fn press(app: &mut App, target: Entity) {
+    app.world_mut().trigger(Pointer::new(
+        PointerId::Mouse,
+        pointer_location(),
+        Press {
+            count: 1,
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        },
+        target,
+    ));
+    app.update();
+}
+
+/// Bevy's picking emits `Click` before `Release` when the button comes up.
+fn click_and_release(app: &mut App, target: Entity) {
+    app.world_mut().trigger(Pointer::new(
+        PointerId::Mouse,
+        pointer_location(),
+        Click {
+            count: 1,
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: std::time::Duration::ZERO,
+        },
+        target,
+    ));
+    app.world_mut().trigger(Pointer::new(
+        PointerId::Mouse,
+        pointer_location(),
+        Release {
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        },
+        target,
+    ));
+    app.update();
+}
+
+fn background(app: &App, entity: Entity) -> Color {
+    app.world()
+        .entity(entity)
+        .get::<BackgroundColor>()
+        .unwrap()
+        .0
+}
+
+#[test]
+fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+
+    press(&mut app, button);
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert!(app.world().entity(button).contains::<Pressed>());
+    assert_eq!(
+        background(&app, button),
+        colors.selected_hovered_item,
+        "Bevy's Button stops Press from bubbling, yet the colour must still follow it"
+    );
+
+    click_and_release(&mut app, button);
+
+    assert!(!app.world().entity(button).contains::<Pressed>());
+    assert_eq!(background(&app, button), colors.selected_item);
+}
+
+#[test]
+fn releasing_a_push_button_activates_it_once() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+
+    press(&mut app, button);
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 0);
+    click_and_release(&mut app, button);
+
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
+}
+
+#[test]
+fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+    app.update();
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let label = app
+        .world()
+        .entity(button)
+        .get::<PushButtonRefs>()
+        .unwrap()
+        .label_id;
+    let label_color = |app: &App| app.world().entity(label).get::<TextColor>().unwrap().0;
+    assert_eq!(label_color(&app), colors.text_disabled);
+
+    press(&mut app, button);
+    click_and_release(&mut app, button);
+    assert!(!app.world().entity(button).contains::<Pressed>());
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 0);
+    assert_eq!(background(&app, button), colors.background_primary);
+
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<InteractionDisabled>();
+    app.update();
+    app.update();
+    assert_eq!(label_color(&app), colors.text_primary);
 }
 
 fn toggle_theme(app: &mut App) {

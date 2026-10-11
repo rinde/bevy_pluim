@@ -5,6 +5,8 @@
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::ui::InteractionDisabled;
+use bevy::ui_widgets::Button;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -20,14 +22,23 @@ impl Plugin for PushButtonPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (|| None::<Entity>)
-                .pipe(theme_push_button)
-                .run_if(resource_changed::<Theme>),
+            (
+                (|| None::<Entity>)
+                    .pipe(theme_push_button)
+                    .run_if(resource_changed::<Theme>),
+                restyle_on_disabled_change,
+            ),
         );
     }
 }
 
 /// A themed button with a label and an optional icon.
+///
+/// It is a [`bevy::ui_widgets::Button`]: it is [`Pressed`](bevy::ui::Pressed) while
+/// held, triggers [`Activate`](bevy::ui_widgets::Activate) when it is used (a
+/// click, or Enter or Space on a focused button) and is disabled by inserting
+/// [`InteractionDisabled`]. React to a use of the button by observing
+/// `Activate`; the hover and press colours follow the pointer on their own.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -38,6 +49,7 @@ impl Plugin for PushButtonPlugin {
         ..default()
     },
     Name::new("PushButton"),
+    Button,
 )]
 pub struct PushButton {
     label: String,
@@ -97,7 +109,6 @@ impl PushButton {
 
         let mut commands = world.commands();
         let mut entity_commands = commands.entity(context.entity);
-        entity_commands.insert(Button);
 
         if default_hover {
             entity_commands.observe(handle_hover);
@@ -126,7 +137,7 @@ impl PushButton {
 
 fn handle_hover(
     trigger: On<MouseEvent>,
-    mut query: Query<&mut BackgroundColor>,
+    mut query: Query<&mut BackgroundColor, Without<InteractionDisabled>>,
     theme: Res<Theme>,
 ) {
     let color = match trigger.event().kind {
@@ -140,6 +151,21 @@ fn handle_hover(
     }
 }
 
+/// Restyles a [`PushButton`] whose [`InteractionDisabled`] was just added or removed.
+fn restyle_on_disabled_change(
+    added: Query<Entity, (With<PushButton>, Added<InteractionDisabled>)>,
+    mut removed: RemovedComponents<InteractionDisabled>,
+    push_buttons: Query<(), With<PushButton>>,
+    mut commands: Commands,
+) {
+    for entity in added
+        .iter()
+        .chain(removed.read().filter(|e| push_buttons.contains(*e)))
+    {
+        commands.run_system_cached_with(theme_push_button, Some(entity));
+    }
+}
+
 fn theme_push_button(
     button_id: In<Option<Entity>>,
     theme: Res<Theme>,
@@ -150,6 +176,7 @@ fn theme_push_button(
             &mut BoxShadow,
             &mut Node,
             &PushButtonRefs,
+            Has<InteractionDisabled>,
         ),
         With<PushButton>,
     >,
@@ -167,7 +194,7 @@ fn theme_push_button(
     } else {
         Either::Right(buttons.iter_mut())
     };
-    for (mut background_color, mut border_color, mut box_shadow, mut node, refs) in it {
+    for (mut background_color, mut border_color, mut box_shadow, mut node, refs, disabled) in it {
         background_color.0 = theme.colors.background_primary;
         border_color.set_all(theme.colors.border);
         node.border_radius = BorderRadius::all(theme.corner_radius);
@@ -177,7 +204,11 @@ fn theme_push_button(
 
         // label
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
-            *text_color = TextColor(theme.colors.text_primary);
+            *text_color = TextColor(if disabled {
+                theme.colors.text_disabled
+            } else {
+                theme.colors.text_primary
+            });
             *text_font = TextFont {
                 font_size: FontSize::Px(14.0),
                 ..default()
@@ -188,7 +219,11 @@ fn theme_push_button(
         if let Some(icon_id) = refs.icon_id
             && let Ok((mut text_color, mut text_font)) = icons.get_mut(icon_id)
         {
-            *text_color = TextColor(theme.colors.border);
+            *text_color = TextColor(if disabled {
+                theme.colors.text_disabled
+            } else {
+                theme.colors.border
+            });
             *text_font = TextFont {
                 font_size: FontSize::Px(14.0),
                 ..default()

@@ -3,6 +3,7 @@
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::ui_widgets::Button;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -25,6 +26,9 @@ impl Plugin for ColorPushButtonPlugin {
 }
 
 /// A button that shows a colour square instead of a label.
+///
+/// Like [`PushButton`](crate::push_button::PushButton) it is a
+/// [`bevy::ui_widgets::Button`] and triggers [`Activate`](bevy::ui_widgets::Activate).
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]

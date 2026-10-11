@@ -26,6 +26,7 @@ pub mod tailwind;
 pub mod theme;
 
 use bevy::prelude::*;
+use bevy::ui_widgets::ButtonPlugin;
 
 use crate::breadcrumbs::BreadCrumbsPlugin;
 use crate::card::CardPlugin;
@@ -50,6 +51,12 @@ pub struct WidgetsPlugin;
 
 impl Plugin for WidgetsPlugin {
     fn build(&self, app: &mut App) {
+        // `DefaultPlugins` and the tester's `HeadlessPlugins` bring Bevy's
+        // `UiWidgetsPlugins` along; a bare `App` does not. Adding the observers
+        // twice would panic, so add them only when they are missing.
+        if !app.is_plugin_added::<ButtonPlugin>() {
+            app.add_plugins(ButtonPlugin);
+        }
         app.init_resource::<Theme>()
             .add_plugins(ListPlugin)
             .add_plugins(PushButtonPlugin)
@@ -68,7 +75,11 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(BreadCrumbsPlugin)
             .add_plugins(LinkPlugin)
             .add_systems(PostStartup, setup)
-            .add_observer(add_ui_root);
+            .add_observer(add_ui_root)
+            .add_observer(observer_transformer::<Over>)
+            .add_observer(observer_transformer::<Press>)
+            .add_observer(observer_transformer::<Release>)
+            .add_observer(observer_transformer::<Out>);
     }
 }
 
@@ -79,10 +90,7 @@ fn add_ui_root(
 ) {
     let entity = t.event().event_target();
     if app_root.contains(entity) {
-        commands
-            .entity(entity)
-            .insert(UiRoot)
-            .observe_and_transform_mouse_events();
+        commands.entity(entity).insert(UiRoot);
     }
 }
 
@@ -156,34 +164,18 @@ fn observer_transformer<E>(trigger: On<Pointer<E>>, mut commands: Commands)
 where
     E: std::fmt::Debug + Clone + Reflect + ToMouseEvent,
 {
-    // The event bubbles up to the root, rewriting its own target at every hop;
-    // the widget that was actually hit is the original target.
-    commands.trigger(MouseEvent {
-        entity: trigger.original_event_target(),
-        kind: trigger.event().event.to_mouse_kind(),
-    });
-}
-
-trait EntityCommandsExt {
-    fn observe_and_transform_mouse_events(&mut self) -> &mut Self;
-}
-
-impl EntityCommandsExt for EntityCommands<'_> {
-    fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
-        self.observe(observer_transformer::<Over>)
-            .observe(observer_transformer::<Press>)
-            .observe(observer_transformer::<Release>)
-            .observe(observer_transformer::<Out>);
-        self
-    }
-}
-
-impl EntityCommandsExt for EntityWorldMut<'_> {
-    fn observe_and_transform_mouse_events(&mut self) -> &mut Self {
-        self.observe(observer_transformer::<Over>)
-            .observe(observer_transformer::<Press>)
-            .observe(observer_transformer::<Release>)
-            .observe(observer_transformer::<Out>);
-        self
+    // The event bubbles up through the hierarchy, rewriting its own target at
+    // every hop; the widget that was actually hit is the original target, and
+    // only the first hop re-triggers, so one event is one `MouseEvent`.
+    //
+    // This is a global observer rather than one on `UiRoot` because Bevy's
+    // `Button` stops `Press` and `Release` from bubbling, which would keep them
+    // from ever reaching the root.
+    let original = trigger.original_event_target();
+    if trigger.event_target() == original {
+        commands.trigger(MouseEvent {
+            entity: original,
+            kind: trigger.event().event.to_mouse_kind(),
+        });
     }
 }
