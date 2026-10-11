@@ -224,9 +224,9 @@ of them (`just example gallery -- --run-all stack link`).
   `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot starve
   it.
 - **Buttons are `bevy::ui_widgets::Button`.** `PushButton`, `ColorPushButton` and
-  `Link` (`NumericStepper`'s buttons are `PushButton`s; the other widgets still
-  use `bevy::ui::Button`, until they are moved over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate` on
-  release over the button and on Enter / Space for a focused one, never while
+  `Link` (the other widgets still use `bevy::ui::Button`, until they are moved
+  over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate`
+  on release over the button and on Enter / Space for a focused one, never while
   `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` unless the app
   already has it (`DefaultPlugins` and the tester's `HeadlessPlugins` add all of
   `UiWidgetsPlugins`; adding twice panics). **`Activate` and `MouseEvent`:**
@@ -251,16 +251,18 @@ of them (`just example gallery -- --run-all stack link`).
   it is on exactly the items of the selection, and `ListBoxMultiSelect` is on the
   list while the selection allows more than one item (`OneOrMore`, `ZeroOrMore`).
   **The choice:** the `ListBox` observers send `ValueChange<Entity>` for a click
-  on a row that is not `Selected`, and for Enter / Space on the active row, and
-  insert and remove `Selected` only if the app registers `listbox_update_selection`.
+  on a row (except the first selected row, see below), and for Enter / Space on
+  the active row, and insert and remove `Selected` only if the app registers `listbox_update_selection`.
   We do not register it: `on_value_change` turns the `ValueChange` into a
   `SelectionParam::update_selection` instead, so `One`, `ZeroOrOne`, `OneOrMore`
   and `ZeroOrMore` (and `None` for a disallowed change) keep deciding, and
   `Selected` can never disagree with the `Selection`. The `ListBox` ignores a click
-  on a selected row, and so deselecting is the item's `MouseEvent::Released`. Both go by
-  the `Selected` the `ListBox` saw, not by the `Selection`: a release is handled after
-  the `ValueChange` of the same click, and one that read the `Selection` would undo
-  it. Hover and selected colours stay on `MouseEvent`. A `ListBox` also sets an
+  only on the first selected row (`listbox_on_row_click` compares the row with the
+  current one); on any other selected row of a multiple selection it still sends the
+  `ValueChange`, and `on_value_change` drops it because the row is `Selected`. So
+  deselecting is the item's `MouseEvent::Released`. Both paths go by the `Selected`
+  the `ListBox` saw, not by the `Selection`: a release is handled after the
+  `ValueChange` of the same click, and one that read the `Selection` would undo it. Hover and selected colours stay on `MouseEvent`. A `ListBox` also sets an
   `ActiveDescendant` on a click and handles the arrow keys, Home and End once the
   list has focus; a `List` is not focusable yet, so the keys do nothing, and the
   active row is not drawn. `ItemView`s keep `should_block_lower: false` so the wheel
@@ -600,7 +602,7 @@ a file can check any `Reflect` type of the app by short type path.
   `zero-or-more grid list` (own items), and `scrolling list` (twelve rows
   inside the `list scroll area`, 100 pixels high). "Add country" spawns the
   next of Suriname, Chile and Kenya into the shared items. A file reaches an
-  item with `Within(Name("one list"), Role(role: Button, label: "CA"))`
+  item with `Within(Name("one list"), Role(role: ListItem, label: "CA"))`
   (an `ItemView` is a `ListItem`; target it, not its text, which the pointer
   passes through; `Selected(..)` and `Not(Selected(..))` say whether it is in the
   selection, and a `Tree(..)` shows `list-item "CA" [selected]`). `lists_screen_fits_window` keeps all of it inside the

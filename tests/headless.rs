@@ -916,12 +916,13 @@ fn what_the_list_box_picks_is_selected_as_far_as_the_selection_allows() {
 }
 
 #[test]
-fn an_item_added_to_the_items_of_a_selected_list_is_not_selected() {
+fn a_view_for_a_new_item_starts_unselected_unless_the_item_is_in_the_selection() {
     let mut app = headless_app();
     let (list, _, selection_ref) =
         spawn_list(&mut app, Selection::builder().zero_or_more(), &["a"]);
     assert_eq!(item_views(&app, list).len(), 1);
 
+    // A new item that is not in the selection gets a view without `Selected`.
     app.world_mut()
         .spawn((Item::new("b"), ItemOf(selection_ref)));
     app.update();
@@ -929,4 +930,20 @@ fn an_item_added_to_the_items_of_a_selected_list_is_not_selected() {
 
     assert_eq!(item_views(&app, list).len(), 2);
     assert!(selected_labels(&app, list).is_empty());
+
+    // A new item that the selection already holds gets a view with `Selected`.
+    let item_c = app
+        .world_mut()
+        .spawn((Item::new("c"), ItemOf(selection_ref)))
+        .id();
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::ZeroOrMore(
+            smallvec::smallvec![item_c],
+        )));
+    app.update();
+    app.update();
+
+    assert_eq!(item_views(&app, list).len(), 3);
+    assert_eq!(selected_labels(&app, list), ["c"]);
 }
