@@ -857,6 +857,28 @@ fn color_palette(world: &mut World) {
             ));
             spawn_theme_button(controls);
         });
+        // One combo in each top corner, placed out of the flow so that nothing
+        // else on the screen moves: the popups are wider than the room these
+        // have to the window edge, so the window margin is what places them.
+        for (name, left, right) in [
+            ("left edge palette combo", Some(px(0)), None),
+            ("right edge palette combo", None, Some(px(0))),
+        ] {
+            root.spawn((
+                ColorPaletteCombo,
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    position_type: PositionType::Absolute,
+                    top: px(20),
+                    left: left.unwrap_or(Val::Auto),
+                    right: right.unwrap_or(Val::Auto),
+                    ..default()
+                },
+                ListLayout::VerticalGrid { columns: 11 },
+                Selection::reference(combo_selection_ref),
+                Name::new(name),
+            ));
+        }
         // 22 columns of 11 rows keep the whole palette (836 by 418) inside the
         // window; 11 columns of 22 rows, as in the example, are taller than it.
         root.spawn((

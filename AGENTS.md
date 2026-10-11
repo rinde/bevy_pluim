@@ -711,6 +711,13 @@ a file can check any `Reflect` type of the app by short type path.
   Component("ItemView")))`; the combo's state is `Component(target:
   Name("first palette combo"), path: "State", is: Eq(Open))` and the popup's
   position the `UiGlobalTransform.0.translation` (the centre) of the float.
+  The popup is centred under its button and pushed in to 10 pixels from the
+  window's left and right edges; the screen has `left edge palette combo` and
+  `right edge palette combo`, absolutely placed in the top corners so nothing
+  else moves, which open into those margins
+  (`color_palette_combo_keeps_margin_at_window_edge`). The layout rounds the
+  popup to whole pixels, so beside the 39 pixel wide button (centre on a half
+  pixel) its centre is the button's plus or minus 0.5.
 - **The `Themed` screen and the theme scenarios.** One of each widget that
   follows the theme in a row: `themed button` (a `PushButton` "Other"),
   `themed card`, `themed list` (`One`, `Two`, `Three`, the first selected) and
