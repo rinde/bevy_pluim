@@ -654,6 +654,91 @@ fn a_color_palette_combo_button_says_whether_its_popup_is_open() {
     assert_eq!(expanded(&app, button), Some(false));
 }
 
+/// A colour palette combo's selection over two colours.
+fn two_color_selection() -> impl Bundle {
+    Selection::builder()
+        .zero_or_one()
+        .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data }))
+}
+
+/// The entities named `ColorPaletteComboFloat`, the popups of palette combos.
+fn palette_combo_floats(app: &mut App) -> Vec<Entity> {
+    let world = app.world_mut();
+    let mut query = world.query::<(Entity, &Name)>();
+    query
+        .iter(world)
+        .filter(|(_, name)| name.as_str() == "ColorPaletteComboFloat")
+        .map(|(entity, _)| entity)
+        .collect()
+}
+
+#[test]
+fn a_color_palette_combo_gets_its_popup_when_the_app_has_two_ui_roots() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let other_root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+
+    app.update();
+    app.update();
+
+    assert!(app.world().entity(root).contains::<UiRoot>());
+    assert!(app.world().entity(other_root).contains::<UiRoot>());
+    assert_eq!(
+        app.world().entity(combo).get::<PaletteComboState>(),
+        Some(&PaletteComboState::Closed)
+    );
+    let floats = palette_combo_floats(&mut app);
+    assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
+}
+
+#[test]
+fn a_color_palette_combo_spawns_its_popup_under_the_topmost_ancestor_of_the_combo() {
+    let mut app = headless_app();
+    let first_root = app.world_mut().spawn(Node::default()).id();
+    let second_root = app.world_mut().spawn(Node::default()).id();
+    let panel = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(second_root)))
+        .id();
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(panel)));
+
+    app.update();
+    app.update();
+
+    let floats = palette_combo_floats(&mut app);
+    assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
+    assert_eq!(
+        app.world().entity(floats[0]).get::<ChildOf>().map(|c| c.0),
+        Some(second_root),
+        "under the combo's own root, not the first one ({first_root})"
+    );
+}
+
+#[test]
+fn a_color_palette_combo_without_a_parent_gets_no_popup() {
+    let mut app = headless_app();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection()))
+        .id();
+
+    app.update();
+    app.update();
+
+    assert!(
+        app.world()
+            .entity(combo)
+            .get::<PaletteComboState>()
+            .is_none()
+    );
+    assert!(palette_combo_floats(&mut app).is_empty());
+}
+
 #[test]
 fn a_combo_opens_when_its_button_is_activated_and_not_when_it_is_only_pressed() {
     let mut app = headless_app();

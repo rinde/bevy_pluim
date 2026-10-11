@@ -15,7 +15,7 @@ use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::Theme;
-use crate::{MouseEvent, MouseKind, UiRoot, color_push_button};
+use crate::{MouseEvent, MouseKind, color_push_button};
 
 /// Registers the systems and observers of [`ColorPaletteCombo`].
 ///
@@ -63,33 +63,49 @@ struct ColorPaletteComboButton;
 #[require(Name::new("ColorPaletteComboFloat"))]
 struct ColorPaletteComboFloat;
 
+/// Builds a [`ColorPaletteCombo`]: its button, as a child, and its popup.
+///
+/// The popup is a child of the combo's own topmost ancestor, not of the combo,
+/// so that nothing between them (a scroll area, a card) clips it or draws over
+/// it. It is not looked up by [`UiRoot`](crate::UiRoot): an app may have more
+/// than one, so the combo's own root is the one that is certain to be on its
+/// screen. The parent must be there when the combo is inserted, so spawn the
+/// combo as a child. A combo without a parent has no such root, so it logs an
+/// `error!` and gets neither button nor popup.
 fn on_insert_combo(
     t: On<Insert, ColorPaletteCombo>,
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
-    root: Single<Entity, With<UiRoot>>,
+    parents: Query<&ChildOf>,
 ) {
+    let combo = t.event().event_target();
+    if !parents.contains(combo) {
+        error!(
+            "ColorPaletteCombo {combo} has no parent, so it has no UI root to hold its popup: \
+             spawn it as a child"
+        );
+        return;
+    }
+    let root = parents.root_ancestor(combo);
+
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
 
-    let list_layout = list_layouts.get(t.event().event_target()).ok().copied();
-    commands
-        .entity(t.event().event_target())
-        .with_children(|parent| {
-            button_id = parent
-                .spawn((
-                    ColorPaletteComboButton,
-                    ColorPushButton,
-                    NoDefaultHover,
-                    // allow mouse events to pass through to parent
-                    Pickable {
-                        should_block_lower: false,
-                        ..default()
-                    },
-                ))
-                .id();
-        });
-    let root = *root;
+    let list_layout = list_layouts.get(combo).ok().copied();
+    commands.entity(combo).with_children(|parent| {
+        button_id = parent
+            .spawn((
+                ColorPaletteComboButton,
+                ColorPushButton,
+                NoDefaultHover,
+                // allow mouse events to pass through to parent
+                Pickable {
+                    should_block_lower: false,
+                    ..default()
+                },
+            ))
+            .id();
+    });
     commands.entity(root).with_children(|parent| {
         float_id = parent
             .spawn((
@@ -125,13 +141,11 @@ fn on_insert_combo(
     });
 
     let sub_refs = SubRefs {
-        parent: t.event().event_target(),
+        parent: combo,
         button: button_id,
         float_id,
     };
-    commands
-        .entity(t.event().event_target())
-        .insert((State::Closed, sub_refs));
+    commands.entity(combo).insert((State::Closed, sub_refs));
 
     commands
         .entity(button_id)
