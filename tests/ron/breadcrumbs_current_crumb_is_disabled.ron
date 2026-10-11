@@ -1,0 +1,55 @@
+// The last crumb is the current panel: a disabled button, which a `Tree(..)`
+// snapshot says with `[disabled]` (`InteractionDisabled` on a `bevy_ui_widgets`
+// `Button`, kept when `LinkState` is `Disabled`). The crumbs before it are plain
+// buttons. A click forced onto the disabled crumb does not activate it, and when
+// the trail grows the old last crumb becomes a button again and the new one is
+// disabled.
+(
+    format_version: 3,
+    name: "the current crumb is a disabled button",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        Check(Tree(of: Name("BreadCrumbs"), matches: r#"
+            - panel "BreadCrumbs":
+              - button "Home" [disabled]
+        "#)),
+
+        // Home > Panel B.
+        MoveTo(Role(role: Button, label: "Go to Panel B")), Click(Left),
+        Wait(2),
+        Check(Tree(of: Name("BreadCrumbs"), matches: r#"
+            - panel "BreadCrumbs":
+              - button "Home"
+              - panel:
+                - text " > "
+                - button "Panel B" [disabled]
+        "#)),
+        Check(Disabled(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B")))),
+        Check(Not(Disabled(Within(Name("BreadCrumbs"), Role(role: Button, label: "Home"))))),
+
+        // A click on the current crumb activates nothing.
+        MoveTo(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B"))),
+        Force(Click(Left)),
+        Wait(2),
+        Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel B"]))),
+
+        // Home > Panel B > Panel B sub: "Panel B" is a button again.
+        MoveTo(Role(role: Button, label: "Go to panel B sub")), Click(Left),
+        Wait(2),
+        Check(Tree(of: Name("BreadCrumbs"), matches: r#"
+            - panel "BreadCrumbs":
+              - button "Home"
+              - panel:
+                - text " > "
+                - button "Panel B"
+              - panel:
+                - text " > "
+                - button "Panel B sub" [disabled]
+        "#)),
+        Check(Not(Disabled(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B"))))),
+    ],
+    expect: [
+        App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel B", "Panel B sub"])),
+    ],
+)

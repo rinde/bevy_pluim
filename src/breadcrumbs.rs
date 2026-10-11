@@ -3,6 +3,7 @@
 //! Clicking a crumb trims the selection back to it.
 
 use bevy::prelude::*;
+use bevy::ui_widgets::Activate;
 
 use crate::label::Label;
 use crate::link::{Link, LinkState};
@@ -42,7 +43,7 @@ fn selection_change(
     mut commands: Commands,
 ) {
     let create_observer = |selection_ref: Entity, new_length: usize| {
-        move |_: On<Pointer<Release>>, mut selections: SelectionParam| {
+        move |_: On<Activate>, mut selections: SelectionParam| {
             selections.update_selection(selection_ref, |s| s.trim_to_length(new_length));
         }
     };
@@ -89,21 +90,17 @@ fn selection_change(
                     let link = Link::new(item.data.clone());
                     let current_index = index + first_diff;
 
+                    // The current crumb is a disabled button: it never activates.
                     let link = if current_index == selected.len() - 1 {
                         (link, LinkState::Disabled)
                     } else {
                         (link, LinkState::Enabled)
                     };
-                    let is_enabled = link.1 == LinkState::Enabled;
                     if current_index == 0 {
                         commands.entity(bread_crumbs_ref).with_children(|parent| {
-                            let mut e = parent.spawn((*bc, link));
-                            if is_enabled {
-                                e.observe(create_observer(
-                                    changed_selection_ref,
-                                    current_index + 1,
-                                ));
-                            }
+                            parent
+                                .spawn((*bc, link))
+                                .observe(create_observer(changed_selection_ref, current_index + 1));
                         });
                     } else {
                         let separator = Label::regular(" > ");
@@ -112,13 +109,10 @@ fn selection_change(
                                 .spawn((*bc, Node::DEFAULT))
                                 .with_children(|sub_parent| {
                                     sub_parent.spawn(separator);
-                                    let mut e = sub_parent.spawn(link);
-                                    if is_enabled {
-                                        e.observe(create_observer(
-                                            changed_selection_ref,
-                                            current_index + 1,
-                                        ));
-                                    }
+                                    sub_parent.spawn(link).observe(create_observer(
+                                        changed_selection_ref,
+                                        current_index + 1,
+                                    ));
                                 });
                         });
                     }

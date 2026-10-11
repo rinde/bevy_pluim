@@ -1,9 +1,10 @@
 // Clicking a crumb trims the `OneOrMore` selection back to it, and the trail
 // shows the crumbs that are left. The `BreadCrumbs` screen starts on "Home";
 // the buttons in the panels of the stack add "Panel B" and "Panel B sub" to the
-// trail. The last crumb is the current panel and plain text; the ones before it
-// are buttons. `breadcrumbs.rs` observes `Pointer<Release>` for the crumbs, a
-// `Click` releases on the crumb.
+// trail. The last crumb is the current panel and a disabled button (`[disabled]`
+// in a `Tree(..)` snapshot: `InteractionDisabled`); the ones before it are
+// buttons. `breadcrumbs.rs` observes `Activate` for the crumbs, which a `Click`
+// on the crumb triggers.
 (
     format_version: 3,
     name: "clicking a crumb trims the selection back to it",
@@ -13,8 +14,7 @@
         Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home"]))),
         Check(Tree(of: Name("BreadCrumbs"), matches: r#"
             - panel "BreadCrumbs":
-              - panel "Link":
-                - text "Home"
+              - button "Home" [disabled]
         "#)),
 
         // Home > Panel B > Panel B sub.
@@ -30,11 +30,10 @@
                 - button "Panel B"
               - panel:
                 - text " > "
-                - panel "Link":
-                  - text "Panel B sub"
+                - button "Panel B sub" [disabled]
         "#)),
 
-        // Back to "Panel B": the last crumb goes, the one clicked becomes plain text.
+        // Back to "Panel B": the last crumb goes, the one clicked becomes the disabled one.
         MoveTo(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B"))), Click(Left),
         Wait(2),
         Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel B"]))),
@@ -43,8 +42,7 @@
               - button "Home"
               - panel:
                 - text " > "
-                - panel "Link":
-                  - text "Panel B"
+                - button "Panel B" [disabled]
         "#)),
         Check(Not(Exists(Within(Name("BreadCrumbs"), Text("Panel B sub"))))),
         // The stack follows the trail.
@@ -63,11 +61,9 @@
         Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home"]))),
         Check(Tree(of: Name("BreadCrumbs"), matches: r#"
             - panel "BreadCrumbs":
-              - panel "Link":
-                - text "Home"
+              - button "Home" [disabled]
         "#)),
         Check(Not(Exists(Within(Name("BreadCrumbs"), Text("Panel B"))))),
-        Check(Not(Exists(Within(Name("BreadCrumbs"), Role(role: Button, label: "Home"))))),
         Check(Tree(of: Name("Stack"), matches: r#"
             - panel "Stack":
               - panel "StackItem":
