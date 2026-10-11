@@ -39,7 +39,9 @@ impl Plugin for NumericStepperPlugin {
 ///
 /// The buttons are [`PushButton`]s that change the value when they are
 /// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
-/// [`InteractionDisabled`] until the value moves away from that bound again.
+/// [`InteractionDisabled`] until the value moves away from that bound again. The
+/// stepper owns that component on its buttons: it enables a button whenever the
+/// value allows a step, so do not disable one yourself.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]

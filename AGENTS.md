@@ -223,9 +223,9 @@ of them (`just example gallery -- --run-all stack link`).
   are not stopped. The combo's outside-click handler reads
   `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot starve
   it.
-- **Buttons are `bevy::ui_widgets::Button`.** `PushButton` and `ColorPushButton`
-  (the other widgets still use `bevy::ui::Button`, until they are moved over) are
-  headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate` on
+- **Buttons are `bevy::ui_widgets::Button`.** `PushButton`, `ColorPushButton` and
+  `Link` (the other widgets still use `bevy::ui::Button`, until they are moved
+  over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate` on
   release over the button and on Enter / Space for a focused one, never while
   `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` unless the app
   already has it (`DefaultPlugins` and the tester's `HeadlessPlugins` add all of
@@ -233,11 +233,16 @@ of them (`just example gallery -- --run-all stack link`).
   "the button was used" is `Activate`, so an action observes `Activate` (on the
   button, or on an ancestor: it bubbles); how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one
-  thing. The `Pointer<Release>` observers in the examples
-  predate this and fire on a release that does not
-  activate (the button was pressed elsewhere); move them to `Activate` when
-  touching them. A disabled `PushButton` (insert `InteractionDisabled`) shows
-  its text in `ThemeColors::text_disabled` and ignores hover.
+  thing. The `Pointer<Release>` observers in the examples predate this and fire
+  on a release that does not activate (the button was pressed elsewhere); move
+  them to `Activate` when touching them. A disabled `PushButton` (insert
+  `InteractionDisabled`) shows its text in `ThemeColors::text_disabled` and
+  ignores hover. A `Link` is disabled through its `LinkState`, not by inserting
+  `InteractionDisabled` yourself: `LinkState::Disabled` keeps the `Button` and
+  adds `InteractionDisabled` (`Enabled` removes it again), and the link ignores
+  hover.
+  The crumbs of `BreadCrumbs` observe `Activate`; the current crumb is a
+  disabled `Link`.
 - **Selections are immutable components.** Change one by going through
   `SelectionParam::update_selection` / `update_selection_single`, whose
   closures return `Option<SelectionValue>` from methods such as
@@ -269,12 +274,11 @@ of them (`just example gallery -- --run-all stack link`).
 
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Two places still
-  observe a raw `Pointer<…>`: the crumbs in `breadcrumbs.rs` (`Pointer<Released>`)
-  and the scroll thumb in `scroll_area.rs` (`Pointer<Drag>`); do not add more. The thumb is there
-  because `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so
-  `MouseEvent` cannot carry a drag; a `MouseKind::Drag` would let it move
-  over.
+- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** One place in the
+  library still observes a raw `Pointer<…>`: the scroll thumb in
+  `scroll_area.rs` (`Pointer<Drag>`); do not add more. It is there because
+  `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so `MouseEvent`
+  cannot carry a drag; a `MouseKind::Drag` would let it move over.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for
@@ -610,11 +614,14 @@ a file can check any `Reflect` type of the app by short type path.
 - **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
   `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
   is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:
-  "Home"))`); the last is a disabled `Link` with no role: reach it by
-  `Nth(i, Within(Name("BreadCrumbs"), Name("Link")))` (the text inside is
-  `Pickable::IGNORE`, so a `MoveTo` to the text is "covered by `Link`") and
-  read its `BackgroundColor.0`; the colour of its label is `TextColor.0` of
-  `Text("..")`. A `Stack` panel hidden by `Display::None` still exists
+  "Home"))`); the last is a disabled button (`InteractionDisabled`; `[disabled]`
+  in a `Tree(..)` snapshot, `Disabled(..)` as a check) with the same role, so
+  `Role(role: Button, label: "Panel A")` reaches it too, as does
+  `Nth(i, Within(Name("BreadCrumbs"), Name("Link")))`. The tester will not click
+  it (`Force(Click(Left))` does, to show that nothing happens), and the text
+  inside is `Pickable::IGNORE`, so a `MoveTo` to the text is "covered by
+  `Link`". Read its `BackgroundColor.0`; the colour of its label is
+  `TextColor.0` of `Text("..")`. A `Stack` panel hidden by `Display::None` still exists
   but is left out of a `Tree(..)` snapshot, which also accepts extra
   siblings, so say that a panel is hidden with `Not(Visible(Within(Name("Stack"),
   Text("Panel A"))))` and that one was never created with `Not(Exists(..))`.
