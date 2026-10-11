@@ -3,8 +3,8 @@
 // `link` (blue-600); under the pointer the background is `background_secondary`
 // (gray-200); pressed, the text is `link_selected` (blue-800); and when the
 // pointer leaves, even with the button still down, it is back to the first. The
-// current crumb is a disabled link, plain text in `text_primary` (gray-900),
-// which does not react to the pointer at all.
+// current crumb is a disabled link, a button with `InteractionDisabled`, its
+// text in `text_primary` (gray-900), which does not react to the pointer at all.
 (
     format_version: 3,
     name: "a link highlights under the pointer and not when disabled",
@@ -64,8 +64,9 @@
         Release(Left),
         Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel A"]))),
 
-        // The current crumb is a disabled link: plain text, not hover-aware.
-        Check(Not(Exists(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel A"))))),
+        // The current crumb is a disabled link: a disabled button, not hover-aware.
+        Check(Disabled(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel A")))),
+        Check(Not(Disabled(Within(Name("BreadCrumbs"), Role(role: Button, label: "Home"))))),
         Check(Component(
             target: Nth(1, Within(Name("BreadCrumbs"), Name("Link"))),
             path: "BackgroundColor.0",
@@ -87,8 +88,8 @@
             path: "TextColor.0",
             is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
         )),
-        // Clicking it changes nothing.
-        Click(Left),
+        // Clicking it changes nothing (forced: the tester does not click a disabled button).
+        Force(Click(Left)),
         Wait(2),
         Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel A"]))),
     ],

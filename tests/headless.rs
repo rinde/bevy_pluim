@@ -17,13 +17,13 @@ use bevy::picking::events::{Click, Pointer, Press, Release};
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
-use bevy::ui_widgets::Activate;
+use bevy::ui_widgets::{Activate, Button};
 use bevy::window::WindowPlugin;
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
-use rin_bevy_ui::link::Link;
+use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionValue};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
@@ -334,6 +334,73 @@ fn a_press_on_a_link_restyles_it() {
         .background_secondary;
     assert_ne!(before.0, expected);
     assert_eq!(after.0, expected);
+}
+
+#[test]
+fn a_disabled_link_keeps_its_button_and_is_interaction_disabled() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let link = app
+        .world_mut()
+        .spawn((Link::new("link"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert!(app.world().entity(link).contains::<Button>());
+    assert!(!app.world().entity(link).contains::<InteractionDisabled>());
+
+    app.world_mut().entity_mut(link).insert(LinkState::Disabled);
+    app.update();
+    assert!(app.world().entity(link).contains::<Button>());
+    assert!(app.world().entity(link).contains::<InteractionDisabled>());
+
+    app.world_mut().entity_mut(link).insert(LinkState::Enabled);
+    app.update();
+    assert!(app.world().entity(link).contains::<Button>());
+    assert!(!app.world().entity(link).contains::<InteractionDisabled>());
+}
+
+#[test]
+fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let link = app
+        .world_mut()
+        .spawn((Link::new("link"), LinkState::Disabled, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let background = |app: &App| app.world().entity(link).get::<BackgroundColor>().unwrap().0;
+    let before = background(&app);
+    app.world_mut().trigger(Pointer::new(
+        PointerId::Mouse,
+        Location {
+            target: NormalizedRenderTarget::None {
+                width: 1,
+                height: 1,
+            },
+            position: Vec2::ZERO,
+        },
+        Press {
+            count: 1,
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        },
+        link,
+    ));
+    app.update();
+
+    assert_eq!(background(&app), before);
+    let text = app.world().entity(link).get::<Children>().unwrap()[0];
+    assert_eq!(
+        app.world().entity(text).get::<TextColor>().unwrap().0,
+        app.world()
+            .get_resource::<Theme>()
+            .unwrap()
+            .colors
+            .text_primary
+    );
 }
 
 /// The `Activate`s of the button that [`spawn_push_button`] spawned.
