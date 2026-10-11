@@ -4,7 +4,8 @@
 // selected). "first palette combo" and "second palette combo" share the
 // selection; "own palette combo" and the palette have selections of their own.
 // Index 60 is red-500 and 5 is slate-500 of `COLORS`; the popup is 250 high,
-// which shows the first six rows, so both are in view.
+// which shows the first six rows, so both are in view. The picked swatch is
+// `Selected` in the popup, the others are not.
 (
     format_version: 3,
     name: "picking a colour closes the popup and the button shows it",
@@ -54,9 +55,13 @@
             path: "BorderColor.top",
             is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:1.0))),
         )),
+        Check(Selected(Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView"))))),
+        Check(Not(Selected(Nth(5, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))))),
         MoveTo(Nth(5, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))),
         Click(Left),
         Check(App(Selected(of: Name("first palette combo"), items: ["slate-500"]))),
+        Check(Selected(Nth(5, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView"))))),
+        Check(Not(Selected(Nth(60, Within(Nth(0, Name("ColorPaletteComboFloat")), Component("ItemView")))))),
         Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
         Check(Component(
             target: Within(Name("first palette combo"), Component("ColorSquare")),

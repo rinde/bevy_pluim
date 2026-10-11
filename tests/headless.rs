@@ -23,6 +23,7 @@ use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
+use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{ItemView, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
@@ -946,4 +947,226 @@ fn a_view_for_a_new_item_starts_unselected_unless_the_item_is_in_the_selection()
 
     assert_eq!(item_views(&app, list).len(), 3);
     assert_eq!(selected_labels(&app, list), ["c"]);
+}
+
+// ---- `ColorPalette`: swatches are `ListItem`s, and `Selected` follows the selection ----
+
+const RED: Color = Color::srgb(1.0, 0.0, 0.0);
+const GREEN: Color = Color::srgb(0.0, 1.0, 0.0);
+const BLUE: Color = Color::srgb(0.0, 0.0, 1.0);
+
+/// A palette of red, green and blue swatches over a selection of its own, as
+/// `(palette, swatches, selection)`.
+fn spawn_palette(
+    app: &mut App,
+    selection: SelectionBuilderWithValue,
+) -> (Entity, Vec<Entity>, Entity) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items: Vec<_> = [RED, GREEN, BLUE]
+        .into_iter()
+        .map(|data| Item { data })
+        .collect();
+    let selection_ref = app
+        .world_mut()
+        .spawn(selection.build_with_items(items))
+        .id();
+    let palette = spawn_palette_on(app, root, selection_ref);
+    let swatches = item_views(app, palette);
+    (palette, swatches, selection_ref)
+}
+
+/// A palette sharing the selection of `selection_ref`.
+fn spawn_palette_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
+    let palette = app
+        .world_mut()
+        .spawn((
+            ColorPalette,
+            Selection::reference(selection_ref),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    palette
+}
+
+/// The colour of a swatch.
+fn swatch_color(app: &App, swatch: Entity) -> Color {
+    let item_ref = app
+        .world()
+        .entity(swatch)
+        .get::<ItemView>()
+        .unwrap()
+        .item_ref;
+    app.world()
+        .entity(item_ref)
+        .get::<Item<Color>>()
+        .unwrap()
+        .data
+}
+
+/// The colours of the swatches of `palette` that carry [`Selected`], in the order of the palette.
+fn selected_colors(app: &App, palette: Entity) -> Vec<Color> {
+    item_views(app, palette)
+        .into_iter()
+        .filter(|swatch| app.world().entity(*swatch).contains::<Selected>())
+        .map(|swatch| swatch_color(app, swatch))
+        .collect()
+}
+
+/// The colours that `selection_ref` selects.
+fn selection_colors(app: &App, selection_ref: Entity) -> Vec<Color> {
+    let Selection::Value(selection) = app
+        .world()
+        .entity(selection_ref)
+        .get::<Selection>()
+        .unwrap()
+    else {
+        return Vec::new();
+    };
+    selection
+        .iter()
+        .map(|item| app.world().entity(item).get::<Item<Color>>().unwrap().data)
+        .collect()
+}
+
+#[test]
+fn a_palette_is_a_list_box_and_its_swatches_are_list_items() {
+    let mut app = headless_app();
+    let (palette, swatches, _) = spawn_palette(&mut app, Selection::builder().zero_or_one());
+
+    assert!(app.world().entity(palette).contains::<ListBox>());
+    assert_eq!(swatches.len(), 3);
+    for swatch in swatches {
+        assert!(app.world().entity(swatch).contains::<ListItem>());
+    }
+}
+
+#[test]
+fn the_swatches_of_the_selection_are_selected_and_the_others_are_not() {
+    let mut app = headless_app();
+    let (palette, swatches, selection_ref) =
+        spawn_palette(&mut app, Selection::builder().zero_or_one());
+    assert!(selected_colors(&app, palette).is_empty());
+
+    // Selected follows the selection when something else changes it as well.
+    let blue = app
+        .world()
+        .entity(swatches[2])
+        .get::<ItemView>()
+        .unwrap()
+        .item_ref;
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(blue))));
+    app.update();
+
+    assert_eq!(selected_colors(&app, palette), [BLUE]);
+}
+
+#[test]
+fn palettes_sharing_a_selection_all_show_it_as_selected() {
+    let mut app = headless_app();
+    let (first, swatches, selection_ref) =
+        spawn_palette(&mut app, Selection::builder().zero_or_more());
+    let root = app.world_mut().spawn(Node::default()).id();
+    let second = spawn_palette_on(&mut app, root, selection_ref);
+    assert!(selected_colors(&app, second).is_empty());
+
+    click_row(&mut app, swatches[1]);
+
+    assert_eq!(selected_colors(&app, first), [GREEN]);
+    assert_eq!(selected_colors(&app, second), [GREEN]);
+}
+
+#[test]
+fn a_palette_over_a_selection_of_many_is_a_multi_select_list_box() {
+    let mut app = headless_app();
+    for (selection, multiple) in [
+        (Selection::builder().one(), false),
+        (Selection::builder().zero_or_one(), false),
+        (Selection::builder().one_or_more(), true),
+        (Selection::builder().zero_or_more(), true),
+    ] {
+        let (palette, _, _) = spawn_palette(&mut app, selection);
+
+        assert_eq!(
+            app.world().entity(palette).contains::<ListBoxMultiSelect>(),
+            multiple
+        );
+    }
+}
+
+#[test]
+fn clicking_a_swatch_selects_it_and_clicking_the_selected_one_deselects_it() {
+    let mut app = headless_app();
+    let (palette, swatches, selection_ref) =
+        spawn_palette(&mut app, Selection::builder().zero_or_one());
+
+    click_row(&mut app, swatches[0]);
+    assert_eq!(selection_colors(&app, selection_ref), [RED]);
+    assert_eq!(selected_colors(&app, palette), [RED]);
+
+    click_row(&mut app, swatches[2]);
+    assert_eq!(selection_colors(&app, selection_ref), [BLUE]);
+    assert_eq!(selected_colors(&app, palette), [BLUE]);
+
+    click_row(&mut app, swatches[2]);
+    assert!(selection_colors(&app, selection_ref).is_empty());
+    assert!(selected_colors(&app, palette).is_empty());
+}
+
+#[test]
+fn clicking_a_selected_swatch_that_is_not_the_first_deselects_it() {
+    let mut app = headless_app();
+    let (palette, swatches, selection_ref) =
+        spawn_palette(&mut app, Selection::builder().zero_or_more());
+    for swatch in &swatches[..2] {
+        click_row(&mut app, *swatch);
+    }
+    assert_eq!(selected_colors(&app, palette), [RED, GREEN]);
+
+    click_row(&mut app, swatches[1]);
+
+    assert_eq!(selection_colors(&app, selection_ref), [RED]);
+    assert_eq!(selected_colors(&app, palette), [RED]);
+}
+
+#[test]
+fn the_selection_rules_decide_what_a_swatch_click_does() {
+    let mut app = headless_app();
+    let (palette, swatches, selection_ref) = spawn_palette(&mut app, Selection::builder().one());
+    assert_eq!(selected_colors(&app, palette), [RED]);
+
+    // A `One` selection replaces its swatch and cannot be emptied.
+    click_row(&mut app, swatches[1]);
+    assert_eq!(selected_colors(&app, palette), [GREEN]);
+    click_row(&mut app, swatches[1]);
+    assert_eq!(selection_colors(&app, selection_ref), [GREEN]);
+    assert_eq!(selected_colors(&app, palette), [GREEN]);
+}
+
+#[test]
+fn a_swatch_spawned_for_an_item_of_the_selection_starts_selected() {
+    let mut app = headless_app();
+    let (palette, _, selection_ref) = spawn_palette(&mut app, Selection::builder().zero_or_more());
+    let yellow = app
+        .world_mut()
+        .spawn((
+            Item {
+                data: Color::srgb(1.0, 1.0, 0.0),
+            },
+            ItemOf(selection_ref),
+        ))
+        .id();
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::ZeroOrMore(
+            smallvec::smallvec![yellow],
+        )));
+    app.update();
+    app.update();
+
+    assert_eq!(item_views(&app, palette).len(), 4);
+    assert_eq!(selected_colors(&app, palette), [Color::srgb(1.0, 1.0, 0.0)]);
 }

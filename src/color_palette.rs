@@ -3,10 +3,14 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
+use bevy::ui::{RelativeCursorPosition, Selected};
+use bevy::ui_widgets::ListBoxMultiSelect;
 use itertools::Either;
 
-use crate::list::{CornerStyle, ItemView, ItemsChangedInput, List, ListLayout, NoDefaultItems};
+use crate::list::{
+    CornerStyle, ItemView, ItemsChangedInput, List, ListLayout, NoDefaultItems, sync_multi_select,
+    sync_selected,
+};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
@@ -36,6 +40,12 @@ impl Plugin for ColorPalettePlugin {
 }
 
 /// A grid of colour swatches for a selection of [`Item<Color>`](crate::select::Item).
+///
+/// Like a [`List`] it is a [`ListBox`](bevy::ui_widgets::ListBox) and its swatches
+/// ([`ItemView`]s) are [`ListItem`](bevy::ui_widgets::ListItem)s, so a swatch of the
+/// selection carries [`Selected`]. The [`Selection`] stays the one source of truth:
+/// [`Selected`] follows it, see [`List`]. A swatch has no label, so it has no accessible
+/// name yet.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -53,11 +63,13 @@ fn on_items_changed(
     mut commands: Commands,
     lists: Query<Option<&Children>, With<ColorPalette>>,
     item_views: Query<(Entity, &ItemView)>,
+    selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
     let Ok(children) = lists.get(*list_ref) else {
         return;
     };
+    let selection = selections.get(*list_ref);
 
     let existing = children
         .map(|c| {
@@ -87,44 +99,45 @@ fn on_items_changed(
         let Ok(item) = items_query.get(item_id) else {
             continue;
         };
+        let is_selected = selection.is_some_and(|selection| selection.is_selected(item_id));
         commands.entity(*list_ref).with_children(|spawner| {
-            spawner
-                .spawn((
-                    Name::new("ItemView"),
-                    Button,
-                    // Allow scrolling
-                    Pickable {
-                        should_block_lower: false,
-                        ..default()
-                    },
+            let mut view = spawner.spawn((
+                Name::new("ItemView"),
+                // Allow scrolling
+                Pickable {
+                    should_block_lower: false,
+                    ..default()
+                },
+                Node {
+                    display: Display::Flex,
+                    justify_self: JustifySelf::Stretch,
+                    // flex_grow: 1.0,
+                    justify_content: JustifyContent::Stretch,
+                    align_items: AlignItems::Stretch,
+                    padding: UiRect::ZERO,
+                    ..default()
+                },
+                ItemView {
+                    item_ref: item_id,
+                    list_ref: *list_ref,
+                },
+            ));
+            view.observe(handle_mouse_events).with_children(|parent| {
+                parent.spawn((
                     Node {
-                        display: Display::Flex,
-                        justify_self: JustifySelf::Stretch,
-                        // flex_grow: 1.0,
-                        justify_content: JustifyContent::Stretch,
-                        align_items: AlignItems::Stretch,
-                        padding: UiRect::ZERO,
+                        border: UiRect::all(Val::Px(1.0)),
+                        width: Val::Px(COLOR_SQUARE_SIZE),
+                        height: Val::Px(COLOR_SQUARE_SIZE),
+                        border_radius: BorderRadius::all(Val::Px(5.0)),
                         ..default()
                     },
-                    ItemView {
-                        item_ref: item_id,
-                        list_ref: *list_ref,
-                    },
-                ))
-                .observe(handle_mouse_events)
-                .with_children(|parent| {
-                    parent.spawn((
-                        Node {
-                            border: UiRect::all(Val::Px(1.0)),
-                            width: Val::Px(COLOR_SQUARE_SIZE),
-                            height: Val::Px(COLOR_SQUARE_SIZE),
-                            border_radius: BorderRadius::all(Val::Px(5.0)),
-                            ..default()
-                        },
-                        BackgroundColor(item.data),
-                        Pickable::IGNORE,
-                    ));
-                });
+                    BackgroundColor(item.data),
+                    Pickable::IGNORE,
+                ));
+            });
+            if is_selected {
+                view.insert(Selected);
+            }
         });
     }
 
@@ -178,13 +191,16 @@ fn handle_mouse_events(
     t: On<MouseEvent>,
     mut selections: SelectionParam,
     color_items: Query<&Item<Color>>,
-    mut item_views: Query<&ItemView>,
+    item_views: Query<(&ItemView, Has<Selected>)>,
     mut commands: Commands,
 ) {
-    let Ok(ItemView {
-        item_ref: target_item_ref,
-        list_ref: target_list_ref,
-    }) = item_views.get_mut(t.event().event_target())
+    let Ok((
+        ItemView {
+            item_ref: target_item_ref,
+            list_ref: target_list_ref,
+        },
+        is_marked_selected,
+    )) = item_views.get(t.event().event_target())
     else {
         return;
     };
@@ -203,9 +219,15 @@ fn handle_mouse_events(
         (MouseKind::Out, true) => Some(HoverState::Selected),
         (MouseKind::Out, false) => Some(HoverState::Unselected),
         (MouseKind::Released, _) => {
-            selections.update_selection(selection_ref, |selection| {
-                selection.toggle_selected(*target_item_ref)
-            });
+            // The `ListBox` leaves a click on a `Selected` swatch alone, so deselecting is
+            // ours. Selecting is the `ListBox`'s, see `list::on_value_change`. Both go by
+            // the `Selected` the `ListBox` saw, not by the `Selection`: see
+            // `list::handle_mouse_events`.
+            if is_marked_selected {
+                selections.update_selection(selection_ref, |selection| {
+                    selection.toggle_selected(*target_item_ref)
+                });
+            }
             None
         }
     };
@@ -283,25 +305,34 @@ fn theme_items(
 fn on_selection_change(
     q: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
-    color_palettes: Query<(Entity, &Children), With<ColorPalette>>,
-    mut item_views: Query<(&ItemView, &RelativeCursorPosition)>,
+    color_palettes: Query<(Entity, Option<&Children>, Has<ListBoxMultiSelect>), With<ColorPalette>>,
+    item_views: Query<(&ItemView, &RelativeCursorPosition, Has<Selected>)>,
     color_items: Query<&Item<Color>>,
     mut commands: Commands,
 ) {
     for changed_selection_ref in q {
-        for (color_palette_ref, children) in color_palettes {
+        for (color_palette_ref, children, is_multi) in color_palettes {
             let Some((selection_ref, selection)) = selections.get_with_ref(color_palette_ref)
             else {
                 continue;
             };
-            if selection_ref != changed_selection_ref {
+            // Its own selection, or the one it refers to.
+            if selection_ref != changed_selection_ref && color_palette_ref != changed_selection_ref
+            {
                 continue;
             }
+            sync_multi_select(&mut commands, color_palette_ref, is_multi, selection);
 
-            for item_view_id in children {
-                let Ok((item_view, rcp)) = item_views.get_mut(*item_view_id) else {
+            for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
+                let Ok((item_view, rcp, was_selected)) = item_views.get(item_view_id) else {
                     continue;
                 };
+                sync_selected(
+                    &mut commands,
+                    item_view_id,
+                    was_selected,
+                    selection.is_selected(item_view.item_ref),
+                );
                 let Ok(Item { data: item_color }) = color_items.get(item_view.item_ref) else {
                     continue;
                 };
@@ -314,7 +345,7 @@ fn on_selection_change(
                     };
                 commands.run_system_cached_with(
                     set_highlight,
-                    (*item_view_id, *item_color, hover_state),
+                    (item_view_id, *item_color, hover_state),
                 );
             }
         }
