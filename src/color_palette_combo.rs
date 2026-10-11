@@ -76,10 +76,16 @@ struct ColorPaletteComboFloat;
 /// The popup is named after its combo, `<combo name> popup`, so that a scenario
 /// or a query finds it by name whatever the order the combos were spawned in.
 /// The name is taken now: renaming the combo later does not rename its popup.
+///
+/// The popup's [`ColorPalette`] refers to the combo's selection from the start, so that
+/// it shows and changes it without waiting for a change of the selection. A combo that
+/// has no [`Selection`] yet gets the reference when it is given one, see
+/// [`on_selection_change`].
 fn on_insert_combo(
     t: On<Insert, ColorPaletteCombo>,
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
+    selections: SelectionParam,
     parents: Query<&ChildOf>,
     names: Query<&Name>,
 ) {
@@ -96,8 +102,11 @@ fn on_insert_combo(
 
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
+    // Reserved now so that the combo can keep it; the scroll area inserts it as its contents.
+    let palette_id = commands.spawn_empty().id();
 
     let list_layout = list_layouts.get(combo).ok().copied();
+    let selection_ref = selections.get_ref(combo);
     commands.entity(combo).with_children(|parent| {
         button_id = parent
             .spawn((
@@ -130,7 +139,10 @@ fn on_insert_combo(
                 Visibility::Hidden,
                 ScrollArea::bundle(
                     move |parent| {
-                        parent.spawn((
+                        let contents = parent.target_entity();
+                        let mut palette = parent.world_mut().entity_mut(palette_id);
+                        palette.insert((
+                            ChildOf(contents),
                             Pickable {
                                 should_block_lower: false,
                                 ..default()
@@ -138,6 +150,9 @@ fn on_insert_combo(
                             ColorPalette,
                             list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
                         ));
+                        if let Some(selection_ref) = selection_ref {
+                            palette.insert(Selection::reference(selection_ref));
+                        }
                     },
                     true,
                     false,
@@ -151,6 +166,7 @@ fn on_insert_combo(
         parent: combo,
         button: button_id,
         float_id,
+        palette: palette_id,
     };
     commands.entity(combo).insert((State::Closed, sub_refs));
 
@@ -184,6 +200,8 @@ struct SubRefs {
     parent: Entity,
     button: Entity,
     float_id: Entity,
+    /// The popup's [`ColorPalette`].
+    palette: Entity,
 }
 
 /// Whether the popup of a [`ColorPaletteCombo`] is showing.
@@ -278,6 +296,11 @@ fn position_float(
     });
 }
 
+/// Keeps the popup's palette and the button's colour square in step with the combo's
+/// selection.
+///
+/// The palette already refers to the selection the combo had when it was spawned; this
+/// points it at the new one when the combo gets or is given another selection.
 fn on_selection_change(
     q: Query<Entity, Changed<Selection>>,
     combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
@@ -285,7 +308,6 @@ fn on_selection_change(
     mut color_squares: Query<&mut BackgroundColor, With<ColorSquare>>,
     selections: SelectionParam,
     items: Query<&Item<Color>>,
-    children: Query<&Children>,
     mut commands: Commands,
 ) {
     for changed_selection_ref in q {
@@ -294,34 +316,21 @@ fn on_selection_change(
             else {
                 continue;
             };
-            if selection_ref != changed_selection_ref {
+            // Its own selection, or the one it refers to.
+            if selection_ref != changed_selection_ref
+                && color_palette_combo_ref != changed_selection_ref
+            {
                 continue;
             }
 
-            // TODO make this less brittle
-            let Some(scroll_contents_ref) = children
-                .get(sub_refs.float_id)
-                .ok()
-                .and_then(|c| c.iter().next())
-            else {
-                continue;
-            };
-            let Some(color_palette_ref) = children
-                .get(scroll_contents_ref)
-                .ok()
-                .and_then(|c| c.iter().next())
-            else {
-                continue;
-            };
-
             if selections
-                .get_ref(color_palette_ref)
-                .is_none_or(|existing_ref| existing_ref != changed_selection_ref)
+                .get_ref(sub_refs.palette)
+                .is_none_or(|existing_ref| existing_ref != selection_ref)
             {
-                // Selection id has changed -> propagate to the List
+                // Selection id has changed -> propagate to the palette
                 commands
-                    .entity(color_palette_ref)
-                    .insert(Selection::reference(changed_selection_ref));
+                    .entity(sub_refs.palette)
+                    .insert(Selection::reference(selection_ref));
             }
 
             let Ok(ColorSquareRef(color_square_id)) = color_square_refs.get(sub_refs.button) else {

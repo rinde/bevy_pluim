@@ -125,7 +125,7 @@ checkout's build so Bevy is not compiled again.
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged (the wheel is handled by `list.rs`'s `update_scroll_position`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle`: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
-| `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup |
+| `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled` |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy** |
@@ -717,7 +717,10 @@ a file can check any `Reflect` type of the app by short type path.
   else moves, which open into those margins
   (`color_palette_combo_keeps_margin_at_window_edge`). The layout rounds the
   popup to whole pixels, so beside the 39 pixel wide button (centre on a half
-  pixel) its centre is the button's plus or minus 0.5.
+  pixel) its centre is the button's plus or minus 0.5. The popup's palette refers to
+  the combo's selection from the moment it is spawned, so
+  `color_palette_combo_pick_as_first_action` opens `own palette combo` and picks a
+  swatch as its first steps, with no wait.
 - **The `Themed` screen and the theme scenarios.** One of each widget that
   follows the theme in a row: `themed button` (a `PushButton` "Other"),
   `themed card`, `themed list` (`One`, `Two`, `Three`, the first selected) and
