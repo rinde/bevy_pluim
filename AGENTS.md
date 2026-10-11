@@ -127,7 +127,7 @@ checkout's build so Bevy is not compiled again.
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
-| `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange` |
+| `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled` |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy** |
 | `label.rs` | `Label::header` / `Label::regular` |
 | `link.rs` | `Link` and its immutable `LinkState` |
@@ -233,14 +233,14 @@ of them (`just example gallery -- --run-all stack link`).
   "the button was used" is `Activate`, so an action observes `Activate` (on the
   button, or on an ancestor: it bubbles); how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one
-  thing. The `Pointer<Release>` observers in the examples and in
-  `numeric_stepper.rs` predate this and fire on a release that does not
-  activate (the button was pressed elsewhere); move them to `Activate` when
-  touching them. A disabled `PushButton` (insert `InteractionDisabled`) shows
-  its text in `ThemeColors::text_disabled` and ignores hover. A `Link` is
-  disabled through its `LinkState`, not by inserting `InteractionDisabled`
-  yourself: `LinkState::Disabled` keeps the `Button` and adds
-  `InteractionDisabled` (`Enabled` removes it again), and the link ignores hover.
+  thing. The `Pointer<Release>` observers in the examples predate this and fire
+  on a release that does not activate (the button was pressed elsewhere); move
+  them to `Activate` when touching them. A disabled `PushButton` (insert
+  `InteractionDisabled`) shows its text in `ThemeColors::text_disabled` and
+  ignores hover. A `Link` is disabled through its `LinkState`, not by inserting
+  `InteractionDisabled` yourself: `LinkState::Disabled` keeps the `Button` and
+  adds `InteractionDisabled` (`Enabled` removes it again), and the link ignores
+  hover.
   The crumbs of `BreadCrumbs` observe `Activate`; the current crumb is a
   disabled `Link`.
 - **Selections are immutable components.** Change one by going through
@@ -274,13 +274,11 @@ of them (`just example gallery -- --run-all stack link`).
 
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Two places still
-  observe a raw `Pointer<…>`: the buttons in
-  `numeric_stepper.rs` (`Pointer<Released>`) and the scroll thumb in
-  `scroll_area.rs` (`Pointer<Drag>`); do not add more. The thumb is there
-  because `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so
-  `MouseEvent` cannot carry a drag; a `MouseKind::Drag` would let it move
-  over.
+- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** One place in the
+  library still observes a raw `Pointer<…>`: the scroll thumb in
+  `scroll_area.rs` (`Pointer<Drag>`); do not add more. It is there because
+  `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so `MouseEvent`
+  cannot carry a drag; a `MouseKind::Drag` would let it move over.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for
@@ -566,7 +564,8 @@ a file can check any `Reflect` type of the app by short type path.
   `Within(Name("u16 stepper"), Role(role: Button, label: "+"))` and reads its
   value with `TextOf(Name("u16 stepper"), Exact("- 11 +"))` (the "-", value
   and "+" labels). Move the pointer to the button before every click: a wider
-  value moves the buttons.
+  value moves the buttons. A button at its limit is `InteractionDisabled`, so
+  the tester's click on it does nothing (`numeric_stepper_bounds.ron`).
 - **The `Lists` screen** names every list after its selection so a file can
   reach it: `one-or-more list` and `one-or-more grid list` (one shared
   `Selection::reference`), `one list` (own items), `zero-or-one list` and

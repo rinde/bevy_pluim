@@ -24,6 +24,7 @@ use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::link::{Link, LinkState};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionValue};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
@@ -543,6 +544,83 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
     assert_eq!(label_color(&app), colors.text_primary);
+}
+
+/// A stepper over a `u8` from 0 to 3, starting at `initial`, returning it and its
+/// decrease and increase buttons.
+fn spawn_stepper(app: &mut App, initial: u8) -> (Entity, Entity, Entity) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stepper = app
+        .world_mut()
+        .spawn((
+            NumericStepper,
+            Value::new_u8(initial, 0, 3, 1),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let children = app.world().entity(stepper).get::<Children>().unwrap();
+    (stepper, children[0], children[2])
+}
+
+fn stepper_value(app: &App, stepper: Entity) -> u8 {
+    app.world()
+        .entity(stepper)
+        .get::<Value>()
+        .unwrap()
+        .as_u8()
+        .unwrap()
+}
+
+fn activate(app: &mut App, button: Entity) {
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    app.update();
+}
+
+fn is_disabled(app: &App, button: Entity) -> bool {
+    app.world().entity(button).contains::<InteractionDisabled>()
+}
+
+#[test]
+fn activating_the_buttons_of_a_numeric_stepper_steps_its_value() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) = spawn_stepper(&mut app, 1);
+
+    activate(&mut app, increase);
+    assert_eq!(stepper_value(&app, stepper), 2);
+    activate(&mut app, decrease);
+    activate(&mut app, decrease);
+    assert_eq!(stepper_value(&app, stepper), 0);
+}
+
+#[test]
+fn a_numeric_stepper_button_at_its_bound_is_disabled_until_the_value_moves() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) = spawn_stepper(&mut app, 0);
+
+    assert!(is_disabled(&app, decrease), "at the minimum");
+    assert!(!is_disabled(&app, increase));
+
+    activate(&mut app, increase);
+    assert!(!is_disabled(&app, decrease));
+    activate(&mut app, increase);
+    activate(&mut app, increase);
+    assert_eq!(stepper_value(&app, stepper), 3);
+    assert!(is_disabled(&app, increase), "at the maximum");
+    assert!(!is_disabled(&app, decrease));
+
+    press(&mut app, increase);
+    click_and_release(&mut app, increase);
+    assert_eq!(
+        stepper_value(&app, stepper),
+        3,
+        "a disabled button does not step"
+    );
+
+    activate(&mut app, decrease);
+    assert!(!is_disabled(&app, increase));
 }
 
 fn toggle_theme(app: &mut App) {
