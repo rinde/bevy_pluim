@@ -231,10 +231,16 @@ fn on_insert_state(
     }
 }
 
+/// Places the popup of a combo under its button, centred on it.
+///
+/// The popup is moved in until it is 10 pixels from the window's left and right
+/// edges, and goes above the button instead of under it when it would run off the bottom. Only
+/// the button's position and the popup's laid-out size are read, so the first opening is placed
+/// like any other.
 fn position_float(
     sub_refs: In<SubRefs>,
     window: Single<&Window, With<PrimaryWindow>>,
-    mut dims: Query<(&mut Node, &UiGlobalTransform, &ComputedNode), With<ColorPaletteComboFloat>>,
+    mut dims: Query<(&mut Node, &ComputedNode), With<ColorPaletteComboFloat>>,
     parent_dims: Query<
         (&ComputedNode, &UiGlobalTransform),
         (
@@ -246,61 +252,30 @@ fn position_float(
     const MARGIN: f32 = 10.0;
     const BUTTON_FLOAT_DIST: f32 = 3.0;
 
-    let (
-        Ok((mut node, global_transform, float_computed_node)),
-        Ok((button_computed_node, button_transform)),
-    ) = (
+    let (Ok((mut node, float_computed_node)), Ok((button_computed_node, button_transform))) = (
         dims.get_mut(sub_refs.float_id),
         parent_dims.get(sub_refs.button),
-    )
-    else {
+    ) else {
         return;
     };
 
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
-    let float_size =
-        float_computed_node.content_size() * float_computed_node.inverse_scale_factor();
-    let translation = global_transform.translation * float_computed_node.inverse_scale_factor();
-    let button_translation =
-        button_transform.translation * button_computed_node.inverse_scale_factor();
+    let float_size = float_computed_node.size() * float_computed_node.inverse_scale_factor();
+    // `UiGlobalTransform` holds the centre of the node.
+    let button_center = button_transform.translation * button_computed_node.inverse_scale_factor();
 
-    let min_coord = translation - (float_size / 2.0);
-    let max_coord = translation + (float_size / 2.0);
+    // Centred under the button, then pushed back inside the window. A popup wider than the
+    // window keeps its left edge on the margin.
+    let centered_x = button_center.x - float_size.x / 2.0;
+    let max_x = window.width() - MARGIN - float_size.x;
+    node.left = Val::Px(centered_x.min(max_x).max(MARGIN));
 
-    let mut intended_x = button_translation.x + (-float_size.x / 2.0) + (button_size.x / 2.0);
-    let mut intended_y = button_translation.y + (button_size.y / 2.0) + BUTTON_FLOAT_DIST;
-
-    // set x position
-    let Val::Px(current_x) = node.left else {
-        return;
-    };
-
-    let delta_x = intended_x - current_x;
-    let global_max_x = max_coord.x + delta_x;
-    let global_min_x = min_coord.x + delta_x;
-
-    if global_max_x + MARGIN > window.width() {
-        let excess_x = global_max_x + MARGIN - window.width();
-        intended_x -= excess_x;
-    } else if global_min_x < MARGIN {
-        let excess_x = MARGIN - global_min_x;
-        intended_x += excess_x;
-    }
-    node.left = Val::Px(intended_x);
-
-    // set y position
-    let Val::Px(current_y) = node.top else {
-        return;
-    };
-
-    let delta_y = intended_y - current_y;
-    let global_max_y = max_coord.y + delta_y;
-
-    if global_max_y + MARGIN > window.height() {
-        intended_y =
-            button_translation.y - (button_size.y / 2.0) - BUTTON_FLOAT_DIST - float_size.y;
-    }
-    node.top = Val::Px(intended_y);
+    let below_y = button_center.y + button_size.y / 2.0 + BUTTON_FLOAT_DIST;
+    node.top = Val::Px(if below_y + float_size.y + MARGIN > window.height() {
+        button_center.y - button_size.y / 2.0 - BUTTON_FLOAT_DIST - float_size.y
+    } else {
+        below_y
+    });
 }
 
 fn on_selection_change(
