@@ -1,7 +1,8 @@
 // The first scenario of tests/scenarios.rs as data: a push button follows the
 // light theme under the pointer, and the click is counted. The colours are the
 // slots of DEFAULT_LIGHT_THEME_COLORS: background_primary, hovered_item,
-// selected_hovered_item and selected_item, in the order the steps reach them.
+// selected_hovered_item and hovered_item again (the pointer is still on the
+// button after the release), in the order the steps reach them.
 (
     format_version: 3,
     name: "a push button follows the theme under the pointer",
@@ -29,7 +30,7 @@
         Check(Component(
             target: Role(role: Button, label: "Add"),
             path: "BackgroundColor.0",
-            is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
         )),
         Check(Resource(path: "Clicks.0", is: Eq(1))),
         MoveTo(Role(role: Button, label: "Other")),

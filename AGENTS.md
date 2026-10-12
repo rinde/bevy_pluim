@@ -374,6 +374,13 @@ of them (`just example gallery -- --run-all stack link`).
   all of them with `(|| None::<Entity>).pipe(theme_x).run_if(resource_changed::<Theme>)`.
   `itertools::Either` unifies the two iterators. See `card.rs` for the
   smallest example.
+  A widget with an interaction state (hovered, pressed, selected) takes its
+  background from one function of that state (`background_for` in
+  `push_button.rs`, `item_background` in `list.rs`) that both its pointer
+  handler and its `theme_*` system call, so a theme change under a resting
+  pointer keeps the hover colour. The state is read from `Hovered` and `Pressed`,
+  not tracked by hand; a `PushButton` with `NoDefaultHover` rests at
+  `background_primary` for its owner to colour.
 - **Corner radius is a `Node` field.** Since Bevy 0.18 `BorderRadius` is
   `Node::border_radius`, not a component; set it on the node.
 - **No hard-coded colours outside `theme.rs` and `tailwind.rs`.** Add a slot
@@ -774,7 +781,11 @@ a file can check any `Reflect` type of the app by short type path.
   `Component(target: .., path: "BoxShadow.0[0].color", ..)` and the colour of
   a label with `TextColor.0` of `Text("..")`. Read a widget the pointer is not
   on: "Change theme" stays hovered after its click, and a hovered item has
-  hover colours.
+  hover colours. The one that reads
+  the hovered "Change theme" is `theme_keeps_hover_colour_under_pointer.ron`: a
+  button the pointer rests on shows the new theme's `hovered_item`. A button
+  let go with the pointer still on it is `hovered_item` too, not
+  `selected_item`.
 
 ### Recording the scenarios
 
