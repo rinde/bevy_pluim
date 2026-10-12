@@ -1,0 +1,36 @@
+// The wheel only moves an axis the scroll area scrolls along: a horizontal
+// wheel over the vertical scroll area leaves its ScrollPosition.x at 0, a
+// vertical wheel over the horizontal one leaves its ScrollPosition.y at 0, and
+// contents that fit stay at (0, 0) whichever way the wheel turns.
+(
+    format_version: 3,
+    name: "the wheel does not move a scroll position along an axis the area does not scroll",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("vertical scroll area")),
+        Wheel(x: -100.0, y: 0.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.x",
+            is: Eq(0.0),
+        )),
+        MoveTo(Name("horizontal scroll area")),
+        Wheel(x: 0.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(0.0),
+        )),
+        MoveTo(Name("fitting scroll area")),
+        Wheel(x: -100.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("fitting scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0",
+            is: Eq((0.0, 0.0)),
+        )),
+    ],
+    expect: [],
+)

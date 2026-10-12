@@ -2,8 +2,8 @@
 // and back, and not down: the area only scrolls horizontally. A positive
 // wheel x is "left", so the scroll position moves by the opposite amount.
 // The scroll position read is the one the layout settles on
-// (ComputedNode.scroll_position), clamped to what overflows; the ScrollPosition
-// component itself takes whatever the wheel adds.
+// (ComputedNode.scroll_position), clamped to what overflows (the ScrollPosition component is kept in that range
+// too, but the layout shows it a pass later).
 (
     format_version: 3,
     name: "the wheel scrolls a horizontal scroll area",

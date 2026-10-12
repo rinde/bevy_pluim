@@ -4,9 +4,9 @@
 // moves with the area around it. The list and its item views let the pointer
 // through (Pickable should_block_lower is false), which is what lets the area
 // below them be hovered. The scroll position that counts is the one the layout
-// settles on (ComputedNode.scroll_position), clamped to what overflows; the
-// ScrollPosition component itself takes whatever the wheel adds. A positive
-// wheel y scrolls up.
+// settles on (ComputedNode.scroll_position), clamped to what overflows (the
+// ScrollPosition component is kept in that range too, but the layout shows it
+// a pass later). A positive wheel y scrolls up.
 (
     format_version: 3,
     name: "the wheel over a list scrolls it",
@@ -28,9 +28,14 @@
             is: Eq(40.0),
         )),
         // Further down, to the end of the rows, however far the wheel turns: the
-        // ScrollPosition component goes to 2040, the layout stops at the overflow, 298.
+        // ScrollPosition component and the layout both stop at the overflow, 298.
         Wheel(x: 0.0, y: -2000.0),
         Wait(2),
+        Check(Component(
+            target: Within(Name("list scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(298.0),
+        )),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
             path: "ComputedNode.scroll_position.y",
