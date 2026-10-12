@@ -8,8 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Full debuginfo in Bevy-linked test binaries fills the runner's disk.
-  CARGO_PROFILE_DEV_DEBUG: line-tables-only
   # Cargo fetches git dependencies with the `git` binary, so the credentials
   # configured by `.github/actions/private-deps` apply to it.
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"

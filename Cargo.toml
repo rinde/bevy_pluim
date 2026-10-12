@@ -100,6 +100,14 @@ print_stdout = "deny"
 print_stderr = "deny"
 indexing_slicing = "deny"
 
+# Test binaries that link Bevy are 1 to 2 GB each with full debug info (over
+# 90% of that is DWARF), which fills disks when several are built; line tables
+# alone keep file and line numbers in backtraces. `cargo test` uses the `test`
+# profile, which inherits this. For a debugger, build with
+# `CARGO_PROFILE_DEV_DEBUG=true`.
+[profile.dev]
+debug = "line-tables-only"
+
 # Bevy is unusably slow in an unoptimised build, so optimise dependencies but
 # not our own code, which keeps the edit-run loop short.
 [profile.dev.package."*"]

@@ -64,9 +64,14 @@ else worth doing in the pull request rather than doing it.
 
 1. `just fmt`
 2. `just lint`
-3. `just test`
-4. New behaviour has a test, where the headless harness allows it
-5. `AGENTS.md` updated if a module, example, convention or command changed
+3. The test binaries are yours: `cargo test --test ron_scenarios` must say
+   `running N tests` with N the number of files in `tests/ron/`
+   (`ls tests/ron/*.ron | wc -l`). Another worktree sharing the target dir may
+   have swapped the binary; if the numbers differ, `touch tests/*.rs
+   src/lib.rs` and run it again (see **Agents** in `AGENTS.md`).
+4. `just test`
+5. New behaviour has a test, where the headless harness allows it
+6. `AGENTS.md` updated if a module, example, convention or command changed
 
 All green, then commit with a message that says what the change does, in the
 imperative (`Close the combo on an outside click`), and push with

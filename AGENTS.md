@@ -110,6 +110,19 @@ run needs its tools allowed, or it stops at the first permission prompt. Each
 worktree starts with an empty `target/`; the skills point cargo at the main
 checkout's build so Bevy is not compiled again.
 
+**Worktrees sharing one target dir can run each other's test binaries.**
+Identically named test targets get the same file name there (cargo's metadata
+hash does not include the workspace path), so a run can execute another
+checkout's `ron_scenarios` or `scenarios` binary, one built from other code and
+other `tests/ron/` files (the binary reads the `tests/ron/` of the checkout
+that compiled it). Before trusting a test run in a worktree, check that
+`cargo test --test ron_scenarios` plays exactly one test per file in
+`tests/ron/`: its `running N tests` line must say as many as
+`ls tests/ron/*.ron | wc -l` (`-- --list` does not work, the target's own
+`main` plays every file). If it does not, `touch tests/*.rs src/lib.rs` to force
+a rebuild and run it again. Per-worktree target dirs are the other fix, but a
+cold Bevy build in each costs more disk and time than the check.
+
 ## Where to find what
 
 | Module | Holds |
@@ -473,6 +486,15 @@ a loop, and note that examples need a display.
 
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
+
+**Debug info is line tables only.** `[profile.dev]` in `Cargo.toml` sets
+`debug = "line-tables-only"` (the `test` profile inherits it), because a test
+binary that links Bevy is about 2 GB with full debug info, over 90% of it DWARF,
+and filled disks when several were built. Backtraces keep file and line numbers;
+what is lost is variable and type information in a debugger. For that, build
+with `CARGO_PROFILE_DEV_DEBUG=true cargo test ...`. CI has no separate setting
+for this: it takes the one in `Cargo.toml`. Changing the setting rebuilds every
+dependency, so it costs one cold Bevy build.
 
 ### The private tester dependency
 

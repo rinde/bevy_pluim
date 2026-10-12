@@ -2,7 +2,7 @@
 name: review-pr
 description: Review a pull request on rinde/rin-bevy-ui against its issue and the repository's rules and make sure CI passed, running it locally where GitHub did not, then approve it or request changes with detailed inline comments. The reviewer agents the coordinator dispatches run this; run it by hand as /review-pr <number> [sonnet|opus].
 argument-hint: <pr-number> [sonnet|opus]
-allowed-tools: Read, Grep, Glob, Write, Bash(gh api:*), Bash(git fetch:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git switch:*), Bash(git status:*), Bash(git rev-parse:*), Bash(just ci:*)
+allowed-tools: Read, Grep, Glob, Write, Bash(gh api:*), Bash(git fetch:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git switch:*), Bash(git status:*), Bash(git rev-parse:*), Bash(just ci:*), Bash(cargo test:*), Bash(touch:*)
 ---
 
 # Review a pull request
@@ -65,6 +65,12 @@ machine. GitHub's CI is the jobs **Format, clippy and docs**, **Tests** and
   45 minutes). In a worktree, reuse the main checkout's build rather than
   compiling Bevy from cold:
   `CARGO_TARGET_DIR="$(git rev-parse --path-format=absolute --git-common-dir)/../target" just ci`.
+  Right before it, make sure the test binaries are the head's, not another
+  worktree's sharing that target dir: with the same `CARGO_TARGET_DIR`,
+  `cargo test --test ron_scenarios` must say `running N tests` with N the
+  number of files in `tests/ron/` (count them with Glob). If the numbers
+  differ, `touch tests/*.rs src/lib.rs` and run it again (see **Agents** in
+  `AGENTS.md`).
   - It passes → CI passed locally: `ci=local` in the marker, and say in the
     body that GitHub's CI did not run and `just ci` passed on `head.sha`.
   - A format, clippy, doc, test or unused-dependency check fails → a
