@@ -312,7 +312,17 @@ of them (`just example gallery -- --run-all stack link`).
   false`. The outside-click systems read `ButtonInput<MouseButton>` and the
   `Hovered` of the button and the popup, not `Activate`, and a click on the
   button is inside the combo, so they never close what the same click opens. A
-  release on the popup closes it unless the selection may hold several items. The state is also
+  release on a palette combo's popup is inside as well, whatever the selection:
+  its scroll bar, or a drag of its thumb, leaves it open. The popup closes on a
+  pick by itself, not through the outside click: its `ColorPalette` observes
+  `Pointer<Click>` (a press and a release on the same swatch) and, for a
+  selection of one item at most (`One`, `ZeroOrOne`), inserts `State::Closed`,
+  whether or not the click changed the selection (the selected colour of a `One`
+  combo, a deselecting click of a `ZeroOrOne` one). A selection of many keeps
+  the popup open (a palette combo over one is not supported yet: its
+  `on_selection_change` asserts). A `Combo` has not been moved over (#96 left it): a release on
+  its list still closes it, unless the selection may hold several items. The
+  state is also
   `aria-expanded` on the button's `AccessibilityNode` (`set_expanded`), set where
   `ComboState` / `State` is inserted (the hook, the observer). Scenarios keep
   checking `ComboState` / `State`: the tester reads components, not the
@@ -351,11 +361,13 @@ of them (`just example gallery -- --run-all stack link`).
 
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** One place in the
-  library still observes a raw `Pointer<…>`: the scroll thumb in
-  `scroll_area.rs` (`Pointer<Drag>`); do not add more. It is there because
-  `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so `MouseEvent`
-  cannot carry a drag; a `MouseKind::Drag` would let it move over.
+- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Two places in the
+  library still observe a raw `Pointer<…>`: the scroll thumb in
+  `scroll_area.rs` (`Pointer<Drag>`) and the palette combo's popup in
+  `color_palette_combo.rs` (`Pointer<Click>`); do not add more. They are there
+  because `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so
+  `MouseEvent` cannot carry a drag or a click (a press and a release on the same
+  node); a `MouseKind::Drag` or `Click` would let them move over.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for
@@ -717,7 +729,10 @@ a file can check any `Reflect` type of the app by short type path.
   `Panel A`, `Panel B` and `Card demo`.
 - **Targets on the `ColorPalette` screen.** A row of `first palette combo`,
   `second palette combo` (the two share one selection) and `own palette combo`
-  (its own, over the same colours) and "Change theme"; below it `palette` (all
+  (its own, over the same colours) and "Change theme"; `one palette combo`
+  is out of the row (absolute, 300 pixels from the left) with a `One` selection
+  over the same colours, slate-50 until another is picked, so that clicking
+  the selected colour changes nothing; below the row `palette` (all
   242 Tailwind colours, 22 columns so that it, 836 by 418, fits the window; the
   example's 11 columns are taller than it) and `palette scroll area` (300 by
   300, 11 columns, sharing `palette`'s selection through its inner

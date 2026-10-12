@@ -1,6 +1,7 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
 use bevy::a11y::AccessibilityNode;
+use bevy::picking::events::{Click, Pointer};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -10,7 +11,7 @@ use itertools::Either;
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::Float;
-use crate::list::ListLayout;
+use crate::list::{ItemView, ListLayout};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, Selection, SelectionParam};
@@ -174,6 +175,11 @@ fn on_insert_combo(
         palette: palette_id,
     };
     commands.entity(combo).insert((State::Closed, sub_refs));
+
+    commands
+        .entity(palette_id)
+        .insert(sub_refs)
+        .observe(close_on_swatch_click);
 
     commands
         .entity(button_id)
@@ -359,9 +365,11 @@ fn on_selection_change(
 /// Closes an open combo when the left button is released outside of it.
 ///
 /// Inside is the combo's button, which opens and closes the popup itself on
-/// [`Activate`], and, for a selection that may hold several items, its popup. Whether
-/// the pointer is on them is their [`Hovered`], which comes from picking and so works
-/// whatever the camera renders to, a window or an image.
+/// [`Activate`], and its popup, whatever the selection: a release on the popup's
+/// scroll bar or between its swatches leaves it open, and a pick closes it on its own,
+/// see [`close_on_swatch_click`]. Whether the pointer is on them is their [`Hovered`],
+/// which comes from picking and so works whatever the camera renders to, a window or
+/// an image.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
     combos: Query<(Entity, &State, &SubRefs), With<ColorPaletteCombo>>,
@@ -369,32 +377,92 @@ fn close_combos_on_outside_click(
         (&Hovered, &mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
     >,
-    selections: SelectionParam,
     floats: Query<&Hovered, With<ColorPaletteComboFloat>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     if mouse_button.just_released(MouseButton::Left) {
         for (combo_id, &combo_state, subs) in combos.iter() {
-            let Some(selection) = selections.get(combo_id) else {
-                continue;
-            };
             let Ok((over_button, mut background_color, mut border_color)) =
                 combo_buttons.get_mut(subs.button)
             else {
                 continue;
             };
             let over_float = floats.get(subs.float_id).is_ok_and(Hovered::get);
-            if combo_state == State::Open
-                && !over_button.get()
-                && !(selection.allow_multiple() && over_float)
-            {
-                *background_color = BackgroundColor(theme.colors.background_primary);
-                *border_color = BorderColor::all(theme.colors.border);
-                commands.entity(combo_id).insert(State::Closed);
+            if combo_state == State::Open && !over_button.get() && !over_float {
+                close(
+                    combo_id,
+                    &mut background_color,
+                    &mut border_color,
+                    &theme,
+                    &mut commands,
+                );
             }
         }
     }
+}
+
+/// Closes the popup of a combo and puts its button back to the resting colours.
+fn close(
+    combo: Entity,
+    background_color: &mut BackgroundColor,
+    border_color: &mut BorderColor,
+    theme: &Theme,
+    commands: &mut Commands,
+) {
+    *background_color = BackgroundColor(theme.colors.background_primary);
+    *border_color = BorderColor::all(theme.colors.border);
+    commands.entity(combo).insert(State::Closed);
+}
+
+/// Closes the popup of a combo whose selection holds one item at most when a swatch
+/// in it is clicked, left button, whether or not the click changed the selection.
+///
+/// It is on the popup's [`ColorPalette`] and sees the [`Click`] of a swatch as it bubbles
+/// up, so a click on the popup that is not on a swatch (its scroll bar, the gap between
+/// swatches) does not close it, and neither does a drag of the scroll thumb. A selection
+/// of many (`OneOrMore`, `ZeroOrMore`) keeps the popup open for the next pick.
+///
+/// Bevy's [`Click`] is observed rather than a `MouseEvent` because a click is a press and
+/// a release on the same swatch, which `MouseKind` cannot say; a release alone also ends
+/// a press that began elsewhere.
+fn close_on_swatch_click(
+    click: On<Pointer<Click>>,
+    palettes: Query<&SubRefs, With<ColorPalette>>,
+    swatches: Query<(), With<ItemView>>,
+    states: Query<&State, With<ColorPaletteCombo>>,
+    mut combo_buttons: Query<
+        (&mut BackgroundColor, &mut BorderColor),
+        With<ColorPaletteComboButton>,
+    >,
+    selections: SelectionParam,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    if click.event().event.button != PointerButton::Primary
+        || !swatches.contains(click.original_event_target())
+    {
+        return;
+    }
+    let Ok(subs) = palettes.get(click.event_target()) else {
+        return;
+    };
+    let Some(selection) = selections.get(subs.parent) else {
+        return;
+    };
+    if selection.allow_multiple() || states.get(subs.parent) != Ok(&State::Open) {
+        return;
+    }
+    let Ok((mut background_color, mut border_color)) = combo_buttons.get_mut(subs.button) else {
+        return;
+    };
+    close(
+        subs.parent,
+        &mut background_color,
+        &mut border_color,
+        &theme,
+        &mut commands,
+    );
 }
 
 fn handle_combo_button_mouse_events(

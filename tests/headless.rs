@@ -906,6 +906,131 @@ fn the_popup_swatches_of_a_color_palette_combo_show_the_selection_the_combo_refe
     assert_eq!(selected_colors(&app, palette), [GREEN]);
 }
 
+/// The two colours the palette combos below choose from.
+fn white_and_black() -> Vec<Item<Color>> {
+    [Color::WHITE, Color::BLACK]
+        .into_iter()
+        .map(|data| Item { data })
+        .collect()
+}
+
+/// A colour palette combo over `selection` (two colours), opened: the combo, its popup's
+/// palette and the palette's swatches.
+fn open_palette_combo_over(app: &mut App, selection: impl Bundle) -> (Entity, Entity, Vec<Entity>) {
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, selection, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let button = single_entity_with::<ColorPushButton>(app);
+    click(app, button);
+    assert_eq!(
+        app.world().entity(combo).get::<PaletteComboState>(),
+        Some(&PaletteComboState::Open)
+    );
+    let palette = single_entity_with::<ColorPalette>(app);
+    let swatches = item_views(app, palette);
+    assert_eq!(swatches.len(), 2);
+    (combo, palette, swatches)
+}
+
+fn palette_combo_state(app: &App, combo: Entity) -> PaletteComboState {
+    *app.world()
+        .entity(combo)
+        .get::<PaletteComboState>()
+        .unwrap()
+}
+
+#[test]
+fn a_click_on_a_swatch_closes_the_popup_of_a_palette_combo_that_holds_one_item_at_most() {
+    for (name, selection) in [
+        (
+            "ZeroOrOne",
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(white_and_black()),
+        ),
+        (
+            "One",
+            Selection::builder()
+                .one()
+                .build_with_items(white_and_black()),
+        ),
+    ] {
+        let mut app = headless_app();
+        let (combo, _, swatches) = open_palette_combo_over(&mut app, selection);
+
+        click_row(&mut app, swatches[1]);
+
+        assert_eq!(
+            palette_combo_state(&app, combo),
+            PaletteComboState::Closed,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_click_on_the_selected_swatch_closes_the_popup_of_a_one_palette_combo_and_keeps_the_selection()
+{
+    let mut app = headless_app();
+    let (combo, palette, swatches) = open_palette_combo_over(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(white_and_black()),
+    );
+    assert_eq!(selected_colors(&app, palette), [Color::WHITE]);
+
+    click_row(&mut app, swatches[0]);
+
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Closed);
+    assert_eq!(selected_colors(&app, palette), [Color::WHITE]);
+}
+
+#[test]
+fn a_click_on_the_popup_of_a_palette_combo_that_is_not_on_a_swatch_leaves_it_open() {
+    let mut app = headless_app();
+    let (combo, palette, swatches) = open_palette_combo_over(&mut app, two_color_selection());
+
+    click_row(&mut app, palette);
+
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);
+    assert!(
+        selected_colors(&app, palette).is_empty(),
+        "nothing was picked"
+    );
+    assert!(
+        swatches
+            .iter()
+            .all(|s| !app.world().entity(*s).contains::<Selected>())
+    );
+}
+
+#[test]
+fn a_click_with_another_button_on_a_swatch_leaves_the_popup_open() {
+    let mut app = headless_app();
+    let (combo, _, swatches) = open_palette_combo_over(&mut app, two_color_selection());
+
+    app.world_mut().trigger(Pointer::new(
+        PointerId::Mouse,
+        pointer_location(),
+        Click {
+            count: 1,
+            button: PointerButton::Secondary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: std::time::Duration::ZERO,
+        },
+        swatches[1],
+    ));
+    app.update();
+
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);
+}
+
 #[test]
 fn a_combo_opens_when_its_button_is_activated_and_not_when_it_is_only_pressed() {
     let mut app = headless_app();

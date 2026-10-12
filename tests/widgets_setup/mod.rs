@@ -857,6 +857,24 @@ fn color_palette(world: &mut World) {
             ));
             spawn_theme_button(controls);
         });
+        // A combo whose selection is always one colour (the first until another is
+        // picked), so that picking the colour it already has changes nothing. Out of
+        // the flow, left of the controls, so that nothing else on the screen moves.
+        root.spawn((
+            ColorPaletteCombo,
+            Node {
+                flex_direction: FlexDirection::Column,
+                position_type: PositionType::Absolute,
+                top: px(20),
+                left: px(300),
+                ..default()
+            },
+            ListLayout::VerticalGrid { columns: 11 },
+            Selection::builder()
+                .one()
+                .build_with_items_ref(selection_ref),
+            Name::new("one palette combo"),
+        ));
         // One combo in each top corner, placed out of the flow so that nothing
         // else on the screen moves: the popups are wider than the room these
         // have to the window edge, so the window margin is what places them.
