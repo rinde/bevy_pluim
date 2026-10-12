@@ -1,0 +1,64 @@
+// A click on the open popup of a palette combo that is not on a swatch, and a
+// drag of its scroll thumb, leave it open and the selection as it was: the
+// popup is inside the combo for the outside-click handler. A click on a swatch
+// afterwards still picks and closes. "first palette combo" is `ZeroOrOne` with
+// slate-50 selected (index 0 of `COLORS`, so the swatch a drag ends over is never
+// it). The second drag ends inside the popup too: ending it outside would be an
+// outside click, as `color_palette_combo_outside_click` has it.
+(
+    format_version: 3,
+    name: "a click on the popup's scroll bar or a drag of its thumb leaves it open",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        MoveTo(Nth(0, Within(Name("first palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-50"]))),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        // The scroll bar: a click on it.
+        MoveTo(Within(Name("first palette combo popup"), Name("ScrollBar"))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Check(Visible(Name("first palette combo popup"))),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-50"]))),
+        // Its thumb: a click, then a drag that scrolls the swatches and ends over one
+        // of them. That swatch is not clicked: the press was on the thumb.
+        MoveTo(Within(Name("first palette combo popup"), Name("ScrollThumb"))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Drag(
+            from: Within(Name("first palette combo popup"), Name("ScrollThumb")),
+            to: Screen((690.0, 250.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("first palette combo popup"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Between(1.0, 2000.0),
+        )),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Check(Visible(Name("first palette combo popup"))),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-50"]))),
+        Drag(
+            from: Within(Name("first palette combo popup"), Name("ScrollThumb")),
+            to: Screen((690.0, 70.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("first palette combo popup"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.y",
+            is: Eq(0.0),
+        )),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        // A swatch still picks and closes.
+        MoveTo(Nth(5, Within(Name("first palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-500"]))),
+    ],
+    expect: [App(Selected(of: Name("first palette combo"), items: ["slate-500"]))],
+)

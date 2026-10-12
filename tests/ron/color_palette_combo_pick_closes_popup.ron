@@ -1,0 +1,59 @@
+// A click on a swatch of an open palette combo whose selection holds one item
+// at most closes the popup, whether or not the click changes the selection: the
+// closing is done by the popup in answer to the click, not by the combo's
+// outside-click handler. "one palette combo" always has one colour selected
+// (slate-50, the first, until another is picked), so clicking that colour
+// changes nothing; "first palette combo" is `ZeroOrOne`, where clicking the
+// selected colour deselects it. Index 0 is slate-50 and 60 is red-500 of
+// `COLORS`.
+(
+    format_version: 3,
+    name: "clicking a swatch closes the popup, even the selected colour",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        // `One`: the colour that is already selected.
+        Check(App(Selected(of: Name("one palette combo"), items: ["slate-50"]))),
+        MoveTo(Within(Name("one palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("one palette combo"), path: "State", is: Eq(Open))),
+        Check(Visible(Name("one palette combo popup"))),
+        Check(Selected(Nth(0, Within(Name("one palette combo popup"), Component("ItemView"))))),
+        MoveTo(Nth(0, Within(Name("one palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(Component(target: Name("one palette combo"), path: "State", is: Eq(Closed))),
+        Check(Not(Visible(Name("one palette combo popup")))),
+        Check(App(Selected(of: Name("one palette combo"), items: ["slate-50"]))),
+        // The button is back to its resting colours (`background_primary`, light theme).
+        Check(Component(
+            target: Within(Name("one palette combo"), Component("ColorPushButton")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        // Another colour of the `One` combo.
+        MoveTo(Within(Name("one palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("one palette combo"), path: "State", is: Eq(Open))),
+        MoveTo(Nth(60, Within(Name("one palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(Component(target: Name("one palette combo"), path: "State", is: Eq(Closed))),
+        Check(App(Selected(of: Name("one palette combo"), items: ["red-500"]))),
+        // `ZeroOrOne`: pick a colour, then click it again, which deselects it.
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        MoveTo(Nth(60, Within(Name("first palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(App(Selected(of: Name("first palette combo"), items: ["red-500"]))),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Check(Selected(Nth(60, Within(Name("first palette combo popup"), Component("ItemView"))))),
+        MoveTo(Nth(60, Within(Name("first palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(Not(Visible(Name("first palette combo popup")))),
+        Check(App(Selected(of: Name("first palette combo"), items: []))),
+    ],
+    expect: [App(Selected(of: Name("first palette combo"), items: []))],
+)
