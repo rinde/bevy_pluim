@@ -95,6 +95,11 @@ impl ScrollArea {
                             width: Val::Percent(100.0),
                             height: Val::Percent(100.0),
                             overflow,
+                            // Place the contents explicitly: auto-placement puts a
+                            // bar in the first free cell, which is not its own when
+                            // the area lacks the other bar.
+                            grid_row: GridPlacement::start(1),
+                            grid_column: GridPlacement::start(1),
                             // Keep children at their natural size: a child stretched to
                             // this node's height reports no overflow when it is a grid
                             // (taffy 0.10), which would leave nothing to scroll.
@@ -134,8 +139,19 @@ pub enum Orientation {
 }
 
 impl ScrollBar {
-    /// Component hook: spawns the thumb of the scroll bar.
+    /// Component hook: places the scroll bar in the grid of its
+    /// [`ScrollArea`] (the vertical bar right of the contents, the horizontal
+    /// bar below them, whichever bars the area has) and spawns its thumb.
     pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let mut entity = world.entity_mut(context.entity);
+        if let Ok((scroll_bar, mut node)) = entity.get_components_mut::<(&Self, &mut Node)>() {
+            let (row, column) = match scroll_bar.0 {
+                Orientation::Horizontal => (2, 1),
+                Orientation::Vertical => (1, 2),
+            };
+            node.grid_row = GridPlacement::start(row);
+            node.grid_column = GridPlacement::start(column);
+        }
         world
             .commands()
             .entity(context.entity)

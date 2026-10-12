@@ -1,0 +1,48 @@
+// Dragging the thumb of the horizontal scroll area to the right scrolls its
+// contents sideways by the share of what overflows that the thumb travelled of
+// its track: partway, to the end, which stops at the last of the contents
+// however far the pointer goes, and back to the start. The scroll position that
+// counts is the one the layout settles on (ComputedNode.scroll_position).
+(
+    format_version: 3,
+    name: "dragging the thumb of a horizontal scroll area scrolls the contents",
+    setup: App(ScrollAreas),
+    steps: [
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Eq(0.0),
+        )),
+        Drag(
+            from: Within(Name("horizontal scroll area"), Name("ScrollThumb")),
+            to: Screen((560.0, 216.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Between(100.0, 1300.0),
+        )),
+        Drag(
+            from: Within(Name("horizontal scroll area"), Name("ScrollThumb")),
+            to: Screen((1270.0, 216.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Eq(1306.0),
+        )),
+        Drag(
+            from: Within(Name("horizontal scroll area"), Name("ScrollThumb")),
+            to: Screen((0.0, 216.0)),
+            frames: 5,
+        ),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ComputedNode.scroll_position.x",
+            is: Eq(0.0),
+        )),
+    ],
+    expect: [],
+)
