@@ -1,0 +1,30 @@
+// An open palette combo's popup takes the pointer from whatever lies under it.
+// Swatch 0 of "first palette combo popup" is centred on (314, 79), which is
+// inside swatch 7 of `palette` (centred on (306, 95), 38 by 38): the first row
+// of the palette is under the first row of the popup. That swatch is not
+// hovered there and not pressed while the mouse button is held, and a click
+// picks the popup's swatch and leaves `palette`'s selection (a selection of its
+// own, over the same colours) empty.
+(
+    format_version: 3,
+    name: "a click on a palette combo's popup swatch does not reach the palette under it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("palette"), items: []))),
+        MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        MoveTo(Nth(0, Within(Name("first palette combo popup"), Component("ItemView")))),
+        Check(Hovered(Nth(0, Within(Name("first palette combo popup"), Component("ItemView"))))),
+        Check(Not(Hovered(Nth(7, Within(Name("palette"), Component("ItemView")))))),
+        Press(Left),
+        Check(Not(Pressed(Nth(7, Within(Name("palette"), Component("ItemView")))))),
+        Check(Not(Hovered(Nth(7, Within(Name("palette"), Component("ItemView")))))),
+        Release(Left),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-50"]))),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(App(Selected(of: Name("palette"), items: []))),
+    ],
+    expect: [App(Selected(of: Name("palette"), items: []))],
+)

@@ -708,12 +708,17 @@ a file can check any `Reflect` type of the app by short type path.
   `Selection::reference`, `own` has a selection of its own over the same
   items) and "Change theme", then below it an "Underneath" button and the
   `country list`, which shares the first selection. An open combo's list
-  floats over "Underneath", whose `PushButton` blocks the pointer: that is
-  what makes the Float's `GlobalZIndex` testable, because the tester's
-  actionability walk skips nodes with `should_block_lower: false`, which the
-  `List` and its `ItemView`s are, so only a button can cover a list item (the
-  `Combo`'s list itself blocks, so a click on it does not reach the `country list`
-  underneath it).
+  floats over "Underneath", the guard that the popup blocks the pointer for what
+  lies beneath it: `Not(Hovered(..))` of it with the pointer on `Canada`
+  (`combo_opens_list`), and `Not(Pressed(..))` of it while a click picks
+  `Canada` (`combo_popup_click_does_not_reach_underneath`). A `List` and its
+  `ItemView`s do not block (`should_block_lower: false`, so the wheel reaches
+  the scroll area around them); the combo's list does (`Pickable::default()`
+  in `combo.rs`), as does the palette combo's popup, which is why a click on
+  either does not reach the `country list` or the `palette` under it. The
+  button also keeps the Float's `GlobalZIndex` testable: the tester's
+  actionability walk skips nodes with `should_block_lower: false`, so only a
+  blocking node can cover a list item.
   Reach the button with `Within(Name("first combo"), Component("ComboButton"))`,
   its list with `Component("ComboList")` and an item with
   `Within(Name("first combo"), Role(role: ListItem, label: "Canada"))` (the
@@ -766,6 +771,10 @@ a file can check any `Reflect` type of the app by short type path.
   Component("ItemView")))`; the combo's state is `Component(target:
   Name("first palette combo"), path: "State", is: Eq(Open))` and the popup's
   position the `UiGlobalTransform.0.translation` (the centre) of the float.
+  The open popup lies over the first row of `palette`: swatch 0 of the popup
+  (centre 314, 79) is over swatch 7 of `palette`, which is not hovered, pressed
+  or selected by a click on it
+  (`color_palette_combo_popup_click_does_not_reach_palette`).
   The popup is centred under its button and pushed in to 10 pixels from the
   window's left and right edges; the screen has `left edge palette combo` and
   `right edge palette combo`, absolutely placed in the top corners so nothing

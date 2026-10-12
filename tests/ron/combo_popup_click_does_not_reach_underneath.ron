@@ -1,0 +1,27 @@
+// An open combo's popup takes the pointer from whatever lies under it. The middle
+// of "Canada" in the popup of "first combo" is over the "Underneath" button, so
+// the button is not hovered there, is not pressed while the mouse button is held
+// and is not pressed when it is let go (a press on the item must not also be a
+// press on the button). The click only picks the item and closes the popup.
+(
+    format_version: 3,
+    name: "a click on a combo's popup item does not reach the button under it",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("first combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
+        Check(Hovered(Within(Name("first combo"), Role(role: ListItem, label: "Canada")))),
+        Check(Not(Hovered(Role(role: Button, label: "Underneath")))),
+        Press(Left),
+        Check(Not(Pressed(Role(role: Button, label: "Underneath")))),
+        Check(Not(Hovered(Role(role: Button, label: "Underneath")))),
+        Release(Left),
+        Check(Not(Pressed(Role(role: Button, label: "Underneath")))),
+        Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+    ],
+    expect: [App(Selected(of: Name("first combo"), items: ["Canada"]))],
+)
