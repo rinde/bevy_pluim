@@ -736,7 +736,10 @@ a file can check any `Reflect` type of the app by short type path.
   hidden lists hold the same labels, so always narrow by combo). `ComboState`
   is read with `Component(target: Name(..), path: "ComboState", is: Eq(Open))`;
   `Visible` of the list (or one item) says whether it shows. A click on empty
-  space is `MoveTo(Screen((900.0, 500.0)))` then `Click(Left)`.
+  space is `MoveTo(Screen((900.0, 500.0)))` then `Click(Left)`. The chevron is
+  the icon of the combo's `PushButton`, `Within(Name("first combo"),
+  Text("\\/"))`; a `PushButton` icon is `text_primary` like its label (and
+  `text_disabled` when disabled).
 - **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
   `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
   is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:

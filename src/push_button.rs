@@ -262,7 +262,7 @@ fn theme_push_button(
             *text_color = TextColor(if disabled {
                 theme.colors.text_disabled
             } else {
-                theme.colors.border
+                theme.colors.text_primary
             });
             *text_font = TextFont {
                 font_size: FontSize::Px(14.0),
