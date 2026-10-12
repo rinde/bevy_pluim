@@ -162,8 +162,14 @@ fn handle_hover(
     mut query: Query<&mut BackgroundColor, Without<InteractionDisabled>>,
     theme: Res<Theme>,
 ) {
-    // The pointer is on the button for every event but `Out`, a release included.
+    // A click and a drag say nothing new about the pointer being on the button: the over,
+    // press, release and out events around them set the colours. A drag in particular can
+    // arrive after the pointer left the button, so it must not put it back under the pointer.
     let kind = trigger.event().kind;
+    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag(_)) {
+        return;
+    }
+    // The pointer is on the button for every event but `Out`, a release included.
     let pressed = matches!(kind, MouseKind::Pressed);
     let hovered = !matches!(kind, MouseKind::Out);
     if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {

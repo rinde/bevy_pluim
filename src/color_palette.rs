@@ -219,6 +219,10 @@ fn handle_mouse_events(
         (MouseKind::Over, false) => Some(HoverState::Hover),
         (MouseKind::Out, true) => Some(HoverState::Selected),
         (MouseKind::Out, false) => Some(HoverState::Unselected),
+        // A click and a drag say nothing new about the pointer being on the swatch: the
+        // over, press, release and out events around them set the highlight. A drag in
+        // particular can arrive after the pointer left the swatch.
+        (MouseKind::Click(_) | MouseKind::Drag(_), _) => None,
         (MouseKind::Released, _) => {
             // The `ListBox` leaves a click on a `Selected` swatch alone, so deselecting is
             // ours. Selecting is the `ListBox`'s, see `list::on_value_change`. Both go by

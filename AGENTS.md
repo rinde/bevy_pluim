@@ -217,15 +217,19 @@ of them (`just example gallery -- --run-all stack link`).
   roots without a `UiTargetCamera`; they carry `NotUnderTest`, and the gallery
   example takes `UiRoot` off whatever has it.
 - **Mouse events.** Global observers (registered by `WidgetsPlugin`, not on
-  `UiRoot`) watch Bevy's `Pointer<Over | Press | Release | Out>` and re-trigger
-  each as a `MouseEvent` on the original target, on the first hop of the
-  event only. `MouseEvent` is crate-private: it is how widgets inside this
-  crate react to the pointer. They are global because Bevy's `Button` calls
-  `propagate(false)` on `Press`, `Release`, `Click`, `DragEnd` and `Cancel`: an
-  observer on `UiRoot` would never see those for a button. `Over` and `Out`
-  are not stopped. The combo's outside-click handler reads
-  `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot starve
-  it.
+  `UiRoot`) watch Bevy's `Pointer<Over | Press | Release | Click | Drag | Out>`
+  and re-trigger each as a `MouseEvent` on the original target, on the first hop
+  of the event only. `MouseEvent` is crate-private: it is how widgets inside
+  this crate react to the pointer. They are global because Bevy's `Button`
+  calls `propagate(false)` on `Press`, `Release`, `Click`, `DragEnd` and
+  `Cancel`: an observer on `UiRoot` would never see those for a button. `Over`,
+  `Drag` and `Out` are not stopped. `MouseKind` says what the pointer did:
+  `Over`, `Pressed`, `Released`, `Click(button)` and `Drag(delta)`, plus `Out`.
+  `Click` is a press and a release on the same node, which `Released` cannot
+  say (it also ends a press that began elsewhere), and `Drag` carries the
+  movement since the previous drag event. The combo's outside-click handler
+  reads `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot
+  starve it.
 - **"Is the pointer on it?" is picking's `Hovered`.** A system that asks where
   the pointer is now, outside a `MouseEvent`, reads `bevy::picking::hover::Hovered`
   (required by the component it asks about): true while the mouse pointer is on
@@ -314,8 +318,9 @@ of them (`just example gallery -- --run-all stack link`).
   button is inside the combo, so they never close what the same click opens. A
   release on a palette combo's popup is inside as well, whatever the selection:
   its scroll bar, or a drag of its thumb, leaves it open. The popup closes on a
-  pick by itself, not through the outside click: its `ColorPalette` observes
-  `Pointer<Click>` (a press and a release on the same swatch) and, for a
+  pick by itself, not through the outside click: a global observer of
+  `MouseEvent`s acts on a `MouseKind::Click` (a press and a release on the same
+  swatch) on a swatch that belongs to the popup's `ColorPalette` and, for a
   selection of one item at most (`One`, `ZeroOrOne`), inserts `State::Closed`,
   whether or not the click changed the selection (the selected colour of a `One`
   combo, a deselecting click of a `ZeroOrOne` one). A selection of many keeps
@@ -366,13 +371,11 @@ of them (`just example gallery -- --run-all stack link`).
 
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.** Two places in the
-  library still observe a raw `Pointer<…>`: the scroll thumb in
-  `scroll_area.rs` (`Pointer<Drag>`) and the palette combo's popup in
-  `color_palette_combo.rs` (`Pointer<Click>`); do not add more. They are there
-  because `MouseKind` has only `Over`, `Pressed`, `Released` and `Out`, so
-  `MouseEvent` cannot carry a drag or a click (a press and a release on the same
-  node); a `MouseKind::Drag` or `Click` would let them move over.
+- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.**
+  The only `Pointer<…>` in the library is the producer in `lib.rs`; do not add
+  more. `MouseKind` says `Over`, `Pressed`, `Released`, `Click` and `Drag`,
+  so a widget can tell a click (a press and a release on the same node) from a
+  release that ends a press begun elsewhere, and can follow a drag.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for

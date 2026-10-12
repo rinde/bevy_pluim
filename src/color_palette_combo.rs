@@ -1,7 +1,6 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
 use bevy::a11y::AccessibilityNode;
-use bevy::picking::events::{Click, Pointer};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -38,7 +37,8 @@ impl Plugin for ColorPaletteComboPlugin {
         )
         .add_observer(on_insert_combo)
         .add_observer(on_remove_combo)
-        .add_observer(on_insert_state);
+        .add_observer(on_insert_state)
+        .add_observer(close_on_swatch_click);
     }
 }
 
@@ -176,10 +176,7 @@ fn on_insert_combo(
     };
     commands.entity(combo).insert((State::Closed, sub_refs));
 
-    commands
-        .entity(palette_id)
-        .insert(sub_refs)
-        .observe(close_on_swatch_click);
+    commands.entity(palette_id).insert(sub_refs);
 
     commands
         .entity(button_id)
@@ -418,18 +415,17 @@ fn close(
 /// Closes the popup of a combo whose selection holds one item at most when a swatch
 /// in it is clicked, left button, whether or not the click changed the selection.
 ///
-/// It is on the popup's [`ColorPalette`] and sees the [`Click`] of a swatch as it bubbles
-/// up, so a click on the popup that is not on a swatch (its scroll bar, the gap between
-/// swatches) does not close it, and neither does a drag of the scroll thumb. A selection
-/// of many (`OneOrMore`, `ZeroOrMore`) keeps the popup open for the next pick.
-///
-/// Bevy's [`Click`] is observed rather than a `MouseEvent` because a click is a press and
-/// a release on the same swatch, which `MouseKind` cannot say; a release alone also ends
-/// a press that began elsewhere.
+/// It is a global observer of [`MouseEvent`]s because a click is a press and a release on
+/// the same swatch, which `MouseKind::Click` says and a `Released` cannot (a release alone
+/// also ends a press that began elsewhere, a drag of the popup's scroll thumb that ends
+/// over a swatch). It acts only on a click whose target is a [`swatch`](ItemView) that
+/// belongs to a palette of a combo, so a click on the popup that is not on a swatch (its
+/// scroll bar, the gap between swatches) does not close it. A selection of many
+/// (`OneOrMore`, `ZeroOrMore`) keeps the popup open for the next pick.
 fn close_on_swatch_click(
-    click: On<Pointer<Click>>,
+    t: On<MouseEvent>,
     palettes: Query<&SubRefs, With<ColorPalette>>,
-    swatches: Query<(), With<ItemView>>,
+    swatches: Query<&ItemView>,
     states: Query<&State, With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
         (&mut BackgroundColor, &mut BorderColor),
@@ -439,12 +435,16 @@ fn close_on_swatch_click(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    if click.event().event.button != PointerButton::Primary
-        || !swatches.contains(click.original_event_target())
-    {
+    let MouseKind::Click(button) = t.event().kind else {
+        return;
+    };
+    if button != PointerButton::Primary {
         return;
     }
-    let Ok(subs) = palettes.get(click.event_target()) else {
+    let Ok(ItemView { list_ref, .. }) = swatches.get(t.event().event_target()) else {
+        return;
+    };
+    let Ok(subs) = palettes.get(*list_ref) else {
         return;
     };
     let Some(selection) = selections.get(subs.parent) else {
@@ -489,6 +489,10 @@ fn handle_combo_button_mouse_events(
     };
 
     match (trigger.event().kind, combo_state) {
+        // A drag says nothing new about the pointer being on the button, and can arrive
+        // after the pointer left it, so it does not restyle the button. A release or a
+        // click on a closed combo does not either, so all three share one empty arm.
+        (MouseKind::Drag(_), _) | (MouseKind::Released | MouseKind::Click(_), State::Closed) => {}
         (MouseKind::Over | MouseKind::Pressed, _) | (_, State::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);
             *border_color = BorderColor::all(theme.colors.border_highlight);
@@ -498,7 +502,6 @@ fn handle_combo_button_mouse_events(
             *background_color = BackgroundColor(theme.colors.background_primary);
             *border_color = BorderColor::all(theme.colors.border);
         }
-        (MouseKind::Released, State::Closed) => {}
     }
 }
 
