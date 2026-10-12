@@ -4,12 +4,13 @@
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::InteractionDisabled;
+use bevy::ui::{InteractionDisabled, Pressed};
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
-use crate::theme::Theme;
+use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`PushButton`].
@@ -34,11 +35,13 @@ impl Plugin for PushButtonPlugin {
 
 /// A themed button with a label and an optional icon.
 ///
-/// It is a [`bevy::ui_widgets::Button`]: it is [`Pressed`](bevy::ui::Pressed) while
+/// It is a [`bevy::ui_widgets::Button`]: it is [`Pressed`] while
 /// held, triggers [`Activate`](bevy::ui_widgets::Activate) when it is used (a
 /// click, or Enter or Space on a focused button) and is disabled by inserting
 /// [`InteractionDisabled`]. React to a use of the button by observing
-/// `Activate`; the hover and press colours follow the pointer on their own.
+/// `Activate`; the hover and press colours follow the pointer on their own, and
+/// stay right when the [`Theme`] changes under a pointer that rests on the button.
+/// Its [`Hovered`] says whether the pointer is on it.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -50,6 +53,7 @@ impl Plugin for PushButtonPlugin {
     },
     Name::new("PushButton"),
     Button,
+    Hovered,
 )]
 pub struct PushButton {
     label: String,
@@ -135,19 +139,35 @@ impl PushButton {
     }
 }
 
+/// The background of a [`PushButton`] with the default hover, from its state.
+const fn background_for(
+    colors: &ThemeColors,
+    disabled: bool,
+    pressed: bool,
+    hovered: bool,
+) -> Color {
+    if disabled {
+        colors.background_primary
+    } else if pressed {
+        colors.selected_hovered_item
+    } else if hovered {
+        colors.hovered_item
+    } else {
+        colors.background_primary
+    }
+}
+
 fn handle_hover(
     trigger: On<MouseEvent>,
     mut query: Query<&mut BackgroundColor, Without<InteractionDisabled>>,
     theme: Res<Theme>,
 ) {
-    let color = match trigger.event().kind {
-        MouseKind::Over => theme.colors.hovered_item,
-        MouseKind::Pressed => theme.colors.selected_hovered_item,
-        MouseKind::Released => theme.colors.selected_item,
-        MouseKind::Out => theme.colors.background_primary,
-    };
+    // The pointer is on the button for every event but `Out`, a release included.
+    let kind = trigger.event().kind;
+    let pressed = matches!(kind, MouseKind::Pressed);
+    let hovered = !matches!(kind, MouseKind::Out);
     if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
-        *background = BackgroundColor(color);
+        *background = BackgroundColor(background_for(&theme.colors, false, pressed, hovered));
     }
 }
 
@@ -177,6 +197,9 @@ fn theme_push_button(
             &mut Node,
             &PushButtonRefs,
             Has<InteractionDisabled>,
+            Has<Pressed>,
+            &Hovered,
+            Has<NoDefaultHover>,
         ),
         With<PushButton>,
     >,
@@ -194,8 +217,25 @@ fn theme_push_button(
     } else {
         Either::Right(buttons.iter_mut())
     };
-    for (mut background_color, mut border_color, mut box_shadow, mut node, refs, disabled) in it {
-        background_color.0 = theme.colors.background_primary;
+    for (
+        mut background_color,
+        mut border_color,
+        mut box_shadow,
+        mut node,
+        refs,
+        disabled,
+        pressed,
+        hovered,
+        no_default_hover,
+    ) in it
+    {
+        // A button with `NoDefaultHover` is coloured by its owner, so it rests here.
+        background_color.0 = background_for(
+            &theme.colors,
+            disabled,
+            pressed && !no_default_hover,
+            hovered.get() && !no_default_hover,
+        );
         border_color.set_all(theme.colors.border);
         node.border_radius = BorderRadius::all(theme.corner_radius);
         *box_shadow = theme.small_shadow().into();

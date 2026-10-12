@@ -1,0 +1,40 @@
+// A theme change restyles a button the pointer rests on by its state, not by
+// its resting look: "Change theme" is clicked and the pointer stays on it, so it
+// shows hovered_item of the NEW theme (DEFAULT_DARK_THEME_COLORS, Tailwind
+// blue-900, after the first click; DEFAULT_LIGHT_THEME_COLORS, blue-200, after the
+// second). A button the pointer is not on ("themed button") is at rest in the new
+// theme.
+(
+    format_version: 3,
+    name: "a button under the pointer keeps its hover colour when the theme changes",
+    setup: App(Themed),
+    steps: [
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Check(Component(
+            target: Role(role: Button, label: "Change theme"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "Theme.colors.hovered_item", is: Eq(Srgba((red:0.11764706,green:0.22745098,blue:0.5411765,alpha:1.0))))),
+        Check(Component(
+            target: Role(role: Button, label: "Change theme"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.11764706,green:0.22745098,blue:0.5411765,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Name("themed button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Role(role: Button, label: "Change theme"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+    ],
+)

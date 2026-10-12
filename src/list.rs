@@ -12,7 +12,7 @@ use bevy::ui_widgets::{ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use itertools::Either;
 
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
-use crate::theme::Theme;
+use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 pub(crate) struct ListPlugin;
@@ -198,20 +198,20 @@ fn handle_mouse_events(
         return;
     }
 
-    match (t.event().kind, is_selected) {
-        (MouseKind::Pressed, _) | (MouseKind::Over, true) => {
-            background_color.0 = theme.colors.selected_hovered_item;
-        }
-        (MouseKind::Over, false) => {
-            background_color.0 = theme.colors.hovered_item;
-        }
-        (MouseKind::Out, true) => {
-            background_color.0 = theme.colors.selected_item;
-        }
-        (MouseKind::Out, false) => {
-            background_color.0 = theme.colors.background_primary;
-        }
-        (MouseKind::Released, _) => {}
+    // The pointer is on the view for every event but `Out`; a press looks selected.
+    let hovered = !matches!(t.event().kind, MouseKind::Out);
+    let pressed = matches!(t.event().kind, MouseKind::Pressed);
+    background_color.0 = item_background(&theme.colors, is_selected || pressed, hovered);
+}
+
+/// The background of an [`ItemView`] from its state: selected and hovered, selected,
+/// hovered, or at rest.
+pub(crate) const fn item_background(colors: &ThemeColors, selected: bool, hovered: bool) -> Color {
+    match (selected, hovered) {
+        (true, true) => colors.selected_hovered_item,
+        (true, false) => colors.selected_item,
+        (false, true) => colors.hovered_item,
+        (false, false) => colors.background_primary,
     }
 }
 
@@ -328,12 +328,7 @@ fn selection_change(
 
                     let is_selected = selection.is_selected(item_view.item_ref);
                     sync_selected(&mut commands, item_view_id, was_selected, is_selected);
-                    match (is_selected, hovered.get()) {
-                        (true, true) => bg.0 = theme.colors.selected_hovered_item,
-                        (true, false) => bg.0 = theme.colors.selected_item,
-                        (false, true) => bg.0 = theme.colors.hovered_item,
-                        (false, false) => bg.0 = theme.colors.background_primary,
-                    }
+                    bg.0 = item_background(&theme.colors, is_selected, hovered.get());
 
                     if is_selected {
                         border_color.set_all(theme.colors.border_highlight);
@@ -473,7 +468,13 @@ fn theme_items(
         (With<List>, Without<NoDefaultItems>),
     >,
     theme: Res<Theme>,
-    mut item_views: Query<(&ItemView, &mut Node, &mut BackgroundColor, &mut BorderColor)>,
+    mut item_views: Query<(
+        &ItemView,
+        &Hovered,
+        &mut Node,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
     selections: SelectionParam,
 ) {
     let iter = list_id.0.map_or_else(
@@ -494,7 +495,7 @@ fn theme_items(
         let selection = selections.get(list_ref).unwrap_or(&no_selection);
 
         for (i, item_view_id) in children.iter().enumerate() {
-            let Ok((ItemView { item_ref, .. }, mut node, mut bg, mut border_color)) =
+            let Ok((ItemView { item_ref, .. }, hovered, mut node, mut bg, mut border_color)) =
                 item_views.get_mut(item_view_id)
             else {
                 continue;
@@ -502,11 +503,10 @@ fn theme_items(
 
             let is_selected = selection.is_selected(*item_ref);
 
+            bg.0 = item_background(&theme.colors, is_selected, hovered.get());
             if is_selected {
-                bg.0 = theme.colors.selected_item;
                 border_color.set_all(theme.colors.border_highlight);
             } else {
-                bg.0 = theme.colors.background_primary;
                 border_color.set_all(theme.colors.border);
             }
 

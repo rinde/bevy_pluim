@@ -59,7 +59,8 @@ fn hover_and_click(colors: &ThemeColors) -> Scenario {
             Step::check(background_is(colors.selected_hovered_item)),
             Step::check(Check::resource::<Clicks>(".0").eq(0_u32)),
             Step::release(),
-            Step::check(background_is(colors.selected_item)),
+            // Let go with the pointer still on the button: it is hovered, not selected.
+            Step::check(background_is(colors.hovered_item)),
             Step::check(Check::resource::<Clicks>(".0").eq(1_u32)),
             Step::move_to(Target::role(WidgetRole::Button, "Other")),
             Step::check(background_is(colors.background_primary)),

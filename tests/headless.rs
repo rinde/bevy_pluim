@@ -15,6 +15,7 @@ use bevy::input::InputPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
 use bevy::picking::events::{Click, Pointer, Press, Release};
+use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, Selected};
@@ -505,7 +506,79 @@ fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
     click_and_release(&mut app, button);
 
     assert!(!app.world().entity(button).contains::<Pressed>());
-    assert_eq!(background(&app, button), colors.selected_item);
+    assert_eq!(
+        background(&app, button),
+        colors.hovered_item,
+        "the pointer is still on a button that was let go, which is no selection"
+    );
+}
+
+/// Says the pointer is on `entity`, and changes the theme to the other one under it.
+///
+/// Only `Update` runs: `PreUpdate`'s `update_is_hovered` would put the `Hovered` of
+/// the headless app, which has no pointer over anything, back to false first.
+fn hover_and_toggle_theme(app: &mut App, entity: Entity) {
+    app.world_mut().entity_mut(entity).insert(Hovered(true));
+    toggle_theme(app);
+    app.world_mut().run_schedule(Update);
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_push_button_keeps_it_hovered() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+
+    hover_and_toggle_theme(&mut app, button);
+
+    assert_eq!(
+        background(&app, button),
+        DEFAULT_DARK_THEME_COLORS.hovered_item
+    );
+}
+
+#[test]
+fn changing_the_theme_under_a_pressed_push_button_keeps_it_pressed() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    press(&mut app, button);
+
+    hover_and_toggle_theme(&mut app, button);
+
+    assert_eq!(
+        background(&app, button),
+        DEFAULT_DARK_THEME_COLORS.selected_hovered_item
+    );
+}
+
+#[test]
+fn changing_the_theme_under_a_push_button_the_pointer_is_not_on_leaves_it_at_rest() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+
+    toggle_theme(&mut app);
+    app.update();
+
+    assert_eq!(
+        background(&app, button),
+        DEFAULT_DARK_THEME_COLORS.background_primary
+    );
+}
+
+#[test]
+fn a_disabled_push_button_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+
+    hover_and_toggle_theme(&mut app, button);
+
+    assert_eq!(
+        background(&app, button),
+        DEFAULT_DARK_THEME_COLORS.background_primary
+    );
 }
 
 #[test]
@@ -1690,4 +1763,38 @@ fn a_swatch_spawned_for_an_item_of_the_selection_starts_selected() {
 
     assert_eq!(item_views(&app, palette).len(), 4);
     assert_eq!(selected_colors(&app, palette), [Color::srgb(1.0, 1.0, 0.0)]);
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_list_item_keeps_it_hovered() {
+    let mut app = headless_app();
+    let (_list, views, _selection) =
+        spawn_list(&mut app, Selection::builder().zero_or_one(), &["a", "b"]);
+
+    hover_and_toggle_theme(&mut app, views[1]);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, views[1]), dark.hovered_item);
+    assert_eq!(background(&app, views[0]), dark.background_primary);
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_selected_list_item_keeps_it_selected_and_hovered() {
+    let mut app = headless_app();
+    let (list, views, _selection) = spawn_list(&mut app, Selection::builder().one(), &["a", "b"]);
+    assert_eq!(selected_labels(&app, list), ["a"], "the first is selected");
+
+    hover_and_toggle_theme(&mut app, views[0]);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, views[0]), dark.selected_hovered_item);
+
+    app.world_mut().entity_mut(views[0]).insert(Hovered(false));
+    toggle_theme(&mut app);
+    app.world_mut().run_schedule(Update);
+    assert_eq!(
+        background(&app, views[0]),
+        DEFAULT_LIGHT_THEME_COLORS.selected_item,
+        "the pointer left, so it is only selected"
+    );
 }
