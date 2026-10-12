@@ -348,14 +348,19 @@ of them (`just example gallery -- --run-all stack link`).
   scroll. For the same reason, don't give scroll contents `height: 100%`.
   The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
   wheel and thumb scenarios fail.
-- **A scroll area's scroll position is `ComputedNode::scroll_position`.** The
-  `ScrollPosition` component is not clamped (the wheel adds to it past either
-  end); the layout clamps to what overflows into `ComputedNode`, which is what
-  is on screen. Read that in a scenario (`ComputedNode.scroll_position.y`). It
-  is floored and only refreshed by the next layout pass, so
-  `handle_thumb_drag` starts each drag event from the current `ScrollPosition`
-  (clamped to what overflows) instead: a frame can hold several drag events,
-  and each must add to the last.
+- **A scroll area's scroll position is kept in range.** The wheel handler
+  (`update_scroll_position` in `list.rs`) moves only an axis whose
+  `Node::overflow` is `Scroll` and leaves `ScrollPosition` inside `[0, max]`
+  per axis, `max` being how far the contents overflow in logical pixels (0 when
+  they fit); a node that does not scroll along an axis is not moved along it.
+  A scenario can read either: `ScrollPosition.0.y` is the value that was set
+  (logical pixels), and `ComputedNode.scroll_position.y` is what the layout
+  shows, floored, in physical pixels and one layout pass behind. Read `ScrollPosition` to check
+  what the wheel or the thumb did and `ComputedNode` to check what is on
+  screen. `handle_thumb_drag` starts each drag event from the current
+  `ScrollPosition` rather than the computed one for that lag: a frame can hold
+  several drag events, and each must add to the last. Its clamp is a guard for
+  contents that shrank.
 
 ## Conventions
 

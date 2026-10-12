@@ -584,11 +584,16 @@ fn theme_lists(
     }
 }
 
-/// Updates the scroll position of scrollable nodes in response to mouse input
+/// Scrolls the nodes under the pointer by the mouse wheel.
+///
+/// An axis is moved only when the node's [`Node::overflow`] scrolls along it,
+/// and the [`ScrollPosition`] stays within `0..=max` on that axis, where `max`
+/// is how far the contents overflow the node (0 when they fit). Both are in
+/// logical pixels.
 pub fn update_scroll_position(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
     hover_map: Res<HoverMap>,
-    mut scrolled_node_query: Query<&mut ScrollPosition>,
+    mut scrolled_node_query: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
     for mouse_wheel_event in mouse_wheel_events.read() {
@@ -605,9 +610,18 @@ pub fn update_scroll_position(
 
         for (_pointer, pointer_map) in hover_map.iter() {
             for (entity, _hit) in pointer_map {
-                if let Ok(mut scroll_position) = scrolled_node_query.get_mut(*entity) {
-                    scroll_position.x -= dx;
-                    scroll_position.y -= dy;
+                let Ok((mut scroll_position, computed, node)) =
+                    scrolled_node_query.get_mut(*entity)
+                else {
+                    continue;
+                };
+                let overflow =
+                    (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
+                if node.overflow.x == OverflowAxis::Scroll {
+                    scroll_position.x = (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0));
+                }
+                if node.overflow.y == OverflowAxis::Scroll {
+                    scroll_position.y = (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0));
                 }
             }
         }

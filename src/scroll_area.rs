@@ -210,8 +210,9 @@ fn handle_thumb_drag(
     // showed the contents (`ComputedNode::scroll_position`): that is floored
     // and only refreshed by the next layout pass, so the several drags a
     // frame can hold would each start from the same value and only the last
-    // would count. The wheel can leave `ScrollPosition` past either end, so
-    // clamp it first.
+    // would count. The wheel keeps `ScrollPosition` in range (see
+    // `update_scroll_position`), so the clamp is only a guard, for a content
+    // size that shrank since.
     let start = scroll_position.0[index].clamp(0.0, max_scroll_offset);
     scroll_position.0[index] = (start + drag.delta[index] * max_scroll_offset / track_length)
         .clamp(0.0, max_scroll_offset);
