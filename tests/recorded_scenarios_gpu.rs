@@ -32,20 +32,7 @@ use rin_bevy_ui_tester::{Recorder, Registry, load_ron_file, ron_files};
 /// recording. They are still recorded, and show as failures in the index. The
 /// test fails when one of them passes, so remove each name when its issue is
 /// fixed.
-const FAILS_WHEN_RECORDED: [&str; 12] = [
-    "a palette combo opens its popup under its button",
-    "a click outside an open palette combo closes it without changing the selection",
-    "a combo with its own selection leaves the others alone",
-    "picking a colour closes the popup and the button shows it",
-    "a colour push button follows the theme and keeps its colour",
-    "clicking a combo button opens its list above the rest of the UI",
-    "a click outside an open combo closes it without changing the selection",
-    "picking an item selects it, closes the list and labels the button",
-    "opening a second combo closes the first",
-    "a combo shares its selection with a list and the other combos",
-    "list item colours follow the theme",
-    "a deselected stack item keeps its state when it is shown again",
-];
+const FAILS_WHEN_RECORDED: [&str; 0] = [];
 
 #[test]
 #[ignore = "needs a GPU: run by `just record`"]
