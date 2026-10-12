@@ -82,7 +82,6 @@ cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
 
 ### Individual lints
-disallowed-types = "deny"
 missing_const_for_fn = "deny"
 
 allow_attributes = "deny"
