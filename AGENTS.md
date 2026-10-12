@@ -690,9 +690,10 @@ a file can check any `Reflect` type of the app by short type path.
   (a positive wheel y scrolls up). Reach contents with `Within(Name(".."),
   Component("ScrollContents"))` and a thumb with `Within(Name(".."),
   Name("ScrollThumb"))` (`Nth(0, ..)` is the vertical bar's, `Nth(1, ..)` the
-  horizontal one's in the two-way area). A horizontal-only area has no
-  usable horizontal bar (it ends up 0 wide at the top of the area, a layout
-  bug this does not fix), so scroll it with the wheel.
+  horizontal one's in the two-way area; a horizontal-only area has just the
+  one, `Nth(0, ..)`). The grid places the contents and the bars explicitly
+  (contents row 1 column 1, vertical bar row 1 column 2, horizontal bar row 2
+  column 1), so a bar sits in its own cell whichever bars the area has.
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
