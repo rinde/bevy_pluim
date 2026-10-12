@@ -122,8 +122,8 @@ checkout's build so Bevy is not compiled again.
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click |
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
-| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged (the wheel is handled by `list.rs`'s `update_scroll_position`) |
-| `list.rs` | `List` with `ListLayout` and `CornerStyle`: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
+| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it |
+| `list.rs` | `List` with `ListLayout` and `CornerStyle`, a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
@@ -349,7 +349,7 @@ of them (`just example gallery -- --run-all stack link`).
   The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
   wheel and thumb scenarios fail.
 - **A scroll area's scroll position is kept in range.** The wheel handler
-  (`update_scroll_position` in `list.rs`) moves only an axis whose
+  (`update_scroll_position` in `scroll_area.rs`) moves only an axis whose
   `Node::overflow` is `Scroll` and leaves `ScrollPosition` inside `[0, max]`
   per axis, `max` being how far the contents overflow in logical pixels (0 when
   they fit); a node that does not scroll along an axis is not moved along it.
@@ -537,7 +537,7 @@ resource, none of which need a window or GPU:
 - `InputPlugin` — provides `ButtonInput<MouseButton>`, needed by
   `combo.rs`'s outside-click observer.
 - `DefaultPickingPlugins` — provides `HoverMap`, needed by
-  `list.rs`'s scroll handling.
+  `scroll_area.rs`'s scroll handling.
 - `ClearColor` (via `init_resource`) — normally inserted by the render
   plugins; `theme.rs`'s `update_theme` writes to it whenever `Theme`
   changes.
