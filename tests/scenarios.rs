@@ -11,17 +11,22 @@ use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
 use bevy::ecs::system::RunSystemOnce;
 use std::path::Path;
 
+use bevy::camera::{CameraUpdateSystems, NormalizedRenderTarget, RenderTarget};
+use bevy::picking::input::PointerInputSettings;
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
+use bevy::ui::{IsDefaultUiCamera, UiSystems};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
 use rin_bevy_ui::list::List;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui_tester::{
-    AppCheck, AppSetup, Check, CheckResult, NoiseFilter, Probe, Scenario, ScenarioReport, Step,
-    SyntheticInput, Target, WidgetRole, WorldSnapshot, resolve, suggest_checks,
+    AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
+    Scenario, ScenarioReport, Step, SyntheticInput, Target, WidgetRole, WorldSnapshot,
+    load_ron_file, resolve, ron_files, suggest_checks,
 };
 
 use common::{spawn_camera_and_root, widgets_app};
@@ -572,4 +577,170 @@ fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
         (scrolled - wanted).abs() < 1.0,
         "scrolled {scrolled}, wanted {wanted} (three moves of {step} px at {per_pixel} per pixel)"
     );
+}
+
+// ---- The UI drawn to an image (#100) ----
+
+/// The image the cameras of [`image_target_app`] draw to.
+#[derive(Resource)]
+struct TargetImage(Handle<Image>);
+
+/// A [`widgets_app`] whose cameras draw to an image instead of the window, as
+/// the recorder's do, with the pointer aimed at that image.
+///
+/// Nothing is drawn: there is no GPU. What matters is that no camera renders to
+/// a window, so Bevy's `ui_focus_system` sees no cursor, while picking still
+/// finds what is under the pointer in the image.
+fn image_target_app() -> App {
+    let mut app = widgets_app();
+    let (width, height) = DEFAULT_WINDOW_SIZE;
+    let image = Image::new_target_texture(width, height, TextureFormat::Rgba8UnormSrgb, None);
+    let handle = app
+        .world_mut()
+        .get_resource_mut::<Assets<Image>>()
+        .unwrap()
+        .add(image);
+    app.world_mut()
+        .get_resource_mut::<SyntheticInput>()
+        .unwrap()
+        .set_target(Some(NormalizedRenderTarget::Image(handle.clone().into())));
+    // The synthetic pointer writes its own `PointerInput`, aimed at the image;
+    // Bevy's mouse input would add one aimed at the window.
+    app.insert_resource(PointerInputSettings {
+        is_mouse_enabled: false,
+        is_touch_enabled: false,
+    })
+    .insert_resource(TargetImage(handle))
+    .add_systems(
+        PostUpdate,
+        draw_to_the_image
+            .before(CameraUpdateSystems)
+            .before(UiSystems::Prepare),
+    );
+    app
+}
+
+/// Points every camera that renders to a window at the [`TargetImage`], and
+/// makes it the default UI camera, which a camera rendering to an image
+/// otherwise never is.
+fn draw_to_the_image(
+    image: Res<TargetImage>,
+    mut cameras: Query<(Entity, &mut RenderTarget), With<Camera>>,
+    mut commands: Commands,
+) {
+    for (camera, mut target) in &mut cameras {
+        if matches!(*target, RenderTarget::Window(_)) {
+            *target = RenderTarget::Image(image.0.clone().into());
+            commands.entity(camera).insert(IsDefaultUiCamera);
+        }
+    }
+}
+
+#[test]
+fn every_scenario_file_passes_with_the_ui_drawn_to_an_image() {
+    // The recorder draws the UI to an image. A widget that asks the window
+    // where the cursor is (`RelativeCursorPosition`) finds nothing there, so a
+    // combo closed on the release that opened it and hovered items lost their
+    // hover colour (#100). Picking works for any render target.
+    let registry = Registry::default();
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
+    let mut failed = Vec::new();
+    for path in ron_files(dir).unwrap() {
+        let scenario = load_ron_file(&path, &registry).unwrap();
+        let mut app = image_target_app();
+        registry.install(app.world_mut());
+        let report = scenario.run_in(&mut app);
+        if !report.passed() {
+            failed.push((path.display().to_string(), report.failures().clone()));
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+}
+
+/// A combo over a selection that may hold several items: picks in its list
+/// leave it open, and a click elsewhere closes it.
+fn picking_several_in_a_combo() -> Scenario {
+    let combo_is =
+        |state| Check::component::<ComboState>(Target::name("multi combo"), "").eq(state);
+    let item = |label: &str| {
+        Target::within(
+            Target::name("multi combo"),
+            Target::role(WidgetRole::ListItem, label),
+        )
+    };
+    Scenario::new("picks in a combo over several items leave it open")
+        .setup(|world| {
+            let root = spawn_camera_and_root(world);
+            world.spawn((
+                Combo,
+                Name::new("multi combo"),
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(LETTERS.map(Item::new)),
+                ChildOf(root),
+            ));
+        })
+        .steps([
+            Step::wait(2),
+            Step::move_to(Target::within(
+                Target::name("multi combo"),
+                Target::component::<ComboButton>(),
+            )),
+            Step::click(),
+            Step::check(combo_is(ComboState::Open)),
+            Step::move_to(item("a")),
+            Step::click(),
+            Step::move_to(item("c")),
+            Step::click(),
+            Step::check(combo_is(ComboState::Open)),
+            Step::check(Check::app(WidgetsCheck::Selected {
+                of: Target::name("multi combo"),
+                items: vec!["a".to_owned(), "c".to_owned()],
+            })),
+            Step::move_to(Target::screen(Vec2::new(900.0, 500.0))),
+            Step::click(),
+            Step::check(combo_is(ComboState::Closed)),
+        ])
+}
+
+#[test]
+fn a_swatch_picked_under_the_pointer_keeps_its_hover_highlight_in_a_window_and_in_an_image() {
+    // The first swatch of `palette` is slate-50, a light colour on the light
+    // theme, so its square's border is the colour darkened: by 0.8 while it is
+    // selected and hovered, by 0.6 once the pointer has left.
+    let swatch = || {
+        Target::nth(
+            0,
+            Target::within(
+                Target::name("palette"),
+                Target::component::<rin_bevy_ui::list::ItemView>(),
+            ),
+        )
+    };
+    let scenario = Scenario::new("pick the first swatch")
+        .app_setup(WidgetsSetup::ColorPalette)
+        .steps([Step::wait(2), Step::move_to(swatch()), Step::click()]);
+    for mut app in [widgets_app(), image_target_app()] {
+        let report = scenario.run_in(&mut app);
+        assert!(report.passed(), "{:#?}", report.failures());
+
+        let world = app.world();
+        let view = resolve(world, &swatch()).unwrap().widget.unwrap();
+        let item = world
+            .get::<rin_bevy_ui::list::ItemView>(view)
+            .unwrap()
+            .item_ref;
+        let color = world.get::<Item<Color>>(item).unwrap().data;
+        let square = *world.get::<Children>(view).unwrap().first().unwrap();
+        let border = world.get::<BorderColor>(square).unwrap().top;
+        assert_eq!(border, color.darker(0.8), "selected and hovered");
+    }
+}
+
+#[test]
+fn picks_in_a_combo_over_several_items_leave_it_open_in_a_window_and_in_an_image() {
+    let report = play(&picking_several_in_a_combo());
+    assert!(report.passed(), "{:#?}", report.failures());
+    let report = picking_several_in_a_combo().run_in(&mut image_target_app());
+    assert!(report.passed(), "{:#?}", report.failures());
 }

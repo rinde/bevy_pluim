@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
-use bevy::picking::hover::HoverMap;
+use bevy::picking::hover::{HoverMap, Hovered};
 use bevy::prelude::*;
-use bevy::ui::{RelativeCursorPosition, Selected};
+use bevy::ui::Selected;
 use bevy::ui_widgets::{ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use itertools::Either;
 
@@ -137,10 +137,12 @@ impl List {
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
 ///
-/// It is a [`ListItem`]: it carries [`Selected`] while its item is selected.
+/// It is a [`ListItem`]: it carries [`Selected`] while its item is selected. Its
+/// [`Hovered`] says whether the pointer is on it, so that a change of the selection
+/// keeps the hover colour of the view under the pointer.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(RelativeCursorPosition::default(), ListItem)]
+#[require(Hovered, ListItem)]
 pub struct ItemView {
     /// The item this view shows.
     pub item_ref: Entity,
@@ -295,7 +297,7 @@ fn selection_change(
     >,
     mut item_views: Query<(
         &ItemView,
-        &RelativeCursorPosition,
+        &Hovered,
         &mut BackgroundColor,
         &mut BorderColor,
         Has<Selected>,
@@ -318,7 +320,7 @@ fn selection_change(
                 sync_multi_select(&mut commands, list_ref, is_multi, selection);
 
                 for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
-                    let Ok((item_view, rcp, mut bg, mut border_color, was_selected)) =
+                    let Ok((item_view, hovered, mut bg, mut border_color, was_selected)) =
                         item_views.get_mut(item_view_id)
                     else {
                         continue;
@@ -326,7 +328,7 @@ fn selection_change(
 
                     let is_selected = selection.is_selected(item_view.item_ref);
                     sync_selected(&mut commands, item_view_id, was_selected, is_selected);
-                    match (is_selected, rcp.cursor_over()) {
+                    match (is_selected, hovered.get()) {
                         (true, true) => bg.0 = theme.colors.selected_hovered_item,
                         (true, false) => bg.0 = theme.colors.selected_item,
                         (false, true) => bg.0 = theme.colors.hovered_item,
