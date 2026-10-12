@@ -840,16 +840,9 @@ recorded_scenarios_gpu --features record`.
   recording (#100). `every_scenario_file_passes_with_the_ui_drawn_to_an_image`
   in `tests/scenarios.rs` plays every file headless with the camera aimed at an
   image, as the recorder does but without a GPU, so this is caught by `just
-  test`. The scenarios that fail only in a recording are listed in
-  `FAILS_WHEN_RECORDED` in the test, with their issues; the test fails for any
-  other scenario, and also when a listed one passes, so remove a name when its
-  issue is fixed. The names listed for #100 are expected to pass since it was
-  fixed, but stay listed until `just record` shows them passing (it has not been
-  run since). #103 (the
-  `Tabs` screen's palette combos got no popup, because the overlay's extra roots
-  made `on_insert_combo` skip them) is fixed in the library and tested
-  headless; `a deselected stack item keeps its state when it is shown again`
-  stays listed until `just record` shows it passing.
+  test`. It fails on any file that does not pass; there is no allowlist, so a
+  scenario that only fails with the UI drawn to an image is a bug to fix, not a
+  name to list.
 - **The overlay's roots.** The recorder's `CursorOverlayPlugin` spawns root
   `Node`s without a `UiTargetCamera`, so `UiRoot` counts them and logs its
   one-root `error!` (#101; the recorder adds no `LogPlugin`, so it is not
