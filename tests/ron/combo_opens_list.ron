@@ -25,6 +25,8 @@
         // waits until the item is the topmost node that takes the pointer there.
         MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
         Check(Hovered(Within(Name("first combo"), Role(role: ListItem, label: "Canada")))),
+        // The popup takes the pointer from the button under it.
+        Check(Not(Hovered(Role(role: Button, label: "Underneath")))),
     ],
     expect: [Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))],
 )
