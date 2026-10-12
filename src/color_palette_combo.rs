@@ -1,8 +1,8 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
 use bevy::a11y::AccessibilityNode;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use itertools::Either;
@@ -52,15 +52,21 @@ impl Plugin for ColorPaletteComboPlugin {
         ..default()
     },
     Name::new("ColorPaletteCombo"),
-    RelativeCursorPosition::default()
 )]
 pub struct ColorPaletteCombo;
 
+/// Marks the button of a [`ColorPaletteCombo`].
+///
+/// Its [`Hovered`] says whether the pointer is on the combo, for the outside click.
 #[derive(Component, Debug, Copy, Clone)]
+#[require(Hovered)]
 struct ColorPaletteComboButton;
 
 /// Marks the popup of a [`ColorPaletteCombo`].
+///
+/// Its [`Hovered`] says whether the pointer is on the popup, for the outside click.
 #[derive(Component, Debug, Copy, Clone)]
+#[require(Hovered)]
 struct ColorPaletteComboFloat;
 
 /// Builds a [`ColorPaletteCombo`]: its button, as a child, and its popup.
@@ -157,7 +163,6 @@ fn on_insert_combo(
                     true,
                     false,
                 ),
-                RelativeCursorPosition::default(),
             ))
             .id();
     });
@@ -351,37 +356,39 @@ fn on_selection_change(
     }
 }
 
-/// System that closes the combo when clicking outside of it.
+/// Closes an open combo when the left button is released outside of it.
+///
+/// Inside is the combo's button, which opens and closes the popup itself on
+/// [`Activate`], and, for a selection that may hold several items, its popup. Whether
+/// the pointer is on them is their [`Hovered`], which comes from picking and so works
+/// whatever the camera renders to, a window or an image.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combos: Query<(Entity, &RelativeCursorPosition, &State, &SubRefs), With<ColorPaletteCombo>>,
+    combos: Query<(Entity, &State, &SubRefs), With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
-        (&mut BackgroundColor, &mut BorderColor),
+        (&Hovered, &mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
     >,
     selections: SelectionParam,
-    floats: Query<&RelativeCursorPosition, With<ColorPaletteComboFloat>>,
+    floats: Query<&Hovered, With<ColorPaletteComboFloat>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     if mouse_button.just_released(MouseButton::Left) {
-        for (combo_id, rcp, &combo_state, subs) in combos.iter() {
+        for (combo_id, &combo_state, subs) in combos.iter() {
             let Some(selection) = selections.get(combo_id) else {
                 continue;
             };
-            let over_float = floats
-                .get(subs.float_id)
-                .is_ok_and(RelativeCursorPosition::cursor_over);
+            let Ok((over_button, mut background_color, mut border_color)) =
+                combo_buttons.get_mut(subs.button)
+            else {
+                continue;
+            };
+            let over_float = floats.get(subs.float_id).is_ok_and(Hovered::get);
             if combo_state == State::Open
-                && !rcp.cursor_over()
+                && !over_button.get()
                 && !(selection.allow_multiple() && over_float)
             {
-                let Ok((mut background_color, mut border_color)) =
-                    combo_buttons.get_mut(subs.button)
-                else {
-                    continue;
-                };
-
                 *background_color = BackgroundColor(theme.colors.background_primary);
                 *border_color = BorderColor::all(theme.colors.border);
                 commands.entity(combo_id).insert(State::Closed);

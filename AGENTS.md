@@ -194,7 +194,7 @@ of them (`just example gallery -- --run-all stack link`).
 | --- | --- |
 | `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
-| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, and the tests of `WidgetsCheck` |
+| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and every `tests/ron/` file played again with the UI drawn to an image (`image_target_app`) |
 | `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
 | `tests/recorded_scenarios_gpu.rs` | needs `--features record` and a GPU, and is `#[ignore]`d: records every `tests/ron/` file offscreen, see [Recording the scenarios](#recording-the-scenarios) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
@@ -226,6 +226,27 @@ of them (`just example gallery -- --run-all stack link`).
   are not stopped. The combo's outside-click handler reads
   `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot starve
   it.
+- **"Is the pointer on it?" is picking's `Hovered`.** A system that asks where
+  the pointer is now, outside a `MouseEvent`, reads `bevy::picking::hover::Hovered`
+  (required by the component it asks about): true while the mouse pointer is on
+  the entity or on any of its descendants, as picking's `HoverMap` says. The
+  outside-click systems of `Combo` and `ColorPaletteCombo` read it on their
+  button (`ComboButton`, the palette combo's `ColorPaletteComboButton`) and popup
+  (`ComboList`, `ColorPaletteComboFloat`), and the `selection_change` of
+  `list.rs` and `color_palette.rs` on each `ItemView`, to keep the hover colour of
+  the item under the pointer. It is on the button rather than the combo because a
+  `Combo`'s popup list is its descendant, so the combo's own `Hovered` would be
+  true over the list as well. Bevy's `RelativeCursorPosition` is not used: it is
+  only computed for cameras that render to a window, so UI drawn to an image (the
+  recorder, any render-to-texture UI) never had the pointer on it (#100).
+  `Hovered` follows the hover map, not the geometry: a node is only hovered when
+  nothing above it that blocks the pointer (`should_block_lower`) is in the way,
+  so an item under an open popup is not. A node with `should_block_lower: false`
+  (a combo's button, an `ItemView`) is hovered and lets what is below be hovered
+  too; a `Pickable::IGNORE` node (an item's label) is never in the hover map, so
+  only the node it lies on counts. It follows `PointerId::Mouse` only, not touch;
+  the outside click reads the mouse button anyway. It is updated in `PreUpdate`,
+  so an `Update` system sees this frame's pointer.
 - **Buttons are `bevy::ui_widgets::Button`.** `PushButton`, `ColorPushButton` and
   `Link` (the other widgets still use `bevy::ui::Button`, until they are moved
   over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate`
@@ -288,9 +309,10 @@ of them (`just example gallery -- --run-all stack link`).
   `Activate`, so on release and on Enter / Space for a focused button, and a
   press alone opens nothing. Hover and press colours stay `MouseEvent`, observed
   on the combo, which gets the pointer because the button has `should_block_lower:
-  false`. The outside-click systems read `ButtonInput<MouseButton>` and
-  `RelativeCursorPosition`, not `Activate`, and a click on the button is inside
-  the combo, so they never close what the same click opens. The state is also
+  false`. The outside-click systems read `ButtonInput<MouseButton>` and the
+  `Hovered` of the button and the popup, not `Activate`, and a click on the
+  button is inside the combo, so they never close what the same click opens. A
+  release on the popup closes it unless the selection may hold several items. The state is also
   `aria-expanded` on the button's `AccessibilityNode` (`set_expanded`), set where
   `ComboState` / `State` is inserted (the hook, the observer). Scenarios keep
   checking `ComboState` / `State`: the tester reads components, not the
@@ -651,6 +673,11 @@ a file can check any `Reflect` type of the app by short type path.
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
+- **Every file is played twice.** Once by `ron_scenarios`, and once more by
+  `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in
+  `tests/scenarios.rs`, with the camera rendering to an image as in a recording,
+  so a file must pass both ways (see [Recording the
+  scenarios](#recording-the-scenarios)).
 - **Targets on the `Combos` screen.** A row of `first combo`, `own combo` and
   `third combo` (`first` and `third` share one selection through
   `Selection::reference`, `own` has a selection of its own over the same
@@ -748,12 +775,20 @@ so the test is `#[ignore]`d, its target needs the `record` feature, and
 recorded_scenarios_gpu --features record`.
 
 - **A drawn recording is not the headless one.** The recorder's cameras render
-  to an `Image`, and Bevy computes `RelativeCursorPosition` only for cameras
-  that render to a window, so widgets that read it (combos, palette combos,
-  hover colours in lists and palettes) misbehave in a recording (#100). The
-  scenarios that fail only there are listed in `FAILS_WHEN_RECORDED` in the test,
-  with their issues; the test fails for any other scenario, and also when a
-  listed one passes, so remove a name when its issue is fixed. #103 (the
+  to an `Image`, and Bevy's UI focus (`Interaction`, `RelativeCursorPosition`)
+  only follows cameras that render to a window, so a widget must not read it:
+  the widgets read hover from picking, which works for any target (see "Is the
+  pointer on it?" above). Combos, palette combos and the hover colours of lists
+  and palettes used to read `RelativeCursorPosition` and misbehaved in a
+  recording (#100). `every_scenario_file_passes_with_the_ui_drawn_to_an_image`
+  in `tests/scenarios.rs` plays every file headless with the camera aimed at an
+  image, as the recorder does but without a GPU, so this is caught by `just
+  test`. The scenarios that fail only in a recording are listed in
+  `FAILS_WHEN_RECORDED` in the test, with their issues; the test fails for any
+  other scenario, and also when a listed one passes, so remove a name when its
+  issue is fixed. The names listed for #100 are expected to pass since it was
+  fixed, but stay listed until `just record` shows them passing (it has not been
+  run since). #103 (the
   `Tabs` screen's palette combos got no popup, because the overlay's extra roots
   made `on_insert_combo` skip them) is fixed in the library and tested
   headless; `a deselected stack item keeps its state when it is shown again`

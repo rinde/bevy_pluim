@@ -5,8 +5,8 @@
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 use bevy::ui_widgets::Activate;
 use itertools::Itertools;
 
@@ -46,14 +46,15 @@ impl Plugin for ComboPlugin {
         ..default()
     },
     Name::new("Combo"),
-    RelativeCursorPosition::default()
 )]
 pub struct Combo;
 
 /// Marks the button of a [`Combo`].
+///
+/// Its [`Hovered`] says whether the pointer is on the combo, for the outside click.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(Name::new("ComboButton"))]
+#[require(Name::new("ComboButton"), Hovered)]
 pub struct ComboButton;
 
 /// The children of a [`Combo`].
@@ -66,9 +67,11 @@ pub struct ComboSubRefs {
 }
 
 /// Marks the list inside the popup of a [`Combo`].
+///
+/// Its [`Hovered`] says whether the pointer is on the popup, for the outside click.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(Name::new("ComboList"))]
+#[require(Name::new("ComboList"), Hovered)]
 pub struct ComboList;
 
 /// Whether the popup of a [`Combo`] is showing.
@@ -139,7 +142,6 @@ impl Combo {
                         Pickable::default(),
                         Visibility::Hidden,
                         ComboList,
-                        RelativeCursorPosition::default(),
                     ))
                     .id();
             });
@@ -237,34 +239,37 @@ fn update_selection(
     text.0 = label;
 }
 
-/// System that closes the combo when clicking outside of it.
+/// Closes an open combo when the left button is released outside of it.
+///
+/// Inside is the combo's button, which opens and closes the popup itself on
+/// [`Activate`], and, for a selection that may hold several items, its list, so
+/// that a pick there keeps the popup open. Whether the pointer is on them is their
+/// [`Hovered`], which comes from picking and so works whatever the camera renders
+/// to, a window or an image.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combos: Query<(Entity, &RelativeCursorPosition, &ComboState, &ComboSubRefs), With<Combo>>,
+    combos: Query<(Entity, &ComboState, &ComboSubRefs), With<Combo>>,
     selections: SelectionParam,
-    mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
-    combo_lists: Query<&RelativeCursorPosition, With<ComboList>>,
+    mut combo_buttons: Query<(&Hovered, &mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
+    combo_lists: Query<&Hovered, With<ComboList>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     if mouse_button.just_released(MouseButton::Left) {
-        for (combo_ref, rcp, &combo_state, subs) in combos.iter() {
+        for (combo_ref, &combo_state, subs) in combos.iter() {
             let Some(selection_value) = selections.get(combo_ref) else {
                 continue;
             };
-            let over_list = combo_lists
-                .get(subs.list_id)
-                .is_ok_and(RelativeCursorPosition::cursor_over);
+            let Ok((over_button, mut background_color, mut border_color)) =
+                combo_buttons.get_mut(subs.button_id)
+            else {
+                continue;
+            };
+            let over_list = combo_lists.get(subs.list_id).is_ok_and(Hovered::get);
             if combo_state == ComboState::Open
-                && !rcp.cursor_over()
+                && !over_button.get()
                 && !(selection_value.allow_multiple() && over_list)
             {
-                let Ok((mut background_color, mut border_color)) =
-                    combo_buttons.get_mut(subs.button_id)
-                else {
-                    continue;
-                };
-
                 *background_color = BackgroundColor(theme.colors.background_primary);
                 *border_color = BorderColor::all(theme.colors.border);
                 commands.entity(combo_ref).insert(ComboState::Closed);

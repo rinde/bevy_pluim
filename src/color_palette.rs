@@ -2,8 +2,9 @@
 
 use std::collections::HashMap;
 
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::{RelativeCursorPosition, Selected};
+use bevy::ui::Selected;
 use bevy::ui_widgets::ListBoxMultiSelect;
 use itertools::Either;
 
@@ -306,7 +307,7 @@ fn on_selection_change(
     q: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
     color_palettes: Query<(Entity, Option<&Children>, Has<ListBoxMultiSelect>), With<ColorPalette>>,
-    item_views: Query<(&ItemView, &RelativeCursorPosition, Has<Selected>)>,
+    item_views: Query<(&ItemView, &Hovered, Has<Selected>)>,
     color_items: Query<&Item<Color>>,
     mut commands: Commands,
 ) {
@@ -324,7 +325,7 @@ fn on_selection_change(
             sync_multi_select(&mut commands, color_palette_ref, is_multi, selection);
 
             for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
-                let Ok((item_view, rcp, was_selected)) = item_views.get(item_view_id) else {
+                let Ok((item_view, hovered, was_selected)) = item_views.get(item_view_id) else {
                     continue;
                 };
                 sync_selected(
@@ -336,13 +337,12 @@ fn on_selection_change(
                 let Ok(Item { data: item_color }) = color_items.get(item_view.item_ref) else {
                     continue;
                 };
-                let hover_state =
-                    match (selection.is_selected(item_view.item_ref), rcp.cursor_over()) {
-                        (true, true) => HoverState::SelectedHover,
-                        (true, false) => HoverState::Selected,
-                        (false, true) => HoverState::Hover,
-                        (false, false) => HoverState::Unselected,
-                    };
+                let hover_state = match (selection.is_selected(item_view.item_ref), hovered.get()) {
+                    (true, true) => HoverState::SelectedHover,
+                    (true, false) => HoverState::Selected,
+                    (false, true) => HoverState::Hover,
+                    (false, false) => HoverState::Unselected,
+                };
                 commands.run_system_cached_with(
                     set_highlight,
                     (item_view_id, *item_color, hover_state),
