@@ -198,7 +198,7 @@ of them (`just example gallery -- --run-all stack link`).
 | `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
 | `tests/recorded_scenarios_gpu.rs` | needs `--features record` and a GPU, and is `#[ignore]`d: records every `tests/ron/` file offscreen, see [Recording the scenarios](#recording-the-scenarios) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
-| `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per widget, each modelled on its example |
+| `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per widget, each started from its example but a fixture of its own |
 | `tests/widgets_check/mod.rs` | `WidgetsCheck`, the checks about widget state the tester's built-in ones cannot say (`Selected`) |
 
 ## How the pieces fit
@@ -448,6 +448,9 @@ of them (`just example gallery -- --run-all stack link`).
 4. `MouseEvent` observers for hover and press.
 5. `pub mod my_widget;` and `add_plugins(MyWidgetPlugin)` in `lib.rs`.
 6. An example in `examples/`, and a row in the tables above.
+7. A `WidgetsSetup` screen for the scenarios: a variant in
+   `tests/widgets_setup/mod.rs`, added to the smoke test in
+   `tests/scenarios.rs`, and its notes under [Scenario files](#scenario-files).
 
 ## Running things
 
@@ -627,16 +630,24 @@ a file can check any `Reflect` type of the app by short type path.
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`,
   `Themed`), which spawns a `Camera2d`, the one root `Node` and a screen, each
-  with a "Change theme" button. Every screen but `Themed` is of the widget it is
-  named after, following the example of that name (some add widgets the example
-  lacks, for instance the `NumericStepper` one); `Themed` has no example: it
-  puts one of each widget that restyles with the theme on one screen. A variant is
-  found by Bevy's automatic registration, so adding one needs no registration
-  call; add it to the smoke test in `tests/scenarios.rs` as well. `Buttons`
-  also keeps the `Clicks` resource, the `Activate`s of "Add". `AppSetup::capture`
-  (recording a session from the app as it is) is not implemented: only the
-  tester's gallery and recorder call it, which these tests do not run, so it
-  would go untested.
+  with a "Change theme" button.
+  - **A screen is a fixture of its own.** It starts from the example of the
+    widget it is named after, then adds names, widgets and sizes for testing
+    (a name to target, a layout that fits the 1280 by 720 window) and does not
+    follow later changes to the example. A change to an example needs no
+    matching change to its screen, and vice versa. They are not shared because
+    the example spawns through `Commands` in a startup system while a setup is
+    handed the `World`, and shared code would put test-only names and widgets
+    into every example, or take them out of the screens.
+  - **`Buttons` and `Themed` have no example of their own.** `Themed` puts one
+    of each widget that restyles with the theme on one screen.
+  - **A variant** is found by Bevy's automatic registration, so adding one
+    needs no registration call; add it to the smoke test in
+    `tests/scenarios.rs` as well.
+  - **`Buttons`** also keeps the `Clicks` resource, the `Activate`s of "Add".
+  - **`AppSetup::capture`** (recording a session from the app as it is) is not
+    implemented: only the tester's gallery and recorder call it, which these
+    tests do not run, so it would go untested.
 - **The check** is `App(Selected(of: .., items: [..]))`: `WidgetsCheck`, the
   one `#[reflect(AppCheck)]` enum of the tests, in `tests/widgets_check/mod.rs`
   (Rust: `Check::app(WidgetsCheck::Selected { .. })`; `mod widgets_check;`

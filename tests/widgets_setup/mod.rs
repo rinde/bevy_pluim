@@ -3,8 +3,10 @@
 //! The tester finds this one `#[reflect(AppSetup)]` enum by itself, so a
 //! scenario file writes `setup: App(Buttons)` and a Rust scenario
 //! `.app_setup(WidgetsSetup::Buttons)`. Each variant spawns a `Camera2d`, the
-//! one root `Node` and a screen of the widget it is named after, following the
-//! example of that name. The examples are not built on this module: they spawn
+//! one root `Node` and a screen of the widget it is named after. A screen
+//! starts from the example of that name but is a test fixture of its own: it
+//! adds names, widgets and sizes for testing and does not follow later changes
+//! to the example. The examples are not built on this module: they spawn
 //! through `Commands` in a startup system, while a setup is handed the
 //! `World`.
 //!
