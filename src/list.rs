@@ -4,8 +4,7 @@ use std::collections::HashMap;
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
-use bevy::picking::hover::{HoverMap, Hovered};
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{ListBox, ListBoxMultiSelect, ListItem, ValueChange};
@@ -19,27 +18,26 @@ pub(crate) struct ListPlugin;
 
 impl Plugin for ListPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, update_scroll_position)
-            .add_systems(
-                Update,
-                (
-                    (|| None::<Entity>)
-                        .pipe(theme_items)
-                        .run_if(resource_changed::<Theme>),
-                    (|| None::<Entity>)
-                        .pipe(theme_lists)
-                        .run_if(resource_changed::<Theme>),
-                    (|| None::<Entity>)
-                        .pipe(theme_item_labels)
-                        .run_if(resource_changed::<Theme>),
-                    selection_change,
-                ),
-            )
-            .add_observer(on_insert_selection)
-            .add_observer(on_value_change)
-            .register_type::<ItemView>()
-            .register_type::<ListLayout>()
-            .register_type::<CornerStyle>();
+        app.add_systems(
+            Update,
+            (
+                (|| None::<Entity>)
+                    .pipe(theme_items)
+                    .run_if(resource_changed::<Theme>),
+                (|| None::<Entity>)
+                    .pipe(theme_lists)
+                    .run_if(resource_changed::<Theme>),
+                (|| None::<Entity>)
+                    .pipe(theme_item_labels)
+                    .run_if(resource_changed::<Theme>),
+                selection_change,
+            ),
+        )
+        .add_observer(on_insert_selection)
+        .add_observer(on_value_change)
+        .register_type::<ItemView>()
+        .register_type::<ListLayout>()
+        .register_type::<CornerStyle>();
     }
 }
 
@@ -51,6 +49,10 @@ impl Plugin for ListPlugin {
 /// holds more than one item (`OneOrMore`, `ZeroOrMore`).
 ///
 /// Use [`ListLayout`] and [`CornerStyle`] to change how they are laid out.
+///
+/// A list does not scroll: it is as large as its items. To scroll a list that
+/// does not fit, put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) (see
+/// [`ScrollArea::bundle`](crate::scroll_area::ScrollArea::bundle)).
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -119,7 +121,6 @@ impl List {
             ListLayout::VerticalGrid { columns } => vec![RepeatedGridTrack::auto(*columns)],
         };
 
-        // TODO allow options to set max size and scroll if contents don't fit
         let node = Node {
             position_type: PositionType::Relative,
             display: Display::Grid,
@@ -580,50 +581,6 @@ fn theme_lists(
     } else {
         for (mut node, mut bg, mut bc, layout, corner_style) in &mut lists {
             theme_list(&mut node, &mut bg, &mut bc, *layout, *corner_style);
-        }
-    }
-}
-
-/// Scrolls the nodes under the pointer by the mouse wheel.
-///
-/// An axis is moved only when the node's [`Node::overflow`] scrolls along it,
-/// and the [`ScrollPosition`] stays within `0..=max` on that axis, where `max`
-/// is how far the contents overflow the node (0 when they fit). Both are in
-/// logical pixels.
-pub fn update_scroll_position(
-    mut mouse_wheel_events: MessageReader<MouseWheel>,
-    hover_map: Res<HoverMap>,
-    mut scrolled_node_query: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-) {
-    for mouse_wheel_event in mouse_wheel_events.read() {
-        let (mut dx, mut dy) = match mouse_wheel_event.unit {
-            MouseScrollUnit::Line => (mouse_wheel_event.x * 21., mouse_wheel_event.y * 21.),
-            MouseScrollUnit::Pixel => (mouse_wheel_event.x, mouse_wheel_event.y),
-        };
-
-        if keyboard_input.pressed(KeyCode::ControlLeft)
-            || keyboard_input.pressed(KeyCode::ControlRight)
-        {
-            std::mem::swap(&mut dx, &mut dy);
-        }
-
-        for (_pointer, pointer_map) in hover_map.iter() {
-            for (entity, _hit) in pointer_map {
-                let Ok((mut scroll_position, computed, node)) =
-                    scrolled_node_query.get_mut(*entity)
-                else {
-                    continue;
-                };
-                let overflow =
-                    (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
-                if node.overflow.x == OverflowAxis::Scroll {
-                    scroll_position.x = (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0));
-                }
-                if node.overflow.y == OverflowAxis::Scroll {
-                    scroll_position.y = (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0));
-                }
-            }
         }
     }
 }
