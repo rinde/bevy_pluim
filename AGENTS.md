@@ -59,7 +59,7 @@ runs on GitHub's side; the coordinator starts every agent, in its own session.
 | Agent | Model | Does |
 | --- | --- | --- |
 | `coordinator` | Sonnet | Decides what is ready, dispatches implementers and reviewers, checks on GitHub that each did its job, merges. Writes no code. |
-| `implementer-sonnet`, `implementer-opus` | Sonnet, Opus | Implements one issue in a worktree under `.claude/worktrees/` on a branch `issue-<number>/-<slug>`, opens a pull request that `Closes #N`, and follows it up on review, red CI or a merge conflict. Runs the `implement-issue` skill. |
+| `implementer-sonnet`, `implementer-opus` | Sonnet, Opus | Implements one issue in a worktree under `.claude/worktrees/` on a branch `RINUI-<number>/<slug>`, opens a pull request that `Closes #N`, and follows it up on review, red CI or a merge conflict. Runs the `implement-issue` skill. |
 | `reviewer-sonnet`, `reviewer-opus` | Sonnet, Opus | Reviews one pull request in a worktree of its own, makes sure CI passed on its head, and posts one review that approves or requests changes, with inline comments. Runs the `review-pr` skill. |
 
 The variants differ only in their model; the instructions are the skills, which
@@ -97,9 +97,9 @@ the coordinator stops, comments and takes `ready-for-agent` off the issue.
 
 | How | What |
 | --- | --- |
-| `/coordinate` | Passes until nothing is left to do, then a report. |
+| `/coordinate` | Passes until nothing is left to do, then a report. One implementer at a time in a cloud session (`CLAUDE_CODE_REMOTE=true`), two on a local machine. |
 | `/coordinate #24 #25` | Only those issues and their pull requests. |
-| `/coordinate max 5` | Five implementers at once instead of three. |
+| `/coordinate max 5` | Five implementers at once instead of the default. |
 | `/coordinate dry-run` | Report what it would do and change nothing. |
 | `/loop 30m /coordinate` | Keep coordinating every half hour. |
 | `claude --agent coordinator` | The coordinator as the session's main agent. |
@@ -520,6 +520,8 @@ then fetches the dependencies (the private tester included, see above) and
 warms the build cache with `cargo build --all-targets` so the first real
 build isn't a cold Bevy compile. It is a no-op unless `CLAUDE_CODE_REMOTE=true`
 or run with `--force`, and is idempotent, with progress on stderr.
+`.claude/settings.json` also sets the auto-compact window to 200k tokens for
+Sonnet 5.5 and Opus 5.5 (`modelSettings.<model>.autoCompactWindow`).
 
 ## Testing
 

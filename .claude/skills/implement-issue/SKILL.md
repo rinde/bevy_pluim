@@ -21,7 +21,7 @@ friends may fail where `gh api repos/...` works.
   and `.../issues/<issue>/comments`. A bare-title issue's title is the
   specification.
 - An existing pull request: if none was given, look for an open one whose head
-  branch starts `issue-<issue>/` or whose body says `Closes #<issue>`
+  branch starts `RINUI-<issue>/` or whose body says `Closes #<issue>`
   (`gh api "repos/rinde/rin-bevy-ui/pulls?state=open&per_page=100"`). If one exists,
   go to **Follow up** below instead.
 - **Dependencies.** Every issue in
@@ -38,8 +38,8 @@ friends may fail where `gh api repos/...` works.
 
 1. Add the `In progress` label:
    `gh api repos/rinde/rin-bevy-ui/issues/<issue>/labels -f "labels[]=In progress"`.
-2. Branch from a fresh `main`, named `issue-<issue>/-<descriptive-slug>`:
-   `git fetch origin main && git switch -c issue-<issue>/-<slug> origin/main`.
+2. Branch from a fresh `main`, named `RINUI-<issue>/<descriptive-slug>`:
+   `git fetch origin main && git switch -c RINUI-<issue>/<slug> origin/main`.
    You are usually in a worktree of your own under `.claude/worktrees/`;
    another implementer may be working in the main checkout or a sibling
    worktree, so touch nothing outside yours.
