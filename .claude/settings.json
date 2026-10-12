@@ -1,4 +1,12 @@
 {
+  "modelSettings": {
+    "claude-sonnet-5-5": {
+      "autoCompactWindow": 200000
+    },
+    "claude-opus-5-5": {
+      "autoCompactWindow": 200000
+    }
+  },
   "hooks": {
     "SessionStart": [
       {
