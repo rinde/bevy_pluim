@@ -773,6 +773,139 @@ fn a_color_palette_combo_without_a_parent_gets_no_popup() {
     assert!(palette_combo_floats(&mut app).is_empty());
 }
 
+/// The selection of the only [`ColorPalette`] of the app.
+fn only_palette_selection(app: &mut App) -> Option<Selection> {
+    let palette = single_entity_with::<ColorPalette>(app);
+    app.world().entity(palette).get::<Selection>().cloned()
+}
+
+#[test]
+fn a_color_palette_combo_popup_refers_to_the_combos_selection_as_soon_as_it_is_spawned() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    // No update after the spawn: nothing has changed since, so the reference was wired
+    // when the popup was spawned, not by a system that reacts to a change.
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+
+    assert_eq!(
+        only_palette_selection(&mut app),
+        Some(Selection::reference(combo))
+    );
+}
+
+#[test]
+fn a_color_palette_combo_popup_refers_to_the_selection_the_combo_refers_to_as_soon_as_it_is_spawned()
+ {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection_ref = app.world_mut().spawn(two_color_selection()).id();
+    app.world_mut().spawn((
+        ColorPaletteCombo,
+        Selection::reference(selection_ref),
+        ChildOf(root),
+    ));
+
+    assert_eq!(
+        only_palette_selection(&mut app),
+        Some(Selection::reference(selection_ref))
+    );
+}
+
+#[test]
+fn a_color_palette_combo_popup_follows_the_selection_the_combo_is_given_later() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let first = app.world_mut().spawn(two_color_selection()).id();
+    let second = app.world_mut().spawn(two_color_selection()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            ColorPaletteCombo,
+            Selection::reference(first),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(
+        only_palette_selection(&mut app),
+        Some(Selection::reference(first))
+    );
+
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::reference(second));
+    app.update();
+
+    assert_eq!(
+        only_palette_selection(&mut app),
+        Some(Selection::reference(second))
+    );
+}
+
+#[test]
+fn a_color_palette_combo_given_its_selection_after_it_is_spawned_passes_it_to_its_popup() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection_ref = app.world_mut().spawn(two_color_selection()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, ChildOf(root)))
+        .id();
+    app.update();
+    assert_eq!(only_palette_selection(&mut app), None);
+
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::reference(selection_ref));
+    app.update();
+
+    assert_eq!(
+        only_palette_selection(&mut app),
+        Some(Selection::reference(selection_ref))
+    );
+}
+
+#[test]
+fn the_popup_swatches_of_a_color_palette_combo_show_the_selection_the_combo_refers_to() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection_ref = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items([RED, GREEN, BLUE].map(|data| Item { data })),
+        )
+        .id();
+    app.update();
+    let green = {
+        let world = app.world_mut();
+        let mut items = world.query::<(Entity, &Item<Color>)>();
+        items
+            .iter(world)
+            .find(|(_, item)| item.data == GREEN)
+            .map(|(entity, _)| entity)
+            .unwrap()
+    };
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(green))));
+    app.world_mut().spawn((
+        ColorPaletteCombo,
+        Selection::reference(selection_ref),
+        ChildOf(root),
+    ));
+    app.update();
+    app.update();
+
+    let palette = single_entity_with::<ColorPalette>(&mut app);
+    assert_eq!(selected_colors(&app, palette), [GREEN]);
+}
+
 #[test]
 fn a_combo_opens_when_its_button_is_activated_and_not_when_it_is_only_pressed() {
     let mut app = headless_app();

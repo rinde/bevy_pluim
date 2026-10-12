@@ -1,0 +1,22 @@
+// The first thing done on the screen is to open "own palette combo" and pick a
+// swatch in its popup: there is no wait, and nothing has changed a selection
+// first. The popup's palette refers to the combo's selection from the moment
+// the popup is spawned (rinde/rin-bevy-ui#88), so the pick lands in the
+// combo's selection. Index 60 is red-500 of `COLORS`.
+(
+    format_version: 3,
+    name: "a palette combo opened as the first action picks into its selection",
+    setup: App(ColorPalette),
+    steps: [
+        MoveTo(Within(Name("own palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("own palette combo"), path: "State", is: Eq(Open))),
+        Check(Visible(Name("own palette combo popup"))),
+        MoveTo(Nth(60, Within(Name("own palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("own palette combo"), items: ["red-500"]))),
+        Check(Component(target: Name("own palette combo"), path: "State", is: Eq(Closed))),
+        Check(Selected(Nth(60, Within(Name("own palette combo popup"), Component("ItemView"))))),
+    ],
+    expect: [App(Selected(of: Name("own palette combo"), items: ["red-500"]))],
+)
