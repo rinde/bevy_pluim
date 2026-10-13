@@ -1798,3 +1798,53 @@ fn changing_the_theme_under_a_hovered_selected_list_item_keeps_it_selected_and_h
         "the pointer left, so it is only selected"
     );
 }
+
+/// The borders of a swatch and of the colour square in it, which carry its highlight.
+fn swatch_border(app: &App, swatch: Entity) -> (Color, Color) {
+    let outer = app.world().entity(swatch).get::<BorderColor>().unwrap().top;
+    let square = app.world().entity(swatch).get::<Children>().unwrap()[0];
+    let inner = app.world().entity(square).get::<BorderColor>().unwrap().top;
+    (outer, inner)
+}
+
+/// The border of `swatch` in the dark theme with the pointer off it, whatever it was.
+fn resting_dark_border(app: &mut App, swatch: Entity) -> (Color, Color) {
+    app.world_mut().entity_mut(swatch).insert(Hovered(false));
+    // Light, then dark again, both with the pointer off the swatch.
+    toggle_theme(app);
+    app.world_mut().run_schedule(Update);
+    toggle_theme(app);
+    app.world_mut().run_schedule(Update);
+    swatch_border(app, swatch)
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_swatch_keeps_it_hovered() {
+    let mut app = headless_app();
+    let (_palette, swatches, _selection) =
+        spawn_palette(&mut app, Selection::builder().zero_or_one());
+
+    hover_and_toggle_theme(&mut app, swatches[1]);
+    let hovered = swatch_border(&app, swatches[1]);
+
+    assert_ne!(
+        hovered,
+        resting_dark_border(&mut app, swatches[1]),
+        "the swatch under the pointer keeps its hover highlight"
+    );
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_selected_swatch_keeps_it_selected_and_hovered() {
+    let mut app = headless_app();
+    let (_palette, swatches, _selection) = spawn_palette(&mut app, Selection::builder().one());
+
+    hover_and_toggle_theme(&mut app, swatches[0]);
+    let hovered = swatch_border(&app, swatches[0]);
+
+    assert_ne!(
+        hovered,
+        resting_dark_border(&mut app, swatches[0]),
+        "the selected swatch under the pointer is highlighted more than a selected one"
+    );
+}
