@@ -127,6 +127,54 @@ pub struct ThemeColors {
     pub focus_ring: Color,
     /// The colour of a scroll bar thumb.
     pub scroll_thumb_background: Color,
+    /// Secondary text, such as descriptions and counts.
+    pub text_secondary: Color,
+    /// Tertiary text, such as captions.
+    pub text_tertiary: Color,
+    /// The colour of divider lines.
+    pub divider: Color,
+    /// The fill of the active tool.
+    pub accent: Color,
+    /// The text on [`accent`](Self::accent).
+    pub accent_text: Color,
+    /// A subtle accent fill, such as a pressed button.
+    pub accent_subtle: Color,
+    /// The text on [`accent_subtle`](Self::accent_subtle).
+    pub accent_subtle_text: Color,
+    /// The bar on [`accent_subtle`](Self::accent_subtle).
+    pub accent_subtle_bar: Color,
+    /// The ring around a selected widget.
+    pub selection_ring: Color,
+    /// The strong hover of a selected row.
+    pub hovered_selected_item: Color,
+    /// The fill of a dangerous action.
+    pub danger: Color,
+    /// The text on [`danger`](Self::danger).
+    pub danger_text: Color,
+    /// The text of a dangerous action while hovered.
+    pub danger_hover_text: Color,
+    /// The background of a warning.
+    pub warning_background: Color,
+    /// The border of a warning.
+    pub warning_border: Color,
+    /// The text of a warning.
+    pub warning_text: Color,
+    /// The background of an informational status, such as running.
+    pub info_background: Color,
+    /// The text of an informational status.
+    pub info_text: Color,
+    /// The background of a neutral pill or badge.
+    pub pill_background: Color,
+    /// The text of a neutral pill or badge.
+    pub pill_text: Color,
+    /// The track of a segmented control.
+    pub segmented_track: Color,
+    /// The selected segment of a segmented control.
+    pub segmented_selected: Color,
+    /// The text of the selected segment.
+    pub segmented_selected_text: Color,
+    /// The surface of a card in a gallery.
+    pub card_surface: Color,
 }
 
 impl Default for ThemeColors {
@@ -154,10 +202,34 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     text_disabled: Color::Srgba(GRAY_400),
     link: Color::Srgba(BLUE_600),
     link_selected: Color::Srgba(BLUE_800),
-    large_shadow: SHADOW_LG,
+    large_shadow: SHADOW_LG_LIGHT_MODE,
     small_shadow: SHADOW_SM,
     focus_ring: Color::Srgba(BLUE_600),
     scroll_thumb_background: Color::Srgba(GRAY_400),
+    text_secondary: Color::srgb_u8(0x5C, 0x62, 0x6A),
+    text_tertiary: Color::srgb_u8(0x6E, 0x74, 0x7C),
+    divider: Color::srgb_u8(0xE5, 0xE1, 0xD7),
+    accent: Color::srgb_u8(0xF8, 0xD7, 0xA4),
+    accent_text: Color::srgb_u8(0x3D, 0x2A, 0x08),
+    accent_subtle: Color::srgb_u8(0xF8, 0xE6, 0xC8),
+    accent_subtle_text: Color::srgb_u8(0x7A, 0x4E, 0x0E),
+    accent_subtle_bar: Color::srgb_u8(0xE9, 0xB6, 0x6A),
+    selection_ring: Color::srgb_u8(0xE9, 0xB6, 0x6A),
+    hovered_selected_item: Color::srgb_u8(0xE7, 0xE3, 0xD9),
+    danger: Color::srgb_u8(0xF6, 0xC3, 0xB6),
+    danger_text: Color::srgb_u8(0x5C, 0x1A, 0x0C),
+    danger_hover_text: Color::srgb_u8(0xB8, 0x43, 0x2B),
+    warning_background: Color::srgb_u8(0xFB, 0xE1, 0xDC),
+    warning_border: Color::srgb_u8(0xE3, 0x9A, 0x8F),
+    warning_text: Color::srgb_u8(0xB3, 0x26, 0x1E),
+    info_background: Color::srgb_u8(0xD8, 0xE8, 0xF7),
+    info_text: Color::srgb_u8(0x1F, 0x4E, 0x7A),
+    pill_background: Color::srgb_u8(0xEC, 0xE8, 0xDF),
+    pill_text: Color::srgb_u8(0x43, 0x48, 0x4F),
+    segmented_track: Color::srgb_u8(0xEC, 0xE8, 0xDF),
+    segmented_selected: Color::srgb_u8(0xFF, 0xFF, 0xFF),
+    segmented_selected_text: Color::srgb_u8(0x22, 0x25, 0x2A),
+    card_surface: Color::srgb_u8(0xFF, 0xFF, 0xFF),
 };
 /// The default colours of the dark theme.
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
@@ -182,6 +254,30 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     small_shadow: SHADOW_SM_DARK_MODE,
     focus_ring: Color::Srgba(BLUE_400),
     scroll_thumb_background: Color::Srgba(GRAY_600),
+    text_secondary: Color::srgb_u8(0xA3, 0xA9, 0xB1),
+    text_tertiary: Color::srgb_u8(0x8A, 0x91, 0x9A),
+    divider: Color::srgb_u8(0x2A, 0x2E, 0x35),
+    accent: Color::srgb_u8(0xF2, 0xA9, 0x3B),
+    accent_text: Color::srgb_u8(0x17, 0x13, 0x0A),
+    accent_subtle: Color::srgb_u8(0x2C, 0x31, 0x38),
+    accent_subtle_text: Color::srgb_u8(0xF2, 0xA9, 0x3B),
+    accent_subtle_bar: Color::srgb_u8(0xF2, 0xA9, 0x3B),
+    selection_ring: Color::srgb_u8(0xF2, 0xA9, 0x3B),
+    hovered_selected_item: Color::srgb_u8(0x2C, 0x31, 0x38),
+    danger: Color::srgb_u8(0xE3, 0x66, 0x4A),
+    danger_text: Color::srgb_u8(0x1C, 0x0E, 0x0A),
+    danger_hover_text: Color::srgb_u8(0xF3, 0x9A, 0x85),
+    warning_background: Color::srgb_u8(0x3A, 0x1D, 0x1B),
+    warning_border: Color::srgb_u8(0xE2, 0x57, 0x4C),
+    warning_text: Color::srgb_u8(0xFF, 0x8A, 0x80),
+    info_background: Color::srgb_u8(0x1C, 0x31, 0x44),
+    info_text: Color::srgb_u8(0x8E, 0xC6, 0xF2),
+    pill_background: Color::srgb_u8(0x2A, 0x2E, 0x35),
+    pill_text: Color::srgb_u8(0xC9, 0xCE, 0xD6),
+    segmented_track: Color::srgb_u8(0x22, 0x26, 0x2C),
+    segmented_selected: Color::srgb_u8(0xE8, 0xE6, 0xE1),
+    segmented_selected_text: Color::srgb_u8(0x14, 0x17, 0x1C),
+    card_surface: Color::srgb_u8(0x22, 0x26, 0x2C),
 };
 
 /// A small shadow.
@@ -195,5 +291,83 @@ pub const SHADOW_XL: Color = Color::srgba(0.0, 0.0, 0.0, 0.25);
 
 /// A small shadow that shows up on a dark background.
 pub const SHADOW_SM_DARK_MODE: Color = Color::srgba(1.0, 1.0, 1.0, 0.03);
-/// A large shadow that shows up on a dark background.
-pub const SHADOW_LG_DARK_MODE: Color = Color::srgba(1.0, 1.0, 1.0, 0.05);
+/// A large shadow on a dark background: black, and heavy enough to show.
+pub const SHADOW_LG_DARK_MODE: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
+/// The large shadow on a light background: a warm dark.
+pub const SHADOW_LG_LIGHT_MODE: Color =
+    Color::srgba(60.0 / 255.0, 50.0 / 255.0, 30.0 / 255.0, 0.14);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_default_themes_differ_in_every_new_slot() {
+        let (l, d) = (DEFAULT_LIGHT_THEME_COLORS, DEFAULT_DARK_THEME_COLORS);
+        let pairs = [
+            ("text_secondary", l.text_secondary, d.text_secondary),
+            ("text_tertiary", l.text_tertiary, d.text_tertiary),
+            ("divider", l.divider, d.divider),
+            ("accent", l.accent, d.accent),
+            ("accent_text", l.accent_text, d.accent_text),
+            ("accent_subtle", l.accent_subtle, d.accent_subtle),
+            (
+                "accent_subtle_text",
+                l.accent_subtle_text,
+                d.accent_subtle_text,
+            ),
+            (
+                "accent_subtle_bar",
+                l.accent_subtle_bar,
+                d.accent_subtle_bar,
+            ),
+            ("selection_ring", l.selection_ring, d.selection_ring),
+            (
+                "hovered_selected_item",
+                l.hovered_selected_item,
+                d.hovered_selected_item,
+            ),
+            ("danger", l.danger, d.danger),
+            ("danger_text", l.danger_text, d.danger_text),
+            (
+                "danger_hover_text",
+                l.danger_hover_text,
+                d.danger_hover_text,
+            ),
+            (
+                "warning_background",
+                l.warning_background,
+                d.warning_background,
+            ),
+            ("warning_border", l.warning_border, d.warning_border),
+            ("warning_text", l.warning_text, d.warning_text),
+            ("info_background", l.info_background, d.info_background),
+            ("info_text", l.info_text, d.info_text),
+            ("pill_background", l.pill_background, d.pill_background),
+            ("pill_text", l.pill_text, d.pill_text),
+            ("segmented_track", l.segmented_track, d.segmented_track),
+            (
+                "segmented_selected",
+                l.segmented_selected,
+                d.segmented_selected,
+            ),
+            (
+                "segmented_selected_text",
+                l.segmented_selected_text,
+                d.segmented_selected_text,
+            ),
+            ("card_surface", l.card_surface, d.card_surface),
+        ];
+        for (name, light, dark) in pairs {
+            assert_ne!(light, dark, "{name} is the same in both themes");
+        }
+    }
+
+    #[test]
+    fn the_large_shadow_is_dark_in_both_themes() {
+        for colors in [DEFAULT_LIGHT_THEME_COLORS, DEFAULT_DARK_THEME_COLORS] {
+            let shadow = colors.large_shadow.to_srgba();
+            assert!(shadow.red < 0.3 && shadow.green < 0.3 && shadow.blue < 0.3);
+        }
+    }
+}
