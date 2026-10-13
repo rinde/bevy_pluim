@@ -47,6 +47,7 @@ use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
+use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
 
@@ -3103,4 +3104,76 @@ fn a_theme_change_restyles_the_chips() {
     );
     let border = app.world().entity(views[1]).get::<BorderColor>().unwrap();
     assert_eq!(border.top, DEFAULT_DARK_THEME_COLORS.chip_border);
+}
+
+#[test]
+fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let row = app
+        .world_mut()
+        .spawn((SettingRow::new("Theme", "Light or dark"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+    let text = |entity| app.world().get::<Text>(entity).unwrap().0.clone();
+    assert_eq!(text(refs.title_id), "Theme");
+    assert_eq!(text(refs.description_id), "Light or dark");
+    assert!(app.world().get::<Node>(refs.control_slot).is_some());
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(
+        app.world().get::<TextColor>(refs.title_id).unwrap().0,
+        colors.text_primary
+    );
+    assert_eq!(
+        app.world().get::<TextColor>(refs.description_id).unwrap().0,
+        colors.text_secondary
+    );
+
+    // The app spawns its control into the slot.
+    let control = app
+        .world_mut()
+        .spawn((Label::regular("control"), ChildOf(refs.control_slot)))
+        .id();
+    app.update();
+    assert_eq!(
+        app.world().get::<ChildOf>(control).unwrap().parent(),
+        refs.control_slot
+    );
+}
+
+#[test]
+fn of_three_setting_rows_only_the_first_two_show_a_divider() {
+    let mut app = headless_app();
+    let rows = app.world_mut().spawn(SettingRows).id();
+    let spawned: Vec<Entity> = ["A", "B", "C"]
+        .into_iter()
+        .map(|title| {
+            app.world_mut()
+                .spawn((SettingRow::new(title, "description"), ChildOf(rows)))
+                .id()
+        })
+        .collect();
+    app.update();
+    app.update();
+
+    let display = |app: &App, row: Entity| {
+        let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+        app.world().get::<Node>(refs.divider_id).unwrap().display
+    };
+    let displays: Vec<Display> = spawned.iter().map(|row| display(&app, *row)).collect();
+    assert_eq!(displays, [Display::Flex, Display::Flex, Display::None]);
+
+    // Adding a fourth row moves the missing divider to it.
+    let fourth = app
+        .world_mut()
+        .spawn((SettingRow::new("D", "description"), ChildOf(rows)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(display(&app, spawned[2]), Display::Flex);
+    assert_eq!(display(&app, fourth), Display::None);
 }

@@ -29,6 +29,7 @@ pub mod push_button;
 pub mod scroll_area;
 pub mod segmented_control;
 pub mod select;
+pub mod setting_row;
 pub mod stack;
 pub mod tailwind;
 pub mod theme;
@@ -60,6 +61,7 @@ use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
 use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
+use crate::setting_row::SettingRowPlugin;
 use crate::stack::StackPlugin;
 use crate::theme::{Theme, ThemePlugin};
 
@@ -83,6 +85,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(SegmentedControlPlugin)
+            .add_plugins(SettingRowPlugin)
             .add_plugins(StackPlugin)
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)
