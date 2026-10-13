@@ -1,0 +1,21 @@
+// A palette combo is usable from the keyboard: Tab focuses its button, Enter opens the popup and
+// puts the focus on its palette, Escape closes it and the focus goes back to the button.
+(
+    format_version: 3,
+    name: "Enter opens a palette combo onto its palette and Escape closes it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("first palette combo"), Component("ColorPushButton"))))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Check(App(Focused(of: Within(Name("first palette combo popup"), Component("ColorPalette"))))),
+        Tap(key: Escape),
+        Wait(1),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(App(Focused(of: Within(Name("first palette combo"), Component("ColorPushButton"))))),
+    ],
+    expect: [],
+)

@@ -1,6 +1,8 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
 use bevy::a11y::AccessibilityNode;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -10,6 +12,7 @@ use itertools::Either;
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::Float;
+use crate::focus::Unreachable;
 use crate::list::{ItemView, ListLayout};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
@@ -46,6 +49,10 @@ impl Plugin for ColorPaletteComboPlugin {
 #[reflect(Component)]
 // #[component(on_add=Self::on_insert)]
 /// A button that opens a [`ColorPalette`] in a popup.
+///
+/// Opening the popup moves the keyboard focus to its palette, so the arrow keys, Enter and
+/// Space work on it. Escape closes it, as does the focus leaving the palette (Tab away, a
+/// click elsewhere); the focus then goes back to the button, unless it moved to another widget.
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -176,7 +183,11 @@ fn on_insert_combo(
     };
     commands.entity(combo).insert((State::Closed, sub_refs));
 
-    commands.entity(palette_id).insert(sub_refs);
+    commands
+        .entity(palette_id)
+        .insert(sub_refs)
+        .observe(close_on_key)
+        .observe(close_on_focus_lost);
 
     commands
         .entity(button_id)
@@ -191,6 +202,84 @@ fn popup_name(combo_name: Option<&Name>) -> Name {
         "{} popup",
         combo_name.map_or("ColorPaletteCombo", Name::as_str)
     ))
+}
+
+/// Closes the combo on the keyboard, with the focus on its palette.
+///
+/// Escape closes it. So do Enter and Space when the selection holds one item at most: the
+/// palette picks the active swatch (or leaves the selection as it is when that swatch is
+/// selected already, as a click does), and the popup has done its job. A selection of many
+/// keeps the popup open for the next pick.
+fn close_on_key(
+    input: On<FocusedInput<KeyboardInput>>,
+    sub_refs: Query<&SubRefs>,
+    states: Query<&State>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let key = &input.event().input;
+    let Ok(sub_refs) = sub_refs.get(input.event_target()) else {
+        return;
+    };
+    if !key.state.is_pressed() || states.get(sub_refs.parent) != Ok(&State::Open) {
+        return;
+    }
+    let closes = match key.key_code {
+        KeyCode::Escape => true,
+        KeyCode::Enter | KeyCode::Space => selections
+            .get(sub_refs.parent)
+            .is_some_and(|selection| !selection.allow_multiple()),
+        _ => false,
+    };
+    if closes {
+        commands.entity(sub_refs.parent).insert(State::Closed);
+    }
+}
+
+/// Closes the combo when the focus leaves its palette.
+///
+/// The focus going to the combo's own button is not leaving, and nor is a click in the popup,
+/// which takes the focus off the palette (nothing in it can have it): the popup stays, and the
+/// palette gets the focus back. Elsewhere the focus goes back to the button
+/// when nothing took it, so a click on empty space does not leave the keyboard nowhere; when it
+/// went to another widget it stays there.
+fn close_on_focus_lost(
+    lost: On<FocusLost>,
+    sub_refs: Query<&SubRefs>,
+    states: Query<&State>,
+    hovered: Query<&Hovered, With<ColorPaletteComboFloat>>,
+    mut focus: ResMut<InputFocus>,
+    mut commands: Commands,
+) {
+    // The event bubbles: only the palette itself losing the focus counts.
+    let Ok(sub_refs) = sub_refs.get(lost.event().entity) else {
+        return;
+    };
+    let Ok(&state) = states.get(sub_refs.parent) else {
+        return;
+    };
+    if sub_refs.palette != lost.event().entity {
+        return;
+    }
+    if state == State::Open {
+        // The focus going to the combo's own button (a click on it, Shift+Tab) is not leaving.
+        if focus.get() == Some(sub_refs.button) {
+            return;
+        }
+        if hovered.get(sub_refs.float_id).is_ok_and(Hovered::get) {
+            if focus.get().is_none() {
+                focus.set(sub_refs.palette, FocusCause::Navigated);
+            }
+            return;
+        }
+    }
+    // An outside click may have closed the popup already: the focus still goes back.
+    if focus.get().is_none() {
+        focus.set(sub_refs.button, FocusCause::Navigated);
+    }
+    if state == State::Open {
+        commands.entity(sub_refs.parent).insert(State::Closed);
+    }
 }
 
 fn on_remove_combo(
@@ -238,11 +327,25 @@ fn on_insert_state(
     t: On<Insert, State>,
     state: Query<(&State, &SubRefs)>,
     mut accessibility_nodes: Query<&mut AccessibilityNode>,
+    mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
     let Ok((&state, &sub_refs)) = state.get(t.event().event_target()) else {
         return;
     };
+    // A closed popup's palette is not a tab stop.
+    match state {
+        State::Open => commands.entity(sub_refs.palette).remove::<Unreachable>(),
+        State::Closed => commands.entity(sub_refs.palette).insert(Unreachable),
+    };
+    match state {
+        State::Open => focus.set(sub_refs.palette, FocusCause::Navigated),
+        // Whoever closed the popup, the focus does not stay on a hidden palette.
+        State::Closed if focus.get() == Some(sub_refs.palette) => {
+            focus.set(sub_refs.button, FocusCause::Navigated);
+        }
+        State::Closed => {}
+    }
 
     let visibility = match state {
         State::Open => Visibility::Visible,
