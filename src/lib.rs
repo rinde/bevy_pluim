@@ -14,6 +14,7 @@ pub mod color_palette_combo;
 pub mod color_push_button;
 pub mod combo;
 pub mod divider;
+pub mod filter_chips;
 pub mod float;
 pub mod focus;
 pub mod icon;
@@ -26,6 +27,7 @@ pub mod numeric_stepper;
 pub mod pill;
 pub mod push_button;
 pub mod scroll_area;
+pub mod segmented_control;
 pub mod select;
 pub mod stack;
 pub mod tailwind;
@@ -43,6 +45,7 @@ use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
 use crate::divider::DividerPlugin;
+use crate::filter_chips::FilterChipsPlugin;
 use crate::float::FloatPlugin;
 use crate::focus::FocusPlugin;
 use crate::icon::IconPlugin;
@@ -55,6 +58,7 @@ use crate::numeric_stepper::NumericStepperPlugin;
 use crate::pill::PillPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
+use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::stack::StackPlugin;
 use crate::theme::{Theme, ThemePlugin};
@@ -78,6 +82,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
+            .add_plugins(SegmentedControlPlugin)
             .add_plugins(StackPlugin)
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)
@@ -90,6 +95,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(IconButtonPlugin)
             .add_plugins(KbdPlugin)
             .add_plugins(PillPlugin)
+            .add_plugins(FilterChipsPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)

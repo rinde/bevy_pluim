@@ -19,6 +19,7 @@ use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
+use rin_bevy_ui::filter_chips::{Chip, ChipView, FilterChips};
 use rin_bevy_ui::list::List;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
@@ -790,4 +791,73 @@ fn picks_in_a_combo_over_several_items_leave_it_open_in_a_window_and_in_an_image
     assert!(report.passed(), "{:#?}", report.failures());
     let report = picking_several_in_a_combo().run_in(&mut image_target_app());
     assert!(report.passed(), "{:#?}", report.failures());
+}
+
+// ---- Filter chips wrap ----
+
+/// The distinct vertical positions (whole pixels) of the chips of a `FilterChips` that sits in
+/// a box `width` pixels wide, i.e. how many lines the chips are on.
+fn chip_lines(width: f32) -> usize {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let wrapper = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: px(width),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            ChildOf(root),
+        ))
+        .id();
+    let chips = app
+        .world_mut()
+        .spawn((
+            FilterChips,
+            Selection::builder().one().build_with_items(
+                [
+                    Chip::with_count("All", 4),
+                    Chip::with_count("Running", 2),
+                    Chip::with_count("At stop", 1),
+                    Chip::with_count("Problems", 1),
+                ]
+                .map(|data| Item { data }),
+            ),
+            ChildOf(wrapper),
+        ))
+        .id();
+    for _ in 0..6 {
+        app.update();
+    }
+    let children = app.world().entity(chips).get::<Children>().unwrap();
+    let mut lines = children
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<ChipView>())
+        .map(|c| {
+            app.world()
+                .get::<UiGlobalTransform>(c)
+                .unwrap()
+                .translation
+                .y
+                .round() as i32
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(lines.len(), 4, "four chips");
+    lines.sort_unstable();
+    lines.dedup();
+    lines.len()
+}
+
+#[test]
+fn filter_chips_wrap_onto_more_lines_in_a_narrower_row() {
+    assert_eq!(
+        chip_lines(2000.0),
+        1,
+        "a wide row holds the chips on one line"
+    );
+    assert!(
+        chip_lines(100.0) > 1,
+        "a row narrower than the chips wraps them"
+    );
 }

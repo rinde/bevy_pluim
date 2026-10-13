@@ -86,6 +86,9 @@ pub struct Theme {
     /// The size of captions, overlines and badges.
     #[educe(Default = 10.0)]
     pub font_size_caption: f32,
+    /// The size of the text of a filter chip.
+    #[educe(Default = 13.0)]
+    pub font_size_chip: f32,
 
     #[educe(Default = ShadowStyle {
         color: Color::BLACK,
@@ -253,6 +256,12 @@ pub struct ThemeColors {
     pub segmented_selected_text: Color,
     /// The surface of a card in a gallery.
     pub card_surface: Color,
+    /// The border of a filter chip.
+    pub chip_border: Color,
+    /// The fill of the active filter chip.
+    pub chip_on: Color,
+    /// The text on [`chip_on`](Self::chip_on).
+    pub chip_on_ink: Color,
 }
 
 impl Default for ThemeColors {
@@ -310,6 +319,9 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     segmented_selected: Color::srgb_u8(0xFF, 0xFF, 0xFF),
     segmented_selected_text: Color::srgb_u8(0x22, 0x25, 0x2A),
     card_surface: Color::srgb_u8(0xFF, 0xFF, 0xFF),
+    chip_border: Color::srgb_u8(0xD3, 0xCE, 0xC2),
+    chip_on: Color::srgb_u8(0xD5, 0xE5, 0xF5),
+    chip_on_ink: Color::srgb_u8(0x1E, 0x3F, 0x62),
 };
 /// The default colours of the dark theme.
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
@@ -360,6 +372,9 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     segmented_selected: Color::srgb_u8(0xE8, 0xE6, 0xE1),
     segmented_selected_text: Color::srgb_u8(0x14, 0x17, 0x1C),
     card_surface: Color::srgb_u8(0x22, 0x26, 0x2C),
+    chip_border: Color::srgb_u8(0x3A, 0x40, 0x48),
+    chip_on: Color::srgb_u8(0xE8, 0xE6, 0xE1),
+    chip_on_ink: Color::srgb_u8(0x14, 0x17, 0x1C),
 };
 
 /// A small shadow.
@@ -441,6 +456,9 @@ mod tests {
                 d.segmented_selected_text,
             ),
             ("card_surface", l.card_surface, d.card_surface),
+            ("chip_border", l.chip_border, d.chip_border),
+            ("chip_on", l.chip_on, d.chip_on),
+            ("chip_on_ink", l.chip_on_ink, d.chip_on_ink),
         ];
         for (name, light, dark) in pairs {
             assert_ne!(light, dark, "{name} is the same in both themes");
