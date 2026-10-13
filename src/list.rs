@@ -7,7 +7,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
-use bevy::ui_widgets::{ListBox, ListBoxMultiSelect, ListItem, ValueChange};
+use bevy::ui_widgets::{ActiveDescendant, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use itertools::Either;
 
 use crate::focus::TabStop;
@@ -19,26 +19,28 @@ pub(crate) struct ListPlugin;
 
 impl Plugin for ListPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                (|| None::<Entity>)
-                    .pipe(theme_items)
-                    .run_if(resource_changed::<Theme>),
-                (|| None::<Entity>)
-                    .pipe(theme_lists)
-                    .run_if(resource_changed::<Theme>),
-                (|| None::<Entity>)
-                    .pipe(theme_item_labels)
-                    .run_if(resource_changed::<Theme>),
-                selection_change,
-            ),
-        )
-        .add_observer(on_insert_selection)
-        .add_observer(on_value_change)
-        .register_type::<ItemView>()
-        .register_type::<ListLayout>()
-        .register_type::<CornerStyle>();
+        // Bevy's own type; registered so a check can read the row the keyboard is on.
+        app.register_type::<ActiveDescendant>()
+            .add_systems(
+                Update,
+                (
+                    (|| None::<Entity>)
+                        .pipe(theme_items)
+                        .run_if(resource_changed::<Theme>),
+                    (|| None::<Entity>)
+                        .pipe(theme_lists)
+                        .run_if(resource_changed::<Theme>),
+                    (|| None::<Entity>)
+                        .pipe(theme_item_labels)
+                        .run_if(resource_changed::<Theme>),
+                    selection_change,
+                ),
+            )
+            .add_observer(on_insert_selection)
+            .add_observer(on_value_change)
+            .register_type::<ItemView>()
+            .register_type::<ListLayout>()
+            .register_type::<CornerStyle>();
     }
 }
 

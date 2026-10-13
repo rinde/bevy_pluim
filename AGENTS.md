@@ -292,9 +292,14 @@ of them (`just example gallery -- --run-all stack link`).
   deselecting is the item's `MouseEvent::Released`. Both paths go by the `Selected`
   the `ListBox` saw, not by the `Selection`: a release is handled after the
   `ValueChange` of the same click, and one that read the `Selection` would undo it. Hover and selected colours stay on `MouseEvent`. A `ListBox` also sets an
-  `ActiveDescendant` on a click and handles the arrow keys, Home and End once the
-  list has focus; a `List` is not focusable yet, so the keys do nothing, and the
-  active row is not drawn. `ItemView`s keep `should_block_lower: false` so the wheel
+  `ActiveDescendant` on a click and, once the list has focus (a `List` is one tab stop),
+  handles the arrow keys (all four move, wrapping round), Home and End by moving it, and
+  Enter / Space by sending the `ValueChange` of the active row, which goes through
+  `on_value_change` like a click, so the `Selection` decides, also a `Selection::Ref` and a
+  palette's. Moving the active row selects nothing. Enter on a row that is already
+  `Selected` does nothing (the `ListBox` does not send it), so keys cannot deselect.
+  The list's focus ring is drawn on the active row, not on the box (see "Keyboard
+  focus"). `ItemView`s keep `should_block_lower: false` so the wheel
   reaches the scroll area, which also lets a click through to what is below: a popup
   that floats over other widgets blocks the pointer itself (`Combo`'s list has
   `Pickable::default()`).
@@ -318,10 +323,13 @@ of them (`just example gallery -- --run-all stack link`).
   link has it), -1 otherwise; **no widget writes `TabIndex` by hand**. Within the group
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
-  `InputFocusVisible` is true; a click focuses without showing it (Bevy's
+  `InputFocusVisible` is true, except that a list's ring is on its `ActiveDescendant` row
+  (a `ListItem`) and the box has none; the `ListBox` clears the active row when the list
+  loses focus, and the ring goes with it, and `ActiveDescendant` is registered in the type
+  registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
-  (`tests/ron/keyboard_tab_order.ron`).
+  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The hidden popup palettes of the combos are still tab stops (a ticket of its own), so the palette scenario Tabs 14 times.
 - **Combo buttons open on `Activate` and say whether the popup is open.** The
   `ComboButton` and the `ColorPushButton` of a `ColorPaletteCombo` are `Button`s;
   the combo toggles its `ComboState` (the palette combo its `State`) on their

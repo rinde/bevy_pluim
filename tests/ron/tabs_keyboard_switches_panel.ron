@@ -1,0 +1,44 @@
+// The tab bar is a list, one tab stop that is first on the `Tabs` screen: Tab focuses it,
+// the arrow keys move the active tab (the ring) without switching, and Enter switches the
+// shown `Stack` panel to it.
+(
+    format_version: 3,
+    name: "arrow keys move over the tabs and Enter shows the panel",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Nth(0, Component("List"))))),
+        Check(App(Active(of: Nth(0, Component("List")), is: Role(role: ListItem, label: "Panel A")))),
+        // The ring is on a tab, not on the bar.
+        Check(Exists(Within(Nth(0, Component("List")), Component("Outline")))),
+        Tap(key: ArrowRight),
+        Wait(1),
+        Check(App(Active(of: Nth(0, Component("List")), is: Role(role: ListItem, label: "Panel B")))),
+        // Moving shows nothing yet.
+        Check(App(Selected(of: Nth(0, Component("List")), items: ["Panel A"]))),
+        Check(Visible(Within(Name("Stack"), Text("Panel A")))),
+        Check(Not(Exists(Within(Name("Stack"), Text("Panel B"))))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(App(Selected(of: Nth(0, Component("List")), items: ["Panel B"]))),
+        Check(Visible(Within(Name("Stack"), Text("Panel B")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
+        Tap(key: ArrowRight),
+        Tap(key: Space),
+        Wait(2),
+        Check(App(Selected(of: Nth(0, Component("List")), items: ["Card demo"]))),
+        Check(Visible(Within(Name("Stack"), Text("Card demo")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
+        // Past the last tab it wraps round to the first.
+        Tap(key: ArrowRight),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Visible(Within(Name("Stack"), Text("Panel A")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
+    ],
+    expect: [
+        App(Selected(of: Nth(0, Component("List")), items: ["Panel A"])),
+    ],
+)

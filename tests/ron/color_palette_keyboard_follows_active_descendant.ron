@@ -1,0 +1,47 @@
+// A palette is a list, so it is one tab stop whose arrow keys move the active swatch, the
+// one with the focus ring (a palette has 22 columns: Right is the next swatch, in the
+// order of `tailwind::COLORS`), and Enter selects it. Tab reaches the palette on the 14th
+// press: the six palette combos, "Change theme" and, for now, the palettes of the six
+// closed popups, which are tab stops although hidden.
+// Swatches have no label, so they are reached by position.
+(
+    format_version: 3,
+    name: "arrow keys move a palette's active swatch and Enter selects it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("palette")))),
+        // A palette that was not clicked starts on its first swatch.
+        Check(App(Active(of: Name("palette"), is: Nth(0, Within(Name("palette"), Component("ItemView")))))),
+        Check(Component(
+            target: Nth(0, Within(Name("palette"), Component("ItemView"))),
+            path: "Outline.color",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Check(Exists(Within(Name("palette"), Component("Outline")))),
+        Tap(key: ArrowRight),
+        Tap(key: ArrowRight),
+        Wait(1),
+        Check(App(Active(of: Name("palette"), is: Nth(2, Within(Name("palette"), Component("ItemView")))))),
+        Check(App(Selected(of: Name("palette"), items: []))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("palette"), items: ["slate-200"]))),
+        Check(Selected(Nth(2, Within(Name("palette"), Component("ItemView"))))),
+        // The scroll area's palette shares the selection and shows it too.
+        Check(App(Selected(of: Within(Name("palette scroll area"), Component("ColorPalette")), items: ["slate-200"]))),
+        Tap(key: End),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("palette"), items: ["rose-950"]))),
+        Check(Not(Selected(Nth(2, Within(Name("palette"), Component("ItemView")))))),
+    ],
+    expect: [
+        App(Selected(of: Name("palette"), items: ["rose-950"])),
+    ],
+)

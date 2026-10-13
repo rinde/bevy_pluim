@@ -21,6 +21,7 @@
 use bevy::ecs::query::QueryFilter;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
+use bevy::ui_widgets::ActiveDescendant;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboList};
@@ -56,6 +57,14 @@ pub enum WidgetsCheck {
         /// The widget that has the focus.
         of: Target,
     },
+    /// The list `of` names has the row `is` names as its `ActiveDescendant`, the row the
+    /// arrow keys moved to.
+    Active {
+        /// The list (or palette) that has the active row.
+        of: Target,
+        /// The row it is.
+        is: Target,
+    },
 }
 
 impl AppCheck for WidgetsCheck {
@@ -73,6 +82,20 @@ impl AppCheck for WidgetsCheck {
                     Ok(())
                 } else {
                     Err(format!("{of:?} has {selected:?} selected, not {items:?}"))
+                }
+            }
+            Self::Active { of, is } => {
+                let world = probe.world();
+                let list = resolve(world, of)?
+                    .widget
+                    .ok_or_else(|| format!("{of:?} names a position, not a widget"))?;
+                let row = resolve(world, is)?
+                    .widget
+                    .ok_or_else(|| format!("{is:?} names a position, not a widget"))?;
+                match world.get::<ActiveDescendant>(list).and_then(|a| a.0) {
+                    Some(active) if active == row => Ok(()),
+                    Some(active) => Err(format!("{active} is active in {of:?}, not {is:?}")),
+                    None => Err(format!("{of:?} has no active row, not {is:?}")),
                 }
             }
             Self::Focused { of } => {
