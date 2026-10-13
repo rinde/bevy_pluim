@@ -33,6 +33,7 @@ use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::icon::{Icon, IconColor};
+use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{ItemView, ItemViewCreator, ItemViewSpawner, List};
@@ -311,6 +312,44 @@ fn a_divider_has_the_divider_colour_and_follows_a_theme_change() {
     for divider in [horizontal, vertical] {
         assert_eq!(background(&app, divider), DEFAULT_DARK_THEME_COLORS.divider);
     }
+}
+
+#[test]
+fn a_kbd_shows_its_key_with_a_border_and_follows_a_theme_change() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let kbd = app.world_mut().spawn((Kbd::new("Esc"), ChildOf(root))).id();
+    app.update();
+    app.update();
+
+    let state = |app: &App| {
+        let e = app.world().entity(kbd);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            e.get::<BorderColor>().unwrap().top,
+            e.get::<TextColor>().unwrap().0,
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (
+            "Esc".to_string(),
+            DEFAULT_LIGHT_THEME_COLORS.border,
+            DEFAULT_LIGHT_THEME_COLORS.text_secondary
+        )
+    );
+
+    toggle_theme(&mut app);
+    app.update();
+
+    assert_eq!(
+        state(&app),
+        (
+            "Esc".to_string(),
+            DEFAULT_DARK_THEME_COLORS.border,
+            DEFAULT_DARK_THEME_COLORS.text_secondary
+        )
+    );
 }
 
 #[test]
