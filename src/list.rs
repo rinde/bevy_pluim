@@ -541,7 +541,8 @@ fn theme_item_labels(
 
     for (mut text_color, mut text_font) in it {
         text_color.0 = theme.colors.text_primary;
-        text_font.font_size = FontSize::Px(theme.font_size);
+        text_font.font = theme.body_font.clone().into();
+        text_font.font_size = FontSize::Px(theme.font_size_secondary);
     }
 }
 
@@ -572,12 +573,12 @@ fn theme_lists(
         bc.set_all(theme.colors.border);
 
         let radius = match corner_style {
-            CornerStyle::FollowLayout => BorderRadius::all(theme.corner_radius),
+            CornerStyle::FollowLayout => BorderRadius::all(theme.control_radius),
             CornerStyle::Tabs => match layout {
                 ListLayout::Vertical | ListLayout::VerticalGrid { .. } => {
-                    BorderRadius::left(theme.corner_radius)
+                    BorderRadius::left(theme.control_radius)
                 }
-                ListLayout::Horizontal => BorderRadius::top(theme.corner_radius),
+                ListLayout::Horizontal => BorderRadius::top(theme.control_radius),
             },
             CornerStyle::None => BorderRadius::all(Val::Px(0.0)),
         };
@@ -607,9 +608,9 @@ const fn theme_item_border(
         CornerStyle::Tabs => {
             node.border_radius = match layout {
                 ListLayout::Vertical | ListLayout::VerticalGrid { .. } => {
-                    BorderRadius::left(theme.corner_radius)
+                    BorderRadius::left(theme.control_radius)
                 }
-                ListLayout::Horizontal => BorderRadius::top(theme.corner_radius),
+                ListLayout::Horizontal => BorderRadius::top(theme.control_radius),
             };
             node.border = UiRect::all(Val::Px(1.0));
         }
@@ -618,28 +619,28 @@ const fn theme_item_border(
             match layout {
                 ListLayout::Vertical => {
                     node.border_radius = match i {
-                        0 => BorderRadius::top(theme.corner_radius),
-                        n if n == last => BorderRadius::bottom(theme.corner_radius),
+                        0 => BorderRadius::top(theme.control_radius),
+                        n if n == last => BorderRadius::bottom(theme.control_radius),
                         _ => BorderRadius::ZERO,
                     }
                 }
                 ListLayout::Horizontal => {
                     node.border_radius = match i {
-                        0 => BorderRadius::left(theme.corner_radius),
-                        n if n == last => BorderRadius::right(theme.corner_radius),
+                        0 => BorderRadius::left(theme.control_radius),
+                        n if n == last => BorderRadius::right(theme.control_radius),
                         _ => BorderRadius::ZERO,
                     }
                 }
                 ListLayout::VerticalGrid { columns } => {
                     let columns = columns as usize;
                     node.border_radius = match i {
-                        0 => BorderRadius::top_left(theme.corner_radius),
-                        n if n == columns - 1 => BorderRadius::top_right(theme.corner_radius),
+                        0 => BorderRadius::top_left(theme.control_radius),
+                        n if n == columns - 1 => BorderRadius::top_right(theme.control_radius),
                         n if n % columns == 0 && last.abs_diff(n) < columns => {
-                            BorderRadius::bottom_left(theme.corner_radius)
+                            BorderRadius::bottom_left(theme.control_radius)
                         }
                         n if n == last && last.is_multiple_of(columns) => {
-                            BorderRadius::bottom_right(theme.corner_radius)
+                            BorderRadius::bottom_right(theme.control_radius)
                         }
                         _ => BorderRadius::ZERO,
                     }

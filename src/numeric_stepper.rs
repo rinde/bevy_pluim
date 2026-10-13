@@ -301,7 +301,7 @@ fn theme_numeric_stepper(
     for (mut node, mut border_color) in it {
         node.column_gap = Val::Px(10.0);
         node.border = UiRect::all(theme.border_thickness);
-        node.border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.control_radius);
         border_color.set_all(theme.colors.border);
     }
 }
