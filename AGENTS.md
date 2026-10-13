@@ -127,7 +127,7 @@ checkout's build so Bevy is not compiled again.
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
-| `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled` |
+| `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to, so only the buttons are tab stops |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy** |
 | `label.rs` | `Label::header` / `Label::regular` |
 | `focus.rs` | the crate-private `TabStop` marker (requires `TabIndex`), `sync_tab_index` and the focus ring, see "Keyboard focus" below |

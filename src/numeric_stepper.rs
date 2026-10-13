@@ -4,6 +4,9 @@ use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::ButtonState;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::FocusedInput;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
@@ -42,6 +45,11 @@ impl Plugin for NumericStepperPlugin {
 /// [`InteractionDisabled`] until the value moves away from that bound again. The
 /// stepper owns that component on its buttons: it enables a button whenever the
 /// value allows a step, so do not disable one yourself.
+///
+/// The arrow keys step the value as well, while the focus is on the stepper or on one of
+/// its buttons (the keys bubble up to the stepper): the up and right arrows increase it,
+/// the down and left arrows decrease it, within the same bounds. The stepper is not a
+/// tab stop itself; its buttons are.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
@@ -91,6 +99,10 @@ impl NumericStepper {
                 },
             )));
 
+        world
+            .commands()
+            .entity(context.entity)
+            .observe(on_key_input);
         world
             .commands()
             .run_system_cached_with(theme_numeric_stepper, Some(context.entity));
@@ -314,6 +326,35 @@ fn on_activate(
         if value.can_increment() {
             value.increment();
         }
+    }
+}
+
+/// Steps the value of the stepper the key reached with the arrow keys.
+fn on_key_input(
+    trigger: On<FocusedInput<KeyboardInput>>,
+    value_refs: Query<&ValueRef>,
+    mut values: Query<&mut Value>,
+) {
+    let input = &trigger.event().input;
+    if input.state != ButtonState::Pressed {
+        return;
+    }
+    let up = match input.key_code {
+        KeyCode::ArrowUp | KeyCode::ArrowRight => true,
+        KeyCode::ArrowDown | KeyCode::ArrowLeft => false,
+        _ => return,
+    };
+    let stepper = trigger.event_target();
+    let value_entity = value_refs
+        .get(stepper)
+        .map_or(stepper, |value_ref| value_ref.0);
+    let Ok(mut value) = values.get_mut(value_entity) else {
+        return;
+    };
+    if up && value.can_increment() {
+        value.increment();
+    } else if !up && value.can_decrement() {
+        value.decrement();
     }
 }
 

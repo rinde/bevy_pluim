@@ -1,0 +1,34 @@
+// Tab reaches the "-" of the default stepper (the stepper is no tab stop, its buttons are);
+// the arrow keys bubble up from the focused button and step the value, Enter and Space
+// still activate it, and a step past a bound changes nothing.
+(
+    format_version: 3,
+    name: "the arrow keys step a numeric stepper from a focused button",
+    setup: App(NumericStepper),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("default stepper"), Role(role: Button, label: "-"))))),
+        Tap(key: ArrowUp),
+        Check(TextOf(Name("default stepper"), Exact("- 2 +"))),
+        Tap(key: ArrowRight),
+        Check(TextOf(Name("default stepper"), Exact("- 3 +"))),
+        Tap(key: ArrowDown),
+        Check(TextOf(Name("default stepper"), Exact("- 2 +"))),
+        Tap(key: ArrowLeft),
+        Check(TextOf(Name("default stepper"), Exact("- 1 +"))),
+        Tap(key: Enter),
+        Check(TextOf(Name("default stepper"), Exact("- 0 +"))),
+        Check(Disabled(Within(Name("default stepper"), Role(role: Button, label: "-")))),
+        Tap(key: ArrowDown),
+        Check(TextOf(Name("default stepper"), Exact("- 0 +"))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("default stepper"), Role(role: Button, label: "+"))))),
+        Tap(key: Space),
+        Check(TextOf(Name("default stepper"), Exact("- 1 +"))),
+        Tap(key: ArrowUp),
+        Check(TextOf(Name("default stepper"), Exact("- 2 +"))),
+        Check(TextOf(Name("u16 stepper"), Exact("- 10 +"))),
+    ],
+    expect: [],
+)
