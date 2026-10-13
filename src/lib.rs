@@ -13,6 +13,7 @@ pub mod color_palette;
 pub mod color_palette_combo;
 pub mod color_push_button;
 pub mod combo;
+pub mod divider;
 pub mod float;
 pub mod focus;
 pub mod label;
@@ -37,6 +38,7 @@ use crate::color_palette::ColorPalettePlugin;
 use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
+use crate::divider::DividerPlugin;
 use crate::float::FloatPlugin;
 use crate::focus::FocusPlugin;
 use crate::label::LabelPlugin;
@@ -75,6 +77,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ItemsPlugin)
             .add_plugins(LabelPlugin)
             .add_plugins(CardPlugin)
+            .add_plugins(DividerPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)

@@ -31,6 +31,7 @@ use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
 use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
+use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{ItemView, List};
@@ -275,6 +276,40 @@ fn a_selection_ref_shared_by_bread_crumbs_and_a_stack_stays_in_sync() {
     assert_eq!(node_display(&app, panel_b), Display::None);
 
     let _ = stack;
+}
+
+#[test]
+fn a_divider_has_the_divider_colour_and_follows_a_theme_change() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let horizontal = app
+        .world_mut()
+        .spawn((Divider::horizontal(), ChildOf(root)))
+        .id();
+    let vertical = app
+        .world_mut()
+        .spawn((Divider::vertical(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    for divider in [horizontal, vertical] {
+        assert_eq!(
+            background(&app, divider),
+            DEFAULT_LIGHT_THEME_COLORS.divider
+        );
+    }
+    let node = app.world().get::<Node>(horizontal).unwrap();
+    assert_eq!((node.height, node.width), (Val::Px(1.0), Val::Auto));
+    let node = app.world().get::<Node>(vertical).unwrap();
+    assert_eq!((node.width, node.height), (Val::Px(1.0), Val::Auto));
+
+    toggle_theme(&mut app);
+    app.update();
+
+    for divider in [horizontal, vertical] {
+        assert_eq!(background(&app, divider), DEFAULT_DARK_THEME_COLORS.divider);
+    }
 }
 
 #[test]
