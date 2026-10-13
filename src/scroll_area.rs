@@ -6,6 +6,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
+use bevy::ui_widgets::ScrollIntoView;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -19,7 +20,8 @@ pub struct ScrollAreaPlugin;
 
 impl Plugin for ScrollAreaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, update_scroll_position)
+        app.add_observer(scroll_into_view)
+            .add_systems(Update, update_scroll_position)
             .add_systems(PostUpdate, handle_scroll_change)
             .add_systems(
                 Update,
@@ -240,6 +242,66 @@ fn handle_thumb_drag(
     let start = scroll_position.0[index].clamp(0.0, max_scroll_offset);
     scroll_position.0[index] =
         (start + delta[index] * max_scroll_offset / track_length).clamp(0.0, max_scroll_offset);
+}
+
+/// Scrolls the [`ScrollContents`] around an entity just far enough to show it.
+///
+/// Answers [`ScrollIntoView`], which a `ListBox` triggers when the arrow keys
+/// move its active descendant. An axis is moved only when the contents scroll
+/// along it, and the [`ScrollPosition`] stays within `0..=max` as in
+/// `update_scroll_position`. An entity outside any scroll area is left alone.
+fn scroll_into_view(
+    mut event: On<ScrollIntoView>,
+    nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
+    parents: Query<&ChildOf>,
+    mut contents: Query<(&mut ScrollPosition, &Node), With<ScrollContents>>,
+) {
+    let target = event.entity;
+    let Ok((target_computed, target_transform)) = nodes.get(target) else {
+        return;
+    };
+    let Some(area) = parents
+        .iter_ancestors(target)
+        .find(|ancestor| contents.contains(*ancestor))
+    else {
+        return;
+    };
+    let Ok((area_computed, area_transform)) = nodes.get(area) else {
+        return;
+    };
+    let Ok((mut scroll_position, node)) = contents.get_mut(area) else {
+        return;
+    };
+    event.propagate(false);
+
+    let target_scale = target_computed.inverse_scale_factor();
+    let area_scale = area_computed.inverse_scale_factor();
+    let target_size = target_computed.size() * target_scale;
+    let area_size = area_computed.size() * area_scale;
+    // Top left corners in logical pixels, as the layout last placed them (the
+    // target's already shifted by the scroll position it had then).
+    let target_top_left = target_transform.translation * target_scale - target_size * 0.5;
+    let area_top_left = area_transform.translation * area_scale - area_size * 0.5;
+    let local_top_left = target_top_left - area_top_left + scroll_position.0;
+    let local_bottom_right = local_top_left + target_size;
+    let max = ((area_computed.content_size() - area_computed.size()) * area_scale).max(Vec2::ZERO);
+
+    if node.overflow.x == OverflowAxis::Scroll {
+        let view = scroll_position.x;
+        if local_top_left.x < view {
+            scroll_position.x = local_top_left.x.clamp(0.0, max.x);
+        } else if local_bottom_right.x > view + area_size.x {
+            scroll_position.x = (local_bottom_right.x - area_size.x).clamp(0.0, max.x);
+        }
+    }
+    if node.overflow.y == OverflowAxis::Scroll {
+        let view = scroll_position.y;
+        if local_top_left.y < view {
+            scroll_position.y = local_top_left.y.clamp(0.0, max.y);
+        } else if local_bottom_right.y > view + area_size.y {
+            scroll_position.y = (local_bottom_right.y - area_size.y).clamp(0.0, max.y);
+        }
+    }
 }
 
 /// Scrolls the nodes under the pointer by the mouse wheel.

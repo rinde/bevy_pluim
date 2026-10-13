@@ -1,0 +1,49 @@
+// The arrow keys move a list's active descendant, and the list asks for the row to be
+// scrolled into view (`ScrollIntoView`), which the `ScrollArea` around it answers: the
+// "scrolling list" is twelve rows in a "list scroll area" 100 pixels high. Tab reaches it
+// as the seventh list tab stop. The wheel keeps working afterwards.
+(
+    format_version: 3,
+    name: "arrowing down a list scrolls its scroll area to the active row",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("scrolling list")))),
+        Check(Component(
+            target: Within(Name("list scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(0.0),
+        )),
+        Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown),
+        Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown),
+        Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown),
+        Wait(2),
+        Check(App(Active(of: Name("scrolling list"), is: Within(Name("scrolling list"), Role(role: ListItem, label: "Row 12"))))),
+        // The last row is in view: the contents scrolled to the row's bottom edge (the wheel's end is 298).
+        Check(Component(
+            target: Within(Name("list scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(297.0),
+        )),
+        // Back to the top: the first row starts one pixel below the contents' top edge.
+        Tap(key: Home),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("list scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(1.0),
+        )),
+        // The wheel still scrolls.
+        MoveTo(Within(Name("scrolling list"), Role(role: ListItem, label: "Row 1"))),
+        Wheel(x: 0.0, y: -40.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("list scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(41.0),
+        )),
+    ],
+    expect: [],
+)
