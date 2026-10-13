@@ -130,7 +130,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click |
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it |
-| `list.rs` | `List` with `ListLayout` and `CornerStyle`, a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
+| `list.rs` | `List` with `ListLayout` and `CornerStyle` (`CornerStyle::Separated` is the panel style: no border or background, 6 px padding, 2 px gaps, rows rounded on all corners, the selected row `hovered_selected_item` with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
@@ -143,6 +143,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `segmented_control.rs` | `SegmentedControl`: a track of text `Segment`s (`Button`s and tab stops) over a `Selection` of `Item<String>`, own or `Selection::Ref`, normally a `One`; a segment's `Activate` sets the selection to its item (`set_selection`), `Selected` and the `segmented_*` theme colours follow the selection and hover. It is its own widget, not a `List` style, so `List` is untouched |
 | `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
 | `icon.rs` | `Icon::bundle(handle, size)` / `Icon::bundle_with_color`: an `ImageNode` from an app-provided white-on-transparent `Handle<Image>`, tinted with the `IconColor` theme role of its `Icon` (primary text by default); a widget changes the role by inserting `Icon` again |
+| `kbd.rs` | `Kbd::new("Esc")`: a display-only key cap, a bordered box (`ThemeColors::border`, `text_secondary` text in the caption size) |
 
 ### Examples
 

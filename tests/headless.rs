@@ -34,9 +34,10 @@ use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::icon::{Icon, IconColor};
+use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{ItemView, ItemViewCreator, ItemViewSpawner, List};
+use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
@@ -313,6 +314,44 @@ fn a_divider_has_the_divider_colour_and_follows_a_theme_change() {
     for divider in [horizontal, vertical] {
         assert_eq!(background(&app, divider), DEFAULT_DARK_THEME_COLORS.divider);
     }
+}
+
+#[test]
+fn a_kbd_shows_its_key_with_a_border_and_follows_a_theme_change() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let kbd = app.world_mut().spawn((Kbd::new("Esc"), ChildOf(root))).id();
+    app.update();
+    app.update();
+
+    let state = |app: &App| {
+        let e = app.world().entity(kbd);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            e.get::<BorderColor>().unwrap().top,
+            e.get::<TextColor>().unwrap().0,
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (
+            "Esc".to_string(),
+            DEFAULT_LIGHT_THEME_COLORS.border,
+            DEFAULT_LIGHT_THEME_COLORS.text_secondary
+        )
+    );
+
+    toggle_theme(&mut app);
+    app.update();
+
+    assert_eq!(
+        state(&app),
+        (
+            "Esc".to_string(),
+            DEFAULT_DARK_THEME_COLORS.border,
+            DEFAULT_DARK_THEME_COLORS.text_secondary
+        )
+    );
 }
 
 #[test]
@@ -2583,4 +2622,102 @@ fn a_segmented_control_follows_a_theme_change() {
     let colors = DEFAULT_DARK_THEME_COLORS;
     assert_eq!(background(&app, control), colors.segmented_track);
     assert_eq!(background(&app, segments[0]), colors.segmented_selected);
+}
+
+// ---- Separated lists ----
+
+/// A `CornerStyle::Separated` list over a `One` selection of `labels`.
+fn spawn_separated_list(app: &mut App, labels: &[&str]) -> (Entity, Vec<Entity>) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items: Vec<_> = labels.iter().map(|label| Item::new(*label)).collect();
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items(items))
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            CornerStyle::Separated,
+            Selection::reference(selection_ref),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let views = item_views(app, list);
+    (list, views)
+}
+
+fn ring(app: &App, view: Entity) -> Color {
+    app.world().entity(view).get::<BorderColor>().unwrap().top
+}
+
+#[test]
+fn a_separated_list_has_no_border_or_background_and_rounds_every_row() {
+    let mut app = headless_app();
+    let (list, views) = spawn_separated_list(&mut app, &["a", "b", "c"]);
+    let radius = app.world().get_resource::<Theme>().unwrap().control_radius;
+
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.border, UiRect::ZERO);
+    assert_eq!(node.padding, UiRect::all(Val::Px(6.0)));
+    assert_eq!(
+        (node.row_gap, node.column_gap),
+        (Val::Px(2.0), Val::Px(2.0))
+    );
+    assert_eq!(background(&app, list), Color::NONE);
+
+    assert_eq!(views.len(), 3);
+    for view in views {
+        let node = app.world().entity(view).get::<Node>().unwrap();
+        assert_eq!(node.border_radius, BorderRadius::all(radius));
+        assert_eq!(node.padding, UiRect::axes(Val::Px(12.0), Val::Px(10.0)));
+    }
+}
+
+#[test]
+fn the_selected_row_of_a_separated_list_has_a_ring_and_the_strong_hover_background() {
+    let mut app = headless_app();
+    let (_, views) = spawn_separated_list(&mut app, &["a", "b"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+
+    assert_eq!(ring(&app, views[0]), colors.selection_ring);
+    assert_eq!(background(&app, views[0]), colors.hovered_selected_item);
+    assert_eq!(ring(&app, views[1]), Color::NONE);
+    assert_eq!(background(&app, views[1]), Color::NONE);
+}
+
+#[test]
+fn selecting_a_row_of_a_separated_list_moves_the_ring_to_it() {
+    let mut app = headless_app();
+    let (list, views) = spawn_separated_list(&mut app, &["a", "b"]);
+
+    list_box_picks(&mut app, list, views[1]);
+
+    assert_eq!(
+        ring(&app, views[1]),
+        DEFAULT_LIGHT_THEME_COLORS.selection_ring
+    );
+    assert_eq!(ring(&app, views[0]), Color::NONE);
+    assert_eq!(background(&app, views[0]), Color::NONE);
+}
+
+#[test]
+fn a_separated_list_follows_a_theme_change() {
+    let mut app = headless_app();
+    let (_, views) = spawn_separated_list(&mut app, &["a", "b"]);
+
+    toggle_theme(&mut app);
+    app.update();
+
+    assert_eq!(
+        ring(&app, views[0]),
+        DEFAULT_DARK_THEME_COLORS.selection_ring
+    );
+    assert_eq!(
+        background(&app, views[0]),
+        DEFAULT_DARK_THEME_COLORS.hovered_selected_item
+    );
+    assert_eq!(background(&app, views[1]), Color::NONE);
 }
