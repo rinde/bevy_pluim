@@ -1,0 +1,65 @@
+// A list is one tab stop: Tab focuses the list, not its rows, and the arrow keys move
+// its active descendant, the row that shows the focus ring (blue-600 under the light
+// theme). Enter or Space picks the active row through the list's selection, so
+// `Selected` follows it. `one list` is the second list of the `Lists` screen, so the
+// second Tab reaches it. Until a key moves it the active row is the selected one (the first, NL).
+(
+    format_version: 3,
+    name: "arrow keys move a list's active descendant and Enter selects it",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("one list")))),
+        Check(App(Active(of: Name("one list"), is: Within(Name("one list"), Role(role: ListItem, label: "NL"))))),
+        // The ring is on the row, not on the box.
+        Check(Component(
+            target: Within(Name("one list"), Role(role: ListItem, label: "NL")),
+            path: "Outline.color",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Check(Count(with: ["Outline", "ItemView"], is: Eq(1))),
+        Tap(key: ArrowRight),
+        Wait(1),
+        Check(App(Active(of: Name("one list"), is: Within(Name("one list"), Role(role: ListItem, label: "CA"))))),
+        Check(Component(
+            target: Within(Name("one list"), Role(role: ListItem, label: "CA")),
+            path: "Outline.color",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        // Moving does not select.
+        Check(App(Selected(of: Name("one list"), items: ["NL"]))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("one list"), items: ["CA"]))),
+        Check(Selected(Within(Name("one list"), Role(role: ListItem, label: "CA")))),
+        Tap(key: End),
+        Tap(key: Space),
+        Wait(1),
+        Check(App(Selected(of: Name("one list"), items: ["BE"]))),
+        Check(Not(Selected(Within(Name("one list"), Role(role: ListItem, label: "CA"))))),
+        Tap(key: Home),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("one list"), items: ["NL"]))),
+        // Tab leaves the list, and the ring with it.
+        Tap(key: Tab),
+        Wait(1),
+        // The focus moved on to the next list, so the ring is on a row of that one: still a single
+        // ring, and no longer the one on `one list`'s row.
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Check(Not(Component(
+            target: Within(Name("one list"), Role(role: ListItem, label: "NL")),
+            path: "Outline.color",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        ))),
+        Check(Not(App(Focused(of: Name("one list"))))),
+    ],
+    expect: [
+        App(Selected(of: Name("one list"), items: ["NL"])),
+    ],
+)

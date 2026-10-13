@@ -8,6 +8,7 @@ use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{InputFocus, InputFocusVisible};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
+use bevy::ui_widgets::{ActiveDescendant, ListItem};
 
 use crate::theme::Theme;
 
@@ -41,18 +42,27 @@ fn sync_tab_index(mut stops: Query<(&mut TabIndex, Has<InteractionDisabled>), Wi
     }
 }
 
-/// Draws the focus ring as an [`Outline`] on the focused [`TabStop`] while the focus is
-/// visible, and takes it off every other one.
+/// Draws the focus ring as an [`Outline`] while the focus is visible, and takes it off
+/// everything else.
+///
+/// The ring goes on the focused [`TabStop`], except for a list: a `ListBox` has one tab stop
+/// and moves an [`ActiveDescendant`] over its rows, so the ring is on that row and the box
+/// itself shows none. A list that is not focused has no active descendant, so no ring.
 fn draw_focus_ring(
     focus: Res<InputFocus>,
     visible: Res<InputFocusVisible>,
     theme: Res<Theme>,
-    stops: Query<(Entity, Option<&Outline>), With<TabStop>>,
+    stops: Query<(Entity, Option<&Outline>), Or<(With<TabStop>, With<ListItem>)>>,
+    active: Query<&ActiveDescendant>,
     mut commands: Commands,
 ) {
     let focused = if visible.0 { focus.get() } else { None };
+    let ringed = focused.and_then(|entity| match active.get(entity) {
+        Ok(ActiveDescendant(row)) => *row,
+        Err(_) => Some(entity),
+    });
     for (entity, outline) in &stops {
-        if focused == Some(entity) {
+        if ringed == Some(entity) {
             let ring = Outline {
                 width: Val::Px(2.0),
                 offset: Val::Px(1.0),
