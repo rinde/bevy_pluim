@@ -11,6 +11,7 @@ use bevy::MinimalPlugins;
 use bevy::a11y::AccessibilityNode;
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
+use bevy::ecs::system::RunSystemOnce;
 use bevy::input::InputPlugin;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{InputFocus, InputFocusVisible};
@@ -40,8 +41,9 @@ use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
+use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
-    Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionValue,
+    Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
@@ -2515,6 +2517,175 @@ fn releasing_on_a_selected_custom_view_in_a_zero_or_one_list_deselects_it() {
     click_row(&mut app, text);
 
     assert!(selection_labels(&app, selection_ref).is_empty());
+}
+
+/// The segments of a control, in order.
+fn segments_of(app: &App, control: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(control)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<Segment>())
+        .collect()
+}
+
+/// The text of a segment.
+fn segment_text(app: &App, segment: Entity) -> String {
+    let label = app.world().entity(segment).get::<Children>().unwrap()[0];
+    app.world().entity(label).get::<Text>().unwrap().0.clone()
+}
+
+/// The text of the segments that carry `Selected`.
+fn selected_segments(app: &App, control: Entity) -> Vec<String> {
+    segments_of(app, control)
+        .into_iter()
+        .filter(|s| app.world().entity(*s).contains::<Selected>())
+        .map(|s| segment_text(app, s))
+        .collect()
+}
+
+fn spawn_segmented_control(app: &mut App) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Auto", "Manual", "Off"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    control
+}
+
+/// Selects the item with the given text through the system param.
+fn select_by_text(app: &mut App, selection: Entity, text: &'static str) {
+    app.world_mut()
+        .run_system_once(
+            move |mut selections: SelectionParam, items: Query<(Entity, &Item<String>)>| {
+                let item = items.iter().find(|(_, i)| i.data == text).unwrap().0;
+                selections.update_selection(selection, |s| s.set_selection([item]));
+            },
+        )
+        .unwrap();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn a_segmented_control_shows_a_segment_per_item_with_the_first_selected() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+
+    let segments = segments_of(&app, control);
+    let texts: Vec<_> = segments.iter().map(|s| segment_text(&app, *s)).collect();
+    assert_eq!(texts, ["Auto", "Manual", "Off"]);
+    assert_eq!(selected_segments(&app, control), ["Auto"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, control), colors.segmented_track);
+    assert_eq!(background(&app, segments[0]), colors.segmented_selected);
+    assert_eq!(background(&app, segments[1]), colors.segmented_track);
+}
+
+#[test]
+fn clicking_a_segment_selects_it() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+
+    activate(&mut app, segments[1]);
+
+    assert_eq!(selected_segments(&app, control), ["Manual"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, segments[0]), colors.segmented_track);
+    assert_eq!(background(&app, segments[1]), colors.segmented_selected);
+
+    // The selected segment stays selected when it is used again.
+    activate(&mut app, segments[1]);
+    assert_eq!(selected_segments(&app, control), ["Manual"]);
+}
+
+#[test]
+fn a_selection_changed_through_the_selection_param_restyles_the_segments() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+
+    select_by_text(&mut app, control, "Off");
+
+    assert_eq!(selected_segments(&app, control), ["Off"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, segments[0]), colors.segmented_track);
+    assert_eq!(background(&app, segments[2]), colors.segmented_selected);
+    let label = app.world().entity(segments[2]).get::<Children>().unwrap()[0];
+    assert_eq!(
+        app.world().entity(label).get::<TextColor>().unwrap().0,
+        colors.segmented_selected_text
+    );
+}
+
+#[test]
+fn a_segmented_control_follows_a_selection_it_refers_to() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::reference(selection),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(selected_segments(&app, control), ["Dark"]);
+
+    // Clicking writes to the referenced selection ...
+    let segments = segments_of(&app, control);
+    activate(&mut app, segments[1]);
+    assert_eq!(selected_segments(&app, control), ["Light"]);
+    let value = app.world().entity(selection).get::<Selection>().unwrap();
+    assert!(matches!(value, Selection::Value(SelectionValue::One(_))));
+
+    // ... and a change made to it from elsewhere restyles the control.
+    select_by_text(&mut app, selection, "Dark");
+    assert_eq!(selected_segments(&app, control), ["Dark"]);
+    assert_eq!(
+        background(&app, segments[0]),
+        DEFAULT_LIGHT_THEME_COLORS.segmented_selected
+    );
+    assert_eq!(
+        background(&app, segments[1]),
+        DEFAULT_LIGHT_THEME_COLORS.segmented_track
+    );
+}
+
+#[test]
+fn a_segmented_control_follows_a_theme_change() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+
+    toggle_theme(&mut app);
+    app.update();
+
+    let colors = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, control), colors.segmented_track);
+    assert_eq!(background(&app, segments[0]), colors.segmented_selected);
 }
 
 // ---- Separated lists ----
