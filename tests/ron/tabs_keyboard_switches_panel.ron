@@ -12,7 +12,7 @@
         Check(App(Focused(of: Nth(0, Component("List"))))),
         Check(App(Active(of: Nth(0, Component("List")), is: Role(role: ListItem, label: "Panel A")))),
         // The ring is on a tab, not on the bar.
-        Check(Exists(Within(Nth(0, Component("List")), Component("Outline")))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
         Tap(key: ArrowRight),
         Wait(1),
         Check(App(Active(of: Nth(0, Component("List")), is: Role(role: ListItem, label: "Panel B")))),

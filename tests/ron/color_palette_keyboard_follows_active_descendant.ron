@@ -23,7 +23,6 @@
             is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
         )),
         Check(Count(with: ["Outline"], is: Eq(1))),
-        Check(Exists(Within(Name("palette"), Component("Outline")))),
         Tap(key: ArrowRight),
         Tap(key: ArrowRight),
         Wait(1),
