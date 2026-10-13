@@ -283,6 +283,7 @@ of them (`just example gallery -- --run-all stack link`).
   hover.
   The crumbs of `BreadCrumbs` observe `Activate`; the current crumb is a
   disabled `Link`.
+- **A list can render its own item views.** `ItemViewCreator` (next to the `List`, a registered system, like `Stack`'s `StackChildSpawner`) is run once per item with an `ItemViewSpawner { item, view }` and spawns the contents under the `ItemView`, which the list still owns, spawns and despawns with `ItemsChanged` and themes. The items need not be `Item<String>`. Such a view is `CustomView`: its children take the pointer, so hover colours come from `Hovered` (`custom_view_hover`) and press and release from a global `MouseEvent` observer that walks up from the target to the view, ignoring a target inside a nested `Button` (which handles its own press; `Button` also stops the click from reaching the `ListBox`). Selection and `Selected` are as for default views.
 - **Lists are `ListBox`es, and `Selection` keeps the last word.** A `List` is a
   `bevy::ui_widgets::ListBox` and its `ItemView`s are `ListItem`s (`Selectable`,
   `Role::ListItem`); `WidgetsPlugin` adds `ListBoxPlugin` unless the app has it.

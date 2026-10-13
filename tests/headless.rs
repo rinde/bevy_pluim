@@ -34,7 +34,7 @@ use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{ItemView, List};
+use rin_bevy_ui::list::{ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::select::{
@@ -2195,4 +2195,180 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
     app.update();
     app.update();
     check(&app);
+}
+
+#[derive(Resource, Default)]
+struct CreatedViews(Vec<(Entity, Entity)>);
+
+#[derive(Component)]
+struct RowButton;
+
+#[derive(Component)]
+struct RowText;
+
+/// A creator of custom item views: a text and a nested button.
+fn spawn_row(
+    spawner: In<ItemViewSpawner>,
+    mut commands: Commands,
+    mut created: ResMut<CreatedViews>,
+) {
+    let ItemViewSpawner { item, view } = *spawner;
+    created.0.push((item, view));
+    commands.entity(view).with_children(|parent| {
+        parent.spawn((Text::new("row"), RowText));
+        parent.spawn((Node::default(), Button, RowButton));
+    });
+}
+
+fn spawn_custom_list(app: &mut App, selection: SelectionBuilderWithValue) -> (Entity, Entity) {
+    app.init_resource::<CreatedViews>();
+    let create = app.world_mut().register_system(spawn_row);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection_ref = app
+        .world_mut()
+        .spawn(selection.build_with_items([Item::new("a"), Item::new("b")]))
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            ItemViewCreator::new(create),
+            Selection::reference(selection_ref),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    (list, selection_ref)
+}
+
+/// The text and the button inside a custom view.
+fn nested(app: &App, view: Entity) -> (Entity, Entity) {
+    let children = app.world().entity(view).get::<Children>().unwrap();
+    let text = children
+        .iter()
+        .find(|c| app.world().entity(*c).contains::<RowText>())
+        .unwrap();
+    let button = children
+        .iter()
+        .find(|c| app.world().entity(*c).contains::<RowButton>())
+        .unwrap();
+    (text, button)
+}
+
+#[test]
+fn a_custom_view_creator_runs_once_per_item_and_fills_the_view() {
+    let mut app = headless_app();
+    let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
+
+    let views = item_views(&app, list);
+    assert_eq!(views.len(), 2);
+    let created = app
+        .world()
+        .get_resource::<CreatedViews>()
+        .unwrap()
+        .0
+        .clone();
+    assert_eq!(created.len(), 2);
+    for view in views {
+        assert!(created.iter().any(|(_, v)| *v == view));
+        assert!(!app.world().entity(view).contains::<Text>());
+        nested(&app, view);
+    }
+    // Further updates do not run it again.
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<CreatedViews>().unwrap().0.len(),
+        2
+    );
+}
+
+#[test]
+fn adding_and_removing_items_adds_and_removes_custom_views() {
+    let mut app = headless_app();
+    let (list, selection_ref) = spawn_custom_list(&mut app, Selection::builder().one());
+
+    app.world_mut()
+        .spawn((Item::new("c"), ItemOf(selection_ref)));
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, list).len(), 3);
+    assert_eq!(
+        app.world().get_resource::<CreatedViews>().unwrap().0.len(),
+        3
+    );
+
+    let third = item_views(&app, list)[2];
+    let item = app
+        .world()
+        .entity(third)
+        .get::<ItemView>()
+        .unwrap()
+        .item_ref;
+    app.world_mut().entity_mut(item).despawn();
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, list).len(), 2);
+}
+
+#[test]
+fn selecting_a_custom_view_restyles_it_like_a_default_one() {
+    let mut app = headless_app();
+    let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
+    let views = item_views(&app, list);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert!(app.world().entity(views[0]).contains::<Selected>());
+    assert_eq!(background(&app, views[0]), colors.selected_item);
+    assert_eq!(background(&app, views[1]), colors.background_primary);
+
+    list_box_picks(&mut app, list, views[1]);
+
+    assert!(!app.world().entity(views[0]).contains::<Selected>());
+    assert!(app.world().entity(views[1]).contains::<Selected>());
+    assert_eq!(background(&app, views[0]), colors.background_primary);
+    assert_eq!(background(&app, views[1]), colors.selected_item);
+}
+
+#[test]
+fn a_press_on_a_nested_button_leaves_the_custom_view_and_the_selection_alone() {
+    let mut app = headless_app();
+    let (list, selection_ref) = spawn_custom_list(&mut app, Selection::builder().one());
+    let views = item_views(&app, list);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let (_, button) = nested(&app, views[1]);
+
+    press(&mut app, button);
+    assert_eq!(background(&app, views[1]), colors.background_primary);
+    click_and_release(&mut app, button);
+
+    assert_eq!(selection_labels(&app, selection_ref), ["a"]);
+    assert!(!app.world().entity(views[1]).contains::<Selected>());
+    assert_eq!(background(&app, views[1]), colors.background_primary);
+}
+
+#[test]
+fn a_press_on_the_text_of_a_custom_view_presses_the_row() {
+    let mut app = headless_app();
+    let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
+    let views = item_views(&app, list);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let (text, _) = nested(&app, views[1]);
+
+    press(&mut app, text);
+
+    assert_eq!(background(&app, views[1]), colors.selected_item);
+}
+
+#[test]
+fn releasing_on_a_selected_custom_view_in_a_zero_or_one_list_deselects_it() {
+    let mut app = headless_app();
+    let (list, selection_ref) = spawn_custom_list(&mut app, Selection::builder().zero_or_one());
+    let views = item_views(&app, list);
+    list_box_picks(&mut app, list, views[1]);
+    assert_eq!(selection_labels(&app, selection_ref), ["b"]);
+    let (text, _) = nested(&app, views[1]);
+
+    click_row(&mut app, text);
+
+    assert!(selection_labels(&app, selection_ref).is_empty());
 }
