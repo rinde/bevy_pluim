@@ -1,4 +1,4 @@
-//! `Label`: themed text, either a header or regular text.
+//! `Label`: themed text in one of several roles (title, regular, secondary, caption, overline).
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -36,16 +36,42 @@ impl Plugin for LabelPlugin {
     },
 )]
 pub enum Label {
-    /// Larger text, for headings.
-    Header(String),
+    /// A title, for panel titles and headings: display font, the title size.
+    Title(String),
     /// Body text.
     Regular(String),
+    /// Secondary text, such as descriptions and captions of option bars: secondary text colour.
+    Secondary(String),
+    /// A caption, such as the faint route line of a row: small size, tertiary text colour.
+    Caption(String),
+    /// A group heading: small size, secondary text colour, shown in upper case.
+    Overline(String),
 }
 
 impl Label {
-    /// A heading with the given text.
+    /// A heading with the given text; the same as [`Label::title`].
     pub fn header(text: impl Into<String>) -> Self {
-        Self::Header(text.into())
+        Self::Title(text.into())
+    }
+
+    /// A title with the given text.
+    pub fn title(text: impl Into<String>) -> Self {
+        Self::Title(text.into())
+    }
+
+    /// Secondary text with the given text.
+    pub fn secondary(text: impl Into<String>) -> Self {
+        Self::Secondary(text.into())
+    }
+
+    /// A caption with the given text.
+    pub fn caption(text: impl Into<String>) -> Self {
+        Self::Caption(text.into())
+    }
+
+    /// An overline with the given text; it is shown in upper case.
+    pub fn overline(text: impl Into<String>) -> Self {
+        Self::Overline(text.into())
     }
 
     /// Body text with the given text.
@@ -58,7 +84,11 @@ impl Label {
             return;
         };
         let text = match this {
-            Self::Header(text) | Self::Regular(text) => text.clone(),
+            Self::Title(text)
+            | Self::Regular(text)
+            | Self::Secondary(text)
+            | Self::Caption(text) => text.clone(),
+            Self::Overline(text) => text.to_uppercase(),
         };
         world.commands().entity(context.entity).insert(Text(text));
         world
@@ -79,11 +109,34 @@ fn theme_labels(
     };
 
     for (mut text_color, mut text_font, label) in it {
-        let (font, font_size) = match label {
-            Label::Header(_) => (&theme.display_font, theme.font_size_title),
-            Label::Regular(_) => (&theme.body_font, theme.font_size_secondary),
+        let (font, font_size, color) = match label {
+            Label::Title(_) => (
+                &theme.display_font,
+                theme.font_size_title,
+                theme.colors.text_primary,
+            ),
+            Label::Regular(_) => (
+                &theme.body_font,
+                theme.font_size_secondary,
+                theme.colors.text_primary,
+            ),
+            Label::Secondary(_) => (
+                &theme.body_font,
+                theme.font_size_secondary,
+                theme.colors.text_secondary,
+            ),
+            Label::Caption(_) => (
+                &theme.body_font,
+                theme.font_size_small,
+                theme.colors.text_tertiary,
+            ),
+            Label::Overline(_) => (
+                &theme.body_font,
+                theme.font_size_caption,
+                theme.colors.text_secondary,
+            ),
         };
-        *text_color = TextColor(theme.colors.text_primary);
+        *text_color = TextColor(color);
         *text_font = TextFont {
             font: font.clone().into(),
             font_size: FontSize::Px(font_size),

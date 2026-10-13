@@ -2101,3 +2101,63 @@ fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
     assert_eq!(font_of(&app, regular), (body.into(), FontSize::Px(20.0)));
     assert_eq!(font_of(&app, header), (display.into(), FontSize::Px(30.0)));
 }
+
+#[test]
+fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let mut spawn = |label: Label| app.world_mut().spawn((label, ChildOf(root))).id();
+    let title = spawn(Label::title("Trains"));
+    let regular = spawn(Label::regular("Row"));
+    let secondary = spawn(Label::secondary("4 on the network"));
+    let caption = spawn(Label::caption("A to B"));
+    let overline = spawn(Label::overline("Locomotives"));
+    app.update();
+    app.update();
+
+    let look = |app: &App, entity: Entity| {
+        let e = app.world().entity(entity);
+        (
+            e.get::<TextColor>().unwrap().0,
+            e.get::<TextFont>().unwrap().font_size,
+        )
+    };
+    let check = |app: &App| {
+        let theme = app.world().get_resource::<Theme>().unwrap();
+        let c = theme.colors;
+        assert_eq!(
+            look(app, title),
+            (c.text_primary, FontSize::Px(theme.font_size_title))
+        );
+        assert_eq!(
+            look(app, regular),
+            (c.text_primary, FontSize::Px(theme.font_size_secondary))
+        );
+        assert_eq!(
+            look(app, secondary),
+            (c.text_secondary, FontSize::Px(theme.font_size_secondary))
+        );
+        assert_eq!(
+            look(app, caption),
+            (c.text_tertiary, FontSize::Px(theme.font_size_small))
+        );
+        assert_eq!(
+            look(app, overline),
+            (c.text_secondary, FontSize::Px(theme.font_size_caption))
+        );
+    };
+    check(&app);
+    assert_eq!(
+        app.world().entity(overline).get::<Text>().unwrap().0,
+        "LOCOMOTIVES"
+    );
+
+    {
+        let mut theme = app.world_mut().get_resource_mut::<Theme>().unwrap();
+        theme.light_dark_toggle();
+        theme.font_size_small = 13.0;
+    }
+    app.update();
+    app.update();
+    check(&app);
+}

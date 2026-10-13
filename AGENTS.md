@@ -136,7 +136,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to, so only the buttons are tab stops |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy** |
-| `label.rs` | `Label::header` / `Label::regular` |
+| `label.rs` | `Label` with `Title` (`Label::title`, also `Label::header`), `Regular`, `Secondary`, `Caption` and `Overline` (shown in upper case, no letter spacing), sized and coloured from the theme's type scale and text slots |
 | `focus.rs` | the crate-private `TabStop` marker (requires `TabIndex`), `sync_tab_index` and the focus ring, see "Keyboard focus" below |
 | `link.rs` | `Link` and its immutable `LinkState` |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node |
