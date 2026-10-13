@@ -28,7 +28,7 @@ bevy-inspector-egui = "0.37.0"
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
-rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "db402f12682b9d4c1f704be86c1f926522f4d32d", features = ["gallery"] }
+rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "c8615dcf92c46972bff0be6747cf5c48d8e9fdb4", features = ["gallery"] }
 
 # Plays every `.ron` file in tests/ron, one test per file, with the tester's own
 # `main` instead of libtest.
