@@ -40,8 +40,20 @@ pub struct Theme {
     #[educe(Default = Val::Px(1.0))]
     pub border_thickness: Val,
 
-    /// The colours.
+    /// The colours in use: the light or the dark set, as [`mode`](Self::mode) says.
+    ///
+    /// Widgets read this one place. Change the mode with [`set_mode`](Self::set_mode) or
+    /// [`light_dark_toggle`](Self::light_dark_toggle) rather than assigning here, or it falls out
+    /// of step with the mode.
     pub colors: ThemeColors,
+    /// The colours of the light mode.
+    #[educe(Default = DEFAULT_LIGHT_THEME_COLORS)]
+    light_colors: ThemeColors,
+    /// The colours of the dark mode.
+    #[educe(Default = DEFAULT_DARK_THEME_COLORS)]
+    dark_colors: ThemeColors,
+    /// Which of the two sets is in use.
+    mode: ThemeMode,
 
     /// The width of a scroll bar.
     #[educe(Default = Val::Px(8.0))]
@@ -109,14 +121,49 @@ impl Theme {
         s
     }
 
-    /// Switches between [`DEFAULT_LIGHT_THEME_COLORS`] and [`DEFAULT_DARK_THEME_COLORS`].
-    pub fn light_dark_toggle(&mut self) {
-        self.colors = if self.colors == DEFAULT_LIGHT_THEME_COLORS {
-            DEFAULT_DARK_THEME_COLORS
-        } else {
-            DEFAULT_LIGHT_THEME_COLORS
+    /// A light-mode theme with the given pair of colour sets, everything else default.
+    #[must_use]
+    pub fn with_colors(light: ThemeColors, dark: ThemeColors) -> Self {
+        Self {
+            colors: light,
+            light_colors: light,
+            dark_colors: dark,
+            ..Self::default()
+        }
+    }
+
+    /// Which of the light and dark colour sets is in use.
+    #[must_use]
+    pub const fn mode(&self) -> ThemeMode {
+        self.mode
+    }
+
+    /// Uses the light or the dark colour set.
+    pub const fn set_mode(&mut self, mode: ThemeMode) {
+        self.mode = mode;
+        self.colors = match mode {
+            ThemeMode::Light => self.light_colors,
+            ThemeMode::Dark => self.dark_colors,
         };
     }
+
+    /// Switches between the light and the dark mode, keeping the application's own colour pair.
+    pub const fn light_dark_toggle(&mut self) {
+        self.set_mode(match self.mode {
+            ThemeMode::Light => ThemeMode::Dark,
+            ThemeMode::Dark => ThemeMode::Light,
+        });
+    }
+}
+
+/// Whether a [`Theme`] uses its light or its dark colours.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+pub enum ThemeMode {
+    /// The light colours.
+    #[default]
+    Light,
+    /// The dark colours.
+    Dark,
 }
 
 /// The colour slots of a [`Theme`].
@@ -388,6 +435,48 @@ mod tests {
         for (name, light, dark) in pairs {
             assert_ne!(light, dark, "{name} is the same in both themes");
         }
+    }
+
+    fn custom_pair() -> (ThemeColors, ThemeColors) {
+        let light = ThemeColors {
+            accent: Color::srgb(1.0, 0.0, 0.0),
+            ..DEFAULT_LIGHT_THEME_COLORS
+        };
+        let dark = ThemeColors {
+            accent: Color::srgb(0.0, 0.0, 1.0),
+            ..DEFAULT_DARK_THEME_COLORS
+        };
+        (light, dark)
+    }
+
+    #[test]
+    fn a_default_theme_is_the_light_defaults() {
+        let theme = Theme::default();
+        assert_eq!(theme.mode(), ThemeMode::Light);
+        assert_eq!(theme.colors, DEFAULT_LIGHT_THEME_COLORS);
+    }
+
+    #[test]
+    fn set_mode_switches_between_a_custom_pair() {
+        let (light, dark) = custom_pair();
+        let mut theme = Theme::with_colors(light, dark);
+        assert_eq!(theme.colors, light);
+        theme.set_mode(ThemeMode::Dark);
+        assert_eq!((theme.mode(), theme.colors), (ThemeMode::Dark, dark));
+        theme.set_mode(ThemeMode::Dark);
+        assert_eq!(theme.colors, dark);
+        theme.set_mode(ThemeMode::Light);
+        assert_eq!((theme.mode(), theme.colors), (ThemeMode::Light, light));
+    }
+
+    #[test]
+    fn light_dark_toggle_switches_between_a_custom_pair() {
+        let (light, dark) = custom_pair();
+        let mut theme = Theme::with_colors(light, dark);
+        theme.light_dark_toggle();
+        assert_eq!(theme.colors, dark);
+        theme.light_dark_toggle();
+        assert_eq!(theme.colors, light);
     }
 
     #[test]
