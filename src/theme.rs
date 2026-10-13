@@ -63,7 +63,7 @@ pub struct Theme {
     ///
     /// Defaults to Bevy's default font; the application loads its own and sets the handle.
     pub body_font: Handle<Font>,
-    /// The font of titles, such as [`Label::Header`](crate::label::Label::Header).
+    /// The font of titles, such as [`Label::Title`](crate::label::Label::Title).
     ///
     /// Defaults to Bevy's default font; the application loads its own and sets the handle.
     pub display_font: Handle<Font>,
