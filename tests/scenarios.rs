@@ -21,6 +21,7 @@ use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
 use rin_bevy_ui::filter_chips::{Chip, ChipView, FilterChips};
 use rin_bevy_ui::list::List;
+use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
@@ -859,5 +860,63 @@ fn filter_chips_wrap_onto_more_lines_in_a_narrower_row() {
     assert!(
         chip_lines(100.0) > 1,
         "a row narrower than the chips wraps them"
+    );
+}
+
+/// The height, in logical pixels, a panel's body area is laid out at with
+/// `rows` rows of 50 px in it and a maximum of 200.
+fn panel_body_height(rows: usize) -> (f32, f32) {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let panel = app
+        .world_mut()
+        .spawn((
+            Panel::new("Trains").with_max_body_height(200.0),
+            ChildOf(root),
+        ))
+        .id();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    for _ in 0..rows {
+        app.world_mut().spawn((
+            Node {
+                height: px(50),
+                width: px(100),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            ChildOf(refs.body),
+        ));
+    }
+    for _ in 0..6 {
+        app.update();
+    }
+    let height = |e: Entity| {
+        let computed = app.world().get::<ComputedNode>(e).unwrap();
+        computed.size().y * computed.inverse_scale_factor()
+    };
+    let overflow = {
+        let contents = *app
+            .world()
+            .get::<Children>(refs.scroll_area)
+            .unwrap()
+            .first()
+            .unwrap();
+        let computed = app.world().get::<ComputedNode>(contents).unwrap();
+        (computed.content_size().y - computed.size().y) * computed.inverse_scale_factor()
+    };
+    (height(refs.scroll_area), overflow)
+}
+
+#[test]
+fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
+    let (short, short_overflow) = panel_body_height(2);
+    assert!((short - 100.0).abs() < 1.5, "grows to its content: {short}");
+    assert!(short_overflow < 1.0, "nothing to scroll: {short_overflow}");
+
+    let (tall, tall_overflow) = panel_body_height(10);
+    assert!((tall - 200.0).abs() < 1.5, "stops at the maximum: {tall}");
+    assert!(
+        (tall_overflow - 300.0).abs() < 1.5,
+        "the rest scrolls: {tall_overflow}"
     );
 }

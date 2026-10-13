@@ -31,6 +31,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
@@ -93,6 +94,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<SegmentedControl>(registry);
         assert_component::<Segment>(registry);
         assert_component::<IconButton>(registry);
+        assert_component::<Panel>(registry);
         assert_component::<ToggleState>(registry);
         assert_component::<Kbd>(registry);
         assert_component::<FilterChips>(registry);
