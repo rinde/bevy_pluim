@@ -487,7 +487,7 @@ fn theme_scroll_area(
                 }
             }
             sb_background_color.0 = theme.colors.background_secondary;
-            sb_node.border_radius = BorderRadius::all(theme.corner_radius);
+            sb_node.border_radius = BorderRadius::all(theme.control_radius);
 
             let Some((mut thumb_node, mut thumb_background_color, mut thumb_border_color)) =
                 children
@@ -508,7 +508,7 @@ fn theme_scroll_area(
             }
             // thumb_node.border = UiRect::all(theme.border_thickness);
             thumb_background_color.0 = theme.colors.scroll_thumb_background;
-            thumb_node.border_radius = BorderRadius::all(theme.corner_radius);
+            thumb_node.border_radius = BorderRadius::all(theme.control_radius);
             thumb_border_color.set_all(theme.colors.border);
         };
 

@@ -26,13 +26,16 @@ fn update_theme(mut clear_color: ResMut<ClearColor>, theme: Res<Theme>) {
 /// How every widget looks.
 ///
 /// Changing the resource restyles all widgets, and keeps [`ClearColor`] in step with the background.
-#[derive(Resource, Clone, Copy, Debug, Educe, Reflect)]
+#[derive(Resource, Clone, Debug, Educe, Reflect)]
 #[reflect(Resource)]
 #[educe(Default)]
 pub struct Theme {
-    /// The radius of rounded corners.
-    #[educe(Default = Val::Px(10.0))]
-    pub corner_radius: Val,
+    /// The radius of the corners of controls: buttons, segments, list items, steppers and scroll bars.
+    #[educe(Default = Val::Px(8.0))]
+    pub control_radius: Val,
+    /// The radius of the corners of panels: cards and popups.
+    #[educe(Default = Val::Px(12.0))]
+    pub panel_radius: Val,
     /// The thickness of borders.
     #[educe(Default = Val::Px(1.0))]
     pub border_thickness: Val,
@@ -44,9 +47,33 @@ pub struct Theme {
     #[educe(Default = Val::Px(8.0))]
     pub scroll_bar_width: Val,
 
-    /// The size of regular text.
+    /// The font of body text: buttons, labels, links and list items.
+    ///
+    /// Defaults to Bevy's default font; the application loads its own and sets the handle.
+    pub body_font: Handle<Font>,
+    /// The font of titles, such as [`Label::Header`](crate::label::Label::Header).
+    ///
+    /// Defaults to Bevy's default font; the application loads its own and sets the handle.
+    pub display_font: Handle<Font>,
+
+    /// The size of a title, in the display font.
+    #[educe(Default = 22.0)]
+    pub font_size_title: f32,
+    /// The size of the title of a row.
+    #[educe(Default = 16.0)]
+    pub font_size_row_title: f32,
+    /// The size of body text.
+    #[educe(Default = 15.0)]
+    pub font_size_body: f32,
+    /// The size of secondary text: buttons, labels and list items.
     #[educe(Default = 14.0)]
-    pub font_size: f32,
+    pub font_size_secondary: f32,
+    /// The size of the text of small controls.
+    #[educe(Default = 12.0)]
+    pub font_size_small: f32,
+    /// The size of captions, overlines and badges.
+    #[educe(Default = 10.0)]
+    pub font_size_caption: f32,
 
     #[educe(Default = ShadowStyle {
         color: Color::BLACK,

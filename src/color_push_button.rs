@@ -147,7 +147,7 @@ pub(crate) fn update_theme(
         } else {
             theme.colors.border
         });
-        node.border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.control_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
         node.padding = theme.color_button_padding;

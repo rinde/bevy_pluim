@@ -86,15 +86,7 @@ impl Link {
         let text = Text::new(&link.label);
         let mut commands = world.commands();
         let mut entity_commands = commands.entity(context.entity);
-        entity_commands.with_child((
-            text,
-            TextFont {
-                font_size: FontSize::Px(18.0),
-                ..default()
-            },
-            LinkText,
-            Pickable::IGNORE,
-        ));
+        entity_commands.with_child((text, LinkText, Pickable::IGNORE));
         entity_commands.observe(handle_hover);
         world
             .commands()
@@ -159,7 +151,7 @@ fn theme_link(
     link_id: In<Option<Entity>>,
     theme: Res<Theme>,
     mut links: Query<(&mut BackgroundColor, &Children, &LinkState), With<Link>>,
-    mut link_texts: Query<&mut TextColor, With<LinkText>>,
+    mut link_texts: Query<(&mut TextColor, &mut TextFont), With<LinkText>>,
 ) {
     let it = if let Some(link_id) = link_id.as_ref() {
         Either::Left(links.get_mut(*link_id).into_iter())
@@ -168,13 +160,15 @@ fn theme_link(
     };
     for (mut link_bg, children, state) in it {
         link_bg.0 = theme.colors.background_primary;
-        let Some(mut text_color) = children
+        let Some((mut text_color, mut text_font)) = children
             .iter()
             .next()
             .and_then(|text_ref| link_texts.get_mut(text_ref).ok())
         else {
             continue;
         };
+        text_font.font = theme.body_font.clone().into();
+        text_font.font_size = FontSize::Px(theme.font_size_body);
         match state {
             LinkState::Enabled => text_color.0 = theme.colors.link,
             LinkState::Disabled => text_color.0 = theme.colors.text_primary,

@@ -245,7 +245,7 @@ fn theme_push_button(
             hovered.get() && !no_default_hover,
         );
         border_color.set_all(theme.colors.border);
-        node.border_radius = BorderRadius::all(theme.corner_radius);
+        node.border_radius = BorderRadius::all(theme.control_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
         node.padding = theme.item_padding;
@@ -258,7 +258,8 @@ fn theme_push_button(
                 theme.colors.text_primary
             });
             *text_font = TextFont {
-                font_size: FontSize::Px(14.0),
+                font: theme.body_font.clone().into(),
+                font_size: FontSize::Px(theme.font_size_secondary),
                 ..default()
             };
         }
@@ -273,7 +274,8 @@ fn theme_push_button(
                 theme.colors.text_primary
             });
             *text_font = TextFont {
-                font_size: FontSize::Px(14.0),
+                font: theme.body_font.clone().into(),
+                font_size: FontSize::Px(theme.font_size_secondary),
                 ..default()
             };
         }
