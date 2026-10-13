@@ -30,6 +30,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::stack::Stack;
@@ -90,6 +91,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Icon>(registry);
         assert_component::<IconButton>(registry);
         assert_component::<Kbd>(registry);
+        assert_component::<Pill>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
     });

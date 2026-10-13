@@ -23,6 +23,7 @@ pub mod label;
 pub mod link;
 pub mod list;
 pub mod numeric_stepper;
+pub mod pill;
 pub mod push_button;
 pub mod scroll_area;
 pub mod select;
@@ -51,6 +52,7 @@ use crate::label::LabelPlugin;
 use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
+use crate::pill::PillPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
 use crate::select::ItemsPlugin;
@@ -87,6 +89,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(IconPlugin)
             .add_plugins(IconButtonPlugin)
             .add_plugins(KbdPlugin)
+            .add_plugins(PillPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)

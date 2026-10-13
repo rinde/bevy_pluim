@@ -237,6 +237,10 @@ pub struct ThemeColors {
     pub info_background: Color,
     /// The text of an informational status.
     pub info_text: Color,
+    /// The background of a waiting status.
+    pub wait_background: Color,
+    /// The text of a waiting status.
+    pub wait_text: Color,
     /// The background of a neutral pill or badge.
     pub pill_background: Color,
     /// The text of a neutral pill or badge.
@@ -298,6 +302,8 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     warning_text: Color::srgb_u8(0xB3, 0x26, 0x1E),
     info_background: Color::srgb_u8(0xD8, 0xE8, 0xF7),
     info_text: Color::srgb_u8(0x1F, 0x4E, 0x7A),
+    wait_background: Color::srgb_u8(0xF9, 0xE5, 0xC2),
+    wait_text: Color::srgb_u8(0x6E, 0x46, 0x08),
     pill_background: Color::srgb_u8(0xEC, 0xE8, 0xDF),
     pill_text: Color::srgb_u8(0x43, 0x48, 0x4F),
     segmented_track: Color::srgb_u8(0xEC, 0xE8, 0xDF),
@@ -346,6 +352,8 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     warning_text: Color::srgb_u8(0xFF, 0x8A, 0x80),
     info_background: Color::srgb_u8(0x1C, 0x31, 0x44),
     info_text: Color::srgb_u8(0x8E, 0xC6, 0xF2),
+    wait_background: Color::srgb_u8(0x3A, 0x2D, 0x17),
+    wait_text: Color::srgb_u8(0xF6, 0xC1, 0x71),
     pill_background: Color::srgb_u8(0x2A, 0x2E, 0x35),
     pill_text: Color::srgb_u8(0xC9, 0xCE, 0xD6),
     segmented_track: Color::srgb_u8(0x22, 0x26, 0x2C),
@@ -417,6 +425,8 @@ mod tests {
             ("warning_text", l.warning_text, d.warning_text),
             ("info_background", l.info_background, d.info_background),
             ("info_text", l.info_text, d.info_text),
+            ("wait_background", l.wait_background, d.wait_background),
+            ("wait_text", l.wait_text, d.wait_text),
             ("pill_background", l.pill_background, d.pill_background),
             ("pill_text", l.pill_text, d.pill_text),
             ("segmented_track", l.segmented_track, d.segmented_track),
