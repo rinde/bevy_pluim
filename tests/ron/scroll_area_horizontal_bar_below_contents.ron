@@ -1,8 +1,8 @@
 // The horizontal scroll bar of the horizontal-only scroll area sits below its
 // contents and is as wide as they are. (It used to be auto-placed beside them,
 // in the zero-width column the vertical bar would have had.) Sizes are
-// ComputedNode.size and positions the centres in UiGlobalTransform, both in
-// physical pixels; the window's scale factor is 1.
+// ComputedNode.size and positions the centres in UiGlobalTransform, both read
+// as logical pixels, so the file passes at any scale factor.
 (
     format_version: 3,
     name: "the horizontal bar of a horizontal scroll area is below the contents",
@@ -11,35 +11,35 @@
         Wait(2),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.size.x",
+            path: "ComputedNode.size.x", unit: Logical,
             is: Between(199.0, 201.0),
         )),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Name("ScrollBar")),
-            path: "ComputedNode.size.x",
+            path: "ComputedNode.size.x", unit: Logical,
             is: Between(199.0, 201.0),
         )),
         // Same left edge: same centre, as the widths match.
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "UiGlobalTransform.0.translation.x",
+            path: "UiGlobalTransform.0.translation.x", unit: Logical,
             is: Between(559.0, 561.0),
         )),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Name("ScrollBar")),
-            path: "UiGlobalTransform.0.translation.x",
+            path: "UiGlobalTransform.0.translation.x", unit: Logical,
             is: Between(559.0, 561.0),
         )),
         // The contents end at y 212 (centre 116, 192 high) and the 8 pixel
         // high bar starts there (centre 216).
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.size.y",
+            path: "ComputedNode.size.y", unit: Logical,
             is: Between(191.0, 193.0),
         )),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Name("ScrollBar")),
-            path: "UiGlobalTransform.0.translation.y",
+            path: "UiGlobalTransform.0.translation.y", unit: Logical,
             is: Between(215.0, 217.0),
         )),
     ],

@@ -4,7 +4,7 @@
 // moves with the area around it. The list and its item views let the pointer
 // through (Pickable should_block_lower is false), which is what lets the area
 // below them be hovered. The scroll position that counts is the one the layout
-// settles on (ComputedNode.scroll_position), clamped to what overflows (the
+// settles on (ScrollPosition.0), clamped to what overflows (the
 // ScrollPosition component is kept in that range too, but the layout shows it
 // a pass later). A positive wheel y scrolls up.
 (
@@ -15,7 +15,7 @@
         Wait(2),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
         MoveTo(Within(Name("scrolling list"), Role(role: ListItem, label: "Row 1"))),
@@ -24,7 +24,7 @@
         Wait(2),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(40.0),
         )),
         // Further down, to the end of the rows, however far the wheel turns: the
@@ -38,7 +38,7 @@
         )),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(298.0),
         )),
         // Back up, to the first row.
@@ -46,7 +46,7 @@
         Wait(2),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
         // The wheel elsewhere leaves the list where it is.
@@ -55,7 +55,7 @@
         Wait(2),
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
     ],

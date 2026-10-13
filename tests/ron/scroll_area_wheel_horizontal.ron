@@ -2,7 +2,7 @@
 // and back, and not down: the area only scrolls horizontally. A positive
 // wheel x is "left", so the scroll position moves by the opposite amount.
 // The scroll position read is the one the layout settles on
-// (ComputedNode.scroll_position), clamped to what overflows (the ScrollPosition component is kept in that range
+// (ScrollPosition.0), clamped to what overflows (the ScrollPosition component is kept in that range
 // too, but the layout shows it a pass later).
 (
     format_version: 3,
@@ -11,7 +11,7 @@
     steps: [
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.x",
+            path: "ScrollPosition.0.x",
             is: Eq(0.0),
         )),
         MoveTo(Name("horizontal scroll area")),
@@ -19,21 +19,21 @@
         Wait(2),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.x",
+            path: "ScrollPosition.0.x",
             is: Eq(100.0),
         )),
         Wheel(x: 40.0, y: 0.0),
         Wait(2),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.x",
+            path: "ScrollPosition.0.x",
             is: Eq(60.0),
         )),
         Wheel(x: 0.0, y: -100.0),
         Wait(2),
         Check(Component(
             target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
     ],
