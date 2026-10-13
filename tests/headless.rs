@@ -47,6 +47,7 @@ use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
+use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
 
@@ -3103,4 +3104,68 @@ fn a_theme_change_restyles_the_chips() {
     );
     let border = app.world().entity(views[1]).get::<BorderColor>().unwrap();
     assert_eq!(border.top, DEFAULT_DARK_THEME_COLORS.chip_border);
+}
+
+#[test]
+fn a_setting_row_spawns_its_two_labels_and_a_control_slot() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let row = app
+        .world_mut()
+        .spawn((
+            SettingRow::new("Appearance", "Dark or light"),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+
+    let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+    let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
+    assert_eq!(text(&app, refs.title_id), "Appearance");
+    assert_eq!(text(&app, refs.description_id), "Dark or light");
+    assert!(app.world().get::<Node>(refs.slot_id).is_some());
+    let title = app.world().get::<TextFont>(refs.title_id).unwrap();
+    assert_eq!(title.font_size, FontSize::Px(15.0));
+    assert_eq!(title.weight, FontWeight::SEMIBOLD);
+    assert_eq!(
+        app.world().get::<TextColor>(refs.description_id).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.text_secondary
+    );
+    // On its own a row has no divider.
+    assert_eq!(
+        app.world().get::<Node>(row).unwrap().border.bottom,
+        Val::Px(0.0)
+    );
+}
+
+#[test]
+fn of_three_setting_rows_only_the_first_two_show_a_divider() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let rows = app.world_mut().spawn((SettingRows, ChildOf(root))).id();
+    let spawn_row = |app: &mut App, name: &str| {
+        app.world_mut()
+            .spawn((SettingRow::new(name, "d"), ChildOf(rows)))
+            .id()
+    };
+    let ids: Vec<Entity> = ["a", "b", "c"].map(|n| spawn_row(&mut app, n)).into();
+    app.update();
+    app.update();
+
+    let bottom = |app: &App, e: Entity| app.world().get::<Node>(e).unwrap().border.bottom;
+    assert_eq!(
+        ids.iter().map(|e| bottom(&app, *e)).collect::<Vec<_>>(),
+        [Val::Px(1.0), Val::Px(1.0), Val::Px(0.0)]
+    );
+    assert_eq!(
+        app.world().get::<BorderColor>(ids[0]).unwrap().bottom,
+        DEFAULT_LIGHT_THEME_COLORS.divider
+    );
+
+    let fourth = spawn_row(&mut app, "d");
+    app.update();
+    app.update();
+    assert_eq!(bottom(&app, ids[2]), Val::Px(1.0));
+    assert_eq!(bottom(&app, fourth), Val::Px(0.0));
 }

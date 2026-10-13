@@ -35,6 +35,7 @@ use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
+use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::stack::Stack;
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 
@@ -96,6 +97,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<IconButton>(registry);
         assert_component::<ToggleState>(registry);
         assert_component::<Kbd>(registry);
+        assert_component::<SettingRow>(registry);
+        assert_component::<SettingRows>(registry);
         assert_component::<Pill>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
