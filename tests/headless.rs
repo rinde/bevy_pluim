@@ -32,6 +32,7 @@ use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboS
 use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
+use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
@@ -2451,4 +2452,195 @@ fn releasing_on_a_selected_custom_view_in_a_zero_or_one_list_deselects_it() {
     click_row(&mut app, text);
 
     assert!(selection_labels(&app, selection_ref).is_empty());
+}
+
+fn spawn_chips(app: &mut App, chips: [Chip; 3]) -> (Entity, Entity) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let chips_entity = app
+        .world_mut()
+        .spawn((
+            FilterChips,
+            Selection::builder()
+                .one()
+                .build_with_items(chips.map(|data| Item { data })),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.update();
+    (root, chips_entity)
+}
+
+fn chip_views(app: &App, chips: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(chips)
+        .get::<Children>()
+        .map(|children| {
+            children
+                .iter()
+                .filter(|c| app.world().entity(*c).contains::<ChipView>())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The label and the count text of a chip.
+fn chip_texts(app: &App, view: Entity) -> (String, String) {
+    let refs = app.world().entity(view).get::<ChipRefs>().unwrap();
+    let text = |e: Entity| app.world().entity(e).get::<Text>().unwrap().0.clone();
+    (text(refs.label), text(refs.count))
+}
+
+fn three_chips() -> [Chip; 3] {
+    [
+        Chip::with_count("All", 4),
+        Chip::with_count("Running", 2),
+        Chip::new("Problems"),
+    ]
+}
+
+#[test]
+fn filter_chips_show_a_chip_per_item_with_label_and_count_and_the_first_active() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    assert_eq!(views.len(), 3);
+    assert_eq!(chip_texts(&app, views[0]), ("All".into(), "4".into()));
+    assert_eq!(
+        chip_texts(&app, views[2]),
+        ("Problems".into(), String::new())
+    );
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, views[0]), colors.chip_on);
+    assert_eq!(background(&app, views[1]), Color::NONE);
+    let label = app
+        .world()
+        .entity(views[0])
+        .get::<ChipRefs>()
+        .unwrap()
+        .label;
+    let ink = app.world().entity(label).get::<TextColor>().unwrap().0;
+    assert_eq!(ink, colors.chip_on_ink);
+}
+
+#[test]
+fn activating_a_chip_selects_it_and_fills_it() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+
+    activate(&mut app, views[1]);
+
+    let selection = app.world().entity(chips).get::<Selection>().unwrap();
+    let item = app.world().entity(views[1]).get::<ChipView>().unwrap().item;
+    assert_eq!(selection.as_selection().unwrap().single(), Some(item));
+    assert_eq!(background(&app, views[1]), colors.chip_on);
+    assert_eq!(background(&app, views[0]), Color::NONE);
+
+    // The active chip stays active when it is activated again.
+    activate(&mut app, views[1]);
+    assert_eq!(background(&app, views[1]), colors.chip_on);
+}
+
+#[test]
+fn updating_the_count_of_an_item_changes_the_text_of_its_chip_without_respawning_it() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let item = app.world().entity(views[2]).get::<ChipView>().unwrap().item;
+
+    app.world_mut()
+        .entity_mut(item)
+        .get_mut::<Item<Chip>>()
+        .unwrap()
+        .data
+        .count = Some(7);
+    app.update();
+    assert_eq!(chip_texts(&app, views[2]), ("Problems".into(), "7".into()));
+
+    app.world_mut()
+        .entity_mut(item)
+        .get_mut::<Item<Chip>>()
+        .unwrap()
+        .data
+        .count = None;
+    app.update();
+    assert_eq!(chip_views(&app, chips), views);
+    assert_eq!(
+        chip_texts(&app, views[2]),
+        ("Problems".into(), String::new())
+    );
+}
+
+#[test]
+fn adding_and_removing_items_adds_and_removes_chips() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let items = app.world().entity(chips).get::<ItemValues>().unwrap();
+    let removed = items[1];
+
+    app.world_mut().entity_mut(removed).despawn();
+    app.world_mut().spawn((
+        Item {
+            data: Chip::new("New"),
+        },
+        ItemOf(chips),
+    ));
+    app.update();
+    app.update();
+
+    let texts = chip_views(&app, chips)
+        .into_iter()
+        .map(|view| chip_texts(&app, view).0)
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["All", "Problems", "New"]);
+}
+
+#[test]
+fn filter_chips_share_a_selection_by_reference() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(three_chips().map(|data| Item { data })),
+        )
+        .id();
+    let chips = app
+        .world_mut()
+        .spawn((FilterChips, Selection::reference(selection), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    app.update();
+    let views = chip_views(&app, chips);
+    assert_eq!(views.len(), 3);
+
+    activate(&mut app, views[2]);
+
+    let item = app.world().entity(views[2]).get::<ChipView>().unwrap().item;
+    let selected = app.world().entity(selection).get::<Selection>().unwrap();
+    assert_eq!(selected.as_selection().unwrap().single(), Some(item));
+}
+
+#[test]
+fn a_theme_change_restyles_the_chips() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+
+    toggle_theme(&mut app);
+    app.update();
+
+    assert_eq!(
+        background(&app, views[0]),
+        DEFAULT_DARK_THEME_COLORS.chip_on
+    );
+    let border = app.world().entity(views[1]).get::<BorderColor>().unwrap();
+    assert_eq!(border.top, DEFAULT_DARK_THEME_COLORS.chip_border);
 }

@@ -22,6 +22,7 @@ use rin_bevy_ui::color_palette_combo::{self, ColorPaletteCombo};
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboState};
 use rin_bevy_ui::divider::Divider;
+use rin_bevy_ui::filter_chips::{ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
 use rin_bevy_ui::icon::Icon;
 use rin_bevy_ui::kbd::Kbd;
@@ -88,6 +89,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Divider>(registry);
         assert_component::<Icon>(registry);
         assert_component::<Kbd>(registry);
+        assert_component::<FilterChips>(registry);
+        assert_component::<ChipView>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
     });

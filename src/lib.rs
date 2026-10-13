@@ -14,6 +14,7 @@ pub mod color_palette_combo;
 pub mod color_push_button;
 pub mod combo;
 pub mod divider;
+pub mod filter_chips;
 pub mod float;
 pub mod focus;
 pub mod icon;
@@ -41,6 +42,7 @@ use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
 use crate::divider::DividerPlugin;
+use crate::filter_chips::FilterChipsPlugin;
 use crate::float::FloatPlugin;
 use crate::focus::FocusPlugin;
 use crate::icon::IconPlugin;
@@ -84,6 +86,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(DividerPlugin)
             .add_plugins(IconPlugin)
             .add_plugins(KbdPlugin)
+            .add_plugins(FilterChipsPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)
