@@ -14,6 +14,7 @@ pub mod color_palette_combo;
 pub mod color_push_button;
 pub mod combo;
 pub mod float;
+pub mod focus;
 pub mod label;
 pub mod link;
 pub mod list;
@@ -25,6 +26,8 @@ pub mod stack;
 pub mod tailwind;
 pub mod theme;
 
+use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
+use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::prelude::*;
 use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin};
 
@@ -35,6 +38,7 @@ use crate::color_palette_combo::ColorPaletteComboPlugin;
 use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
 use crate::float::FloatPlugin;
+use crate::focus::FocusPlugin;
 use crate::label::LabelPlugin;
 use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
@@ -60,7 +64,19 @@ impl Plugin for WidgetsPlugin {
         if !app.is_plugin_added::<ListBoxPlugin>() {
             app.add_plugins(ListBoxPlugin);
         }
+        // The same for keyboard focus: the tester's `HeadlessPlugins` has the first two but
+        // not tab navigation.
+        if !app.is_plugin_added::<InputFocusPlugin>() {
+            app.add_plugins(InputFocusPlugin);
+        }
+        if !app.is_plugin_added::<InputDispatchPlugin>() {
+            app.add_plugins(InputDispatchPlugin);
+        }
+        if !app.is_plugin_added::<TabNavigationPlugin>() {
+            app.add_plugins(TabNavigationPlugin);
+        }
         app.init_resource::<Theme>()
+            .add_plugins(FocusPlugin)
             .add_plugins(ListPlugin)
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
@@ -115,10 +131,11 @@ fn setup(roots: Query<(), With<UiRoot>>) {
 /// [`UiTargetCamera`], when the node is added. Root nodes aimed at another camera
 /// (a second window's UI, an overlay) belong to someone else and are left alone.
 /// A [`UiTargetCamera`] inserted after the [`Node`] is not seen, so insert it in
-/// the same bundle. If the app does not end up with exactly one such root at
+/// the same bundle. It is the one non-modal [`TabGroup`],
+/// so Tab moves through the widgets below it. If the app does not end up with exactly one such root at
 /// startup, an error is logged.
 #[derive(Component, Debug, Copy, Clone)]
-#[require(Name::new("UiRoot"))]
+#[require(Name::new("UiRoot"), TabGroup::new(0))]
 pub struct UiRoot;
 
 /// What the pointer did to a widget.

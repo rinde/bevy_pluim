@@ -19,6 +19,7 @@
 )]
 
 use bevy::ecs::query::QueryFilter;
+use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -50,6 +51,11 @@ pub enum WidgetsCheck {
         /// The labels of the selected items, in order.
         items: Vec<String>,
     },
+    /// The keyboard focus (`InputFocus`) is on the widget `of` names.
+    Focused {
+        /// The widget that has the focus.
+        of: Target,
+    },
 }
 
 impl AppCheck for WidgetsCheck {
@@ -67,6 +73,17 @@ impl AppCheck for WidgetsCheck {
                     Ok(())
                 } else {
                     Err(format!("{of:?} has {selected:?} selected, not {items:?}"))
+                }
+            }
+            Self::Focused { of } => {
+                let world = probe.world();
+                let widget = resolve(world, of)?
+                    .widget
+                    .ok_or_else(|| format!("{of:?} names a position, not a widget"))?;
+                match world.get_resource::<InputFocus>().and_then(InputFocus::get) {
+                    Some(focused) if focused == widget => Ok(()),
+                    Some(focused) => Err(format!("{focused} has the focus, not {of:?}")),
+                    None => Err(format!("nothing has the focus, not {of:?}")),
                 }
             }
         }

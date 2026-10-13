@@ -130,6 +130,7 @@ checkout's build so Bevy is not compiled again.
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled` |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy** |
 | `label.rs` | `Label::header` / `Label::regular` |
+| `focus.rs` | the crate-private `TabStop` marker (requires `TabIndex`), `sync_tab_index` and the focus ring, see "Keyboard focus" below |
 | `link.rs` | `Link` and its immutable `LinkState` |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node |
 
@@ -307,6 +308,20 @@ of them (`just example gallery -- --run-all stack link`).
   locator without a label reaches all of them, so the scenarios use `Nth(..)`); a
   Tailwind colour has a name (`blue-500`) but an `Item<Color>` does not carry one,
   so naming swatches is left to the accessibility follow-up.
+- **Keyboard focus: tab stops and the focus ring.** `WidgetsPlugin` adds Bevy's
+  `InputFocusPlugin`, `InputDispatchPlugin` and `TabNavigationPlugin` unless the app
+  has them (the tester's `HeadlessPlugins` has the first two, not the third), and
+  `UiRoot` requires `TabGroup::new(0)`, so the widget tree is one non-modal tab group.
+  `PushButton`, `ColorPushButton`, `Link` and `List` (so a `ColorPalette` as well)
+  require the crate-private `TabStop`, which requires `TabIndex`. `sync_tab_index`
+  owns the value: 0 for a stop that is not `InteractionDisabled` (a `LinkState::Disabled`
+  link has it), -1 otherwise; **no widget writes `TabIndex` by hand**. Within the group
+  the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
+  gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
+  `InputFocusVisible` is true; a click focuses without showing it (Bevy's
+  `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
+  `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
+  (`tests/ron/keyboard_tab_order.ron`).
 - **Combo buttons open on `Activate` and say whether the popup is open.** The
   `ComboButton` and the `ColorPushButton` of a `ColorPaletteCombo` are `Button`s;
   the combo toggles its `ComboState` (the palette combo its `State`) on their

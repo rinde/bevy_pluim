@@ -10,6 +10,7 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
+use crate::focus::TabStop;
 use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
@@ -54,6 +55,7 @@ impl Plugin for PushButtonPlugin {
     Name::new("PushButton"),
     Button,
     Hovered,
+    TabStop,
 )]
 pub struct PushButton {
     label: String,
