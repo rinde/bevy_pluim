@@ -778,7 +778,7 @@ a file can check any `Reflect` type of the app by short type path.
   `ScrollPosition` (logical) rather than `ComputedNode.scroll_position`
   (physical). `ComputedNode.size` and `UiGlobalTransform` are physical: check
   them with `unit: Logical`, which divides by the scale factor, or compare with
-  a `Capture`. `Screen(..)` is in logical pixels and runs in both variants; a
+  a `Captured`. `Screen(..)` is in logical pixels and runs in both variants; a
   file that really needs a screen position and cannot run at scale 2 says
   `variants: ["default"]`, with a comment saying why (none does today).
 - **Prove it fails** as with Rust scenarios: change an expected value in the

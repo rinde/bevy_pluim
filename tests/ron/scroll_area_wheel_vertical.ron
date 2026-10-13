@@ -2,8 +2,8 @@
 // up, never past the top, and not sideways: the area only scrolls vertically.
 // A positive wheel y is "up", so the scroll position moves by the opposite
 // amount.
-// The scroll position read is the one the layout settles on
-// (ScrollPosition.0), clamped to what overflows (the ScrollPosition component is kept in that range
+// The scroll position read is the value that was set
+// (ScrollPosition.0, logical pixels), clamped to what overflows (the ScrollPosition component is kept in that range
 // too, but the layout shows it a pass later).
 (
     format_version: 3,

@@ -2,7 +2,7 @@
 // contents sideways by the share of what overflows that the thumb travelled of
 // its track: partway, to the end, which stops at the last of the contents
 // however far the pointer goes, and back to the start. The scroll position that
-// counts is the one the layout settles on (ScrollPosition).
+// counts is the value that was set (ScrollPosition.0, logical pixels).
 (
     format_version: 3,
     name: "dragging the thumb of a horizontal scroll area scrolls the contents",

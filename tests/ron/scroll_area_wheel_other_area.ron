@@ -1,7 +1,7 @@
 // The wheel scrolls the scroll area under the pointer and no other: after
 // scrolling the vertical area, the other three still show their top left.
-// The scroll position read is the one the layout settles on
-// (ScrollPosition.0), clamped to what overflows (the ScrollPosition component is kept in that range
+// The scroll position read is the value that was set
+// (ScrollPosition.0, logical pixels), clamped to what overflows (the ScrollPosition component is kept in that range
 // too, but the layout shows it a pass later).
 (
     format_version: 3,

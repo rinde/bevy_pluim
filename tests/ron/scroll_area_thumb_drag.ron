@@ -1,8 +1,8 @@
 // Dragging the thumb of the vertical scroll area scrolls its contents by the
 // share of what overflows that the thumb travelled of its track: partway down,
 // to the end, which stops at the last of the contents however far the pointer
-// goes, and back to the top. The scroll position that counts is the one the
-// layout settles on (ScrollPosition).
+// goes, and back to the top. The scroll position that counts is the value that was
+// set (ScrollPosition.0, logical pixels).
 (
     format_version: 3,
     name: "dragging the thumb scrolls the contents",

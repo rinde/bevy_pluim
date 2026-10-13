@@ -1,8 +1,8 @@
 // The wheel over the horizontal scroll area scrolls its contents sideways
 // and back, and not down: the area only scrolls horizontally. A positive
 // wheel x is "left", so the scroll position moves by the opposite amount.
-// The scroll position read is the one the layout settles on
-// (ScrollPosition.0), clamped to what overflows (the ScrollPosition component is kept in that range
+// The scroll position read is the value that was set
+// (ScrollPosition.0, logical pixels), clamped to what overflows (the ScrollPosition component is kept in that range
 // too, but the layout shows it a pass later).
 (
     format_version: 3,
