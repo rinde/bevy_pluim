@@ -1367,6 +1367,37 @@ fn activating_the_buttons_of_a_numeric_stepper_steps_its_value() {
 }
 
 #[test]
+fn one_arrow_key_steps_a_reinserted_numeric_stepper_once() {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    let mut app = headless_app();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let (stepper, _, _) = spawn_stepper(&mut app, 0);
+    app.world_mut().entity_mut(stepper).insert(NumericStepper);
+    app.update();
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(stepper));
+
+    app.world_mut().write_message(KeyboardInput {
+        key_code: KeyCode::ArrowUp,
+        logical_key: Key::ArrowUp,
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    });
+    app.update();
+    app.update();
+
+    assert_eq!(stepper_value(&app, stepper), 1);
+}
+
+#[test]
 fn a_numeric_stepper_button_at_its_bound_is_disabled_until_the_value_moves() {
     let mut app = headless_app();
     let (stepper, decrease, increase) = spawn_stepper(&mut app, 0);

@@ -24,15 +24,17 @@ pub struct NumericStepperPlugin;
 
 impl Plugin for NumericStepperPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_activate).add_systems(
-            Update,
-            (
-                on_change,
-                (|| None::<Entity>)
-                    .pipe(theme_numeric_stepper)
-                    .run_if(resource_changed::<Theme>),
-            ),
-        );
+        app.add_observer(on_activate)
+            .add_observer(on_key_input)
+            .add_systems(
+                Update,
+                (
+                    on_change,
+                    (|| None::<Entity>)
+                        .pipe(theme_numeric_stepper)
+                        .run_if(resource_changed::<Theme>),
+                ),
+            );
     }
 }
 
@@ -99,10 +101,6 @@ impl NumericStepper {
                 },
             )));
 
-        world
-            .commands()
-            .entity(context.entity)
-            .observe(on_key_input);
         world
             .commands()
             .run_system_cached_with(theme_numeric_stepper, Some(context.entity));
@@ -332,6 +330,7 @@ fn on_activate(
 /// Steps the value of the stepper the key reached with the arrow keys.
 fn on_key_input(
     trigger: On<FocusedInput<KeyboardInput>>,
+    steppers: Query<(), With<NumericStepper>>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
 ) {
@@ -345,6 +344,9 @@ fn on_key_input(
         _ => return,
     };
     let stepper = trigger.event_target();
+    if !steppers.contains(stepper) {
+        return;
+    }
     let value_entity = value_refs
         .get(stepper)
         .map_or(stepper, |value_ref| value_ref.0);
