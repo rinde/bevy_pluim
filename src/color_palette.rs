@@ -214,16 +214,16 @@ fn handle_mouse_events(
 
     let is_selected = selection.is_selected(*target_item_ref);
 
-    let highlight = match (t.event().kind, is_selected) {
-        (MouseKind::Pressed, _) | (MouseKind::Over, true) => Some(HoverState::SelectedHover),
-        (MouseKind::Over, false) => Some(HoverState::Hover),
-        (MouseKind::Out, true) => Some(HoverState::Selected),
-        (MouseKind::Out, false) => Some(HoverState::Unselected),
+    let highlight = match t.event().kind {
+        // A press is a pointer on the swatch, and shows the strongest highlight.
+        MouseKind::Pressed => Some(HoverState::SelectedHover),
+        MouseKind::Over => Some(HoverState::of(is_selected, true)),
+        MouseKind::Out => Some(HoverState::of(is_selected, false)),
         // A click and a drag say nothing new about the pointer being on the swatch: the
         // over, press, release and out events around them set the highlight. A drag in
         // particular can arrive after the pointer left the swatch.
-        (MouseKind::Click(_) | MouseKind::Drag(_), _) => None,
-        (MouseKind::Released, _) => {
+        MouseKind::Click(_) | MouseKind::Drag(_) => None,
+        MouseKind::Released => {
             // The `ListBox` leaves a click on a `Selected` swatch alone, so deselecting is
             // ours. Selecting is the `ListBox`'s, see `list::on_value_change`. Both go by
             // the `Selected` the `ListBox` saw, not by the `Selection`: see
@@ -250,7 +250,13 @@ fn theme_items(
     theme: Res<Theme>,
     color_palettes: Query<(Entity, Option<&Children>), With<ColorPalette>>,
     selections: SelectionParam,
-    mut item_views: Query<(&Children, &ItemView, &mut Node, &mut BackgroundColor)>,
+    mut item_views: Query<(
+        &Children,
+        &ItemView,
+        &Hovered,
+        &mut Node,
+        &mut BackgroundColor,
+    )>,
     mut color_item_views: Query<&mut Node, Without<ItemView>>,
     color_items: Query<&Item<Color>>,
     mut commands: Commands,
@@ -272,6 +278,7 @@ fn theme_items(
             let Ok((
                 children,
                 ItemView { item_ref, .. },
+                hovered,
                 mut outer_node,
                 mut outer_background_color,
             )) = item_views.get_mut(*item_view_id)
@@ -293,11 +300,7 @@ fn theme_items(
             inner_node.border = UiRect::all(Val::Px(1.0));
             inner_node.border_radius = BorderRadius::all(Val::Px(5.0));
 
-            let hover_state = if selection.is_selected(*item_ref) {
-                HoverState::Selected
-            } else {
-                HoverState::Unselected
-            };
+            let hover_state = HoverState::of(selection.is_selected(*item_ref), hovered.get());
             let Ok(Item { data: item_color }) = color_items.get(*item_ref) else {
                 continue;
             };
@@ -341,12 +344,8 @@ fn on_selection_change(
                 let Ok(Item { data: item_color }) = color_items.get(item_view.item_ref) else {
                     continue;
                 };
-                let hover_state = match (selection.is_selected(item_view.item_ref), hovered.get()) {
-                    (true, true) => HoverState::SelectedHover,
-                    (true, false) => HoverState::Selected,
-                    (false, true) => HoverState::Hover,
-                    (false, false) => HoverState::Unselected,
-                };
+                let hover_state =
+                    HoverState::of(selection.is_selected(item_view.item_ref), hovered.get());
                 commands.run_system_cached_with(
                     set_highlight,
                     (item_view_id, *item_color, hover_state),
@@ -408,4 +407,17 @@ enum HoverState {
     Selected,
     Unselected,
     Hover,
+}
+
+impl HoverState {
+    /// The highlight of a swatch from its state, for the hover handler and the theme
+    /// system alike so that they cannot disagree.
+    const fn of(selected: bool, hovered: bool) -> Self {
+        match (selected, hovered) {
+            (true, true) => Self::SelectedHover,
+            (true, false) => Self::Selected,
+            (false, true) => Self::Hover,
+            (false, false) => Self::Unselected,
+        }
+    }
 }
