@@ -1,0 +1,20 @@
+// With the focus on an open palette combo's palette, arrow keys and Enter pick a colour and
+// the popup closes.
+(
+    format_version: 3,
+    name: "arrow keys and Enter pick a colour from a palette combo and close it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Tap(key: Enter),
+        Wait(1),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
+        Tap(key: ArrowRight),
+        Tap(key: Enter),
+        Wait(1),
+        Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
+        Check(Not(App(Selected(of: Name("first palette combo"), items: [])))),
+    ],
+    expect: [],
+)

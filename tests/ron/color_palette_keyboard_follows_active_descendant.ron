@@ -1,8 +1,8 @@
 // A palette is a list, so it is one tab stop whose arrow keys move the active swatch, the
 // one with the focus ring (a palette has 22 columns: Right is the next swatch, in the
-// order of `tailwind::COLORS`), and Enter selects it. Tab reaches the palette on the 14th
-// press: the six palette combos, "Change theme" and, for now, the palettes of the six
-// closed popups, which are tab stops although hidden.
+// order of `tailwind::COLORS`), and Enter selects it. Tab reaches the palette on the 8th
+// press: the six palette combos and "Change theme" (the palettes of the closed popups are
+// skipped).
 // Swatches have no label, so they are reached by position.
 (
     format_version: 3,
@@ -11,8 +11,7 @@
     steps: [
         Wait(2),
         Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
-        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
-        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
         Wait(1),
         Check(App(Focused(of: Name("palette")))),
         // A palette that was not clicked starts on its first swatch.

@@ -324,7 +324,8 @@ of them (`just example gallery -- --run-all stack link`).
   `PushButton`, `ColorPushButton`, `Link` and `List` (so a `ColorPalette` as well)
   require the crate-private `TabStop`, which requires `TabIndex`. `sync_tab_index`
   owns the value: 0 for a stop that is not `InteractionDisabled` (a `LinkState::Disabled`
-  link has it), -1 otherwise; **no widget writes `TabIndex` by hand**. Within the group
+  link has it), -1 otherwise or while it has the crate-private `Unreachable` marker (the
+  list of a closed combo, put on and taken off with `ComboState` / `State`); **no widget writes `TabIndex` by hand**. Within the group
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
   `InputFocusVisible` is true, except that a list's ring is on its `ActiveDescendant` row
@@ -333,7 +334,23 @@ of them (`just example gallery -- --run-all stack link`).
   registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
-  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The hidden popup palettes of the combos are still tab stops (a ticket of its own), so the palette scenario Tabs 14 times.
+  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+- **A combo's popup takes the keyboard focus while it is open.** Opening a `Combo` or a
+  `ColorPaletteCombo` (the hook of `ComboState`, the observer of `State`) sets
+  `InputFocus` to the popup's list (the palette, for the palette combo) with
+  `FocusCause::Navigated`, so the `ListBox` arrows and Enter / Space work on it; closing
+  it, however it was closed, moves the focus back to the button if it was still on the
+  list. The observers sit on that list, not on the combo, because a palette combo's popup
+  is a child of its root: `FocusedInput<KeyboardInput>` closes the combo on Escape, and
+  on Enter / Space for a selection of one item at most (the `ListBox` picks the active
+  row, or leaves a selected one, and the popup is done; a selection of many stays open),
+  and `FocusLost` closes it when the focus leaves the list (Tab away, a click on
+  something else). A click on the button or in the popup also takes the focus off the
+  list (nothing in them is focusable), but that is not leaving: the pointer being on
+  either (their `Hovered`) makes the observer ignore it (and put the focus back on the
+  list for a click in the popup). On a close by losing the focus the focus goes back to the
+  button only if nothing took it. `ComboState` / `State` stay the one source of truth. The
+  `combo_keyboard_*` and `color_palette_combo_keyboard_*` files cover it.
 - **Combo buttons open on `Activate` and say whether the popup is open.** The
   `ComboButton` and the `ColorPushButton` of a `ColorPaletteCombo` are `Button`s;
   the combo toggles its `ComboState` (the palette combo its `State`) on their

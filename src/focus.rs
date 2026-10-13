@@ -27,15 +27,25 @@ impl Plugin for FocusPlugin {
 /// Marks a widget that Tab reaches.
 ///
 /// Its [`TabIndex`] is kept by `sync_tab_index`: 0 while the widget is usable, -1 while it
-/// is [`InteractionDisabled`] (a disabled `Link` included), so Tab skips it.
+/// is [`InteractionDisabled`] (a disabled `Link` included) or [`Unreachable`] (the list of a
+/// closed combo), so Tab skips it.
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[require(TabIndex(0))]
 pub(crate) struct TabStop;
 
-/// Keeps the [`TabIndex`] of every [`TabStop`] in step with whether it is disabled.
-fn sync_tab_index(mut stops: Query<(&mut TabIndex, Has<InteractionDisabled>), With<TabStop>>) {
-    for (mut index, disabled) in &mut stops {
-        let wanted = if disabled { -1 } else { 0 };
+/// Marks a [`TabStop`] that Tab skips although it is usable: the list of a closed combo.
+///
+/// Whoever hides the widget inserts it, and removes it again when the widget shows.
+#[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Unreachable;
+
+/// Keeps the [`TabIndex`] of every [`TabStop`] in step with whether it is disabled or
+/// [`Unreachable`].
+fn sync_tab_index(
+    mut stops: Query<(&mut TabIndex, Has<InteractionDisabled>, Has<Unreachable>), With<TabStop>>,
+) {
+    for (mut index, disabled, unreachable) in &mut stops {
+        let wanted = if disabled || unreachable { -1 } else { 0 };
         if index.0 != wanted {
             index.0 = wanted;
         }

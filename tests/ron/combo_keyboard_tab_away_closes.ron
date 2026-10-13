@@ -1,0 +1,19 @@
+// The focus leaving the open list closes the combo: Tab goes on to the next widget, which keeps
+// the focus.
+(
+    format_version: 3,
+    name: "Tabbing out of an open combo's list closes it",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Tap(key: Enter),
+        Wait(1),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        Tap(key: Tab),
+        Wait(2),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        Check(Not(App(Focused(of: Within(Name("first combo"), Component("ComboList")))))),
+    ],
+    expect: [],
+)

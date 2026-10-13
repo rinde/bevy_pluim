@@ -1,16 +1,20 @@
 //! `Combo`: a button that opens a [`List`] in a [`Float`].
 //!
-//! The popup closes again on a click outside of it.
+//! The popup closes again on a click outside of it. From the keyboard, opening it puts the
+//! focus on its list and Escape closes it again.
 
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use itertools::Itertools;
 
 use crate::float::Float;
+use crate::focus::Unreachable;
 use crate::list::{List, NoDefaultItems};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::select::{Item, Selection, SelectionParam};
@@ -35,6 +39,10 @@ impl Plugin for ComboPlugin {
 /// The popup closes again on a click outside of it. The button toggles it when
 /// it is [`Activate`]d (a click, or Enter or Space on a focused button) and says
 /// whether it is open as `aria-expanded` on its [`AccessibilityNode`].
+///
+/// Opening the popup moves the keyboard focus to its list, so the arrow keys, Enter and
+/// Space work on it. Escape closes it, as does the focus leaving the list (Tab away, a click
+/// elsewhere); the focus then goes back to the button, unless it moved to another widget.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 #[component(on_add=Self::on_add)]
@@ -105,6 +113,23 @@ impl ComboState {
             Self::Closed => Visibility::Hidden,
         };
         world.commands().entity(list_id).insert(visibility);
+        // A closed popup's list is not a tab stop.
+        match state {
+            Self::Open => world.commands().entity(list_id).remove::<Unreachable>(),
+            Self::Closed => world.commands().entity(list_id).insert(Unreachable),
+        };
+        if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
+            match state {
+                Self::Open => {
+                    focus.set(list_id, FocusCause::Navigated);
+                }
+                // Whoever closed the popup, the focus does not stay on a hidden list.
+                Self::Closed if focus.get() == Some(list_id) => {
+                    focus.set(button_id, FocusCause::Navigated);
+                }
+                Self::Closed => {}
+            }
+        }
         if let Some(mut node) = world.get_mut::<AccessibilityNode>(button_id) {
             node.set_expanded(state == Self::Open);
         }
@@ -150,6 +175,11 @@ impl Combo {
         let combo_id = context.entity;
         world
             .commands()
+            .entity(list_id)
+            .observe(close_on_key(combo_id))
+            .observe(close_on_focus_lost(combo_id));
+        world
+            .commands()
             .entity(combo_id)
             .insert((ComboState::Closed, ComboSubRefs { button_id, list_id }))
             .observe(handle_combo_button_mouse_events);
@@ -160,6 +190,80 @@ impl Combo {
                 }
             },
         );
+    }
+}
+
+/// An observer for the popup's list that closes the combo on the keyboard.
+///
+/// Escape closes it. So do Enter and Space when the selection holds one item at most: the
+/// list picks the active row (or leaves the selection as it is when that row is selected
+/// already, as a click does), and the popup has done its job. A selection of many keeps the
+/// popup open for the next pick.
+fn close_on_key(
+    combo_id: Entity,
+) -> impl Fn(On<FocusedInput<KeyboardInput>>, Query<&ComboState>, SelectionParam, Commands) {
+    move |input, states, selections, mut commands| {
+        let key = &input.event().input;
+        if !key.state.is_pressed() || states.get(combo_id) != Ok(&ComboState::Open) {
+            return;
+        }
+        let closes = match key.key_code {
+            KeyCode::Escape => true,
+            KeyCode::Enter | KeyCode::Space => selections
+                .get(combo_id)
+                .is_some_and(|selection| !selection.allow_multiple()),
+            _ => false,
+        };
+        if closes {
+            commands.entity(combo_id).insert(ComboState::Closed);
+        }
+    }
+}
+
+/// An observer for the popup's list that closes the combo when the focus leaves the list.
+///
+/// The focus going to the combo's own button is not leaving, and nor is a click in the popup,
+/// which takes the focus off the list (nothing in it can have it): the popup stays, and the
+/// list gets the focus back. Elsewhere the focus goes back to the button
+/// when nothing took it, so a click on empty space does not leave the keyboard nowhere; when it
+/// went to another widget it stays there.
+fn close_on_focus_lost(
+    combo_id: Entity,
+) -> impl Fn(
+    On<FocusLost>,
+    Query<(&ComboState, &ComboSubRefs)>,
+    Query<&Hovered, With<ComboList>>,
+    ResMut<InputFocus>,
+    Commands,
+) {
+    move |lost, states, hovered, mut focus, mut commands| {
+        let Ok((&state, sub_refs)) = states.get(combo_id) else {
+            return;
+        };
+        // The event bubbles: only the list itself losing the focus counts.
+        if lost.event().entity != sub_refs.list_id {
+            return;
+        }
+        if state == ComboState::Open {
+            // The focus going to the combo's own button (a click on it, Shift+Tab) is not
+            // leaving.
+            if focus.get() == Some(sub_refs.button_id) {
+                return;
+            }
+            if hovered.get(sub_refs.list_id).is_ok_and(Hovered::get) {
+                if focus.get().is_none() {
+                    focus.set(sub_refs.list_id, FocusCause::Navigated);
+                }
+                return;
+            }
+        }
+        // An outside click may have closed the popup already: the focus still goes back.
+        if focus.get().is_none() {
+            focus.set(sub_refs.button_id, FocusCause::Navigated);
+        }
+        if state == ComboState::Open {
+            commands.entity(combo_id).insert(ComboState::Closed);
+        }
     }
 }
 
