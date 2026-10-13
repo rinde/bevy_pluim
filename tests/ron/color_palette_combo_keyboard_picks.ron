@@ -14,7 +14,7 @@
         Tap(key: Enter),
         Wait(1),
         Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Closed))),
-        Check(Not(App(Selected(of: Name("first palette combo"), items: [])))),
+        Check(App(Selected(of: Name("first palette combo"), items: ["slate-100"]))),
     ],
     expect: [],
 )

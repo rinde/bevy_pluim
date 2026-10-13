@@ -4,12 +4,14 @@
 //! [`TabIndex`] and `draw_focus_ring` draws the [`ThemeColors::focus_ring`](crate::theme::ThemeColors)
 //! around the focused one while the focus is visible.
 
+use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::input_focus::{InputFocus, InputFocusVisible};
+use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{ActiveDescendant, ListItem};
 
+use crate::select::SelectionValue;
 use crate::theme::Theme;
 
 /// Registers the systems of the keyboard focus.
@@ -133,4 +135,58 @@ fn draw_focus_ring(
             commands.entity(entity).remove::<Outline>();
         }
     }
+}
+
+/// Whether a key pressed with the focus on an open combo's popup closes it.
+///
+/// Escape closes it. So do Enter and Space when the selection holds one item at most: the
+/// popup's list picks the active row (or leaves the selection as it is when that row is
+/// selected already, as a click does), and the popup has done its job. A selection of many
+/// keeps the popup open for the next pick.
+pub(crate) fn popup_key_closes(input: &KeyboardInput, selection: Option<&SelectionValue>) -> bool {
+    if !input.state.is_pressed() {
+        return false;
+    }
+    match input.key_code {
+        KeyCode::Escape => true,
+        KeyCode::Enter | KeyCode::Space => {
+            selection.is_some_and(|selection| !selection.allow_multiple())
+        }
+        _ => false,
+    }
+}
+
+/// What a popup's list losing the focus means for its combo.
+///
+/// Moves the focus where it belongs and says whether the combo closes. The focus going to the
+/// combo's own button is not leaving, and nor is a click in the popup, which takes the focus
+/// off the list (nothing in it can have it): the popup stays, and the list gets the focus
+/// back. Elsewhere the focus goes back to the button when nothing took it, so a click on empty
+/// space does not leave the keyboard nowhere; when it went to another widget it stays there.
+/// `open` says whether the combo is open, `popup_hovered` whether the pointer is on the popup.
+pub(crate) fn popup_focus_lost(
+    focus: &mut InputFocus,
+    open: bool,
+    button: Entity,
+    list: Entity,
+    popup_hovered: bool,
+) -> bool {
+    if open {
+        // The focus going to the combo's own button (a click on it, Shift+Tab) is not
+        // leaving.
+        if focus.get() == Some(button) {
+            return false;
+        }
+        if popup_hovered {
+            if focus.get().is_none() {
+                focus.set(list, FocusCause::Navigated);
+            }
+            return false;
+        }
+    }
+    // An outside click may have closed the popup already: the focus still goes back.
+    if focus.get().is_none() {
+        focus.set(button, FocusCause::Navigated);
+    }
+    open
 }
