@@ -7,6 +7,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
+use crate::focus::TabStop;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`ColorPushButton`].
@@ -42,7 +43,7 @@ impl Plugin for ColorPushButtonPlugin {
         align_items: AlignItems::Center,
         ..default()
     },
-    Name::new("ColorPushButton"),Button,
+    Name::new("ColorPushButton"),Button,TabStop,
 )]
 pub struct ColorPushButton;
 

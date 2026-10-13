@@ -15,11 +15,12 @@ use bevy::camera::{CameraUpdateSystems, NormalizedRenderTarget, RenderTarget};
 use bevy::picking::input::PointerInputSettings;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
-use bevy::ui::{IsDefaultUiCamera, UiSystems};
+use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
 use rin_bevy_ui::list::List;
+use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
@@ -88,6 +89,51 @@ fn a_scenario_expecting_the_wrong_theme_colours_fails() {
         "{:#?}",
         report.failures()
     );
+}
+
+/// A scenario that taps Tab `taps` times on the "Buttons" screen, with "Other" disabled
+/// when `disable_other`, and expects the focus on `expected` at the end.
+fn tab_to(taps: usize, disable_other: bool, expected: &str) -> Scenario {
+    let button = |label: &str| Target::role(WidgetRole::Button, label);
+    let mut steps = vec![Step::wait(2)];
+    steps.extend((0..taps).map(|_| Step::tap(KeyCode::Tab)));
+    steps.push(Step::check(Check::app(WidgetsCheck::Focused {
+        of: button(expected),
+    })));
+    Scenario::new("Tab moves the focus through the buttons in spawn order")
+        .setup(move |world| {
+            let root = spawn_camera_and_root(world);
+            world.entity_mut(root).with_children(|root| {
+                root.spawn(PushButton::from_label("Add"));
+                let mut other = root.spawn(PushButton::from_label("Other"));
+                if disable_other {
+                    other.insert(InteractionDisabled);
+                }
+                root.spawn(PushButton::from_label("Last"));
+            });
+        })
+        .steps(steps)
+}
+
+#[test]
+fn tab_focuses_the_first_button_then_the_next_in_spawn_order() {
+    for (taps, expected) in [(1, "Add"), (2, "Other"), (3, "Last"), (4, "Add")] {
+        let report = play(&tab_to(taps, false, expected));
+        assert!(report.passed(), "{taps} taps: {:#?}", report.failures());
+    }
+}
+
+#[test]
+fn tab_skips_a_disabled_button() {
+    let report = play(&tab_to(2, true, "Last"));
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
+#[test]
+fn a_scenario_expecting_the_wrong_focus_fails() {
+    // The second Tab lands on "Other", so expecting "Last" there must fail.
+    let report = play(&tab_to(2, false, "Last"));
+    assert!(!report.passed());
 }
 
 #[test]

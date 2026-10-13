@@ -7,6 +7,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
+use crate::focus::TabStop;
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
 
@@ -49,6 +50,7 @@ impl Plugin for LinkPlugin {
     Name::new("Link"),
     Button,
     LinkState::Enabled,
+    TabStop,
 )]
 pub struct Link {
     label: String,
