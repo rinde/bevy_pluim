@@ -3,11 +3,14 @@
 use std::collections::HashMap;
 
 use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
-use bevy::ui_widgets::{ActiveDescendant, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
+use bevy::ui_widgets::{
+    ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
+};
 use itertools::Either;
 
 use crate::focus::TabStop;
@@ -34,10 +37,12 @@ impl Plugin for ListPlugin {
                         .pipe(theme_item_labels)
                         .run_if(resource_changed::<Theme>),
                     selection_change,
+                    custom_view_hover,
                 ),
             )
             .add_observer(on_insert_selection)
             .add_observer(on_value_change)
+            .add_observer(handle_custom_view_mouse_events)
             .register_type::<ItemView>()
             .register_type::<ListLayout>()
             .register_type::<CornerStyle>();
@@ -98,6 +103,50 @@ pub enum CornerStyle {
     /// Square corners.
     None,
 }
+
+/// Makes a [`List`] build the contents of its item views with a system of the app's own,
+/// instead of the default text.
+///
+/// The list still owns each [`ItemView`] node: it spawns one per item, keeps them in step
+/// with [`ItemsChanged`], and handles hover, press and selection exactly as for the default
+/// views. The creator runs once per view, right after it is spawned, and adds the
+/// contents as children of [`ItemViewSpawner::view`]. The items need not be `Item<String>`.
+///
+/// A [`Button`] inside a view handles its own pointer: a press on it does not restyle the
+/// row and a click on it does not change the selection. Contents that are not buttons pass
+/// the pointer on to the row.
+///
+/// Add it with the [`List`], before the first update; the creator is a system registered
+/// with `World::register_system`.
+#[derive(Component, Debug, Copy, Clone)]
+pub struct ItemViewCreator {
+    /// The system that spawns the contents of a view, through the [`ItemViewSpawner`] it is given.
+    pub create: SystemId<In<ItemViewSpawner>>,
+}
+
+impl ItemViewCreator {
+    /// A list whose views are filled by `create`.
+    #[must_use]
+    pub const fn new(create: SystemId<In<ItemViewSpawner>>) -> Self {
+        Self { create }
+    }
+}
+
+/// Given to the creator system of an [`ItemViewCreator`]: the item to show and the (empty)
+/// view to fill with children.
+#[derive(Debug, Copy, Clone)]
+pub struct ItemViewSpawner {
+    /// The item the view shows.
+    pub item: Entity,
+    /// The [`ItemView`] node to spawn the contents under.
+    pub view: Entity,
+}
+
+/// Marks an [`ItemView`] whose contents come from an [`ItemViewCreator`]. Such a view has
+/// children that take the pointer, so it reads hover from [`Hovered`] and the pointer events
+/// of its descendants instead of observing its own.
+#[derive(Component, Debug, Copy, Clone)]
+struct CustomView;
 
 /// Opt out of the default item views, for a [`List`] that renders its items itself.
 #[derive(Component, Copy, Clone, Default, Debug)]
@@ -213,6 +262,86 @@ fn handle_mouse_events(
     let hovered = !matches!(t.event().kind, MouseKind::Out);
     let pressed = matches!(t.event().kind, MouseKind::Pressed);
     background_color.0 = item_background(&theme.colors, is_selected || pressed, hovered);
+}
+
+/// The [`ItemView`] a pointer event on `target` belongs to, if `target` is a custom view or
+/// lies under one without a nested button in between.
+fn custom_view_of(
+    target: Entity,
+    parents: &Query<&ChildOf>,
+    views: &Query<(), With<CustomView>>,
+    buttons: &Query<(), With<Button>>,
+) -> Option<Entity> {
+    let mut current = target;
+    loop {
+        if views.contains(current) {
+            return Some(current);
+        }
+        if buttons.contains(current) {
+            return None;
+        }
+        current = parents.get(current).ok()?.parent();
+    }
+}
+
+fn handle_custom_view_mouse_events(
+    t: On<MouseEvent>,
+    parents: Query<&ChildOf>,
+    custom_views: Query<(), With<CustomView>>,
+    buttons: Query<(), With<Button>>,
+    mut selections: SelectionParam,
+    mut item_views: Query<(&ItemView, &Hovered, &mut BackgroundColor, Has<Selected>)>,
+    theme: Res<Theme>,
+) {
+    let kind = t.event().kind;
+    if !matches!(kind, MouseKind::Pressed | MouseKind::Released) {
+        return;
+    }
+    let Some(view) = custom_view_of(t.event().event_target(), &parents, &custom_views, &buttons)
+    else {
+        return;
+    };
+    let Ok((item_view, hovered, mut background_color, is_marked_selected)) =
+        item_views.get_mut(view)
+    else {
+        return;
+    };
+    let Some(is_selected) = selections
+        .get(item_view.list_ref)
+        .map(|selection| selection.is_selected(item_view.item_ref))
+    else {
+        return;
+    };
+    if matches!(kind, MouseKind::Pressed) {
+        background_color.0 = item_background(&theme.colors, true, hovered.get());
+        return;
+    }
+    // See `handle_mouse_events`: deselecting a `Selected` row is ours, by the `Selected` the
+    // `ListBox` saw.
+    if is_marked_selected {
+        selections.update_selection(item_view.list_ref, |selection| {
+            selection.toggle_selected(item_view.item_ref)
+        });
+    } else {
+        background_color.0 = item_background(&theme.colors, is_selected, hovered.get());
+    }
+}
+
+/// Colours a custom view when the pointer enters or leaves it or anything inside it.
+fn custom_view_hover(
+    mut item_views: Query<
+        (&ItemView, &Hovered, &mut BackgroundColor),
+        (With<CustomView>, Changed<Hovered>),
+    >,
+    selections: SelectionParam,
+    theme: Res<Theme>,
+) {
+    for (item_view, hovered, mut background_color) in &mut item_views {
+        let is_selected = selections
+            .get(item_view.list_ref)
+            .is_some_and(|selection| selection.is_selected(item_view.item_ref));
+        background_color.0 = item_background(&theme.colors, is_selected, hovered.get());
+    }
 }
 
 /// The background of an [`ItemView`] from its state: selected and hovered, selected,
@@ -361,12 +490,15 @@ fn on_items_changed(
     input: In<ItemsChangedInput>,
     items_query: Query<&Item<String>>,
     mut commands: Commands,
-    lists: Query<Option<&Children>, (With<List>, Without<NoDefaultItems>)>,
+    lists: Query<
+        (Option<&Children>, Option<&ItemViewCreator>),
+        (With<List>, Without<NoDefaultItems>),
+    >,
     item_views: Query<(Entity, &ItemView)>,
     selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
-    let Ok(children) = lists.get(*list_ref) else {
+    let Ok((children, creator)) = lists.get(*list_ref) else {
         return;
     };
     let selection = selections.get(*list_ref);
@@ -379,6 +511,7 @@ fn on_items_changed(
         })
         .unwrap_or_default();
 
+    let mut commands_run = Vec::new();
     let mut items = items.clone();
     for (view_ref, ItemView { item_ref, .. }) in existing {
         let len_before = items.len();
@@ -390,9 +523,10 @@ fn on_items_changed(
     }
 
     for item_ref in items {
-        let Ok(item) = items_query.get(item_ref) else {
+        let item = items_query.get(item_ref).ok();
+        if item.is_none() && creator.is_none() {
             continue;
-        };
+        }
         let is_selected = selection.is_some_and(|selection| selection.is_selected(item_ref));
         commands.entity(*list_ref).with_children(|spawner| {
             let mut view = spawner.spawn((
@@ -416,15 +550,28 @@ fn on_items_changed(
                     list_ref: *list_ref,
                 },
             ));
-            view.observe(handle_mouse_events).with_children(|parent| {
-                parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
-            });
             if is_selected {
                 view.insert(Selected);
+            }
+            if let Some(creator) = creator {
+                let spawner = ItemViewSpawner {
+                    item: item_ref,
+                    view: view.id(),
+                };
+                view.insert(CustomView);
+                let create = creator.create;
+                commands_run.push((create, spawner));
+            } else if let Some(item) = item {
+                view.observe(handle_mouse_events).with_children(|parent| {
+                    parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
+                });
             }
         });
     }
 
+    for (create, spawner) in commands_run {
+        commands.run_system_with(create, spawner);
+    }
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
