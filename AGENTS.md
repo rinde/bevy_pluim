@@ -396,6 +396,15 @@ of them (`just example gallery -- --run-all stack link`).
 
 ## Conventions
 
+- **A scroll area scrolls a focused row into view.** `scroll_into_view` in
+  `scroll_area.rs` observes `bevy_ui_widgets::ScrollIntoView`, which a `ListBox`
+  triggers when the arrow keys, Home or End move its active descendant. It finds
+  the `ScrollContents` above the entity and moves its `ScrollPosition` by the
+  least that shows the entity, per axis only where the contents scroll and within
+  `[0, max]`; an entity outside any scroll area is left alone. It reads the
+  entity's laid-out position, so it is one layout pass behind like the wheel's
+  `ComputedNode`. The wheel is untouched
+  (`scroll_area_keyboard_scrolls_item_into_view.ron`).
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
 - **Widgets observe `MouseEvent`, not raw `Pointer<…>`.**
