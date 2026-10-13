@@ -36,6 +36,7 @@ use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::stack::Stack;
 use rin_bevy_ui::theme::{Theme, ThemeColors};
+use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton};
 
 fn app_with_widgets() -> App {
     let mut app = App::new();
@@ -97,6 +98,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Kbd>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
+        assert_component::<Toolbar>(registry);
+        assert_component::<ToolbarButton>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
     });
