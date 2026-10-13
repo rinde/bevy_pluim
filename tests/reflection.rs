@@ -89,12 +89,9 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Card>(registry);
         assert_component::<Divider>(registry);
         assert_component::<Icon>(registry);
-<<<<<<< HEAD
         assert_component::<SegmentedControl>(registry);
         assert_component::<Segment>(registry);
-=======
         assert_component::<IconButton>(registry);
->>>>>>> origin/main
         assert_component::<Kbd>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
