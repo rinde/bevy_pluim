@@ -107,8 +107,15 @@ the coordinator stops, comments and takes `ready-for-agent` off the issue.
 Agents talk to GitHub through `gh api` and its REST endpoints, because cloud
 sessions block the GraphQL API that `gh issue` and `gh pr` use. An unattended
 run needs its tools allowed, or it stops at the first permission prompt. Each
-worktree starts with an empty `target/`; the skills point cargo at the main
-checkout's build so Bevy is not compiled again.
+worktree builds in its own `target/`, seeded from the main checkout's with a
+copy-on-write clone (`cp -c -R` on macOS, which falls back to a real copy where it cannot
+clone, so the skills compare `df` before and after and remove `./target` if it
+grew; `cp -R --reflink=always` on Linux, which refuses), only when `./target`
+does not exist yet, then `touch tests/*.rs src/lib.rs`.
+Never share one `CARGO_TARGET_DIR` between worktrees (stale artifacts, and
+`ron_scenarios` reads `tests/ron` through a path compiled into its binary, so
+it can play another worktree's files) and never `cp -r` the 19G `target/`
+(it fills the disk). The skills check `df -h .` first.
 
 ## Where to find what
 

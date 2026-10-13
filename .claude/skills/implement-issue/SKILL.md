@@ -46,9 +46,28 @@ friends may fail where `gh api repos/...` works.
 3. Read `AGENTS.md` in full, then the module you are changing and a sibling
    widget; `push_button.rs` is the reference widget to copy.
 
-A worktree has its own `target/`, so its first build is a cold Bevy compile.
-To reuse the main checkout's build, prefix cargo and `just` commands with
-`CARGO_TARGET_DIR="$(git rev-parse --path-format=absolute --git-common-dir)/../target"`.
+**Build in your worktree's own `target/`, never in a shared one.** Two
+worktrees on one `CARGO_TARGET_DIR` mix up same-named artifacts (a stale
+`ThemeColors`, and `tests/ron_scenarios` reads `tests/ron` through a path
+compiled into its binary, so it can play another worktree's files). Do not
+point `CARGO_TARGET_DIR` at the main checkout's `target/`, and never `cp -r` it
+(about 19G; copies filled the disk, #165). Instead:
+
+1. Check space: `df -h .` should show more than 30G free; if not, stop and
+   report rather than building.
+2. Seed `target/` with a copy-on-write clone, which costs no disk, only if
+   the main checkout has a build and `./target` does not exist yet (else `cp`
+   would nest it as `./target/target`):
+   `MAIN="$(git rev-parse --path-format=absolute --git-common-dir)/.."`. On
+   Linux, `cp -R --reflink=always "$MAIN/target" ./target` refuses to copy when
+   the filesystem cannot clone. On macOS `cp -c -R "$MAIN/target" ./target`
+   silently falls back to a real copy when it cannot clone (not APFS), so
+   guard it: note `df -k .` before and after, and if free space dropped by
+   more than a few hundred MB, `rm -rf ./target`. In either case, if the clone
+   did not happen, remove any partial `./target` and build cold (a long Bevy
+   compile) rather than copying for real.
+3. After seeding, `touch tests/*.rs src/lib.rs` so cargo rebuilds this crate's
+   own targets from your sources, whatever the seed held.
 
 ## 3. Implement
 
