@@ -17,6 +17,7 @@ pub mod divider;
 pub mod float;
 pub mod focus;
 pub mod icon;
+pub mod icon_button;
 pub mod kbd;
 pub mod label;
 pub mod link;
@@ -44,6 +45,7 @@ use crate::divider::DividerPlugin;
 use crate::float::FloatPlugin;
 use crate::focus::FocusPlugin;
 use crate::icon::IconPlugin;
+use crate::icon_button::IconButtonPlugin;
 use crate::kbd::KbdPlugin;
 use crate::label::LabelPlugin;
 use crate::link::LinkPlugin;
@@ -83,6 +85,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(CardPlugin)
             .add_plugins(DividerPlugin)
             .add_plugins(IconPlugin)
+            .add_plugins(IconButtonPlugin)
             .add_plugins(KbdPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(ThemePlugin)

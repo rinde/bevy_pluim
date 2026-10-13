@@ -33,6 +33,7 @@ use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::icon::{Icon, IconColor};
+use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
@@ -390,6 +391,69 @@ fn an_icon_is_tinted_with_the_text_colour_and_follows_a_theme_change() {
         tint(&app, icon),
         DEFAULT_DARK_THEME_COLORS.accent_subtle_text
     );
+}
+
+#[test]
+fn an_icon_button_spawns_a_sized_icon_and_follows_its_image_and_name() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let regular = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Pause", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    let small = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Close", IconButtonSize::Small),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+
+    let icon_of = |app: &App, e: Entity| app.world().get::<IconButtonRefs>(e).unwrap().icon_id;
+    let side = |app: &App, e: Entity| {
+        let node = app.world().get::<Node>(e).unwrap();
+        (node.width, node.height)
+    };
+    for (button, button_px, icon_px) in [(regular, 44.0, 22.0), (small, 30.0, 16.0)] {
+        assert_eq!(side(&app, button), (Val::Px(button_px), Val::Px(button_px)));
+        let icon = icon_of(&app, button);
+        assert_eq!(side(&app, icon), (Val::Px(icon_px), Val::Px(icon_px)));
+        assert_eq!(app.world().get::<ChildOf>(icon).unwrap().parent(), button);
+    }
+    assert_eq!(
+        background(&app, regular),
+        DEFAULT_LIGHT_THEME_COLORS.background_primary
+    );
+    let tint = |app: &App, e: Entity| app.world().get::<ImageNode>(icon_of(app, e)).unwrap().color;
+    assert_eq!(tint(&app, regular), DEFAULT_LIGHT_THEME_COLORS.text_primary);
+    assert_eq!(tint(&app, small), DEFAULT_LIGHT_THEME_COLORS.text_secondary);
+    let label = |app: &App, e: Entity| {
+        app.world()
+            .get::<AccessibilityNode>(e)
+            .unwrap()
+            .label()
+            .map(str::to_owned)
+    };
+    assert_eq!(label(&app, regular).as_deref(), Some("Pause"));
+
+    let play: Handle<Image> = bevy::asset::uuid_handle!("0b6c1d2e-3f40-4a51-8b62-7c83d94ea5f6");
+    app.world_mut().entity_mut(regular).insert(IconButton::new(
+        play.clone(),
+        "Play",
+        IconButtonSize::Regular,
+    ));
+    app.update();
+    app.update();
+
+    let icon = icon_of(&app, regular);
+    assert_eq!(app.world().get::<ImageNode>(icon).unwrap().image, play);
+    assert_eq!(label(&app, regular).as_deref(), Some("Play"));
+    assert_eq!(app.world().get::<Children>(regular).unwrap().len(), 1);
 }
 
 #[test]
