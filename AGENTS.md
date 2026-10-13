@@ -141,6 +141,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `link.rs` | `Link` and its immutable `LinkState` |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node |
 | `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
+| `icon.rs` | `Icon::bundle(handle, size)` / `Icon::bundle_with_color`: an `ImageNode` from an app-provided white-on-transparent `Handle<Image>`, tinted with the `IconColor` theme role of its `Icon` (primary text by default); a widget changes the role by inserting `Icon` again |
 
 ### Examples
 
