@@ -12,6 +12,8 @@ use bevy::a11y::AccessibilityNode;
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::input::InputPlugin;
+use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::{InputFocus, InputFocusVisible};
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
 use bevy::picking::events::{Click, Pointer, Press, Release};
@@ -625,6 +627,67 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
     assert_eq!(label_color(&app), colors.text_primary);
+}
+
+/// Whether `entity` has a focus ring, an [`Outline`].
+fn has_focus_ring(app: &App, entity: Entity) -> bool {
+    app.world().entity(entity).contains::<Outline>()
+}
+
+#[test]
+fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
+    let mut app = headless_app();
+    let focused = spawn_push_button(&mut app);
+    let other = app.world_mut().spawn(PushButton::from_label("Other")).id();
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(focused));
+    app.world_mut().insert_resource(InputFocusVisible(true));
+    app.update();
+    app.update();
+
+    let ring = app.world().entity(focused).get::<Outline>().unwrap();
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(ring.color, colors.focus_ring);
+    assert_eq!(ring.width, Val::Px(2.0));
+    assert_eq!(ring.offset, Val::Px(1.0));
+    assert!(!has_focus_ring(&app, other));
+
+    // A click hides the ring, Tab shows it again.
+    app.world_mut().insert_resource(InputFocusVisible(false));
+    app.update();
+    app.update();
+    assert!(!has_focus_ring(&app, focused));
+    app.world_mut().insert_resource(InputFocusVisible(true));
+    app.update();
+    app.update();
+    assert!(has_focus_ring(&app, focused));
+
+    // The focus moves, and the ring with it.
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(other));
+    app.update();
+    app.update();
+    assert!(!has_focus_ring(&app, focused));
+    assert!(has_focus_ring(&app, other));
+}
+
+#[test]
+fn a_tab_stop_is_reached_by_tab_only_while_it_is_enabled() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let index = |app: &App| app.world().entity(button).get::<TabIndex>().unwrap().0;
+    assert_eq!(index(&app), 0);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+    assert_eq!(index(&app), -1);
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(index(&app), 0);
 }
 
 /// Whether the [`AccessibilityNode`] of `entity` says `aria-expanded`, or nothing.

@@ -10,6 +10,7 @@ use bevy::ui::Selected;
 use bevy::ui_widgets::{ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use itertools::Either;
 
+use crate::focus::TabStop;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
@@ -59,6 +60,7 @@ impl Plugin for ListPlugin {
 #[require(
     Name::new("List"),
     ListBox,
+    TabStop,
     ListLayout::Vertical,
     CornerStyle::FollowLayout,
     Pickable {

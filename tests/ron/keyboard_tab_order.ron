@@ -1,0 +1,17 @@
+(
+    format_version: 3,
+    name: "Tab focuses the buttons in spawn order and wraps round",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Add")))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Other")))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Add")))),
+    ],
+    expect: [],
+)

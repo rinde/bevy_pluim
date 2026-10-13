@@ -123,6 +123,8 @@ pub struct ThemeColors {
     pub large_shadow: Color,
     /// The colour of the small shadow.
     pub small_shadow: Color,
+    /// The colour of the ring around the widget that has keyboard focus.
+    pub focus_ring: Color,
     /// The colour of a scroll bar thumb.
     pub scroll_thumb_background: Color,
 }
@@ -154,6 +156,7 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     link_selected: Color::Srgba(BLUE_800),
     large_shadow: SHADOW_LG,
     small_shadow: SHADOW_SM,
+    focus_ring: Color::Srgba(BLUE_600),
     scroll_thumb_background: Color::Srgba(GRAY_400),
 };
 /// The default colours of the dark theme.
@@ -177,6 +180,7 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     link_selected: Color::Srgba(BLUE_200),
     large_shadow: SHADOW_LG_DARK_MODE,
     small_shadow: SHADOW_SM_DARK_MODE,
+    focus_ring: Color::Srgba(BLUE_400),
     scroll_thumb_background: Color::Srgba(GRAY_600),
 };
 
