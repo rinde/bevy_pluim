@@ -142,6 +142,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node |
 | `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
 | `icon.rs` | `Icon::bundle(handle, size)` / `Icon::bundle_with_color`: an `ImageNode` from an app-provided white-on-transparent `Handle<Image>`, tinted with the `IconColor` theme role of its `Icon` (primary text by default); a widget changes the role by inserting `Icon` again |
+| `icon_button.rs` | `IconButton::new(handle, name, size)` with `IconButtonSize::{Regular, Small}` (44 px / 22 px icon, 30 px / 16 px icon): a borderless `Button` of control radius with an `Icon` child (`IconButtonRefs`); `name` is the label of its `AccessibilityNode`, kept there by a system because Bevy clears a text-less button's label on add; inserting `IconButton` again swaps icon, name or size; small icons are secondary text until hovered; an app observes `Activate` |
 
 ### Examples
 
