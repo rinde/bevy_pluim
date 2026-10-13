@@ -140,6 +140,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `focus.rs` | the crate-private `TabStop` marker (requires `TabIndex`), `sync_tab_index` and the focus ring, see "Keyboard focus" below |
 | `link.rs` | `Link` and its immutable `LinkState` |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node |
+| `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
 
 ### Examples
 
