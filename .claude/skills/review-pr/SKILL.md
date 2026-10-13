@@ -62,9 +62,13 @@ machine. GitHub's CI is the jobs **Format, clippy and docs**, **Tests** and
   reasons without a step's output (see **Agents** in `AGENTS.md`) — or is still
   queued or running → run CI yourself, in the checkout of the head:
   `just ci`. It builds Bevy, so give the command a long timeout (up to
-  45 minutes). In a worktree, reuse the main checkout's build rather than
-  compiling Bevy from cold:
-  `CARGO_TARGET_DIR="$(git rev-parse --path-format=absolute --git-common-dir)/../target" just ci`.
+  45 minutes). In a worktree, build in the worktree's own `target/`, never a shared
+  `CARGO_TARGET_DIR` (it gives stale test binaries) and never a full copy of
+  the main checkout's 19G `target/` (it fills the disk). Check `df -h .` shows
+  more than 30G free, seed with a copy-on-write clone (macOS
+  `cp -c -R "$(git rev-parse --path-format=absolute --git-common-dir)/../target" ./target`,
+  Linux `cp -R --reflink=always ...`; if it fails, remove the partial copy and
+  build cold), `touch tests/*.rs src/lib.rs`, then `just ci`.
   - It passes → CI passed locally: `ci=local` in the marker, and say in the
     body that GitHub's CI did not run and `just ci` passed on `head.sha`.
   - A format, clippy, doc, test or unused-dependency check fails → a
