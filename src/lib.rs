@@ -23,6 +23,7 @@ pub mod list;
 pub mod numeric_stepper;
 pub mod push_button;
 pub mod scroll_area;
+pub mod segmented_control;
 pub mod select;
 pub mod stack;
 pub mod tailwind;
@@ -49,6 +50,7 @@ use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
+use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::stack::StackPlugin;
 use crate::theme::{Theme, ThemePlugin};
@@ -72,6 +74,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
+            .add_plugins(SegmentedControlPlugin)
             .add_plugins(StackPlugin)
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)

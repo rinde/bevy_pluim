@@ -140,6 +140,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `focus.rs` | the crate-private `TabStop` marker (requires `TabIndex`), `sync_tab_index` and the focus ring, see "Keyboard focus" below |
 | `link.rs` | `Link` and its immutable `LinkState` |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node |
+| `segmented_control.rs` | `SegmentedControl`: a track of text `Segment`s (`Button`s and tab stops) over a `Selection` of `Item<String>`, own or `Selection::Ref`, normally a `One`; a segment's `Activate` sets the selection to its item (`set_selection`), `Selected` and the `segmented_*` theme colours follow the selection and hover. It is its own widget, not a `List` style, so `List` is untouched |
 | `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
 | `icon.rs` | `Icon::bundle(handle, size)` / `Icon::bundle_with_color`: an `ImageNode` from an app-provided white-on-transparent `Handle<Image>`, tinted with the `IconColor` theme role of its `Icon` (primary text by default); a widget changes the role by inserting `Icon` again |
 
@@ -157,6 +158,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `lists` | `List` layouts and corner styles |
 | `numeric_stepper` | `NumericStepper` |
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
+| `segmented_control` | `SegmentedControl`s, one with its own selection and two sharing one |
 | `gallery` | the tester's gallery: the widgets in one window, and a **Scenarios** window listing every file of `tests/ron/` (one group per widget) to watch play, step, take over or record; see [The gallery](#the-gallery) |
 
 Every example has a button that toggles the light and dark theme (the gallery's
