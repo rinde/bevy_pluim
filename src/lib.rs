@@ -46,20 +46,17 @@ use crate::stack::StackPlugin;
 use crate::theme::{Theme, ThemePlugin};
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
+///
+/// The `ButtonPlugin` and `ListBoxPlugin` of `bevy_ui_widgets` are added in
+/// [`Plugin::finish`] when the app does not have them by then, so it does not matter
+/// whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added before or after this
+/// plugin. An app that is driven by hand with `App::update` instead of `App::run`
+/// must call `App::finish` first, or its buttons and lists get no observers.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
 impl Plugin for WidgetsPlugin {
     fn build(&self, app: &mut App) {
-        // `DefaultPlugins` and the tester's `HeadlessPlugins` bring Bevy's
-        // `UiWidgetsPlugins` along; a bare `App` does not. Adding the observers
-        // twice would panic, so add them only when they are missing.
-        if !app.is_plugin_added::<ButtonPlugin>() {
-            app.add_plugins(ButtonPlugin);
-        }
-        if !app.is_plugin_added::<ListBoxPlugin>() {
-            app.add_plugins(ListBoxPlugin);
-        }
         app.init_resource::<Theme>()
             .add_plugins(ListPlugin)
             .add_plugins(PushButtonPlugin)
@@ -85,6 +82,19 @@ impl Plugin for WidgetsPlugin {
             .add_observer(observer_transformer::<Click>)
             .add_observer(observer_transformer::<Drag>)
             .add_observer(observer_transformer::<Out>);
+    }
+
+    /// `DefaultPlugins` and the tester's `HeadlessPlugins` bring Bevy's
+    /// `UiWidgetsPlugins` along; a bare `App` does not. Adding the same plugin
+    /// twice panics, so the missing ones are added here, once every plugin of the
+    /// app has been built and it is known which ones the app has.
+    fn finish(&self, app: &mut App) {
+        if !app.is_plugin_added::<ButtonPlugin>() {
+            app.add_plugins(ButtonPlugin);
+        }
+        if !app.is_plugin_added::<ListBoxPlugin>() {
+            app.add_plugins(ListBoxPlugin);
+        }
     }
 }
 

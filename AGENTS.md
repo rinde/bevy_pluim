@@ -255,9 +255,13 @@ of them (`just example gallery -- --run-all stack link`).
   `Link` (the other widgets still use `bevy::ui::Button`, until they are moved
   over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
-  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` unless the app
-  already has it (`DefaultPlugins` and the tester's `HeadlessPlugins` add all of
-  `UiWidgetsPlugins`; adding twice panics). **`Activate` and `MouseEvent`:**
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`) in
+  its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
+  tester's `HeadlessPlugins` add all of `UiWidgetsPlugins`; adding twice panics),
+  so the order of `WidgetsPlugin` and `UiWidgetsPlugins` does not matter; an app
+  driven by hand with `App::update` must call `App::finish` first. A
+  `ColorPushButton` with `InteractionDisabled` has its border in `text_disabled`
+  (it has no hover colours to ignore). **`Activate` and `MouseEvent`:**
   "the button was used" is `Activate`, so an action observes `Activate` (on the
   button, or on an ancestor: it bubbles); how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one

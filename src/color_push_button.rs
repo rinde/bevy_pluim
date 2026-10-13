@@ -3,6 +3,7 @@
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
@@ -18,9 +19,12 @@ impl Plugin for ColorPushButtonPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (|| None::<Entity>)
-                .pipe(update_theme)
-                .run_if(resource_changed::<Theme>),
+            (
+                (|| None::<Entity>)
+                    .pipe(update_theme)
+                    .run_if(resource_changed::<Theme>),
+                restyle_on_disabled_change,
+            ),
         );
     }
 }
@@ -88,6 +92,21 @@ impl ColorPushButton {
     }
 }
 
+/// Restyles a [`ColorPushButton`] whose [`InteractionDisabled`] was just added or removed.
+fn restyle_on_disabled_change(
+    added: Query<Entity, (With<ColorPushButton>, Added<InteractionDisabled>)>,
+    mut removed: RemovedComponents<InteractionDisabled>,
+    buttons: Query<(), With<ColorPushButton>>,
+    mut commands: Commands,
+) {
+    for entity in added
+        .iter()
+        .chain(removed.read().filter(|e| buttons.contains(*e)))
+    {
+        commands.run_system_cached_with(update_theme, Some(entity));
+    }
+}
+
 pub(crate) fn update_theme(
     button_id: In<Option<Entity>>,
     theme: Res<Theme>,
@@ -98,6 +117,7 @@ pub(crate) fn update_theme(
             &mut BorderColor,
             &mut BoxShadow,
             &mut Node,
+            Has<InteractionDisabled>,
         ),
         With<ColorPushButton>,
     >,
@@ -117,10 +137,15 @@ pub(crate) fn update_theme(
         mut border_color,
         mut box_shadow,
         mut node,
+        disabled,
     ) in it
     {
         background_color.0 = theme.colors.background_primary;
-        border_color.set_all(theme.colors.border);
+        border_color.set_all(if disabled {
+            theme.colors.text_disabled
+        } else {
+            theme.colors.border
+        });
         node.border_radius = BorderRadius::all(theme.corner_radius);
         *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
