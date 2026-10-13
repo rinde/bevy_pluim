@@ -41,6 +41,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
@@ -2857,6 +2858,62 @@ fn a_separated_list_follows_a_theme_change() {
     assert_eq!(background(&app, views[1]), Color::NONE);
 }
 
+#[test]
+fn a_pill_gets_the_colours_of_its_tone_and_a_new_tone_restyles_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let pill = app
+        .world_mut()
+        .spawn((Pill::new("running"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let state = |app: &App| {
+        let e = app.world().entity(pill);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            e.get::<BackgroundColor>().unwrap().0,
+            e.get::<TextColor>().unwrap().0,
+        )
+    };
+    let c = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(
+        state(&app),
+        ("RUNNING".to_string(), c.pill_background, c.pill_text)
+    );
+
+    for (tone, text, bg, fg) in [
+        (PillTone::Info, "RUNNING", c.info_background, c.info_text),
+        (PillTone::Warning, "AT STOP", c.wait_background, c.wait_text),
+        (
+            PillTone::Problem,
+            "NO PATH",
+            c.warning_background,
+            c.warning_text,
+        ),
+        (PillTone::Neutral, "IDLE", c.pill_background, c.pill_text),
+    ] {
+        app.world_mut()
+            .entity_mut(pill)
+            .insert(Pill::new(text).with_tone(tone));
+        app.update();
+        app.update();
+        assert_eq!(state(&app), (text.to_string(), bg, fg), "{tone:?}");
+    }
+
+    app.world_mut()
+        .entity_mut(pill)
+        .insert(Pill::new("x").with_tone(PillTone::Warning));
+    toggle_theme(&mut app);
+    app.update();
+    app.update();
+    let d = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(
+        state(&app),
+        ("X".to_string(), d.wait_background, d.wait_text)
+    );
+}
 fn spawn_chips(app: &mut App, chips: [Chip; 3]) -> (Entity, Entity) {
     let root = app.world_mut().spawn(Node::default()).id();
     let chips_entity = app
