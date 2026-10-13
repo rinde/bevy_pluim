@@ -37,7 +37,7 @@
         ),
         Check(Component(
             target: Within(Name("first palette combo popup"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Between(1.0, 2000.0),
         )),
         Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),
@@ -50,7 +50,7 @@
         ),
         Check(Component(
             target: Within(Name("first palette combo popup"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
         Check(Component(target: Name("first palette combo"), path: "State", is: Eq(Open))),

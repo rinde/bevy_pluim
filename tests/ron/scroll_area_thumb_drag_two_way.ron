@@ -13,12 +13,12 @@
         ),
         Check(Component(
             target: Within(Name("two-way scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.x",
+            path: "ScrollPosition.0.x",
             is: Gt(0.0),
         )),
         Check(Component(
             target: Within(Name("two-way scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
         Drag(
@@ -28,7 +28,7 @@
         ),
         Check(Component(
             target: Within(Name("two-way scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Gt(0.0),
         )),
     ],

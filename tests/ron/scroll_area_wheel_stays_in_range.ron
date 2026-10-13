@@ -29,7 +29,7 @@
         Wait(2),
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Lt(214.0),
         )),
         // Far past the top stops at the top.

@@ -2,8 +2,8 @@
 // up, never past the top, and not sideways: the area only scrolls vertically.
 // A positive wheel y is "up", so the scroll position moves by the opposite
 // amount.
-// The scroll position read is the one the layout settles on
-// (ComputedNode.scroll_position), clamped to what overflows (the ScrollPosition component is kept in that range
+// The scroll position read is the value that was set
+// (ScrollPosition.0, logical pixels), clamped to what overflows (the ScrollPosition component is kept in that range
 // too, but the layout shows it a pass later).
 (
     format_version: 3,
@@ -12,7 +12,7 @@
     steps: [
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
         MoveTo(Name("vertical scroll area")),
@@ -20,28 +20,28 @@
         Wait(2),
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(100.0),
         )),
         Wheel(x: 0.0, y: 40.0),
         Wait(2),
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(60.0),
         )),
         Wheel(x: 0.0, y: 500.0),
         Wait(2),
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.y",
+            path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
         Wheel(x: -100.0, y: 0.0),
         Wait(2),
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
-            path: "ComputedNode.scroll_position.x",
+            path: "ScrollPosition.0.x",
             is: Eq(0.0),
         )),
     ],

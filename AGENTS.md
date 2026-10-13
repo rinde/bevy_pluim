@@ -184,9 +184,8 @@ of them (`just example gallery -- --run-all stack link`).
   `NotUnderTest` (setups spawn selections beside the UI, not under it), and puts
   `Theme` back; the scenario's `WidgetsSetup` builds the screen again. Leave
   the selections out and stale ones make later scenarios fail.
-- **The window has a scale factor of 1** (temporary, rinde/rin-bevy-ui#104) (`scale_factor_override`). The files
-  check pixel values such as `ComputedNode.scroll_position`, which are physical
-  pixels, and on a 2x display every one of them doubles.
+- **The window has the display's scale factor.** The files state logical
+  values (see "Scenario files"), so they pass at any scale factor.
 - **`leave_gallery_roots_alone` is temporary** (rinde/rin-bevy-ui-tester#86,
   rinde/rin-bevy-ui#101): it takes `UiRoot` off the cursor overlay's roots.
   Drop it once they stop getting `UiRoot`.
@@ -411,11 +410,10 @@ of them (`just example gallery -- --run-all stack link`).
   `Node::overflow` is `Scroll` and leaves `ScrollPosition` inside `[0, max]`
   per axis, `max` being how far the contents overflow in logical pixels (0 when
   they fit); a node that does not scroll along an axis is not moved along it.
-  A scenario can read either: `ScrollPosition.0.y` is the value that was set
-  (logical pixels), and `ComputedNode.scroll_position.y` is what the layout
-  shows, floored, in physical pixels and one layout pass behind. Read `ScrollPosition` to check
-  what the wheel or the thumb did and `ComputedNode` to check what is on
-  screen. `handle_thumb_drag` starts each drag event from the current
+  A scenario reads `ScrollPosition.0.y`, the value that was set (logical
+  pixels). `ComputedNode.scroll_position.y` is what the layout shows, floored,
+  in physical pixels and one layout pass behind, so it doubles at a scale
+  factor of 2 and scenario files do not read it. `handle_thumb_drag` starts each drag event from the current
   `ScrollPosition` rather than the computed one for that lag: a frame can hold
   several drag events, and each must add to the last. Its clamp is a guard for
   contents that shrank.
@@ -774,6 +772,15 @@ a file can check any `Reflect` type of the app by short type path.
   column 1), so a bar sits in its own cell whichever bars the area has.
 - **Observers on a screen's entities** are added with `.observe(..)` on the
   spawned entity. `Observer::new(..)` in a bundle is a global observer.
+- **Every file runs at scale factors 1 and 2.** `ron_scenarios` plays each file
+  as written (`name`) and on a window with the same logical size and a scale
+  factor of 2 (`name [scale 2]`), so a file states logical values. Read
+  `ScrollPosition` (logical) rather than `ComputedNode.scroll_position`
+  (physical). `ComputedNode.size` and `UiGlobalTransform` are physical: check
+  them with `unit: Logical`, which divides by the scale factor, or compare with
+  a `Captured`. `Screen(..)` is in logical pixels and runs in both variants; a
+  file that really needs a screen position and cannot run at scale 2 says
+  `variants: ["default"]`, with a comment saying why (none does today).
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
 - **Every file is played twice.** Once by `ron_scenarios`, and once more by

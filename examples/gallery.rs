@@ -36,7 +36,6 @@ use std::path::Path;
 use bevy::app::AppExit;
 use bevy::camera::Camera2d;
 use bevy::prelude::*;
-use bevy::window::WindowResolution;
 use rin_bevy_ui::select::{ItemOf, Selection};
 use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::{UiRoot, WidgetsPlugin};
@@ -206,10 +205,6 @@ fn main() -> AppExit {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "rin-bevy-ui".into(),
-                // Temporary, rinde/rin-bevy-ui#104: the scenario files check
-                // pixel positions (a scroll position, say) as they are at a
-                // scale factor of 1. Remove when they no longer depend on it.
-                resolution: WindowResolution::default().with_scale_factor_override(1.0),
                 ..default()
             }),
             ..default()
