@@ -1,0 +1,41 @@
+// Tab does not land in a `Stack` panel that is hidden (`Display::None`), and does
+// once the panel is shown again. "hello" is a button of Panel A.
+(
+    format_version: 3,
+    name: "Tab skips the buttons of a hidden stack panel",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        // Panel A shows: Tab reaches "hello" somewhere in the cycle.
+        // Seven stops: the tab list, "Change theme", two palette combos, the combo,
+        // "Button on a card" and "hello".
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("Stack"), Role(role: Button, label: "hello"))))),
+
+        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(Not(Visible(Within(Name("Stack"), Role(role: Button, label: "hello"))))),
+        // A click on "Change theme" focuses it; Tab then goes on in tree order to the two
+        // lists of Panel B, then round to the tab list and "Change theme" again. It never
+        // lands on a button of Panel A.
+        MoveTo(Role(role: Button, label: "Change theme")), Click(Left),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Nth(1, Within(Name("Stack"), Component("List")))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Nth(2, Within(Name("Stack"), Component("List")))))),
+        Tap(key: Tab), Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+
+        // Shown again, it is back in the order: from "Change theme" the stops are the two
+        // palette combos, the combo, "Button on a card" and "hello".
+        MoveTo(Role(role: ListItem, label: "Panel A")), Click(Left),
+        Wait(2),
+        Check(Visible(Within(Name("Stack"), Role(role: Button, label: "hello")))),
+        MoveTo(Role(role: Button, label: "Change theme")), Click(Left),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("Stack"), Role(role: Button, label: "hello"))))),
+    ],
+    expect: [],
+)

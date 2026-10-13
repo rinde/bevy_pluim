@@ -27,8 +27,9 @@ impl Plugin for FocusPlugin {
 /// Marks a widget that Tab reaches.
 ///
 /// Its [`TabIndex`] is kept by `sync_tab_index`: 0 while the widget is usable, -1 while it
-/// is [`InteractionDisabled`] (a disabled `Link` included) or [`Unreachable`] (the list of a
-/// closed combo), so Tab skips it.
+/// is [`InteractionDisabled`] (a disabled `Link` included), [`Unreachable`] (the list of a
+/// closed combo) or hidden (`Visibility::Hidden`, or under a `Display::None` node, such
+/// as a hidden `Stack` panel), so Tab skips it.
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[require(TabIndex(0))]
 pub(crate) struct TabStop;
@@ -39,13 +40,60 @@ pub(crate) struct TabStop;
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Unreachable;
 
-/// Keeps the [`TabIndex`] of every [`TabStop`] in step with whether it is disabled or
-/// [`Unreachable`].
+/// Whether `entity` is not shown: it or an ancestor has `Display::None`, or its own
+/// [`Visibility`] or that of the nearest ancestor that is not `Inherited` is `Hidden`.
+///
+/// Read from `Visibility` rather than `InheritedVisibility`, which only a rendering app
+/// propagates.
+fn is_hidden(
+    entity: Entity,
+    shown: &Query<(Option<&Node>, Option<&Visibility>)>,
+    parents: &Query<&ChildOf>,
+) -> bool {
+    let mut visibility_decided = false;
+    let mut current = entity;
+    loop {
+        if let Ok((node, visibility)) = shown.get(current) {
+            if node.is_some_and(|node| node.display == Display::None) {
+                return true;
+            }
+            if !visibility_decided {
+                match visibility {
+                    Some(Visibility::Hidden) => return true,
+                    Some(Visibility::Visible) => visibility_decided = true,
+                    _ => {}
+                }
+            }
+        }
+        match parents.get(current) {
+            Ok(child_of) => current = child_of.parent(),
+            Err(_) => return false,
+        }
+    }
+}
+
+/// Keeps the [`TabIndex`] of every [`TabStop`] in step with whether it is disabled,
+/// [`Unreachable`] or hidden.
 fn sync_tab_index(
-    mut stops: Query<(&mut TabIndex, Has<InteractionDisabled>, Has<Unreachable>), With<TabStop>>,
+    mut stops: Query<
+        (
+            Entity,
+            &mut TabIndex,
+            Has<InteractionDisabled>,
+            Has<Unreachable>,
+        ),
+        With<TabStop>,
+    >,
+    shown: Query<(Option<&Node>, Option<&Visibility>)>,
+    parents: Query<&ChildOf>,
 ) {
-    for (mut index, disabled, unreachable) in &mut stops {
-        let wanted = if disabled || unreachable { -1 } else { 0 };
+    for (entity, mut index, disabled, unreachable) in &mut stops {
+        let hidden = is_hidden(entity, &shown, &parents);
+        let wanted = if disabled || unreachable || hidden {
+            -1
+        } else {
+            0
+        };
         if index.0 != wanted {
             index.0 = wanted;
         }
