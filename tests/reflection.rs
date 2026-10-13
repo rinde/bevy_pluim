@@ -25,7 +25,7 @@ use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
 use rin_bevy_ui::icon::Icon;
-use rin_bevy_ui::icon_button::IconButton;
+use rin_bevy_ui::icon_button::{IconButton, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
@@ -93,6 +93,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<SegmentedControl>(registry);
         assert_component::<Segment>(registry);
         assert_component::<IconButton>(registry);
+        assert_component::<ToggleState>(registry);
         assert_component::<Kbd>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);

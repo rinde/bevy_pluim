@@ -35,7 +35,7 @@ use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::icon::{Icon, IconColor};
-use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize};
+use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
@@ -457,6 +457,76 @@ fn an_icon_button_spawns_a_sized_icon_and_follows_its_image_and_name() {
     assert_eq!(app.world().get::<ImageNode>(icon).unwrap().image, play);
     assert_eq!(label(&app, regular).as_deref(), Some("Play"));
     assert_eq!(app.world().get::<Children>(regular).unwrap().len(), 1);
+}
+
+#[test]
+fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let toggle = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Pause", IconButtonSize::Regular),
+            ToggleState(false),
+            ChildOf(root),
+        ))
+        .id();
+    let plain = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Close", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    let tint = |app: &App, e: Entity| {
+        let icon = app.world().get::<IconButtonRefs>(e).unwrap().icon_id;
+        app.world().get::<ImageNode>(icon).unwrap().color
+    };
+    let state = |app: &App, e: Entity| app.world().get::<ToggleState>(e).copied();
+    let bar_display = |app: &App, e: Entity| {
+        let children = app.world().get::<Children>(e).unwrap();
+        let bar = children[1];
+        app.world().get::<Node>(bar).unwrap().display
+    };
+    assert_eq!(background(&app, toggle), colors.background_primary);
+    assert_eq!(bar_display(&app, toggle), Display::None);
+
+    app.world_mut().trigger(Activate { entity: toggle });
+    app.update();
+    app.update();
+    assert_eq!(state(&app, toggle), Some(ToggleState(true)));
+    assert_eq!(background(&app, toggle), colors.accent_subtle);
+    assert_eq!(tint(&app, toggle), colors.accent_subtle_text);
+    assert_eq!(bar_display(&app, toggle), Display::Flex);
+    let bar = app.world().get::<Children>(toggle).unwrap()[1];
+    assert_eq!(
+        app.world().get::<BackgroundColor>(bar).unwrap().0,
+        colors.accent_subtle_bar
+    );
+
+    app.world_mut().trigger(Activate { entity: toggle });
+    app.update();
+    app.update();
+    assert_eq!(state(&app, toggle), Some(ToggleState(false)));
+    assert_eq!(background(&app, toggle), colors.background_primary);
+    assert_eq!(bar_display(&app, toggle), Display::None);
+
+    // Set from outside.
+    app.world_mut().entity_mut(toggle).insert(ToggleState(true));
+    app.update();
+    app.update();
+    assert_eq!(background(&app, toggle), colors.accent_subtle);
+
+    // A button without a ToggleState stays momentary.
+    app.world_mut().trigger(Activate { entity: plain });
+    app.update();
+    app.update();
+    assert_eq!(state(&app, plain), None);
+    assert_eq!(app.world().get::<Children>(plain).unwrap().len(), 1);
 }
 
 #[test]
