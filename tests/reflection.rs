@@ -23,6 +23,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::float::Float;
+use rin_bevy_ui::icon::Icon;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, List, ListLayout};
@@ -84,6 +85,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Stack>(registry);
         assert_component::<Card>(registry);
         assert_component::<Divider>(registry);
+        assert_component::<Icon>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
     });

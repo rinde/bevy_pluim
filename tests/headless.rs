@@ -32,6 +32,7 @@ use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboS
 use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
+use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{ItemView, List};
@@ -310,6 +311,46 @@ fn a_divider_has_the_divider_colour_and_follows_a_theme_change() {
     for divider in [horizontal, vertical] {
         assert_eq!(background(&app, divider), DEFAULT_DARK_THEME_COLORS.divider);
     }
+}
+
+#[test]
+fn an_icon_is_tinted_with_the_text_colour_and_follows_a_theme_change() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let icon = app
+        .world_mut()
+        .spawn((Icon::bundle(Handle::default(), 18.0), ChildOf(root)))
+        .id();
+    let active = app
+        .world_mut()
+        .spawn((
+            Icon::bundle_with_color(Handle::default(), 24.0, IconColor::AccentText),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+
+    let tint = |app: &App, e: Entity| app.world().get::<ImageNode>(e).unwrap().color;
+    assert_eq!(tint(&app, icon), DEFAULT_LIGHT_THEME_COLORS.text_primary);
+    assert_eq!(tint(&app, active), DEFAULT_LIGHT_THEME_COLORS.accent_text);
+    let node = app.world().get::<Node>(icon).unwrap();
+    assert_eq!((node.width, node.height), (Val::Px(18.0), Val::Px(18.0)));
+
+    toggle_theme(&mut app);
+    app.update();
+
+    assert_eq!(tint(&app, icon), DEFAULT_DARK_THEME_COLORS.text_primary);
+    assert_eq!(tint(&app, active), DEFAULT_DARK_THEME_COLORS.accent_text);
+
+    app.world_mut().entity_mut(icon).insert(Icon {
+        color: IconColor::AccentSubtleText,
+    });
+    app.update();
+    assert_eq!(
+        tint(&app, icon),
+        DEFAULT_DARK_THEME_COLORS.accent_subtle_text
+    );
 }
 
 #[test]
