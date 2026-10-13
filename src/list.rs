@@ -18,6 +18,15 @@ use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValu
 use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
+/// Padding around a [`CornerStyle::Separated`] list.
+const SEPARATED_LIST_PADDING: Val = Val::Px(6.0);
+/// Gap between the rows of a [`CornerStyle::Separated`] list.
+const SEPARATED_ROW_GAP: Val = Val::Px(2.0);
+/// Width of the ring on the selected row of a [`CornerStyle::Separated`] list.
+const SEPARATED_RING_WIDTH: Val = Val::Px(1.0);
+/// Padding inside a row of a [`CornerStyle::Separated`] list: 10 pixels by 12.
+const SEPARATED_ITEM_PADDING: UiRect = UiRect::axes(Val::Px(12.0), Val::Px(10.0));
+
 pub(crate) struct ListPlugin;
 
 impl Plugin for ListPlugin {
@@ -102,6 +111,11 @@ pub enum CornerStyle {
     Tabs,
     /// Square corners.
     None,
+    /// Rows that stand apart on the surface they lie on: no border or background on the
+    /// list, a little padding around it and a gap between the rows, each row rounded on
+    /// all corners. A row under the pointer gets the hover background; the selected row
+    /// gets the strong hover background and a ring in the selection colour, not a fill.
+    Separated,
 }
 
 /// Makes a [`List`] build the contents of its item views with a system of the app's own,
@@ -220,6 +234,7 @@ fn handle_mouse_events(
     t: On<MouseEvent>,
     mut selections: SelectionParam,
     mut item_views: Query<(&ItemView, &mut BackgroundColor, Has<Selected>)>,
+    styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
     // A click and a drag say nothing new about the pointer being on the view: the over,
@@ -261,7 +276,8 @@ fn handle_mouse_events(
     // The pointer is on the view for every event but `Out`; a press looks selected.
     let hovered = !matches!(t.event().kind, MouseKind::Out);
     let pressed = matches!(t.event().kind, MouseKind::Pressed);
-    background_color.0 = item_background(&theme.colors, is_selected || pressed, hovered);
+    let style = styles.get(*list_ref).copied().unwrap_or(CornerStyle::None);
+    background_color.0 = item_background(&theme.colors, style, is_selected || pressed, hovered);
 }
 
 /// The [`ItemView`] a pointer event on `target` belongs to, if `target` is a custom view or
@@ -291,6 +307,7 @@ fn handle_custom_view_mouse_events(
     buttons: Query<(), With<Button>>,
     mut selections: SelectionParam,
     mut item_views: Query<(&ItemView, &Hovered, &mut BackgroundColor, Has<Selected>)>,
+    styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
     let kind = t.event().kind;
@@ -312,8 +329,12 @@ fn handle_custom_view_mouse_events(
     else {
         return;
     };
+    let style = styles
+        .get(item_view.list_ref)
+        .copied()
+        .unwrap_or(CornerStyle::None);
     if matches!(kind, MouseKind::Pressed) {
-        background_color.0 = item_background(&theme.colors, true, hovered.get());
+        background_color.0 = item_background(&theme.colors, style, true, hovered.get());
         return;
     }
     // See `handle_mouse_events`: deselecting a `Selected` row is ours, by the `Selected` the
@@ -323,7 +344,7 @@ fn handle_custom_view_mouse_events(
             selection.toggle_selected(item_view.item_ref)
         });
     } else {
-        background_color.0 = item_background(&theme.colors, is_selected, hovered.get());
+        background_color.0 = item_background(&theme.colors, style, is_selected, hovered.get());
     }
 }
 
@@ -334,24 +355,54 @@ fn custom_view_hover(
         (With<CustomView>, Changed<Hovered>),
     >,
     selections: SelectionParam,
+    styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
     for (item_view, hovered, mut background_color) in &mut item_views {
+        let style = styles
+            .get(item_view.list_ref)
+            .copied()
+            .unwrap_or(CornerStyle::None);
         let is_selected = selections
             .get(item_view.list_ref)
             .is_some_and(|selection| selection.is_selected(item_view.item_ref));
-        background_color.0 = item_background(&theme.colors, is_selected, hovered.get());
+        background_color.0 = item_background(&theme.colors, style, is_selected, hovered.get());
     }
 }
 
 /// The background of an [`ItemView`] from its state: selected and hovered, selected,
 /// hovered, or at rest.
-pub(crate) const fn item_background(colors: &ThemeColors, selected: bool, hovered: bool) -> Color {
+pub(crate) const fn item_background(
+    colors: &ThemeColors,
+    style: CornerStyle,
+    selected: bool,
+    hovered: bool,
+) -> Color {
+    if matches!(style, CornerStyle::Separated) {
+        // The selected row is told apart by its ring; the rest sits on the surface.
+        return match (selected, hovered) {
+            (true, _) => colors.hovered_selected_item,
+            (false, true) => colors.hovered_item,
+            (false, false) => Color::NONE,
+        };
+    }
     match (selected, hovered) {
         (true, true) => colors.selected_hovered_item,
         (true, false) => colors.selected_item,
         (false, true) => colors.hovered_item,
         (false, false) => colors.background_primary,
+    }
+}
+
+/// The border colour of an [`ItemView`]: the selection ring on a selected row of a
+/// [`CornerStyle::Separated`] list (transparent on the others), the plain and highlight
+/// borders elsewhere.
+const fn item_border(colors: &ThemeColors, style: CornerStyle, selected: bool) -> Color {
+    match (style, selected) {
+        (CornerStyle::Separated, true) => colors.selection_ring,
+        (CornerStyle::Separated, false) => Color::NONE,
+        (_, true) => colors.border_highlight,
+        (_, false) => colors.border,
     }
 }
 
@@ -431,6 +482,7 @@ fn selection_change(
             Entity,
             Option<&Children>,
             &Selection,
+            &CornerStyle,
             Has<ListBoxMultiSelect>,
         ),
         (With<List>, Without<NoDefaultItems>),
@@ -446,7 +498,7 @@ fn selection_change(
     mut commands: Commands,
 ) {
     for changed_selection_ref in q {
-        for (list_ref, children, list_selection, is_multi) in lists {
+        for (list_ref, children, list_selection, style, is_multi) in lists {
             let is_changed = match list_selection {
                 Selection::Ref(entity) => {
                     changed_selection_ref == *entity || changed_selection_ref == list_ref
@@ -468,13 +520,8 @@ fn selection_change(
 
                     let is_selected = selection.is_selected(item_view.item_ref);
                     sync_selected(&mut commands, item_view_id, was_selected, is_selected);
-                    bg.0 = item_background(&theme.colors, is_selected, hovered.get());
-
-                    if is_selected {
-                        border_color.set_all(theme.colors.border_highlight);
-                    } else {
-                        border_color.set_all(theme.colors.border);
-                    }
+                    bg.0 = item_background(&theme.colors, *style, is_selected, hovered.get());
+                    border_color.set_all(item_border(&theme.colors, *style, is_selected));
                 }
             }
         }
@@ -661,16 +708,11 @@ fn theme_items(
 
             let is_selected = selection.is_selected(*item_ref);
 
-            bg.0 = item_background(&theme.colors, is_selected, hovered.get());
-            if is_selected {
-                border_color.set_all(theme.colors.border_highlight);
-            } else {
-                border_color.set_all(theme.colors.border);
-            }
-
-            theme_item_border(&mut node, *corner_style, *layout, i, last, &theme);
+            bg.0 = item_background(&theme.colors, *corner_style, is_selected, hovered.get());
+            border_color.set_all(item_border(&theme.colors, *corner_style, is_selected));
 
             node.padding = theme.item_padding;
+            theme_item_border(&mut node, *corner_style, *layout, i, last, &theme);
         }
     }
 }
@@ -714,9 +756,16 @@ fn theme_lists(
                       corner_style: CornerStyle| {
         node.border = match corner_style {
             CornerStyle::FollowLayout | CornerStyle::None => UiRect::all(theme.border_thickness),
-            CornerStyle::Tabs => UiRect::ZERO,
+            CornerStyle::Tabs | CornerStyle::Separated => UiRect::ZERO,
         };
-        bg.0 = theme.colors.background_primary;
+        if matches!(corner_style, CornerStyle::Separated) {
+            bg.0 = Color::NONE;
+            node.padding = UiRect::all(SEPARATED_LIST_PADDING);
+            node.row_gap = SEPARATED_ROW_GAP;
+            node.column_gap = SEPARATED_ROW_GAP;
+        } else {
+            bg.0 = theme.colors.background_primary;
+        }
         bc.set_all(theme.colors.border);
 
         let radius = match corner_style {
@@ -727,7 +776,7 @@ fn theme_lists(
                 }
                 ListLayout::Horizontal => BorderRadius::top(theme.control_radius),
             },
-            CornerStyle::None => BorderRadius::all(Val::Px(0.0)),
+            CornerStyle::None | CornerStyle::Separated => BorderRadius::all(Val::Px(0.0)),
         };
         node.border_radius = radius;
     };
@@ -797,6 +846,13 @@ const fn theme_item_border(
         CornerStyle::None => {
             node.border = UiRect::ZERO;
             node.border_radius = BorderRadius::ZERO;
+        }
+        CornerStyle::Separated => {
+            // The border is the ring of a selected row, transparent otherwise, so that
+            // selecting a row does not move its content.
+            node.border = UiRect::all(SEPARATED_RING_WIDTH);
+            node.border_radius = BorderRadius::all(theme.control_radius);
+            node.padding = SEPARATED_ITEM_PADDING;
         }
     }
 }
