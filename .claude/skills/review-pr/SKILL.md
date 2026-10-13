@@ -65,10 +65,12 @@ machine. GitHub's CI is the jobs **Format, clippy and docs**, **Tests** and
   45 minutes). In a worktree, build in the worktree's own `target/`, never a shared
   `CARGO_TARGET_DIR` (it gives stale test binaries) and never a full copy of
   the main checkout's 19G `target/` (it fills the disk). Check `df -h .` shows
-  more than 30G free, seed with a copy-on-write clone (macOS
+  more than 30G free, seed with a copy-on-write clone if `./target` does not exist (macOS
   `cp -c -R "$(git rev-parse --path-format=absolute --git-common-dir)/../target" ./target`,
-  Linux `cp -R --reflink=always ...`; if it fails, remove the partial copy and
-  build cold), `touch tests/*.rs src/lib.rs`, then `just ci`.
+  which silently copies for real when it cannot clone, so compare `df -k .`
+  before and after and `rm -rf ./target` if free space dropped by more than a
+  few hundred MB; Linux `cp -R --reflink=always ...`, which refuses; if the
+  clone failed, remove the partial copy and build cold), `touch tests/*.rs src/lib.rs`, then `just ci`.
   - It passes → CI passed locally: `ci=local` in the marker, and say in the
     body that GitHub's CI did not run and `just ci` passed on `head.sha`.
   - A format, clippy, doc, test or unused-dependency check fails → a

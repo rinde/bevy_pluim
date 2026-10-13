@@ -55,13 +55,17 @@ point `CARGO_TARGET_DIR` at the main checkout's `target/`, and never `cp -r` it
 
 1. Check space: `df -h .` should show more than 30G free; if not, stop and
    report rather than building.
-2. Seed `target/` with a copy-on-write clone, which costs no disk, and only if
-   the main checkout has a build:
-   `MAIN="$(git rev-parse --path-format=absolute --git-common-dir)/.."`, then on
-   macOS `cp -c -R "$MAIN/target" ./target`, on Linux
-   `cp -R --reflink=always "$MAIN/target" ./target`. Both fail instead of
-   copying when the filesystem cannot clone; then remove any partial `./target`
-   and build cold (a long Bevy compile) rather than copying for real.
+2. Seed `target/` with a copy-on-write clone, which costs no disk, only if
+   the main checkout has a build and `./target` does not exist yet (else `cp`
+   would nest it as `./target/target`):
+   `MAIN="$(git rev-parse --path-format=absolute --git-common-dir)/.."`. On
+   Linux, `cp -R --reflink=always "$MAIN/target" ./target` refuses to copy when
+   the filesystem cannot clone. On macOS `cp -c -R "$MAIN/target" ./target`
+   silently falls back to a real copy when it cannot clone (not APFS), so
+   guard it: note `df -k .` before and after, and if free space dropped by
+   more than a few hundred MB, `rm -rf ./target`. In either case, if the clone
+   did not happen, remove any partial `./target` and build cold (a long Bevy
+   compile) rather than copying for real.
 3. After seeding, `touch tests/*.rs src/lib.rs` so cargo rebuilds this crate's
    own targets from your sources, whatever the seed held.
 
