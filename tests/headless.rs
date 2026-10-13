@@ -56,6 +56,8 @@ fn headless_app() -> App {
     app.add_plugins(DefaultPickingPlugins);
     app.init_resource::<ClearColor>();
     app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
     app
 }
 
@@ -627,6 +629,66 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
     assert_eq!(label_color(&app), colors.text_primary);
+}
+
+#[test]
+fn widgets_plugin_and_ui_widgets_plugins_work_in_either_order() {
+    for widgets_first in [true, false] {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(WindowPlugin {
+            primary_window: None,
+            ..default()
+        });
+        app.add_plugins(InputPlugin);
+        app.add_plugins(DefaultPickingPlugins);
+        app.init_resource::<ClearColor>();
+        if widgets_first {
+            app.add_plugins(WidgetsPlugin);
+            app.add_plugins(bevy::ui_widgets::UiWidgetsPlugins);
+        } else {
+            app.add_plugins(bevy::ui_widgets::UiWidgetsPlugins);
+            app.add_plugins(WidgetsPlugin);
+        }
+        // Building and finishing the app is the test: a duplicate plugin panics.
+        app.finish();
+        app.cleanup();
+    }
+}
+
+#[test]
+fn a_disabled_color_push_button_shows_the_disabled_border_and_does_not_activate() {
+    let mut app = headless_app();
+    app.init_resource::<Activations>();
+    let button = app.world_mut().spawn(ColorPushButton).id();
+    app.world_mut()
+        .entity_mut(button)
+        .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 1);
+    app.update();
+    app.update();
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let border = |app: &App| app.world().entity(button).get::<BorderColor>().unwrap().top;
+    assert_eq!(border(&app), colors.border);
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+    app.update();
+    assert_eq!(border(&app), colors.text_disabled);
+    press(&mut app, button);
+    click_and_release(&mut app, button);
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 0);
+
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<InteractionDisabled>();
+    app.update();
+    app.update();
+    assert_eq!(border(&app), colors.border);
+    press(&mut app, button);
+    click_and_release(&mut app, button);
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
 }
 
 /// Whether `entity` has a focus ring, an [`Outline`].
