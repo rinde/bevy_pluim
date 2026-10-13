@@ -54,6 +54,7 @@ fn theme_float(
     for (mut node, mut bs) in iter {
         node.position_type = PositionType::Absolute;
         // node.width = Val::Percent(100.0);
+        node.border_radius = BorderRadius::all(theme.panel_radius);
         *bs = BoxShadow::from(theme.large_shadow());
     }
 }

@@ -79,12 +79,13 @@ fn theme_labels(
     };
 
     for (mut text_color, mut text_font, label) in it {
-        let font_size = match label {
-            Label::Header(_) => 18.0,
-            Label::Regular(_) => 14.0,
+        let (font, font_size) = match label {
+            Label::Header(_) => (&theme.display_font, theme.font_size_title),
+            Label::Regular(_) => (&theme.body_font, theme.font_size_secondary),
         };
         *text_color = TextColor(theme.colors.text_primary);
         *text_font = TextFont {
+            font: font.clone().into(),
             font_size: FontSize::Px(font_size),
             ..default()
         };

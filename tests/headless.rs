@@ -31,6 +31,7 @@ use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
 use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
+use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{ItemView, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
@@ -2019,4 +2020,53 @@ fn changing_the_theme_under_a_hovered_selected_swatch_keeps_it_selected_and_hove
         resting_dark_border(&mut app, swatches[0]),
         "the selected swatch under the pointer is highlighted more than a selected one"
     );
+}
+
+#[test]
+fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
+    let body = bevy::asset::uuid_handle!("6f2b1c1e-3b0a-4f43-9d0e-0a3c5a1b7e01");
+    let display = bevy::asset::uuid_handle!("6f2b1c1e-3b0a-4f43-9d0e-0a3c5a1b7e02");
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("Go"), ChildOf(root)))
+        .id();
+    let regular = app
+        .world_mut()
+        .spawn((Label::regular("Regular"), ChildOf(root)))
+        .id();
+    let header = app
+        .world_mut()
+        .spawn((Label::header("Header"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    {
+        let mut theme = app.world_mut().get_resource_mut::<Theme>().unwrap();
+        theme.body_font = body.clone();
+        theme.display_font = display.clone();
+        theme.font_size_secondary = 20.0;
+        theme.font_size_title = 30.0;
+    }
+    app.update();
+    app.update();
+
+    let font_of = |app: &App, entity: Entity| {
+        let font = app.world().entity(entity).get::<TextFont>().unwrap();
+        (font.font.clone(), font.font_size)
+    };
+    let button_label = app
+        .world()
+        .entity(button)
+        .get::<PushButtonRefs>()
+        .unwrap()
+        .label_id;
+    assert_eq!(
+        font_of(&app, button_label),
+        (body.clone().into(), FontSize::Px(20.0))
+    );
+    assert_eq!(font_of(&app, regular), (body.into(), FontSize::Px(20.0)));
+    assert_eq!(font_of(&app, header), (display.into(), FontSize::Px(30.0)));
 }
