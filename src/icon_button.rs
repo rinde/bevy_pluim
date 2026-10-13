@@ -6,7 +6,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
-use bevy::ui_widgets::Button;
+use bevy::ui_widgets::{Activate, Button};
 use itertools::Either;
 
 use crate::focus::TabStop;
@@ -22,6 +22,7 @@ pub struct IconButtonPlugin;
 
 impl Plugin for IconButtonPlugin {
     fn build(&self, app: &mut App) {
+        app.add_observer(restyle_on_toggle);
         app.add_systems(
             Update,
             (
@@ -70,7 +71,7 @@ impl IconButtonSize {
 /// radius and the primary background, the hover background under the pointer.
 ///
 /// It is a [`bevy::ui_widgets::Button`], so an action observes
-/// [`Activate`](bevy::ui_widgets::Activate) on it, and it is disabled by
+/// [`Activate`] on it, and it is disabled by
 /// inserting [`InteractionDisabled`]. `name` is its accessible name, the label
 /// of its [`AccessibilityNode`], since the icon has no text.
 ///
@@ -99,6 +100,34 @@ pub struct IconButton {
     /// The size of the button.
     pub size: IconButtonSize,
 }
+
+/// Whether a toggle [`IconButton`] is on, such as a pause button while the game
+/// is paused. An on button shows the subtle accent background, an accent icon and
+/// an accent bar along its bottom edge.
+///
+/// Insert it on an [`IconButton`] to make it a toggle: an
+/// [`Activate`] (a click, or Enter / Space) inserts
+/// the flipped value, which restyles the button and is what an app observes
+/// (`On<Insert, ToggleState>`). An app can insert a value itself to set it from
+/// outside, for a keyboard shortcut or because the game paused itself. A button
+/// without it is a plain, momentary button. It is one on/off button, not part of
+/// a group.
+#[derive(Component, Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct ToggleState(pub bool);
+
+/// The accent bar child of a toggle [`IconButton`], spawned with the first
+/// [`ToggleState`].
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+struct ToggleBarRef(Entity);
+
+/// The bar along the bottom edge of an on toggle button.
+#[derive(Component, Clone, Copy, Debug)]
+struct ToggleBar;
+
+/// The height of the bar of an on toggle button, in logical pixels.
+const BAR_HEIGHT_PX: f32 = 2.0;
 
 /// The [`Icon`] child of an [`IconButton`].
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
@@ -131,7 +160,8 @@ impl IconButton {
             commands
                 .entity(entity)
                 .insert(IconButtonRefs { icon_id })
-                .observe(handle_hover);
+                .observe(handle_hover)
+                .observe(toggle_on_activate);
         }
         world
             .commands()
@@ -140,15 +170,23 @@ impl IconButton {
 }
 
 /// The background and the icon colour of a button, from its state.
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "the four independent facts of a button's state"
+)]
 const fn look(
     colors: &ThemeColors,
     size: IconButtonSize,
     disabled: bool,
     pressed: bool,
     hovered: bool,
+    on: bool,
 ) -> (Color, IconColor) {
     if disabled {
         return (colors.background_primary, IconColor::TextDisabled);
+    }
+    if on {
+        return (colors.accent_subtle, IconColor::AccentSubtleText);
     }
     let background = if pressed {
         colors.selected_hovered_item
@@ -164,10 +202,32 @@ const fn look(
     (background, icon)
 }
 
+/// Flips the [`ToggleState`] of a button that has one.
+fn toggle_on_activate(
+    trigger: On<Activate>,
+    states: Query<&ToggleState, Without<InteractionDisabled>>,
+    mut commands: Commands,
+) {
+    let target = trigger.event().event_target();
+    if let Ok(state) = states.get(target) {
+        commands.entity(target).insert(ToggleState(!state.0));
+    }
+}
+
+/// Restyles a button whose [`ToggleState`] was just inserted.
+fn restyle_on_toggle(t: On<Insert, ToggleState>, mut commands: Commands) {
+    commands.run_system_cached_with(theme_icon_buttons, Some(t.event().event_target()));
+}
+
 fn handle_hover(
     trigger: On<MouseEvent>,
     mut buttons: Query<
-        (&IconButton, &IconButtonRefs, &mut BackgroundColor),
+        (
+            &IconButton,
+            &IconButtonRefs,
+            &mut BackgroundColor,
+            Option<&ToggleState>,
+        ),
         Without<InteractionDisabled>,
     >,
     theme: Res<Theme>,
@@ -180,8 +240,9 @@ fn handle_hover(
     let pressed = matches!(kind, MouseKind::Pressed);
     let hovered = !matches!(kind, MouseKind::Out);
     let target = trigger.event().event_target();
-    if let Ok((button, refs, mut background)) = buttons.get_mut(target) {
-        let (color, icon) = look(&theme.colors, button.size, false, pressed, hovered);
+    if let Ok((button, refs, mut background, toggle)) = buttons.get_mut(target) {
+        let on = toggle.is_some_and(|t| t.0);
+        let (color, icon) = look(&theme.colors, button.size, false, pressed, hovered, on);
         *background = BackgroundColor(color);
         commands.entity(refs.icon_id).insert(Icon { color: icon });
     }
@@ -223,6 +284,7 @@ fn theme_icon_buttons(
     button_id: In<Option<Entity>>,
     theme: Res<Theme>,
     mut buttons: Query<(
+        Entity,
         &IconButton,
         &IconButtonRefs,
         &mut BackgroundColor,
@@ -230,8 +292,11 @@ fn theme_icon_buttons(
         Has<InteractionDisabled>,
         Has<Pressed>,
         &Hovered,
+        Option<&ToggleState>,
+        Option<&ToggleBarRef>,
     )>,
-    icons: Query<(&Icon, &ImageNode, &Node), Without<IconButton>>,
+    mut bars: Query<(&mut Node, &mut BackgroundColor), (With<ToggleBar>, Without<IconButton>)>,
+    icons: Query<(&Icon, &ImageNode, &Node), (Without<IconButton>, Without<ToggleBar>)>,
     mut commands: Commands,
 ) {
     let it = if let Some(button_id) = button_id.as_ref() {
@@ -239,13 +304,56 @@ fn theme_icon_buttons(
     } else {
         Either::Right(buttons.iter_mut())
     };
-    for (button, refs, mut background, mut node, disabled, pressed, hovered) in it {
-        let (color, icon_color) =
-            look(&theme.colors, button.size, disabled, pressed, hovered.get());
+    for (entity, button, refs, mut background, mut node, disabled, pressed, hovered, toggle, bar) in
+        it
+    {
+        let on = toggle.is_some_and(|t| t.0);
+        let (color, icon_color) = look(
+            &theme.colors,
+            button.size,
+            disabled,
+            pressed,
+            hovered.get(),
+            on,
+        );
         background.0 = color;
         node.width = Val::Px(button.size.button_px());
         node.height = Val::Px(button.size.button_px());
         node.border_radius = BorderRadius::all(theme.control_radius);
+
+        if toggle.is_some() {
+            // Inset by the radius so the bar stays on the straight part of the edge.
+            let bar_node = Node {
+                position_type: PositionType::Absolute,
+                left: theme.control_radius,
+                right: theme.control_radius,
+                bottom: Val::Px(0.0),
+                height: Val::Px(BAR_HEIGHT_PX),
+                display: if on { Display::Flex } else { Display::None },
+                ..default()
+            };
+            let bar_color = BackgroundColor(theme.colors.accent_subtle_bar);
+            match bar.and_then(|b| bars.get_mut(b.0).ok()) {
+                Some((mut n, mut c)) => {
+                    *n = bar_node;
+                    *c = bar_color;
+                }
+                None if bar.is_none() => {
+                    let id = commands
+                        .spawn((
+                            ToggleBar,
+                            Name::new("ToggleBar"),
+                            bar_node,
+                            bar_color,
+                            Pickable::IGNORE,
+                            ChildOf(entity),
+                        ))
+                        .id();
+                    commands.entity(entity).insert(ToggleBarRef(id));
+                }
+                None => {}
+            }
+        }
 
         let Ok((icon, image, icon_node)) = icons.get(refs.icon_id) else {
             continue;
