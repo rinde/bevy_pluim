@@ -752,6 +752,53 @@ fn a_tab_stop_is_reached_by_tab_only_while_it_is_enabled() {
     assert_eq!(index(&app), 0);
 }
 
+#[test]
+fn a_tab_stop_in_a_hidden_stack_panel_or_hidden_popup_is_not_reached_by_tab() {
+    let mut app = headless_app();
+    let index = |app: &App, e: Entity| app.world().entity(e).get::<TabIndex>().unwrap().0;
+
+    // A button in a node that is `Display::None`, as a `Stack` hides its panels.
+    let panel = app.world_mut().spawn(Node::default()).id();
+    let in_panel = app
+        .world_mut()
+        .spawn((PushButton::from_label("in panel"), ChildOf(panel)))
+        .id();
+    // A button in a popup that is `Visibility::Hidden`.
+    let popup = app.world_mut().spawn(Node::default()).id();
+    let in_popup = app
+        .world_mut()
+        .spawn((PushButton::from_label("in popup"), ChildOf(popup)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(index(&app, in_panel), 0);
+    assert_eq!(index(&app, in_popup), 0);
+
+    app.world_mut()
+        .entity_mut(panel)
+        .get_mut::<Node>()
+        .unwrap()
+        .display = Display::None;
+    app.world_mut().entity_mut(popup).insert(Visibility::Hidden);
+    app.update();
+    app.update();
+    assert_eq!(index(&app, in_panel), -1);
+    assert_eq!(index(&app, in_popup), -1);
+
+    app.world_mut()
+        .entity_mut(panel)
+        .get_mut::<Node>()
+        .unwrap()
+        .display = Display::Flex;
+    app.world_mut()
+        .entity_mut(popup)
+        .insert(Visibility::Inherited);
+    app.update();
+    app.update();
+    assert_eq!(index(&app, in_panel), 0);
+    assert_eq!(index(&app, in_popup), 0);
+}
+
 /// Whether the [`AccessibilityNode`] of `entity` says `aria-expanded`, or nothing.
 fn expanded(app: &App, entity: Entity) -> Option<bool> {
     app.world()

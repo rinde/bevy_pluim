@@ -325,7 +325,9 @@ of them (`just example gallery -- --run-all stack link`).
   require the crate-private `TabStop`, which requires `TabIndex`. `sync_tab_index`
   owns the value: 0 for a stop that is not `InteractionDisabled` (a `LinkState::Disabled`
   link has it), -1 otherwise or while it has the crate-private `Unreachable` marker (the
-  list of a closed combo, put on and taken off with `ComboState` / `State`); **no widget writes `TabIndex` by hand**. Within the group
+  list of a closed combo, put on and taken off with `ComboState` / `State`) or while it is
+  hidden (`Visibility::Hidden` on it or its nearest non-`Inherited` ancestor, or itself or an ancestor `Display::None`, as in a
+  hidden `Stack` panel; it is Tab-reachable again once shown); **no widget writes `TabIndex` by hand**. Within the group
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
   `InputFocusVisible` is true, except that a list's ring is on its `ActiveDescendant` row
