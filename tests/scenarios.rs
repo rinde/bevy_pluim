@@ -21,6 +21,7 @@ use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
 use rin_bevy_ui::filter_chips::{Chip, ChipView, FilterChips};
 use rin_bevy_ui::list::List;
+use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
@@ -860,4 +861,65 @@ fn filter_chips_wrap_onto_more_lines_in_a_narrower_row() {
         chip_lines(100.0) > 1,
         "a row narrower than the chips wraps them"
     );
+}
+
+// ---- Panel body grows, then scrolls ----
+
+/// The height in logical pixels of the scroll area of a `Panel` whose body holds `rows` rows of
+/// 40 px, and whether its contents overflow it.
+fn panel_body_height(rows: usize) -> (f32, bool) {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let panel = app
+        .world_mut()
+        .spawn((
+            Panel::new("Trains").with_subtitle("4 on the network"),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    for _ in 0..rows {
+        app.world_mut().spawn((
+            Node {
+                height: px(40),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            ChildOf(refs.body),
+        ));
+    }
+    for _ in 0..6 {
+        app.update();
+    }
+    let area = app.world().get::<ComputedNode>(refs.scroll_area).unwrap();
+    let contents = app.world().get::<ChildOf>(refs.body).unwrap().parent();
+    let contents = app.world().get::<ComputedNode>(contents).unwrap();
+    let height = area.size().y * area.inverse_scale_factor();
+    let overflow =
+        (contents.content_size().y - contents.size().y) * contents.inverse_scale_factor();
+    (height, overflow > 1.0)
+}
+
+#[test]
+fn a_panel_body_grows_with_its_content_then_scrolls_at_the_maximum_height() {
+    let (short, short_overflows) = panel_body_height(3);
+    assert!(
+        (short - 120.0).abs() < 1.5,
+        "three rows are {short} px high"
+    );
+    assert!(!short_overflows);
+
+    let (medium, _) = panel_body_height(6);
+    assert!(
+        (medium - 240.0).abs() < 1.5,
+        "six rows are {medium} px high"
+    );
+
+    let (tall, tall_overflows) = panel_body_height(30);
+    assert!(
+        (tall - 620.0).abs() < 1.5,
+        "thirty rows stop at 620 px, not {tall}"
+    );
+    assert!(tall_overflows, "the contents overflow the area and scroll");
 }

@@ -41,6 +41,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
@@ -3103,4 +3104,138 @@ fn a_theme_change_restyles_the_chips() {
     );
     let border = app.world().entity(views[1]).get::<BorderColor>().unwrap();
     assert_eq!(border.top, DEFAULT_DARK_THEME_COLORS.chip_border);
+}
+
+// ---- Panel ----
+
+fn text_of(app: &App, entity: Entity) -> String {
+    app.world().get::<Text>(entity).unwrap().0.clone()
+}
+
+fn spawn_panel(app: &mut App, panel: Panel) -> (Entity, PanelRefs) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let id = app.world_mut().spawn((panel, ChildOf(root))).id();
+    app.update();
+    app.update();
+    (id, *app.world().get::<PanelRefs>(id).unwrap())
+}
+
+#[test]
+fn a_panel_spawns_its_header_parts_and_body() {
+    let mut app = headless_app();
+    let (panel, refs) = spawn_panel(
+        &mut app,
+        Panel::new("Trains")
+            .with_subtitle("4 on the network")
+            .with_close_icon(Handle::default()),
+    );
+
+    assert_eq!(text_of(&app, refs.title), "Trains");
+    assert_eq!(text_of(&app, refs.subtitle), "4 on the network");
+    assert_eq!(node_display(&app, refs.subtitle), Display::Flex);
+    assert_eq!(node_display(&app, refs.close), Display::Flex);
+    assert!(app.world().entity(refs.close).contains::<IconButton>());
+    assert_eq!(
+        app.world().get::<ChildOf>(refs.header).unwrap().parent(),
+        panel
+    );
+    assert_eq!(
+        app.world()
+            .get::<ChildOf>(refs.scroll_area)
+            .unwrap()
+            .parent(),
+        panel
+    );
+    // The body is inside the scroll area's contents.
+    let contents = app.world().get::<ChildOf>(refs.body).unwrap().parent();
+    assert_eq!(
+        app.world().get::<ChildOf>(contents).unwrap().parent(),
+        refs.scroll_area
+    );
+    assert_eq!(
+        app.world()
+            .get::<Node>(refs.scroll_area)
+            .unwrap()
+            .max_height,
+        Val::Px(620.0)
+    );
+    assert_eq!(
+        card_background(&app, panel),
+        DEFAULT_LIGHT_THEME_COLORS.background_primary
+    );
+}
+
+#[test]
+fn a_panel_without_a_subtitle_or_close_icon_hides_them() {
+    let mut app = headless_app();
+    let (_, refs) = spawn_panel(&mut app, Panel::new("Stops"));
+
+    assert_eq!(node_display(&app, refs.subtitle), Display::None);
+    assert_eq!(node_display(&app, refs.close), Display::None);
+}
+
+#[test]
+fn the_strip_and_footer_of_a_panel_show_only_with_content() {
+    let mut app = headless_app();
+    let (_, refs) = spawn_panel(&mut app, Panel::new("Trains"));
+    for part in [refs.strip, refs.footer, refs.footer_divider] {
+        assert_eq!(node_display(&app, part), Display::None);
+    }
+
+    app.world_mut()
+        .spawn((Label::regular("Pick a train."), ChildOf(refs.footer)));
+    app.update();
+    app.update();
+
+    assert_eq!(node_display(&app, refs.footer), Display::Flex);
+    assert_eq!(node_display(&app, refs.footer_divider), Display::Flex);
+    assert_eq!(node_display(&app, refs.strip), Display::None);
+}
+
+#[test]
+fn activating_the_close_button_of_a_panel_triggers_panel_closed() {
+    #[derive(Resource, Default)]
+    struct Closed(Vec<Entity>);
+    let mut app = headless_app();
+    app.init_resource::<Closed>();
+    let (panel, refs) = spawn_panel(
+        &mut app,
+        Panel::new("Trains").with_close_icon(Handle::default()),
+    );
+    app.world_mut()
+        .entity_mut(panel)
+        .observe(|e: On<PanelClosed>, mut closed: ResMut<Closed>| closed.0.push(e.entity));
+
+    app.world_mut().trigger(Activate { entity: refs.close });
+    app.update();
+
+    assert_eq!(app.world().get_resource::<Closed>().unwrap().0, vec![panel]);
+}
+
+#[test]
+fn changing_the_title_and_subtitle_of_a_panel_updates_the_text() {
+    let mut app = headless_app();
+    let (panel, refs) = spawn_panel(
+        &mut app,
+        Panel::new("Trains").with_subtitle("4 on the network"),
+    );
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Stops").with_subtitle("3 open"));
+    app.update();
+    app.update();
+
+    assert_eq!(text_of(&app, refs.title), "Stops");
+    assert_eq!(text_of(&app, refs.subtitle), "3 open");
+    assert_eq!(*app.world().get::<PanelRefs>(panel).unwrap(), refs);
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Stops"));
+    app.update();
+    app.update();
+
+    assert_eq!(node_display(&app, refs.subtitle), Display::None);
+    assert_eq!(app.world().get::<Children>(panel).unwrap().len(), 6);
 }
