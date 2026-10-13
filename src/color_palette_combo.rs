@@ -12,7 +12,7 @@ use itertools::Either;
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::Float;
-use crate::focus::Unreachable;
+use crate::focus::{Unreachable, popup_focus_lost, popup_key_closes};
 use crate::list::{ItemView, ListLayout};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
@@ -205,11 +205,6 @@ fn popup_name(combo_name: Option<&Name>) -> Name {
 }
 
 /// Closes the combo on the keyboard, with the focus on its palette.
-///
-/// Escape closes it. So do Enter and Space when the selection holds one item at most: the
-/// palette picks the active swatch (or leaves the selection as it is when that swatch is
-/// selected already, as a click does), and the popup has done its job. A selection of many
-/// keeps the popup open for the next pick.
 fn close_on_key(
     input: On<FocusedInput<KeyboardInput>>,
     sub_refs: Query<&SubRefs>,
@@ -217,32 +212,17 @@ fn close_on_key(
     selections: SelectionParam,
     mut commands: Commands,
 ) {
-    let key = &input.event().input;
     let Ok(sub_refs) = sub_refs.get(input.event_target()) else {
         return;
     };
-    if !key.state.is_pressed() || states.get(sub_refs.parent) != Ok(&State::Open) {
-        return;
-    }
-    let closes = match key.key_code {
-        KeyCode::Escape => true,
-        KeyCode::Enter | KeyCode::Space => selections
-            .get(sub_refs.parent)
-            .is_some_and(|selection| !selection.allow_multiple()),
-        _ => false,
-    };
-    if closes {
+    if states.get(sub_refs.parent) == Ok(&State::Open)
+        && popup_key_closes(&input.event().input, selections.get(sub_refs.parent))
+    {
         commands.entity(sub_refs.parent).insert(State::Closed);
     }
 }
 
 /// Closes the combo when the focus leaves its palette.
-///
-/// The focus going to the combo's own button is not leaving, and nor is a click in the popup,
-/// which takes the focus off the palette (nothing in it can have it): the popup stays, and the
-/// palette gets the focus back. Elsewhere the focus goes back to the button
-/// when nothing took it, so a click on empty space does not leave the keyboard nowhere; when it
-/// went to another widget it stays there.
 fn close_on_focus_lost(
     lost: On<FocusLost>,
     sub_refs: Query<&SubRefs>,
@@ -261,23 +241,14 @@ fn close_on_focus_lost(
     if sub_refs.palette != lost.event().entity {
         return;
     }
-    if state == State::Open {
-        // The focus going to the combo's own button (a click on it, Shift+Tab) is not leaving.
-        if focus.get() == Some(sub_refs.button) {
-            return;
-        }
-        if hovered.get(sub_refs.float_id).is_ok_and(Hovered::get) {
-            if focus.get().is_none() {
-                focus.set(sub_refs.palette, FocusCause::Navigated);
-            }
-            return;
-        }
-    }
-    // An outside click may have closed the popup already: the focus still goes back.
-    if focus.get().is_none() {
-        focus.set(sub_refs.button, FocusCause::Navigated);
-    }
-    if state == State::Open {
+    let popup_hovered = hovered.get(sub_refs.float_id).is_ok_and(Hovered::get);
+    if popup_focus_lost(
+        &mut focus,
+        state == State::Open,
+        sub_refs.button,
+        sub_refs.palette,
+        popup_hovered,
+    ) {
         commands.entity(sub_refs.parent).insert(State::Closed);
     }
 }

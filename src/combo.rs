@@ -14,7 +14,7 @@ use bevy::ui_widgets::Activate;
 use itertools::Itertools;
 
 use crate::float::Float;
-use crate::focus::Unreachable;
+use crate::focus::{Unreachable, popup_focus_lost, popup_key_closes};
 use crate::list::{List, NoDefaultItems};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::select::{Item, Selection, SelectionParam};
@@ -194,39 +194,19 @@ impl Combo {
 }
 
 /// An observer for the popup's list that closes the combo on the keyboard.
-///
-/// Escape closes it. So do Enter and Space when the selection holds one item at most: the
-/// list picks the active row (or leaves the selection as it is when that row is selected
-/// already, as a click does), and the popup has done its job. A selection of many keeps the
-/// popup open for the next pick.
 fn close_on_key(
     combo_id: Entity,
 ) -> impl Fn(On<FocusedInput<KeyboardInput>>, Query<&ComboState>, SelectionParam, Commands) {
     move |input, states, selections, mut commands| {
-        let key = &input.event().input;
-        if !key.state.is_pressed() || states.get(combo_id) != Ok(&ComboState::Open) {
-            return;
-        }
-        let closes = match key.key_code {
-            KeyCode::Escape => true,
-            KeyCode::Enter | KeyCode::Space => selections
-                .get(combo_id)
-                .is_some_and(|selection| !selection.allow_multiple()),
-            _ => false,
-        };
-        if closes {
+        if states.get(combo_id) == Ok(&ComboState::Open)
+            && popup_key_closes(&input.event().input, selections.get(combo_id))
+        {
             commands.entity(combo_id).insert(ComboState::Closed);
         }
     }
 }
 
 /// An observer for the popup's list that closes the combo when the focus leaves the list.
-///
-/// The focus going to the combo's own button is not leaving, and nor is a click in the popup,
-/// which takes the focus off the list (nothing in it can have it): the popup stays, and the
-/// list gets the focus back. Elsewhere the focus goes back to the button
-/// when nothing took it, so a click on empty space does not leave the keyboard nowhere; when it
-/// went to another widget it stays there.
 fn close_on_focus_lost(
     combo_id: Entity,
 ) -> impl Fn(
@@ -244,24 +224,14 @@ fn close_on_focus_lost(
         if lost.event().entity != sub_refs.list_id {
             return;
         }
-        if state == ComboState::Open {
-            // The focus going to the combo's own button (a click on it, Shift+Tab) is not
-            // leaving.
-            if focus.get() == Some(sub_refs.button_id) {
-                return;
-            }
-            if hovered.get(sub_refs.list_id).is_ok_and(Hovered::get) {
-                if focus.get().is_none() {
-                    focus.set(sub_refs.list_id, FocusCause::Navigated);
-                }
-                return;
-            }
-        }
-        // An outside click may have closed the popup already: the focus still goes back.
-        if focus.get().is_none() {
-            focus.set(sub_refs.button_id, FocusCause::Navigated);
-        }
-        if state == ComboState::Open {
+        let popup_hovered = hovered.get(sub_refs.list_id).is_ok_and(Hovered::get);
+        if popup_focus_lost(
+            &mut focus,
+            state == ComboState::Open,
+            sub_refs.button_id,
+            sub_refs.list_id,
+            popup_hovered,
+        ) {
             commands.entity(combo_id).insert(ComboState::Closed);
         }
     }
