@@ -123,15 +123,20 @@ fn handle_hover(
     mut link_texts: Query<&mut TextColor, With<LinkText>>,
     theme: Res<Theme>,
 ) {
+    // A click and a drag say nothing new about the pointer being on the link: the over,
+    // press, release and out events around them set the colours. A drag in particular can
+    // arrive after the pointer left the link, so it must not put it back under the pointer.
     let bg_color = match trigger.event().kind {
         MouseKind::Over | MouseKind::Pressed | MouseKind::Released => {
             theme.colors.background_secondary
         }
         MouseKind::Out => theme.colors.background_primary,
+        MouseKind::Click(_) | MouseKind::Drag(_) => return,
     };
     let link_color = match trigger.event().kind {
         MouseKind::Over | MouseKind::Released | MouseKind::Out => theme.colors.link,
         MouseKind::Pressed => theme.colors.link_selected,
+        MouseKind::Click(_) | MouseKind::Drag(_) => return,
     };
     let Ok((mut link_bg, children)) = links.get_mut(trigger.event().event_target()) else {
         return;

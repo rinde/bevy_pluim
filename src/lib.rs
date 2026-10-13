@@ -82,6 +82,8 @@ impl Plugin for WidgetsPlugin {
             .add_observer(observer_transformer::<Over>)
             .add_observer(observer_transformer::<Press>)
             .add_observer(observer_transformer::<Release>)
+            .add_observer(observer_transformer::<Click>)
+            .add_observer(observer_transformer::<Drag>)
             .add_observer(observer_transformer::<Out>);
     }
 }
@@ -125,6 +127,11 @@ enum MouseKind {
     Over,
     Pressed,
     Released,
+    /// The pointer pressed and released on the widget without moving off it.
+    Click(PointerButton),
+    /// The pointer moved while a button was held down on the widget, by this much
+    /// since the previous pointer event.
+    Drag(Vec2),
     Out,
 }
 
@@ -157,6 +164,18 @@ impl ToMouseEvent for Release {
     }
 }
 
+impl ToMouseEvent for Click {
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Click(self.button)
+    }
+}
+
+impl ToMouseEvent for Drag {
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Drag(self.delta)
+    }
+}
+
 impl ToMouseEvent for Out {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Out
@@ -172,8 +191,8 @@ where
     // only the first hop re-triggers, so one event is one `MouseEvent`.
     //
     // This is a global observer rather than one on `UiRoot` because Bevy's
-    // `Button` stops `Press` and `Release` from bubbling, which would keep them
-    // from ever reaching the root.
+    // `Button` stops `Press`, `Release`, `Click` and `DragEnd` from bubbling,
+    // which would keep them from ever reaching the root.
     let original = trigger.original_event_target();
     if trigger.event_target() == original {
         commands.trigger(MouseEvent {

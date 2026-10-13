@@ -185,6 +185,8 @@ fn handle_hover(
         MouseKind::Pressed => theme.colors.selected_hovered_item,
         MouseKind::Released => theme.colors.selected_item,
         MouseKind::Out => theme.colors.scroll_thumb_background,
+        // A click or a drag leaves the colour of the press and release before it.
+        MouseKind::Click(_) | MouseKind::Drag(_) => return,
     };
     if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
         *background = BackgroundColor(color);
@@ -193,12 +195,15 @@ fn handle_hover(
 
 /// Scrolls the contents by as much as the thumb moved along its scroll bar.
 fn handle_thumb_drag(
-    drag: On<Pointer<Drag>>,
+    drag: On<MouseEvent>,
     thumbs: Query<&ChildOf, With<ScrollThumb>>,
     scroll_bars: Query<&ScrollBar>,
     mut scroll_contents: Query<(&mut ScrollPosition, &ComputedNode, &ScrollAreaRefs)>,
 ) {
-    let Ok(scroll_bar_entity) = thumbs.get(drag.event_target()).map(ChildOf::parent) else {
+    let MouseKind::Drag(delta) = drag.event().kind else {
+        return;
+    };
+    let Ok(scroll_bar_entity) = thumbs.get(drag.event().event_target()).map(ChildOf::parent) else {
         return;
     };
     let Ok(scroll_bar) = scroll_bars.get(scroll_bar_entity) else {
@@ -233,8 +238,8 @@ fn handle_thumb_drag(
     // `update_scroll_position`), so the clamp is only a guard, for a content
     // size that shrank since.
     let start = scroll_position.0[index].clamp(0.0, max_scroll_offset);
-    scroll_position.0[index] = (start + drag.delta[index] * max_scroll_offset / track_length)
-        .clamp(0.0, max_scroll_offset);
+    scroll_position.0[index] =
+        (start + delta[index] * max_scroll_offset / track_length).clamp(0.0, max_scroll_offset);
 }
 
 /// Scrolls the nodes under the pointer by the mouse wheel.
