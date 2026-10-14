@@ -22,7 +22,7 @@ use std::path::Path;
 
 use bevy::color::palettes::tailwind::{
     AMBER_600, BLUE_600, CYAN_600, EMERALD_600, FUCHSIA_600, GREEN_600, INDIGO_600, LIME_600,
-    ORANGE_600, PINK_600, PURPLE_600, ROSE_600, SKY_600, YELLOW_600,
+    ORANGE_600, PINK_600, PURPLE_600, RED_500, ROSE_600, SKY_600, YELLOW_600,
 };
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
@@ -33,10 +33,12 @@ use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
+use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::filter_chips::{Chip, FilterChips};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
+use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
@@ -133,6 +135,12 @@ pub enum WidgetsSetup {
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
     Tooltip,
+    /// Buttons whose accessible names are checked, each with a `Name`:
+    /// `plain button` (a `PushButton` "Add"), `icon push button` (a
+    /// `PushButton` "Save" with the icon text "+"), `colour button` (a
+    /// `ColorPushButton` showing red-500) and `link` (a `Link` "Docs"), then
+    /// "Change theme".
+    ButtonNames,
     /// One of each widget whose colours follow the theme, side by side: a
     /// `themed button` ("Other"), a `themed card` and a `themed list` of
     /// three items (the first selected), then "Change theme".
@@ -158,6 +166,7 @@ impl AppSetup for WidgetsSetup {
             Self::Badge => badge(world),
             Self::IconButtons => icon_buttons(world),
             Self::Tooltip => tooltip(world),
+            Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
         }
         Ok(())
@@ -1302,6 +1311,26 @@ fn tooltip(world: &mut World) {
         .insert(Name::new("help button"));
         spawn_theme_button(root);
     });
+}
+
+fn button_names(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((Name::new("plain button"), PushButton::from_label("Add")));
+        root.spawn((Name::new("icon push button"), PushButton::new("Save", "+")));
+        root.spawn((Name::new("colour button"), ColorPushButton));
+        root.spawn((Name::new("link"), Link::new("Docs")));
+        spawn_theme_button(root);
+    });
+    world.flush();
+    let button = world
+        .query_filtered::<&ColorSquareRef, With<ColorPushButton>>()
+        .iter(world)
+        .next()
+        .map(|square| square.0);
+    if let Some(mut color) = button.and_then(|square| world.get_mut::<BackgroundColor>(square)) {
+        color.0 = RED_500.into();
+    }
 }
 
 fn themed(world: &mut World) {
