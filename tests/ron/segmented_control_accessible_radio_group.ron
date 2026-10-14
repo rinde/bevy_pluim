@@ -1,0 +1,51 @@
+// To a screen reader a segmented control is a radio group and each segment a
+// radio button, toggled while it is the selected one. The segments stay
+// `Button`s, so `Role(role: Button, ..)` (which reads the component, not the
+// accessibility node) still finds them. A click on "Manual" moves the toggle.
+(
+    format_version: 3,
+    name: "a segmented control is a radio group whose toggle follows the selection",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("own segmented control"),
+            role: Some("RadioGroup"),
+            label: None,
+            value: None,
+            states: [],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("own segmented control"), Role(role: Button, label: "Auto")),
+            role: Some("RadioButton"),
+            label: None,
+            value: None,
+            states: [Toggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("own segmented control"), Role(role: Button, label: "Manual")),
+            role: Some("RadioButton"),
+            label: None,
+            value: None,
+            states: [NotToggled],
+        ))),
+        MoveTo(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Click(Left),
+        Wait(1),
+        Check(App(Accessible(
+            of: Within(Name("own segmented control"), Role(role: Button, label: "Manual")),
+            role: Some("RadioButton"),
+            label: None,
+            value: None,
+            states: [Toggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("own segmented control"), Role(role: Button, label: "Auto")),
+            role: Some("RadioButton"),
+            label: None,
+            value: None,
+            states: [NotToggled],
+        ))),
+    ],
+    expect: [],
+)

@@ -1,0 +1,53 @@
+// An icon button with a `ToggleState` is a toggle button to a screen reader:
+// still a `Button`, toggled on and off with its state. One without a
+// `ToggleState` has no toggled state at all, so it is neither `Toggled` nor
+// `NotToggled`.
+(
+    format_version: 3,
+    name: "a toggle icon button is toggled with its state and a plain one is not a toggle",
+    setup: App(IconButtons),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("toggle button"),
+            role: Some("Button"),
+            label: None,
+            value: None,
+            states: [NotToggled],
+        ))),
+        Check(Not(App(Accessible(
+            of: Name("regular button"),
+            role: Some("Button"),
+            label: None,
+            value: None,
+            states: [NotToggled],
+        )))),
+        Check(Not(App(Accessible(
+            of: Name("regular button"),
+            role: Some("Button"),
+            label: None,
+            value: None,
+            states: [Toggled],
+        )))),
+        MoveTo(Name("toggle button")),
+        Click(Left),
+        Wait(1),
+        Check(App(Accessible(
+            of: Name("toggle button"),
+            role: Some("Button"),
+            label: None,
+            value: None,
+            states: [Toggled],
+        ))),
+        Click(Left),
+        Wait(1),
+        Check(App(Accessible(
+            of: Name("toggle button"),
+            role: Some("Button"),
+            label: None,
+            value: None,
+            states: [NotToggled],
+        ))),
+    ],
+    expect: [],
+)

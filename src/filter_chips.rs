@@ -1,13 +1,15 @@
 //! `FilterChips`: a wrapping row of pill-shaped options, one of them active, each with an
 //! optional count.
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
 
@@ -44,6 +46,7 @@ impl Plugin for FilterChipsPlugin {
                 )
                     .chain(),
             )
+            .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
     }
 }
@@ -62,6 +65,10 @@ impl Plugin for FilterChipsPlugin {
 /// click. The chips wrap onto further lines when the row is too narrow.
 ///
 /// There is no arrow-key navigation between chips: each chip is a tab stop of its own.
+///
+/// To a screen reader the row is a radio group and each chip a radio button named after its
+/// label and count (`Waiting 3`), checked while it is active. The library gives the group no
+/// label; an app can insert Bevy's `AccessibleLabel` on the row.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -73,6 +80,7 @@ impl Plugin for FilterChipsPlugin {
         row_gap: Val::Px(CHIP_GAP),
         ..default()
     },
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct FilterChips;
 
@@ -346,6 +354,39 @@ fn restyle_changed_chips(
         for (chip, _) in views.iter().filter(|(_, view)| view.item == item) {
             commands.run_system_cached_with(theme_chips, Some(chip));
         }
+    }
+}
+
+/// The accessible name of a chip: its label, and its count after a space when it has one.
+fn accessible_name(chip: &Chip) -> String {
+    chip.count.map_or_else(
+        || chip.label.clone(),
+        |count| format!("{} {count}", chip.label),
+    )
+}
+
+/// Keeps the row a radio group and each chip a radio button named after its label and count,
+/// toggled while it is active. Bevy makes a node a button again when its `Button` changes, and
+/// takes the name from only one of the chip's two texts, so this runs after it.
+fn sync_accessibility(
+    mut rows: Query<&mut AccessibilityNode, (With<FilterChips>, Without<ChipView>)>,
+    mut chips: Query<(&ChipView, &mut AccessibilityNode)>,
+    items: Query<&Item<Chip>>,
+    selections: SelectionParam,
+) {
+    for mut node in &mut rows {
+        sync_role(&mut node, Role::RadioGroup);
+    }
+    for (view, mut node) in &mut chips {
+        let Ok(item) = items.get(view.item) else {
+            continue;
+        };
+        let active = selections
+            .get(view.chips)
+            .is_some_and(|selection| selection.is_selected(view.item));
+        sync_role(&mut node, Role::RadioButton);
+        sync_label(&mut node, &accessible_name(&item.data));
+        sync_toggled(&mut node, Some(active));
     }
 }
 

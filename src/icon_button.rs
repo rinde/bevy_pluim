@@ -9,7 +9,7 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy::ui_widgets::{Activate, Button};
 use itertools::Either;
 
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_toggled};
 use crate::icon::{Icon, IconColor};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::Tooltip;
@@ -31,9 +31,9 @@ impl Plugin for IconButtonPlugin {
                     .pipe(theme_icon_buttons)
                     .run_if(resource_changed::<Theme>),
                 restyle_on_disabled_change,
-                sync_accessible_names,
             ),
-        );
+        )
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync));
     }
 }
 
@@ -141,7 +141,8 @@ pub struct IconButton {
 /// (`On<Insert, ToggleState>`). An app can insert a value itself to set it from
 /// outside, for a keyboard shortcut or because the game paused itself. A button
 /// without it is a plain, momentary button. It is one on/off button, not part of
-/// a group.
+/// a group. To a screen reader a button with it is a toggle button, pressed while
+/// it is on; one without it has no toggled state at all.
 #[derive(Component, Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
@@ -378,20 +379,15 @@ fn restyle_on_disabled_change(
     }
 }
 
-/// Keeps the label of each button's [`AccessibilityNode`] at its name. Bevy
-/// clears the label of a button without text when the button is added, so this
-/// also sets it again after that.
-fn sync_accessible_names(
-    buttons: Query<(Entity, &IconButton), With<AccessibilityNode>>,
-    mut nodes: Query<&mut AccessibilityNode>,
+/// Keeps the label of each button's [`AccessibilityNode`] at its name, and its
+/// toggled state at its [`ToggleState`], or unset without one. Bevy clears the
+/// label of a button without text when the button is added, so this runs after it.
+fn sync_accessibility(
+    mut buttons: Query<(&IconButton, Option<&ToggleState>, &mut AccessibilityNode)>,
 ) {
-    for (entity, button) in &buttons {
-        let Ok(mut node) = nodes.get_mut(entity) else {
-            continue;
-        };
-        if node.label() != Some(button.name.as_str()) {
-            node.set_label(button.name.as_str());
-        }
+    for (button, toggle, mut node) in &mut buttons {
+        sync_label(&mut node, &button.name);
+        sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
     }
 }
 
