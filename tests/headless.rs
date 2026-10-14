@@ -9,12 +9,15 @@
 
 use bevy::MinimalPlugins;
 use bevy::a11y::AccessibilityNode;
+use bevy::asset::AssetPlugin;
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
+use bevy::camera::visibility::VisibilityPlugin;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::input::InputPlugin;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{InputFocus, InputFocusVisible};
+use bevy::mesh::MeshPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
 use bevy::picking::events::{Click, Pointer, Press, Release};
@@ -64,10 +67,12 @@ mod hud_ui;
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
 /// `combo.rs`/`list.rs` need pointer input and picking resources; all
 /// normally inserted by the render/window plugins that this headless setup
-/// skips.
+/// skips. `focus.rs` reads `InheritedVisibility`, which `VisibilityPlugin`
+/// propagates; its bounds systems need the mesh assets.
 fn headless_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
+    app.add_plugins((AssetPlugin::default(), MeshPlugin, VisibilityPlugin));
     app.add_plugins(WindowPlugin {
         primary_window: None,
         ..default()
