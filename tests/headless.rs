@@ -3491,6 +3491,45 @@ fn selected_label(app: &App, selection_holder: Entity) -> Option<String> {
 }
 
 #[test]
+fn a_tool_with_a_key_hint_gets_a_positioned_hint_text_and_one_without_gets_none() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let toolbar = app
+        .world_mut()
+        .spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::builder().one().build_with_items(
+                [
+                    Tool::new(Handle::default(), "Select").with_key_hint("1"),
+                    Tool::new(Handle::default(), "Rail"),
+                ]
+                .map(|data| Item { data }),
+            ),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let buttons = toolbar_buttons(&app, toolbar);
+    let hint_of = |button: Entity| {
+        app.world()
+            .entity(button)
+            .get::<ToolbarButtonRefs>()
+            .unwrap()
+            .hint
+    };
+    let hint = hint_of(buttons[0]).unwrap();
+    assert_eq!(hint_of(buttons[1]), None);
+    let entity = app.world().entity(hint);
+    assert_eq!(entity.get::<Text>().unwrap().0, "1");
+    let node = entity.get::<Node>().unwrap();
+    assert_eq!(node.position_type, PositionType::Absolute);
+    assert_eq!((node.top, node.right), (Val::Px(5.0), Val::Px(7.0)));
+    assert!((entity.get::<TextColor>().unwrap().0.alpha() - 0.6).abs() < 1e-6);
+}
+
+#[test]
 fn a_toolbar_has_a_button_per_item_with_a_divider_between_groups() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());

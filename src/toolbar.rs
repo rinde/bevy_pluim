@@ -30,6 +30,14 @@ const BUTTON_GAP: f32 = 4.0;
 /// The height of the bar along the bottom edge of the active button of a
 /// [`ToolbarStyle::Underlined`] toolbar.
 const BAR_HEIGHT: f32 = 2.0;
+/// The font size of a key hint.
+const HINT_FONT_SIZE: f32 = 10.0;
+/// The opacity of a key hint, as a fraction of its text colour.
+const HINT_OPACITY: f32 = 0.6;
+/// The distance of a key hint from the top edge of its button.
+const HINT_TOP: f32 = 5.0;
+/// The distance of a key hint from the right edge of its button.
+const HINT_RIGHT: f32 = 7.0;
 
 /// Registers the systems and observers of [`Toolbar`].
 ///
@@ -134,6 +142,9 @@ pub struct Tool {
     pub label: String,
     /// The group of the tool. A divider is put between neighbouring tools whose groups differ.
     pub group: u32,
+    /// A shortcut key shown as small text in the top-right corner of the button, such as `"1"`.
+    /// The toolbar only shows it; the application binds the key.
+    pub key_hint: Option<String>,
 }
 
 impl Tool {
@@ -148,7 +159,15 @@ impl Tool {
             icon,
             label: label.into(),
             group,
+            key_hint: None,
         }
+    }
+
+    /// This tool with `hint` shown in the corner of its button.
+    #[must_use]
+    pub fn with_key_hint(mut self, hint: impl Into<String>) -> Self {
+        self.key_hint = Some(hint.into());
+        self
     }
 }
 
@@ -171,6 +190,8 @@ pub struct ToolbarButtonRefs {
     pub icon: Entity,
     /// The label text; only in a [`ToolbarStyle::Filled`] toolbar.
     pub label: Option<Entity>,
+    /// The key hint text in the top-right corner; only for a tool with a [`Tool::key_hint`].
+    pub hint: Option<Entity>,
     /// The accent bar; only in a [`ToolbarStyle::Underlined`] toolbar.
     pub bar: Option<Entity>,
 }
@@ -182,7 +203,7 @@ struct GroupDivider;
 /// What a child of a toolbar is, to tell whether the children match the items.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Slot {
-    Button(Entity),
+    Button { item: Entity, hint: bool },
     Divider,
 }
 
@@ -190,7 +211,7 @@ enum Slot {
 /// groups or its style no longer match the children.
 fn sync_buttons(
     toolbars: Query<(Entity, &Toolbar, Option<&Children>)>,
-    buttons: Query<&ToolbarButton>,
+    buttons: Query<(&ToolbarButton, &ToolbarButtonRefs)>,
     dividers: Query<(), With<GroupDivider>>,
     items: Query<&Item<Tool>>,
     selections: SelectionParam,
@@ -211,14 +232,23 @@ fn sync_buttons(
                 wanted.push(Slot::Divider);
             }
             last_group = Some(tool.data.group);
-            wanted.push(Slot::Button(item));
+            wanted.push(Slot::Button {
+                item,
+                hint: tool.data.key_hint.is_some(),
+            });
         }
 
         let mut existing = Vec::new();
         let mut current_style = true;
         for child in children.into_iter().flat_map(RelationshipTarget::iter) {
-            if let Ok(button) = buttons.get(child) {
-                existing.push((child, Slot::Button(button.item)));
+            if let Ok((button, refs)) = buttons.get(child) {
+                existing.push((
+                    child,
+                    Slot::Button {
+                        item: button.item,
+                        hint: refs.hint.is_some(),
+                    },
+                ));
                 current_style &= button.style == toolbar.style;
             } else if dividers.contains(child) {
                 existing.push((child, Slot::Divider));
@@ -237,8 +267,15 @@ fn sync_buttons(
         }
         for slot in wanted {
             match slot {
-                Slot::Button(item) => {
-                    spawn_button(&mut commands, &theme, toolbar_ref, toolbar.style, item);
+                Slot::Button { item, hint } => {
+                    spawn_button(
+                        &mut commands,
+                        &theme,
+                        toolbar_ref,
+                        toolbar.style,
+                        item,
+                        hint,
+                    );
                 }
                 Slot::Divider => {
                     commands.spawn((Divider::vertical(), GroupDivider, ChildOf(toolbar_ref)));
@@ -263,6 +300,7 @@ fn spawn_button(
     toolbar: Entity,
     style: ToolbarStyle,
     item: Entity,
+    hint: bool,
 ) {
     let (width, height, icon_px) = match style {
         ToolbarStyle::Filled => (FILLED_WIDTH, FILLED_HEIGHT, FILLED_ICON),
@@ -278,6 +316,27 @@ fn spawn_button(
     let label = (style == ToolbarStyle::Filled).then(|| {
         commands
             .spawn((Text::new(""), label_font(theme), Pickable::IGNORE))
+            .id()
+    });
+    let hint = hint.then(|| {
+        commands
+            .spawn((
+                Name::new("ToolbarKeyHint"),
+                Text::new(""),
+                TextFont {
+                    font: theme.body_font.clone().into(),
+                    font_size: FontSize::Px(HINT_FONT_SIZE),
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(HINT_TOP),
+                    right: Val::Px(HINT_RIGHT),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
             .id()
     });
     let bar = (style == ToolbarStyle::Underlined).then(|| {
@@ -306,7 +365,12 @@ fn spawn_button(
                 toolbar,
                 style,
             },
-            ToolbarButtonRefs { icon, label, bar },
+            ToolbarButtonRefs {
+                icon,
+                label,
+                hint,
+                bar,
+            },
             Button,
             Hovered::default(),
             TabStop,
@@ -328,6 +392,9 @@ fn spawn_button(
     commands.entity(button).add_children(&[icon]);
     if let Some(label) = label {
         commands.entity(button).add_children(&[label]);
+    }
+    if let Some(hint) = hint {
+        commands.entity(button).add_children(&[hint]);
     }
     if let Some(bar) = bar {
         commands.entity(button).add_children(&[bar]);
@@ -462,6 +529,20 @@ fn update_buttons(
             color.set_if_neq(TextColor(look.icon.color(&theme.colors)));
             if theme.is_changed() || refs.is_added() {
                 *font = label_font(&theme);
+            }
+        }
+        if let Some(hint) = refs.hint
+            && let Ok((mut text, mut color, mut font, _)) = labels.get_mut(hint)
+        {
+            let key = item.data.key_hint.as_deref().unwrap_or_default();
+            if text.0 != key {
+                key.clone_into(&mut text.0);
+            }
+            color.set_if_neq(TextColor(
+                look.icon.color(&theme.colors).with_alpha(HINT_OPACITY),
+            ));
+            if theme.is_changed() || refs.is_added() {
+                font.font = theme.body_font.clone().into();
             }
         }
         if let Some(bar) = refs.bar
