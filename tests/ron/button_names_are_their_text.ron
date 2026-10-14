@@ -1,0 +1,18 @@
+// A push button, a push button with an icon, a link and a colour button each
+// carry their visible text as accessible label (Bevy leaves a
+// `bevy::ui_widgets::Button` unlabelled): the text of the button only, with no
+// "button" added and without an icon's text. A colour button is named after
+// its colour.
+(
+    format_version: 3,
+    name: "push buttons, links and colour buttons are named after their text",
+    setup: App(ButtonNames),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Name("plain button"), role: Some("Button"), label: Some("Add"), value: None, states: []))),
+        Check(App(Accessible(of: Name("icon push button"), role: Some("Button"), label: Some("Save"), value: None, states: []))),
+        Check(App(Accessible(of: Name("colour button"), role: Some("Button"), label: Some("red-500"), value: None, states: []))),
+        Check(App(Accessible(of: Name("link"), role: Some("Link"), label: Some("Docs"), value: None, states: []))),
+    ],
+    expect: [],
+)
