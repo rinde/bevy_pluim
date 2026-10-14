@@ -18,14 +18,14 @@
         Check(App(Accessible(
             of: Within(Name("own segmented control"), Role(role: Button, label: "Auto")),
             role: Some("RadioButton"),
-            label: None,
+            label: Some("Auto"),
             value: None,
             states: [Toggled],
         ))),
         Check(App(Accessible(
             of: Within(Name("own segmented control"), Role(role: Button, label: "Manual")),
             role: Some("RadioButton"),
-            label: None,
+            label: Some("Manual"),
             value: None,
             states: [NotToggled],
         ))),
@@ -35,14 +35,14 @@
         Check(App(Accessible(
             of: Within(Name("own segmented control"), Role(role: Button, label: "Manual")),
             role: Some("RadioButton"),
-            label: None,
+            label: Some("Manual"),
             value: None,
             states: [Toggled],
         ))),
         Check(App(Accessible(
             of: Within(Name("own segmented control"), Role(role: Button, label: "Auto")),
             role: Some("RadioButton"),
-            label: None,
+            label: Some("Auto"),
             value: None,
             states: [NotToggled],
         ))),

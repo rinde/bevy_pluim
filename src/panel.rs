@@ -9,7 +9,7 @@ use bevy::ui_widgets::Activate;
 
 use crate::card::Card;
 use crate::divider::Divider;
-use crate::focus::sync_label;
+use crate::focus::{clear_label, sync_labelled_by};
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::label::Label;
 use crate::scroll_area::ScrollArea;
@@ -280,7 +280,9 @@ fn sync_panel(
         return;
     };
     if let Some(mut accessibility_node) = accessibility_node {
-        sync_label(&mut accessibility_node, &panel.title);
+        // The title is read from its own text, so the group does not repeat it as a label.
+        clear_label(&mut accessibility_node);
+        sync_labelled_by(&mut accessibility_node, refs.title);
     }
     let show = |shown: bool| if shown { Display::Flex } else { Display::None };
     commands

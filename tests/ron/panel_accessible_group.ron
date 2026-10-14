@@ -1,4 +1,5 @@
-// A `Panel` is a group to assistive technology, labelled with its title; its
+// A `Panel` is a group to assistive technology, labelled by its title (`labelled_by`,
+// checked in `tests/headless.rs`, so the group has no label of its own); its
 // close button keeps its own name.
 (
     format_version: 3,
@@ -9,14 +10,14 @@
         Check(App(Accessible(
             of: Name("closable panel"),
             role: Some("Group"),
-            label: Some("Trains"),
+            label: None,
             value: None,
             states: [Shown],
         ))),
         Check(App(Accessible(
             of: Name("tall panel"),
             role: Some("Group"),
-            label: Some("Stops"),
+            label: None,
             value: None,
             states: [],
         ))),

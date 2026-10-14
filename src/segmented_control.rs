@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{Activate, Button};
 
-use crate::focus::{AccessibilitySync, TabStop, sync_role, sync_toggled};
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::list::sync_selected;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
@@ -213,17 +213,31 @@ fn theme_segmented_controls(
     }
 }
 
-/// Keeps the control a radio group and each segment a radio button, toggled while it is
+/// Keeps the control a radio group and each segment a radio button named after its item's text,
+/// toggled while it is
 /// [`Selected`]. Bevy makes a node a button again when its `Button` changes, so this runs
 /// after it.
 fn sync_accessibility(
-    mut controls: Query<&mut AccessibilityNode, (With<SegmentedControl>, Without<Segment>)>,
-    mut segments: Query<(&mut AccessibilityNode, Has<Selected>), With<Segment>>,
+    mut controls: Query<
+        &mut AccessibilityNode,
+        (
+            With<SegmentedControl>,
+            Without<Segment>,
+            Changed<AccessibilityNode>,
+        ),
+    >,
+    mut segments: Query<(&Segment, &mut AccessibilityNode, Has<Selected>)>,
+    items: Query<&Item<String>>,
 ) {
+    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
+    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut controls {
         sync_role(&mut node, Role::RadioGroup);
     }
-    for (mut node, selected) in &mut segments {
+    for (segment, mut node, selected) in &mut segments {
+        if let Ok(item) = items.get(segment.item_ref) {
+            sync_label(&mut node, &item.data);
+        }
         sync_role(&mut node, Role::RadioButton);
         sync_toggled(&mut node, Some(selected));
     }

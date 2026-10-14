@@ -359,11 +359,20 @@ fn update_cards(
 /// changes, and clears the label of a button that has no text of its own when it is added, so
 /// this runs after it.
 fn sync_accessibility(
-    mut galleries: Query<&mut AccessibilityNode, (With<Gallery>, Without<GalleryCardView>)>,
+    mut galleries: Query<
+        &mut AccessibilityNode,
+        (
+            With<Gallery>,
+            Without<GalleryCardView>,
+            Changed<AccessibilityNode>,
+        ),
+    >,
     mut cards: Query<(&GalleryCardView, &mut AccessibilityNode)>,
     items: Query<&Item<GalleryCard>>,
     selections: SelectionParam,
 ) {
+    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
+    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut galleries {
         sync_role(&mut node, Role::RadioGroup);
     }

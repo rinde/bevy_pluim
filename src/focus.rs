@@ -97,6 +97,14 @@ pub(crate) fn sync_controls(node: &mut Mut<AccessibilityNode>, controlled: Entit
     }
 }
 
+/// Says that `node` is named by the text of `labelling`, writing it only when it differs.
+pub(crate) fn sync_labelled_by(node: &mut Mut<AccessibilityNode>, labelling: Entity) {
+    let wanted = [node_id(labelling)];
+    if node.labelled_by() != wanted {
+        node.set_labelled_by(wanted);
+    }
+}
+
 /// The id of the accessibility node of `entity`, as Bevy builds it for the platform.
 pub(crate) const fn node_id(entity: Entity) -> accesskit::NodeId {
     accesskit::NodeId(entity.to_bits())

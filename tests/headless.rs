@@ -1328,6 +1328,45 @@ fn a_combo_button_controls_its_list() {
     assert_eq!(controls(&app, button), vec![list.to_bits()]);
 }
 
+/// The tick at which the [`AccessibilityNode`] of `entity` last changed.
+fn accessibility_changed_at(app: &App, entity: Entity) -> bevy::ecs::change_detection::Tick {
+    app.world()
+        .entity(entity)
+        .get_ref::<AccessibilityNode>()
+        .unwrap()
+        .last_changed()
+}
+
+#[test]
+fn a_combo_button_writes_its_accessibility_node_only_when_the_shown_text_changes() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    let before = accessibility_changed_at(&app, button);
+    app.update();
+    app.update();
+    assert_eq!(accessibility_changed_at(&app, button), before, "idle");
+
+    select_by_text(&mut app, combo, "b");
+    let node = app.world().get::<AccessibilityNode>(button).unwrap();
+    assert_eq!(node.value(), Some("b"));
+    assert_ne!(accessibility_changed_at(&app, button), before, "changed");
+    let after = accessibility_changed_at(&app, button);
+    app.update();
+    app.update();
+    assert_eq!(accessibility_changed_at(&app, button), after, "idle again");
+}
+
+#[test]
+fn a_color_palette_combo_button_writes_its_accessibility_node_only_when_the_colour_changes() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let (_, button) = spawn_palette_combo(&mut app);
+    let before = accessibility_changed_at(&app, button);
+    app.update();
+    app.update();
+    assert_eq!(accessibility_changed_at(&app, button), before);
+}
+
 #[test]
 fn a_color_palette_combo_button_controls_its_palette() {
     let mut app = headless_app();
@@ -3653,18 +3692,24 @@ fn a_setting_row_is_a_group_labelled_with_its_title_and_described_by_its_descrip
 }
 
 #[test]
-fn a_panel_is_a_group_labelled_with_its_title_which_follows_a_new_panel() {
+fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
     let mut app = headless_app();
     let panel = app.world_mut().spawn(Panel::new("Trains")).id();
     app.update();
     app.update();
     let node = |app: &App| {
         let node = app.world().get::<AccessibilityNode>(panel).unwrap();
-        (node.role(), node.label().map(str::to_owned))
+        let title = app.world().get::<PanelRefs>(panel).unwrap().title;
+        (
+            node.role(),
+            node.label().map(str::to_owned),
+            node.labelled_by() == [accesskit::NodeId(title.to_bits())],
+            app.world().get::<Text>(title).unwrap().0.clone(),
+        )
     };
     assert_eq!(
         node(&app),
-        (accesskit::Role::Group, Some("Trains".to_owned()))
+        (accesskit::Role::Group, None, true, "Trains".to_owned())
     );
 
     app.world_mut()
@@ -3674,7 +3719,7 @@ fn a_panel_is_a_group_labelled_with_its_title_which_follows_a_new_panel() {
     app.update();
     assert_eq!(
         node(&app),
-        (accesskit::Role::Group, Some("Stops".to_owned()))
+        (accesskit::Role::Group, None, true, "Stops".to_owned())
     );
 }
 
