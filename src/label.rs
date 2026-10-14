@@ -3,9 +3,13 @@
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::text::LetterSpacing;
 use itertools::Either;
 
 use crate::theme::Theme;
+
+/// Letter spacing of an overline, in logical pixels.
+const OVERLINE_LETTER_SPACING: f32 = 0.5;
 
 pub(crate) struct LabelPlugin;
 
@@ -44,7 +48,8 @@ pub enum Label {
     Secondary(String),
     /// A caption, such as the faint route line of a row: small size, tertiary text colour.
     Caption(String),
-    /// A group heading: small size, secondary text colour, shown in upper case.
+    /// A group heading: the overline size, semibold, secondary text colour, shown in upper case
+    /// with 0.5 px of letter spacing.
     Overline(String),
 }
 
@@ -99,7 +104,7 @@ impl Label {
 
 fn theme_labels(
     label_id: In<Option<Entity>>,
-    mut labels: Query<(&mut TextColor, &mut TextFont, &Label)>,
+    mut labels: Query<(&mut TextColor, &mut TextFont, &mut LetterSpacing, &Label)>,
     theme: Res<Theme>,
 ) {
     let it = if let Some(button_id) = label_id.as_ref() {
@@ -108,7 +113,7 @@ fn theme_labels(
         Either::Right(labels.iter_mut())
     };
 
-    for (mut text_color, mut text_font, label) in it {
+    for (mut text_color, mut text_font, mut letter_spacing, label) in it {
         let (font, font_size, color) = match label {
             Label::Title(_) => (
                 &theme.display_font,
@@ -132,15 +137,26 @@ fn theme_labels(
             ),
             Label::Overline(_) => (
                 &theme.body_font,
-                theme.font_size_caption,
+                theme.font_size_overline,
                 theme.colors.text_secondary,
             ),
         };
+        let overline = matches!(label, Label::Overline(_));
         *text_color = TextColor(color);
         *text_font = TextFont {
             font: font.clone().into(),
             font_size: FontSize::Px(font_size),
+            weight: if overline {
+                FontWeight::SEMIBOLD
+            } else {
+                FontWeight::default()
+            },
             ..default()
+        };
+        *letter_spacing = if overline {
+            LetterSpacing::Px(OVERLINE_LETTER_SPACING)
+        } else {
+            LetterSpacing::default()
         };
     }
 }
