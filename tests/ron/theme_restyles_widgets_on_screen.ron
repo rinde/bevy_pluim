@@ -108,7 +108,7 @@
         Check(Component(
             target: Name("themed button"),
             path: "BoxShadow.0[0].color",
-            is: Eq(Srgba((red:1.0,green:1.0,blue:1.0,alpha:0.03))),
+            is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.2))),
         )),
         Check(Component(
             target: Name("themed card"),

@@ -27,7 +27,7 @@ impl Plugin for KbdPlugin {
 /// A key cap: a small bordered box around the name of a key. Display only.
 ///
 /// The border is the theme's `border` colour, the text its `text_secondary`
-/// colour, in the caption size.
+/// colour, in the caption size. It reuses those two slots and has none of its own.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
