@@ -1,0 +1,23 @@
+// All starts active. A click on "Running" selects it, in `mirror chips` as well (one shared
+// selection); `narrow chips` keeps its own.
+(
+    format_version: 3,
+    name: "clicking a chip selects it",
+    setup: App(FilterChips),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("status chips"), items: ["All"]))),
+        MoveTo(Within(Name("status chips"), Role(role: Button, label: "Running 2"))),
+        Click(Left),
+        Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
+        Check(App(Selected(of: Name("mirror chips"), items: ["Running"]))),
+        Check(App(Selected(of: Name("narrow chips"), items: ["Alpha"]))),
+        MoveTo(Within(Name("narrow chips"), Role(role: Button, label: "Gamma "))),
+        Click(Left),
+        Check(App(Selected(of: Name("narrow chips"), items: ["Gamma"]))),
+        Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("narrow chips"), items: ["Gamma"])),
+    ],
+)

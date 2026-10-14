@@ -1,0 +1,25 @@
+// Every chip is a tab stop: Tab reaches "All", then "Running"; Enter or Space on a focused chip
+// selects it, like a click.
+(
+    format_version: 3,
+    name: "Enter and Space on a focused chip select it",
+    setup: App(FilterChips),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "All 4"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "Running 2"))))),
+        Tap(key: Enter),
+        Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
+        Tap(key: Tab),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "Problems 1"))))),
+        Tap(key: Space),
+        Check(App(Selected(of: Name("status chips"), items: ["Problems"]))),
+        Check(App(Selected(of: Name("mirror chips"), items: ["Problems"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("status chips"), items: ["Problems"])),
+    ],
+)

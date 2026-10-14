@@ -1,0 +1,23 @@
+// A click on the active chip changes nothing: a `One` selection keeps its chip.
+(
+    format_version: 3,
+    name: "clicking the active chip keeps it",
+    setup: App(FilterChips),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("status chips"), items: ["All"]))),
+        MoveTo(Within(Name("status chips"), Role(role: Button, label: "All 4"))),
+        Click(Left),
+        Check(App(Selected(of: Name("status chips"), items: ["All"]))),
+        MoveTo(Within(Name("mirror chips"), Role(role: Button, label: "Waiting 1"))),
+        Click(Left),
+        Check(App(Selected(of: Name("status chips"), items: ["Waiting"]))),
+        MoveTo(Within(Name("mirror chips"), Role(role: Button, label: "Waiting 1"))),
+        Click(Left),
+        Check(App(Selected(of: Name("status chips"), items: ["Waiting"]))),
+        Check(App(Selected(of: Name("mirror chips"), items: ["Waiting"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("status chips"), items: ["Waiting"])),
+    ],
+)
