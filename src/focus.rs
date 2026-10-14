@@ -4,6 +4,7 @@
 //! [`TabIndex`] and `draw_focus_ring` draws the [`ThemeColors::focus_ring`](crate::theme::ThemeColors)
 //! around the focused one while the focus is visible.
 
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
@@ -22,7 +23,10 @@ pub struct FocusPlugin;
 
 impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (sync_tab_index, draw_focus_ring));
+        app.add_systems(Update, draw_focus_ring).add_systems(
+            PostUpdate,
+            sync_tab_index.after(VisibilitySystems::VisibilityPropagate),
+        );
     }
 }
 
@@ -30,8 +34,8 @@ impl Plugin for FocusPlugin {
 ///
 /// Its [`TabIndex`] is kept by `sync_tab_index`: 0 while the widget is usable, -1 while it
 /// is [`InteractionDisabled`] (a disabled `Link` included), [`Unreachable`] (the list of a
-/// closed combo) or hidden (`Visibility::Hidden`, or under a `Display::None` node, such
-/// as a hidden `Stack` panel), so Tab skips it.
+/// closed combo) or hidden (its [`InheritedVisibility`] is hidden, or it is under a
+/// `Display::None` node, such as a hidden `Stack` panel), so Tab skips it.
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[require(TabIndex(0))]
 pub(crate) struct TabStop;
@@ -42,30 +46,25 @@ pub(crate) struct TabStop;
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Unreachable;
 
-/// Whether `entity` is not shown: it or an ancestor has `Display::None`, or its own
-/// [`Visibility`] or that of the nearest ancestor that is not `Inherited` is `Hidden`.
-///
-/// Read from `Visibility` rather than `InheritedVisibility`, which only a rendering app
-/// propagates.
+/// Whether `entity` is not shown: its [`InheritedVisibility`] is hidden, or it or an
+/// ancestor has `Display::None`, which takes a node out of the layout without touching its
+/// visibility.
 fn is_hidden(
     entity: Entity,
-    shown: &Query<(Option<&Node>, Option<&Visibility>)>,
+    shown: &Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: &Query<&ChildOf>,
 ) -> bool {
-    let mut visibility_decided = false;
+    if let Ok((_, Some(visibility))) = shown.get(entity)
+        && !visibility.get()
+    {
+        return true;
+    }
     let mut current = entity;
     loop {
-        if let Ok((node, visibility)) = shown.get(current) {
-            if node.is_some_and(|node| node.display == Display::None) {
-                return true;
-            }
-            if !visibility_decided {
-                match visibility {
-                    Some(Visibility::Hidden) => return true,
-                    Some(Visibility::Visible) => visibility_decided = true,
-                    _ => {}
-                }
-            }
+        if let Ok((Some(node), _)) = shown.get(current)
+            && node.display == Display::None
+        {
+            return true;
         }
         match parents.get(current) {
             Ok(child_of) => current = child_of.parent(),
@@ -86,7 +85,7 @@ fn sync_tab_index(
         ),
         With<TabStop>,
     >,
-    shown: Query<(Option<&Node>, Option<&Visibility>)>,
+    shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
     for (entity, mut index, disabled, unreachable) in &mut stops {

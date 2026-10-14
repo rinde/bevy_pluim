@@ -350,8 +350,11 @@ of them (`just example gallery -- --run-all stack link`).
   owns the value: 0 for a stop that is not `InteractionDisabled` (a `LinkState::Disabled`
   link has it), -1 otherwise or while it has the crate-private `Unreachable` marker (the
   list of a closed combo, put on and taken off with `ComboState` / `State`) or while it is
-  hidden (`Visibility::Hidden` on it or its nearest non-`Inherited` ancestor, or itself or an ancestor `Display::None`, as in a
-  hidden `Stack` panel; it is Tab-reachable again once shown); **no widget writes `TabIndex` by hand**. Within the group
+  hidden (its `InheritedVisibility` is hidden, as Bevy's UI renderer reads it, or itself or an
+  ancestor is `Display::None`, as in a hidden `Stack` panel; it is Tab-reachable again once
+  shown). `sync_tab_index` runs in `PostUpdate` after `VisibilitySystems::VisibilityPropagate`,
+  so an app needs Bevy's `VisibilityPlugin` (in `DefaultPlugins`, and the tester's
+  `HeadlessPlugins` through `CameraPlugin`), or every stop counts as hidden; **no widget writes `TabIndex` by hand**. Within the group
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
   `InputFocusVisible` is true, except that a list's ring is on its `ActiveDescendant` row
@@ -624,6 +627,8 @@ resource, none of which need a window or GPU:
   `combo.rs`'s outside-click observer.
 - `DefaultPickingPlugins` — provides `HoverMap`, needed by
   `scroll_area.rs`'s scroll handling.
+- `VisibilityPlugin` — propagates `InheritedVisibility`, which `focus.rs`'s
+  `sync_tab_index` reads; without it every tab stop counts as hidden.
 - `ClearColor` (via `init_resource`) — normally inserted by the render
   plugins; `theme.rs`'s `update_theme` writes to it whenever `Theme`
   changes.
