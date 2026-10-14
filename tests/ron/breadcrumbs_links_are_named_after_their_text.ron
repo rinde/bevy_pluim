@@ -1,0 +1,21 @@
+// The crumbs of a trail are labelled with their text, the current, disabled
+// one included.
+(
+    format_version: 3,
+    name: "crumbs carry their text as accessible label",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Go to Panel B")), Click(Left),
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            role: Some("Link"), label: Some("Home"), value: None, states: [Enabled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B")),
+            role: Some("Link"), label: Some("Panel B"), value: None, states: [Disabled],
+        ))),
+    ],
+    expect: [],
+)

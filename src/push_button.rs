@@ -10,7 +10,10 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
-use crate::focus::TabStop;
+use bevy::a11y::AccessibilityNode;
+
+use crate::combo::ComboButton;
+use crate::focus::{AccessibilitySync, TabStop, sync_label};
 use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
@@ -31,7 +34,19 @@ impl Plugin for PushButtonPlugin {
                 restyle_on_disabled_change,
                 restyle_on_size_change,
             ),
-        );
+        )
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync));
+    }
+}
+
+/// Keeps the label of each button's [`AccessibilityNode`] at its text, without the icon. Bevy
+/// leaves a [`bevy::ui_widgets::Button`] unlabelled. A combo's button is left alone: it is a
+/// combo box whose value says the selection.
+fn sync_accessibility(
+    mut buttons: Query<(&PushButton, &mut AccessibilityNode), Without<ComboButton>>,
+) {
+    for (button, mut node) in &mut buttons {
+        sync_label(&mut node, &button.label);
     }
 }
 

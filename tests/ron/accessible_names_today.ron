@@ -2,10 +2,7 @@
 // test app's own `App(Accessible(..))` check (tests/widgets_check/mod.rs): a
 // `PushButton` is a `Button`, and one with `InteractionDisabled` is `Disabled`.
 //
-// It has no label yet: Bevy labels its `bevy::ui::Button`s with their text,
-// but a `PushButton` is a `bevy::ui_widgets::Button`, which Bevy leaves
-// unlabelled. The tester's `Role(role: Button, label: "Add")` finds it all the
-// same, because it reads the text, not the accessibility node.
+// Its label is its text (see button_names_are_their_text.ron).
 (
     format_version: 3,
     name: "push buttons are buttons, disabled when disabled",
@@ -15,14 +12,14 @@
         Check(App(Accessible(
             of: Role(role: Button, label: "Add"),
             role: Some("Button"),
-            label: None,
+            label: Some("Add"),
             value: None,
             states: [Enabled, Shown],
         ))),
         Check(App(Accessible(
             of: Role(role: Button, label: "Disabled"),
             role: Some("Button"),
-            label: None,
+            label: Some("Disabled"),
             value: None,
             states: [Disabled],
         ))),
