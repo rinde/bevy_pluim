@@ -25,6 +25,7 @@ pub mod link;
 pub mod list;
 pub mod numeric_stepper;
 pub mod panel;
+pub mod pill;
 pub mod push_button;
 pub mod scroll_area;
 pub mod segmented_control;
@@ -32,6 +33,7 @@ pub mod select;
 pub mod stack;
 pub mod tailwind;
 pub mod theme;
+pub mod toolbar;
 
 use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
@@ -56,12 +58,14 @@ use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
 use crate::panel::PanelPlugin;
+use crate::pill::PillPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
 use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::stack::StackPlugin;
 use crate::theme::{Theme, ThemePlugin};
+use crate::toolbar::ToolbarPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
@@ -94,7 +98,9 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(IconPlugin)
             .add_plugins(IconButtonPlugin)
             .add_plugins(KbdPlugin)
+            .add_plugins(PillPlugin)
             .add_plugins(FilterChipsPlugin)
+            .add_plugins(ToolbarPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(PanelPlugin)
             .add_plugins(ThemePlugin)

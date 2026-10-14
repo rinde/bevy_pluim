@@ -42,6 +42,7 @@ use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
+use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
@@ -49,6 +50,7 @@ use rin_bevy_ui::select::{
 };
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
+use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarStyle};
 
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
 /// `combo.rs`/`list.rs` need pointer input and picking resources; all
@@ -2858,6 +2860,62 @@ fn a_separated_list_follows_a_theme_change() {
     assert_eq!(background(&app, views[1]), Color::NONE);
 }
 
+#[test]
+fn a_pill_gets_the_colours_of_its_tone_and_a_new_tone_restyles_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let pill = app
+        .world_mut()
+        .spawn((Pill::new("running"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let state = |app: &App| {
+        let e = app.world().entity(pill);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            e.get::<BackgroundColor>().unwrap().0,
+            e.get::<TextColor>().unwrap().0,
+        )
+    };
+    let c = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(
+        state(&app),
+        ("RUNNING".to_string(), c.pill_background, c.pill_text)
+    );
+
+    for (tone, text, bg, fg) in [
+        (PillTone::Info, "RUNNING", c.info_background, c.info_text),
+        (PillTone::Warning, "AT STOP", c.wait_background, c.wait_text),
+        (
+            PillTone::Problem,
+            "NO PATH",
+            c.warning_background,
+            c.warning_text,
+        ),
+        (PillTone::Neutral, "IDLE", c.pill_background, c.pill_text),
+    ] {
+        app.world_mut()
+            .entity_mut(pill)
+            .insert(Pill::new(text).with_tone(tone));
+        app.update();
+        app.update();
+        assert_eq!(state(&app), (text.to_string(), bg, fg), "{tone:?}");
+    }
+
+    app.world_mut()
+        .entity_mut(pill)
+        .insert(Pill::new("x").with_tone(PillTone::Warning));
+    toggle_theme(&mut app);
+    app.update();
+    app.update();
+    let d = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(
+        state(&app),
+        ("X".to_string(), d.wait_background, d.wait_text)
+    );
+}
 fn spawn_chips(app: &mut App, chips: [Chip; 3]) -> (Entity, Entity) {
     let root = app.world_mut().spawn(Node::default()).id();
     let chips_entity = app
@@ -3174,5 +3232,244 @@ fn changing_the_subtitle_of_a_live_panel_updates_its_text() {
     assert_eq!(
         app.world().get::<Node>(refs.subtitle).unwrap().display,
         Display::None
+    );
+}
+
+fn tools() -> [Tool; 4] {
+    [
+        Tool::in_group(Handle::default(), "Select", 0),
+        Tool::in_group(Handle::default(), "Rail", 1),
+        Tool::in_group(Handle::default(), "Signal", 1),
+        Tool::in_group(Handle::default(), "Train", 2),
+    ]
+}
+
+fn toolbar_children(app: &App, toolbar: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(toolbar)
+        .get::<Children>()
+        .map(|c| c.iter().collect())
+        .unwrap_or_default()
+}
+
+fn toolbar_buttons(app: &App, toolbar: Entity) -> Vec<Entity> {
+    toolbar_children(app, toolbar)
+        .into_iter()
+        .filter(|c| app.world().entity(*c).contains::<ToolbarButton>())
+        .collect()
+}
+
+fn spawn_toolbar(app: &mut App, style: ToolbarStyle, builder: SelectionBuilderWithValue) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let toolbar = app
+        .world_mut()
+        .spawn((
+            Toolbar::new(style),
+            builder.build_with_items(tools().map(|data| Item { data })),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.update();
+    toolbar
+}
+
+fn selected_label(app: &App, selection_holder: Entity) -> Option<String> {
+    let selection = app
+        .world()
+        .entity(selection_holder)
+        .get::<Selection>()
+        .unwrap();
+    let item = selection.as_selection().unwrap().single()?;
+    Some(
+        app.world()
+            .entity(item)
+            .get::<Item<Tool>>()
+            .unwrap()
+            .data
+            .label
+            .clone(),
+    )
+}
+
+#[test]
+fn a_toolbar_has_a_button_per_item_with_a_divider_between_groups() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+
+    let children = toolbar_children(&app, toolbar);
+    assert_eq!(children.len(), 6);
+    let is_divider = |e: Entity| app.world().entity(e).contains::<Divider>();
+    assert_eq!(
+        children.iter().map(|c| is_divider(*c)).collect::<Vec<_>>(),
+        [false, true, false, false, true, false]
+    );
+    let buttons = toolbar_buttons(&app, toolbar);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, buttons[0]), colors.accent);
+    assert_eq!(background(&app, buttons[1]), Color::NONE);
+    let node = app.world().entity(buttons[0]).get::<Node>().unwrap();
+    assert_eq!((node.width, node.height), (Val::Px(66.0), Val::Px(60.0)));
+}
+
+#[test]
+fn clicking_a_tool_of_a_one_toolbar_selects_it_and_fills_it() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+
+    activate(&mut app, buttons[2]);
+    assert_eq!(selected_label(&app, toolbar).as_deref(), Some("Signal"));
+    assert_eq!(background(&app, buttons[2]), colors.accent);
+    assert_eq!(background(&app, buttons[0]), Color::NONE);
+
+    // The active tool stays active when it is activated again.
+    activate(&mut app, buttons[2]);
+    assert_eq!(selected_label(&app, toolbar).as_deref(), Some("Signal"));
+    assert_eq!(background(&app, buttons[2]), colors.accent);
+}
+
+#[test]
+fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_colour_when_active() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let label = |app: &App, b: Entity| {
+        let refs = app.world().entity(b).get::<ToolbarButtonRefs>().unwrap();
+        let e = app.world().entity(refs.label.unwrap());
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            e.get::<TextColor>().unwrap().0,
+        )
+    };
+    assert_eq!(
+        label(&app, buttons[0]),
+        ("Select".into(), colors.accent_text)
+    );
+    assert_eq!(
+        label(&app, buttons[1]),
+        ("Rail".into(), colors.text_secondary)
+    );
+}
+
+#[test]
+fn clicking_the_open_panel_of_a_zero_or_one_toolbar_closes_it() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().zero_or_one(),
+    );
+    let buttons = toolbar_buttons(&app, toolbar);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(selected_label(&app, toolbar), None);
+
+    activate(&mut app, buttons[1]);
+    assert_eq!(selected_label(&app, toolbar).as_deref(), Some("Rail"));
+    assert_eq!(background(&app, buttons[1]), colors.accent_subtle);
+    let refs = *app
+        .world()
+        .entity(buttons[1])
+        .get::<ToolbarButtonRefs>()
+        .unwrap();
+    assert_eq!(node_display(&app, refs.bar.unwrap()), Display::Flex);
+
+    activate(&mut app, buttons[1]);
+    assert_eq!(selected_label(&app, toolbar), None);
+    assert_eq!(background(&app, buttons[1]), Color::NONE);
+    assert_eq!(node_display(&app, refs.bar.unwrap()), Display::None);
+}
+
+#[test]
+fn a_selection_changed_through_the_selection_param_restyles_the_buttons() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let target = app
+        .world()
+        .entity(buttons[3])
+        .get::<ToolbarButton>()
+        .unwrap()
+        .item;
+
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(toolbar, |s| s.set_selection([target]));
+        })
+        .unwrap();
+    app.update();
+    app.update();
+
+    assert_eq!(background(&app, buttons[3]), colors.accent);
+    assert_eq!(background(&app, buttons[0]), Color::NONE);
+}
+
+#[test]
+fn a_toolbar_shares_a_selection_by_reference() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(tools().map(|data| Item { data })),
+        )
+        .id();
+    let toolbar = app
+        .world_mut()
+        .spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::reference(selection),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.update();
+    let buttons = toolbar_buttons(&app, toolbar);
+    assert_eq!(buttons.len(), 4);
+
+    activate(&mut app, buttons[3]);
+
+    assert_eq!(selected_label(&app, selection).as_deref(), Some("Train"));
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, buttons[3]), colors.accent);
+}
+
+#[test]
+fn a_toolbar_button_is_named_after_its_tool_for_assistive_tech() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().zero_or_one(),
+    );
+    let buttons = toolbar_buttons(&app, toolbar);
+    let node = app
+        .world()
+        .entity(buttons[1])
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.label(), Some("Rail"));
+}
+
+#[test]
+fn a_theme_change_restyles_the_toolbar() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+
+    toggle_theme(&mut app);
+    app.update();
+    app.update();
+
+    assert_eq!(
+        background(&app, buttons[0]),
+        DEFAULT_DARK_THEME_COLORS.accent
     );
 }
