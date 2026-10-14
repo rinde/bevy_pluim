@@ -160,6 +160,26 @@ request again in this run, and report what stopped CI for a human to fix.
 Fold each report into the next pass. When a merge closes an issue, the issues
 it blocked may now be ready: that is what the next pass is for.
 
+### 5. Leftovers become ready issues
+
+Nothing that is left undone ends the run as a question for a human. Decide it
+yourself, with your best judgment, and put it on GitHub:
+
+- **Nits not sent back.** A review comment that was not blocking and that the
+  merged pull request did not take becomes an issue: what to change, where, and
+  when it is done, labelled `ready-for-agent` (and `opus` if it needs it).
+  Collect the nits of one pull request in one issue.
+- **Questions on an issue.** An issue an implementer moved to `Needs refinement`
+  in this run gets your decision as a comment, its body stays the specification,
+  `Needs refinement` comes off and `ready-for-agent` goes back on, so the next
+  pass starts it. If the decision leaves nothing to do, say so and close it as
+  completed. An issue too big for one pull request is split into sub-issues,
+  each carrying its decision and `ready-for-agent`, with the original left open
+  as the tracker.
+
+Only what no agent can do goes to a human: billing, secrets, permissions, a
+dependency closed as not planned, and `require-human-review`.
+
 ## Rules
 
 - Never write or review code, approve a pull request, or push a commit
@@ -171,7 +191,8 @@ it blocked may now be ready: that is what the next pass is for.
 - Never start an issue whose dependencies are not done, and never two
   implementers on one issue or one pull request.
 - Leave issues without `ready-for-agent` and pull requests that belong to no
-  `ready-for-agent` issue alone, even if they look easy.
+  `ready-for-agent` issue alone, even if they look easy, except an issue an
+  implementer moved to `Needs refinement` in this run (see step 5).
 - Do not wait in a loop for CI. Leave it to a later pass; the
   user runs you again, or runs you on a schedule with `/loop`.
 
@@ -186,5 +207,5 @@ dispatching and changing nothing.
 
 End with a short table: each issue you looked at, its pull request, and its
 state — dispatched, in review, changes requested, waiting for CI, waiting for
-a human, merged, blocked by `#N`, stalled or needs refinement — then anything
-a human must decide.
+a human, merged, blocked by `#N` or stalled — then the issues you filed or
+refined, and only then what no agent can do.
