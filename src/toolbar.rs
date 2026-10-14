@@ -1,12 +1,13 @@
 //! `Toolbar`: a row of icon buttons over a [`Selection`](crate::select::Selection), in groups.
 
+use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
 use crate::divider::Divider;
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
 use crate::select::{Item, SelectionParam};
@@ -55,14 +56,9 @@ impl Plugin for ToolbarPlugin {
             .register_type::<ToolbarButton>()
             .add_systems(
                 Update,
-                (
-                    sync_buttons,
-                    update_buttons,
-                    sync_accessible_names,
-                    sync_tooltips,
-                )
-                    .chain(),
+                (sync_buttons, update_buttons, sync_tooltips).chain(),
             )
+            .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
     }
 }
@@ -107,6 +103,9 @@ pub enum ToolbarLabels {
 ///
 /// Items with different [`Tool::group`]s are separated by a vertical [`Divider`]. A button is a
 /// [`Button`] and a tab stop: Enter and Space on a focused one pick it, like a click.
+///
+/// To a screen reader the row is a toolbar and each button a toggle button named after its
+/// tool, pressed while its tool is active.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -117,6 +116,7 @@ pub enum ToolbarLabels {
         column_gap: Val::Px(BUTTON_GAP),
         ..default()
     },
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::Toolbar)),
 )]
 pub struct Toolbar {
     /// How the active button looks, and with it the size of the buttons and whether they show
@@ -615,20 +615,27 @@ fn update_buttons(
     }
 }
 
-/// Keeps the label of each button's [`AccessibilityNode`] at the label of its tool. Bevy
-/// clears the label of a button that has no text of its own when it is added, so this also
-/// sets it again after that.
-fn sync_accessible_names(
+/// Keeps the toolbar a toolbar and each button a button named after the label of its tool,
+/// toggled on while its tool is active and off otherwise. Bevy clears the label of a button
+/// that has no text of its own when it is added, so this runs after it.
+fn sync_accessibility(
+    mut toolbars: Query<&mut AccessibilityNode, (With<Toolbar>, Without<ToolbarButton>)>,
     mut buttons: Query<(&ToolbarButton, &mut AccessibilityNode)>,
     items: Query<&Item<Tool>>,
+    selections: SelectionParam,
 ) {
+    for mut node in &mut toolbars {
+        sync_role(&mut node, Role::Toolbar);
+    }
     for (button, mut node) in &mut buttons {
         let Ok(item) = items.get(button.item) else {
             continue;
         };
-        if node.label() != Some(item.data.label.as_str()) {
-            node.set_label(item.data.label.as_str());
-        }
+        let active = selections
+            .get(button.toolbar)
+            .is_some_and(|selection| selection.is_selected(button.item));
+        sync_label(&mut node, &item.data.label);
+        sync_toggled(&mut node, Some(active));
     }
 }
 

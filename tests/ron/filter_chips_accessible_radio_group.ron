@@ -1,0 +1,59 @@
+// To a screen reader a row of filter chips is a radio group and each chip a
+// radio button named after its label and count ("Running 2"; "Gamma" without
+// one), toggled while it is the active chip. The chips stay `Button`s, so
+// `Role(role: Button, ..)` (which reads their text) still finds them. A click
+// on "Running 2" moves the toggle from "All 4".
+(
+    format_version: 3,
+    name: "filter chips are a radio group whose toggle follows the active chip",
+    setup: App(FilterChips),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("status chips"),
+            role: Some("RadioGroup"),
+            label: None,
+            value: None,
+            states: [],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("status chips"), Role(role: Button, label: "All 4")),
+            role: Some("RadioButton"),
+            label: Some("All 4"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("status chips"), Role(role: Button, label: "Running 2")),
+            role: Some("RadioButton"),
+            label: Some("Running 2"),
+            value: None,
+            states: [NotToggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("narrow chips"), Role(role: Button, label: "Gamma ")),
+            role: Some("RadioButton"),
+            label: Some("Gamma"),
+            value: None,
+            states: [NotToggled],
+        ))),
+        MoveTo(Within(Name("status chips"), Role(role: Button, label: "Running 2"))),
+        Click(Left),
+        Wait(1),
+        Check(App(Accessible(
+            of: Within(Name("status chips"), Role(role: Button, label: "Running 2")),
+            role: Some("RadioButton"),
+            label: Some("Running 2"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("status chips"), Role(role: Button, label: "All 4")),
+            role: Some("RadioButton"),
+            label: Some("All 4"),
+            value: None,
+            states: [NotToggled],
+        ))),
+    ],
+    expect: [],
+)

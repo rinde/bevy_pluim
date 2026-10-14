@@ -4,13 +4,14 @@
 //! [`TabIndex`] and `draw_focus_ring` draws the [`ThemeColors::focus_ring`](crate::theme::ThemeColors)
 //! around the focused one while the focus is visible.
 
-use bevy::a11y::AccessibilityNode;
+use accesskit::Role;
+use bevy::a11y::{AccessibilityNode, AccessibilitySystems};
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
 use bevy::prelude::*;
-use bevy::ui::InteractionDisabled;
+use bevy::ui::{InteractionDisabled, UiSystems};
 use bevy::ui_widgets::{ActiveDescendant, ListItem};
 
 use crate::select::SelectionValue;
@@ -24,11 +25,52 @@ pub struct FocusPlugin;
 
 impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, draw_focus_ring).add_systems(
-            PostUpdate,
-            (sync_tab_index, sync_accessibility_hidden)
-                .after(VisibilitySystems::VisibilityPropagate),
-        );
+        app.add_systems(Update, draw_focus_ring)
+            .add_systems(
+                PostUpdate,
+                (sync_tab_index, sync_accessibility_hidden)
+                    .after(VisibilitySystems::VisibilityPropagate),
+            )
+            .configure_sets(
+                PostUpdate,
+                AccessibilitySync
+                    .after(UiSystems::PostLayout)
+                    .before(AccessibilitySystems::Update),
+            );
+    }
+}
+
+/// The systems that set the role and states of the widgets' [`AccessibilityNode`]s.
+///
+/// They run after Bevy's own, which set [`Role::Button`] on a node whose `Button` changed and
+/// clear the label of a button without text, and before the tree goes to the platform.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct AccessibilitySync;
+
+/// Sets the role of `node` to `role`, writing it only when it differs.
+pub(crate) fn sync_role(node: &mut Mut<AccessibilityNode>, role: Role) {
+    if node.role() != role {
+        node.set_role(role);
+    }
+}
+
+/// Sets the toggled state of `node` to `toggled`, or clears it for `None`, writing it only
+/// when it differs.
+pub(crate) fn sync_toggled(node: &mut Mut<AccessibilityNode>, toggled: Option<bool>) {
+    let wanted = toggled.map(accesskit::Toggled::from);
+    if node.toggled() == wanted {
+        return;
+    }
+    match wanted {
+        Some(toggled) => node.set_toggled(toggled),
+        None => node.clear_toggled(),
+    }
+}
+
+/// Sets the label of `node` to `label`, writing it only when it differs.
+pub(crate) fn sync_label(node: &mut Mut<AccessibilityNode>, label: &str) {
+    if node.label() != Some(label) {
+        node.set_label(label);
     }
 }
 

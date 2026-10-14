@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
@@ -9,7 +11,7 @@ use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{Activate, Button};
 
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, TabStop, sync_role, sync_toggled};
 use crate::list::sync_selected;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
@@ -45,6 +47,7 @@ impl Plugin for SegmentedControlPlugin {
                 hover_change,
             ),
         )
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
         .add_observer(on_insert_selection)
         .register_type::<SegmentedControl>()
         .register_type::<Segment>();
@@ -78,6 +81,10 @@ impl Plugin for SegmentedControlPlugin {
 ///
 /// Each segment is a [`Button`] and a tab stop, and carries [`Selected`] while it is the
 /// selected one.
+///
+/// To a screen reader the control is a radio group and each segment a radio button, checked
+/// while it is selected. The library gives the group no label; an app can insert Bevy's
+/// `AccessibleLabel` on the control.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -93,6 +100,7 @@ impl Plugin for SegmentedControlPlugin {
         ..default()
     },
     BackgroundColor::default(),
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct SegmentedControl;
 
@@ -202,6 +210,22 @@ fn theme_segmented_controls(
             weight: FontWeight::SEMIBOLD,
             ..default()
         };
+    }
+}
+
+/// Keeps the control a radio group and each segment a radio button, toggled while it is
+/// [`Selected`]. Bevy makes a node a button again when its `Button` changes, so this runs
+/// after it.
+fn sync_accessibility(
+    mut controls: Query<&mut AccessibilityNode, (With<SegmentedControl>, Without<Segment>)>,
+    mut segments: Query<(&mut AccessibilityNode, Has<Selected>), With<Segment>>,
+) {
+    for mut node in &mut controls {
+        sync_role(&mut node, Role::RadioGroup);
+    }
+    for (mut node, selected) in &mut segments {
+        sync_role(&mut node, Role::RadioButton);
+        sync_toggled(&mut node, Some(selected));
     }
 }
 

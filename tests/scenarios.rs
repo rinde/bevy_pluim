@@ -22,6 +22,7 @@ use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
 use rin_bevy_ui::filter_chips::{Chip, ChipView, FilterChips};
+use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
@@ -32,6 +33,7 @@ use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
+use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui_tester::{
     AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
     Scenario, ScenarioReport, Step, SyntheticInput, Target, WidgetRole, WorldSnapshot,
@@ -1225,4 +1227,149 @@ fn a_badge_describes_its_button_and_is_not_in_the_tree_itself() {
         app.update();
     }
     assert_eq!(accessibility_node(&mut app, "warnings").description(), None);
+}
+
+// ---- Radio and toggle roles ----
+
+/// A step that checks the role, label and states of the accessibility node of `of`.
+fn accessible_step(
+    of: Target,
+    role: &str,
+    label: Option<&str>,
+    states: &[AccessibleState],
+) -> Step {
+    Step::check(Check::app(WidgetsCheck::Accessible {
+        of,
+        role: Some(role.to_owned()),
+        label: label.map(ToString::to_string),
+        value: None,
+        states: states.to_vec(),
+    }))
+}
+
+#[test]
+fn a_gallery_is_a_radio_group_whose_toggle_follows_the_picked_card() {
+    let card = |label: &str| {
+        Target::within(
+            Target::name("vehicles"),
+            Target::role(WidgetRole::Button, label),
+        )
+    };
+    let scenario = Scenario::new("a gallery is a radio group")
+        .setup(|world| {
+            let root = spawn_camera_and_root(world);
+            world.spawn((
+                Gallery,
+                Name::new("vehicles"),
+                AccessibleLabel::new("Vehicles"),
+                Selection::builder().one().build_with_items(
+                    [
+                        ("Steam", "Locomotives"),
+                        ("Diesel", "Locomotives"),
+                        ("Boxcar", "Wagons"),
+                    ]
+                    .map(|(label, group)| Item {
+                        data: GalleryCard::new(Handle::default(), label, group),
+                    }),
+                ),
+                ChildOf(root),
+            ));
+        })
+        .steps([
+            Step::wait(2),
+            accessible_step(
+                Target::name("vehicles"),
+                "RadioGroup",
+                Some("Vehicles"),
+                &[],
+            ),
+            accessible_step(
+                card("Steam"),
+                "RadioButton",
+                Some("Steam"),
+                &[AccessibleState::Toggled],
+            ),
+            accessible_step(
+                card("Boxcar"),
+                "RadioButton",
+                Some("Boxcar"),
+                &[AccessibleState::NotToggled],
+            ),
+            Step::move_to(card("Boxcar")),
+            Step::click(),
+            Step::wait(1),
+            accessible_step(
+                card("Boxcar"),
+                "RadioButton",
+                Some("Boxcar"),
+                &[AccessibleState::Toggled],
+            ),
+            accessible_step(
+                card("Steam"),
+                "RadioButton",
+                Some("Steam"),
+                &[AccessibleState::NotToggled],
+            ),
+        ]);
+    let report = play(&scenario);
+    assert!(report.passed(), "{:?}", report.failures());
+}
+
+#[test]
+fn a_toolbar_is_a_toolbar_of_buttons_toggled_while_their_tool_is_active() {
+    let tool = |label: &str| {
+        Target::within(
+            Target::name("tools"),
+            Target::role(WidgetRole::Button, label),
+        )
+    };
+    let scenario = Scenario::new("a toolbar is a toolbar of toggle buttons")
+        .setup(|world| {
+            let root = spawn_camera_and_root(world);
+            world.spawn((
+                Toolbar::new(ToolbarStyle::Filled),
+                Name::new("tools"),
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items(["Rail", "Road"].map(|label| Item {
+                        data: Tool::new(Handle::default(), label),
+                    })),
+                ChildOf(root),
+            ));
+        })
+        .steps([
+            Step::wait(2),
+            accessible_step(Target::name("tools"), "Toolbar", None, &[]),
+            accessible_step(
+                tool("Rail"),
+                "Button",
+                Some("Rail"),
+                &[AccessibleState::NotToggled],
+            ),
+            Step::move_to(tool("Rail")),
+            Step::click(),
+            Step::wait(1),
+            accessible_step(
+                tool("Rail"),
+                "Button",
+                Some("Rail"),
+                &[AccessibleState::Toggled],
+            ),
+            accessible_step(
+                tool("Road"),
+                "Button",
+                Some("Road"),
+                &[AccessibleState::NotToggled],
+            ),
+            Step::click(),
+            Step::wait(1),
+            accessible_step(
+                tool("Rail"),
+                "Button",
+                Some("Rail"),
+                &[AccessibleState::NotToggled],
+            ),
+        ]);
+    let report = play(&scenario);
+    assert!(report.passed(), "{:?}", report.failures());
 }

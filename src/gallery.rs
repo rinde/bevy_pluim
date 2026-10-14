@@ -1,13 +1,14 @@
 //! `Gallery`: a row of image cards over a [`Selection`](crate::select::Selection), in titled
 //! groups, exactly one of them picked.
 
+use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
 use crate::divider::Divider;
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::icon::Icon;
 use crate::label::Label;
 use crate::select::{Item, SelectionParam};
@@ -46,10 +47,8 @@ impl Plugin for GalleryPlugin {
             .register_type::<GalleryCard>()
             .register_type::<Gallery>()
             .register_type::<GalleryCardView>()
-            .add_systems(
-                Update,
-                (sync_cards, update_cards, sync_accessible_names).chain(),
-            )
+            .add_systems(Update, (sync_cards, update_cards).chain())
+            .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
     }
 }
@@ -70,6 +69,10 @@ impl Plugin for GalleryPlugin {
 ///
 /// A card is a [`Button`] and a tab stop: Enter and Space on a focused one pick it, like a
 /// click.
+///
+/// To a screen reader the gallery is a radio group and each card a radio button named after
+/// its label, checked while it is picked. The library gives the group no label; an app can
+/// insert Bevy's `AccessibleLabel` on the gallery.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -80,6 +83,7 @@ impl Plugin for GalleryPlugin {
         flex_shrink: 0.0,
         ..default()
     },
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct Gallery;
 
@@ -350,20 +354,29 @@ fn update_cards(
     }
 }
 
-/// Keeps the label of each card's [`AccessibilityNode`] at the label of its item. Bevy
-/// clears the label of a button that has no text of its own when it is added, so this also
-/// sets it again after that.
-fn sync_accessible_names(
+/// Keeps the gallery a radio group and each card a radio button named after the label of its
+/// item, toggled while it is picked. Bevy makes a node a button again when its `Button`
+/// changes, and clears the label of a button that has no text of its own when it is added, so
+/// this runs after it.
+fn sync_accessibility(
+    mut galleries: Query<&mut AccessibilityNode, (With<Gallery>, Without<GalleryCardView>)>,
     mut cards: Query<(&GalleryCardView, &mut AccessibilityNode)>,
     items: Query<&Item<GalleryCard>>,
+    selections: SelectionParam,
 ) {
+    for mut node in &mut galleries {
+        sync_role(&mut node, Role::RadioGroup);
+    }
     for (view, mut node) in &mut cards {
         let Ok(item) = items.get(view.item) else {
             continue;
         };
-        if node.label() != Some(item.data.label.as_str()) {
-            node.set_label(item.data.label.as_str());
-        }
+        let picked = selections
+            .get(view.gallery)
+            .is_some_and(|selection| selection.is_selected(view.item));
+        sync_role(&mut node, Role::RadioButton);
+        sync_label(&mut node, &item.data.label);
+        sync_toggled(&mut node, Some(picked));
     }
 }
 
