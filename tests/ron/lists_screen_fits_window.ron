@@ -12,6 +12,7 @@
         MoveTo(Name("zero-or-one list")),
         MoveTo(Name("zero-or-more list")),
         MoveTo(Name("zero-or-more grid list")),
+        MoveTo(Name("separated list")),
         MoveTo(Name("list scroll area")),
         MoveTo(Role(role: Button, label: "Add country")),
         MoveTo(Role(role: Button, label: "Change theme")),

@@ -819,7 +819,7 @@ a file can check any `Reflect` type of the app by short type path.
   reach it: `one-or-more list` and `one-or-more grid list` (one shared
   `Selection::reference`), `one list` (own items), `zero-or-one list` and
   `zero-or-more list` (own selections over the shared items, `ItemsRef`),
-  `zero-or-more grid list` (own items), and `scrolling list` (twelve rows
+  `zero-or-more grid list` (own items), `separated list` (`CornerStyle::Separated`, `One`, own items NL to BE; `list_separated_ring_follows_selection`), and `scrolling list` (twelve rows
   inside the `list scroll area`, 100 pixels high). "Add country" spawns the
   next of Suriname, Chile and Kenya into the shared items. A file reaches an
   item with `Within(Name("one list"), Role(role: ListItem, label: "CA"))`
