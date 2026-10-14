@@ -97,6 +97,11 @@ pub enum WidgetsSetup {
     /// `first mirror stepper` and `second mirror stepper` point to it), and
     /// "Change theme".
     NumericStepper,
+    /// Segmented controls, each with a `Name`: `own segmented control`
+    /// (Auto, Manual, with a selection of its own) and `first shared
+    /// segmented control` and `second shared segmented control` (Dark, Light,
+    /// sharing one selection), then "Change theme".
+    SegmentedControls,
     /// Two panels, each with a title, a subtitle and a close button, which
     /// closes the panel by despawning it: `closable panel` (a few lines in
     /// its body) and `tall panel`, whose 100 pixel high body is shorter than
@@ -138,6 +143,7 @@ impl AppSetup for WidgetsSetup {
             Self::Tabs => tabs(world),
             Self::ColorPalette => color_palette(world),
             Self::NumericStepper => numeric_stepper(world),
+            Self::SegmentedControls => segmented_controls(world),
             Self::Panel => panel(world),
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
@@ -1008,6 +1014,37 @@ fn numeric_stepper(world: &mut World) {
             NumericStepper::default(),
             ValueRef(shared),
             Name::new("second mirror stepper"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn segmented_controls(world: &mut World) {
+    let root = row_root(world);
+    let shared = world
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Auto", "Manual"].map(Item::new)),
+            Name::new("own segmented control"),
+        ));
+        root.spawn((
+            SegmentedControl,
+            Selection::reference(shared),
+            Name::new("first shared segmented control"),
+        ));
+        root.spawn((
+            SegmentedControl,
+            Selection::reference(shared),
+            Name::new("second shared segmented control"),
         ));
         spawn_theme_button(root);
     });

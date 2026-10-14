@@ -1,0 +1,27 @@
+// Every segment is a tab stop: Tab reaches "Auto", then "Manual"; Enter or Space on a focused
+// segment selects it.
+(
+    format_version: 3,
+    name: "Enter and Space on a focused segment select it",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Manual"))))),
+        Tap(key: Enter),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        // On to the first shared control: "Dark", then "Light", which Space selects for both.
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("first shared segmented control"), Role(role: Button, label: "Dark"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("first shared segmented control"), Role(role: Button, label: "Light"))))),
+        Tap(key: Space),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Light"]))),
+        Check(App(Selected(of: Name("second shared segmented control"), items: ["Light"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("own segmented control"), items: ["Manual"])),
+    ],
+)

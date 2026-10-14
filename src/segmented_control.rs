@@ -59,13 +59,18 @@ impl Plugin for SegmentedControlPlugin {
 /// item, with the selected one highlighted. A click on a segment (or Enter / Space on a focused
 /// one) selects it, and a selection changed from elsewhere restyles the segments.
 ///
-/// ```ignore
-/// commands.spawn((
-///     SegmentedControl,
-///     Selection::builder().one().build_with_items(
-///         ["Auto", "Manual"].map(Item::new),
-///     ),
-/// ));
+/// ```no_run
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::segmented_control::SegmentedControl;
+/// # use rin_bevy_ui::select::{Item, Selection};
+/// fn setup(mut commands: Commands) {
+///     commands.spawn((
+///         SegmentedControl,
+///         Selection::builder()
+///             .one()
+///             .build_with_items(["Auto", "Manual"].map(Item::new)),
+///     ));
+/// }
 /// ```
 ///
 /// Each segment is a [`Button`] and a tab stop, and carries [`Selected`] while it is the

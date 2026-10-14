@@ -151,6 +151,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Tabs,
         WidgetsSetup::ColorPalette,
         WidgetsSetup::NumericStepper,
+        WidgetsSetup::SegmentedControls,
         WidgetsSetup::Panel,
         WidgetsSetup::SettingRows,
         WidgetsSetup::Badge,

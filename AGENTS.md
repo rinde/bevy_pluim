@@ -724,7 +724,7 @@ a file can check any `Reflect` type of the app by short type path.
   `to_ron()`.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
-  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`,
+  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`,
   `Panel`, `SettingRows`, `Badge`, `Tooltip`, `Themed`, `IconButtons`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
@@ -797,6 +797,14 @@ a file can check any `Reflect` type of the app by short type path.
   button and the icon tint (`Within(Name("small button"), Component("Icon"))`,
   `ImageNode.color`) of the small one; `icon_button_activates.ron` the `Clicks` and the
   `ToggleState.0` of the toggle.
+- **The `SegmentedControls` screen.** A row of `own segmented control` (Auto,
+  Manual, its own selection, Auto first) and `first shared segmented control` and
+  `second shared segmented control` (Dark, Light, one shared selection through
+  `Selection::reference`) and "Change theme". A file reaches a segment with
+  `Within(Name("own segmented control"), Role(role: Button, label: "Manual"))`,
+  says what a control shows with `App(Selected(of: Name(..), items: [..]))` and
+  whether a segment is `Selected(..)`; each segment is a tab stop, so Tab walks
+  Auto, Manual, Dark, Light, Dark, Light and Enter / Space selects the focused one.
 - **The `Lists` screen** names every list after its selection so a file can
   reach it: `one-or-more list` and `one-or-more grid list` (one shared
   `Selection::reference`), `one list` (own items), `zero-or-one list` and

@@ -1,0 +1,26 @@
+// `first` and `second shared segmented control` point to one selection: a click on a segment of
+// either selects it in both.
+(
+    format_version: 3,
+    name: "segmented controls sharing a selection follow each other",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Dark"]))),
+        Check(App(Selected(of: Name("second shared segmented control"), items: ["Dark"]))),
+        MoveTo(Within(Name("second shared segmented control"), Role(role: Button, label: "Light"))),
+        Click(Left),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Light"]))),
+        Check(App(Selected(of: Name("second shared segmented control"), items: ["Light"]))),
+        Check(Selected(Within(Name("first shared segmented control"), Role(role: Button, label: "Light")))),
+        Check(Not(Selected(Within(Name("first shared segmented control"), Role(role: Button, label: "Dark"))))),
+        MoveTo(Within(Name("first shared segmented control"), Role(role: Button, label: "Dark"))),
+        Click(Left),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Dark"]))),
+        Check(App(Selected(of: Name("second shared segmented control"), items: ["Dark"]))),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Auto"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("second shared segmented control"), items: ["Dark"])),
+    ],
+)
