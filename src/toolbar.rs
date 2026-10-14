@@ -19,6 +19,10 @@ const FILLED_WIDTH: f32 = 66.0;
 const FILLED_HEIGHT: f32 = 60.0;
 /// The side of the icon of a button of a [`ToolbarStyle::Filled`] toolbar.
 const FILLED_ICON: f32 = 22.0;
+/// The width of a button of a [`ToolbarStyle::Filled`] toolbar whose labels are hidden.
+const ICON_ONLY_WIDTH: f32 = 56.0;
+/// The height of a button of a [`ToolbarStyle::Filled`] toolbar whose labels are hidden.
+const ICON_ONLY_HEIGHT: f32 = 52.0;
 /// The gap between the icon and the label of a button.
 const LABEL_GAP: f32 = 4.0;
 /// The gap between two buttons, and between a button and a group divider.
@@ -39,6 +43,7 @@ impl Plugin for ToolbarPlugin {
             .register_type::<Tool>()
             .register_type::<Toolbar>()
             .register_type::<ToolbarStyle>()
+            .register_type::<ToolbarLabels>()
             .register_type::<ToolbarButton>()
             .add_systems(
                 Update,
@@ -67,6 +72,22 @@ pub enum ToolbarStyle {
     Underlined,
 }
 
+/// Whether the buttons of a [`ToolbarStyle::Filled`] [`Toolbar`] show their label.
+///
+/// Insert a new value on the toolbar to switch; the buttons are laid out again, not respawned.
+/// With the labels hidden the buttons are 56 by 52 px and show the icon alone; the label stays
+/// the accessible name. An [`ToolbarStyle::Underlined`] toolbar never shows labels, so this does
+/// not change it.
+#[derive(Component, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+pub enum ToolbarLabels {
+    /// The label is under the icon.
+    #[default]
+    Shown,
+    /// The icon is alone.
+    Hidden,
+}
+
 /// A row of icon buttons over a [`Selection`](crate::select::Selection) of [`Item<Tool>`]s, where
 /// picking a button selects its item.
 ///
@@ -82,6 +103,7 @@ pub enum ToolbarStyle {
 #[reflect(Component)]
 #[require(
     Name::new("Toolbar"),
+    ToolbarLabels,
     Node {
         align_items: AlignItems::Center,
         column_gap: Val::Px(BUTTON_GAP),
@@ -365,6 +387,7 @@ const fn button_look(
 /// selection, the pointer and the theme.
 fn update_buttons(
     theme: Res<Theme>,
+    toolbars: Query<&ToolbarLabels>,
     selections: SelectionParam,
     items: Query<&Item<Tool>>,
     mut buttons: Query<(
@@ -375,8 +398,14 @@ fn update_buttons(
         &mut Node,
     )>,
     mut icons: Query<(&Icon, &mut ImageNode), Without<ToolbarButton>>,
-    mut labels: Query<(&mut Text, &mut TextColor, &mut TextFont), Without<ToolbarButton>>,
-    mut bars: Query<(&mut Node, &mut BackgroundColor), (Without<ToolbarButton>, Without<Icon>)>,
+    mut labels: Query<
+        (&mut Text, &mut TextColor, &mut TextFont, &mut Node),
+        Without<ToolbarButton>,
+    >,
+    mut bars: Query<
+        (&mut Node, &mut BackgroundColor),
+        (Without<ToolbarButton>, Without<Icon>, Without<Text>),
+    >,
     mut commands: Commands,
 ) {
     for (button, refs, hovered, mut background, mut node) in &mut buttons {
@@ -387,6 +416,22 @@ fn update_buttons(
             .get(button.toolbar)
             .is_some_and(|selection| selection.is_selected(button.item));
         let look = button_look(&theme.colors, button.style, active, hovered.get());
+        let labels_shown = toolbars
+            .get(button.toolbar)
+            .is_ok_and(|labels| *labels == ToolbarLabels::Shown);
+        if button.style == ToolbarStyle::Filled {
+            let (width, height) = if labels_shown {
+                (FILLED_WIDTH, FILLED_HEIGHT)
+            } else {
+                (ICON_ONLY_WIDTH, ICON_ONLY_HEIGHT)
+            };
+            if node.width != Val::Px(width) {
+                node.width = Val::Px(width);
+            }
+            if node.height != Val::Px(height) {
+                node.height = Val::Px(height);
+            }
+        }
         background.set_if_neq(BackgroundColor(look.background));
         if theme.is_changed() {
             node.border_radius = BorderRadius::all(theme.control_radius);
@@ -401,8 +446,16 @@ fn update_buttons(
             }
         }
         if let Some(label) = refs.label
-            && let Ok((mut text, mut color, mut font)) = labels.get_mut(label)
+            && let Ok((mut text, mut color, mut font, mut label_node)) = labels.get_mut(label)
         {
+            let display = if labels_shown {
+                Display::Flex
+            } else {
+                Display::None
+            };
+            if label_node.display != display {
+                label_node.display = display;
+            }
             if text.0 != item.data.label {
                 item.data.label.clone_into(&mut text.0);
             }

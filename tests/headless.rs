@@ -52,7 +52,9 @@ use rin_bevy_ui::select::{
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
-use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarStyle};
+use rin_bevy_ui::toolbar::{
+    Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
+};
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
@@ -3886,6 +3888,37 @@ fn a_theme_change_restyles_the_gallery() {
     let colors = DEFAULT_DARK_THEME_COLORS;
     assert_eq!(border_top(&app, groups[0].1[0]), colors.selection_ring);
     assert_eq!(background(&app, groups[1].1[0]), colors.card_surface);
+}
+
+#[test]
+fn hiding_the_tool_labels_shrinks_the_buttons_and_showing_them_restores_it() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+    let state = |app: &App| {
+        let world = app.world();
+        let node = world.entity(buttons[0]).get::<Node>().unwrap();
+        let refs = world.entity(buttons[0]).get::<ToolbarButtonRefs>().unwrap();
+        let label = world.entity(refs.label.unwrap()).get::<Node>().unwrap();
+        (node.width, node.height, label.display)
+    };
+    assert_eq!(state(&app), (Val::Px(66.0), Val::Px(60.0), Display::Flex));
+
+    app.world_mut()
+        .entity_mut(toolbar)
+        .insert(ToolbarLabels::Hidden);
+    app.update();
+    app.update();
+    assert_eq!(state(&app), (Val::Px(56.0), Val::Px(52.0), Display::None));
+    // The buttons were laid out again, not respawned.
+    assert_eq!(toolbar_buttons(&app, toolbar), buttons);
+
+    app.world_mut()
+        .entity_mut(toolbar)
+        .insert(ToolbarLabels::Shown);
+    app.update();
+    app.update();
+    assert_eq!(state(&app), (Val::Px(66.0), Val::Px(60.0), Display::Flex));
 }
 
 /// Advances `Time` by 200 ms and runs `Update` only: `PreUpdate`'s `update_is_hovered` would
