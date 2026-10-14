@@ -58,6 +58,9 @@ use rin_bevy_ui::toolbar::{
 };
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 
+#[path = "../examples/hud/ui/mod.rs"]
+mod hud_ui;
+
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
 /// `combo.rs`/`list.rs` need pointer input and picking resources; all
 /// normally inserted by the render/window plugins that this headless setup
@@ -4336,4 +4339,31 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
         // The neutral tool next to it is untouched.
         assert_eq!(background(&app, buttons[0]), Color::NONE);
     }
+}
+
+#[test]
+fn the_hud_example_builds_and_runs() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins((WidgetsPlugin, hud_ui::HudPlugin));
+    app.finish();
+    app.cleanup();
+    for _ in 0..6 {
+        app.update();
+    }
+    let world = app.world_mut();
+    // The Trains panel is open at the start, with a row for each of the four trains,
+    // and the Warnings panel is made hidden.
+    assert_eq!(world.query::<&Panel>().iter(world).count(), 2);
+    assert_eq!(world.query::<&ItemView>().iter(world).count(), 4);
+    // Four panel tools and five dock tools.
+    assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
 }

@@ -170,10 +170,12 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 | `segmented_control` | `SegmentedControl`s, one with its own selection and two sharing one |
 | `image_gallery` | a `Gallery` of locomotives and wagons in a horizontal `ScrollArea` |
+| `hud` | the redesign's HUD composed from the widgets over sample data, no game: pause button and `Kbd`, a panel `Toolbar` with badges driving a `Stack` of `Panel`s (trains with `FilterChips` and `Pill` rows, stops, warnings, preferences with `SettingRow`s), and a tool dock whose active tool brings an option bar (`SegmentedControl`s, `NumericStepper`, vehicle `Gallery`). Its icons are drawn at startup. The UI lives in `examples/hud/ui/mod.rs`, which `tests/headless.rs` includes with `#[path]` for a smoke test |
 | `gallery` | the tester's gallery: the widgets in one window, and a **Scenarios** window listing every file of `tests/ron/` (one group per widget) to watch play, step, take over or record; see [The gallery](#the-gallery) |
 
 Every example has a button that toggles the light and dark theme (the gallery's
-is on its screens), and all but `gallery` set `GlobalUiDebugOptions`, which is
+is on its screens, the `hud`'s is the Appearance setting of its Preferences
+panel), and all but `gallery` set `GlobalUiDebugOptions`, which is
 why `bevy_ui_debug` is switched on in `[dev-dependencies]`.
 
 ### The gallery
