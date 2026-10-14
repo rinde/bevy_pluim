@@ -1360,11 +1360,31 @@ fn a_combo_button_writes_its_accessibility_node_only_when_the_shown_text_changes
 fn a_color_palette_combo_button_writes_its_accessibility_node_only_when_the_colour_changes() {
     let mut app = headless_app();
     app.world_mut().spawn((Window::default(), PrimaryWindow));
-    let (_, button) = spawn_palette_combo(&mut app);
+    let (combo, button) = spawn_palette_combo(&mut app);
     let before = accessibility_changed_at(&app, button);
     app.update();
     app.update();
-    assert_eq!(accessibility_changed_at(&app, button), before);
+    assert_eq!(accessibility_changed_at(&app, button), before, "idle");
+
+    app.world_mut()
+        .run_system_once(
+            move |mut selections: SelectionParam, items: Query<(Entity, &Item<Color>)>| {
+                let item = items
+                    .iter()
+                    .find(|(_, i)| i.data == Color::BLACK)
+                    .unwrap()
+                    .0;
+                selections.update_selection(combo, |s| s.set_selection([item]));
+            },
+        )
+        .unwrap();
+    app.update();
+    app.update();
+    assert_ne!(accessibility_changed_at(&app, button), before, "changed");
+    let after = accessibility_changed_at(&app, button);
+    app.update();
+    app.update();
+    assert_eq!(accessibility_changed_at(&app, button), after, "idle again");
 }
 
 #[test]

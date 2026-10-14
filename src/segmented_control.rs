@@ -214,9 +214,8 @@ fn theme_segmented_controls(
 }
 
 /// Keeps the control a radio group and each segment a radio button named after its item's text,
-/// toggled while it is
-/// [`Selected`]. Bevy makes a node a button again when its `Button` changes, so this runs
-/// after it.
+/// toggled while it is [`Selected`]. Bevy makes a node a button again when its `Button` changes,
+/// so this runs after it.
 fn sync_accessibility(
     mut controls: Query<
         &mut AccessibilityNode,
