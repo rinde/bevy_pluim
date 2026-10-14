@@ -1,10 +1,10 @@
-// A colour has no text, so its accessible name is the name of the colour: the
-// Tailwind name (`blue-500`) of a swatch, and of the colour a palette combo's
-// button shows, which follows a pick. Index 60 is red-500 and 5 is slate-500
-// of the Tailwind colours in `COLORS`.
+// A colour has no text, so a swatch's accessible name is the name of its
+// colour, the Tailwind name (`blue-500`). A palette combo's button is a combo
+// box, and the name of the colour it shows is its value, which follows a pick.
+// Index 60 is red-500 and 5 is slate-500 of the Tailwind colours in `COLORS`.
 (
     format_version: 3,
-    name: "swatches and colour buttons are named after their colour",
+    name: "swatches are named after their colour and a palette combo's value is its colour",
     setup: App(ColorPalette),
     steps: [
         Wait(2),
@@ -22,26 +22,42 @@
             value: None,
             states: [],
         ))),
-        // The button of a combo whose colour is slate-50 is named after it.
+        // The button of a combo whose colour is slate-50 has it as its value.
         Check(App(Accessible(
             of: Within(Name("one palette combo"), Component("ColorPushButton")),
-            role: Some("Button"),
-            label: Some("slate-50"),
-            value: None,
-            states: [],
+            role: Some("ComboBox"),
+            label: None,
+            value: Some("slate-50"),
+            states: [Collapsed],
         ))),
-        // And follows a pick.
+        // A combo with nothing selected has an empty value.
+        Check(App(Accessible(
+            of: Within(Name("own palette combo"), Component("ColorPushButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some(""),
+            states: [Collapsed],
+        ))),
+        // It is expanded while its popup is open, and its value follows a pick.
         MoveTo(Within(Name("one palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("one palette combo"), Component("ColorPushButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some("slate-50"),
+            states: [Expanded],
+        ))),
         MoveTo(Nth(60, Within(Name("one palette combo popup"), Component("ItemView")))),
         Click(Left),
         Wait(2),
         Check(App(Accessible(
             of: Within(Name("one palette combo"), Component("ColorPushButton")),
-            role: Some("Button"),
-            label: Some("red-500"),
-            value: None,
-            states: [],
+            role: Some("ComboBox"),
+            label: None,
+            value: Some("red-500"),
+            states: [Collapsed],
         ))),
     ],
     expect: [],

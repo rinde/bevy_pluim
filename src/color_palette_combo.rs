@@ -1,5 +1,6 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
+use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
@@ -12,11 +13,15 @@ use itertools::Either;
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::Float;
-use crate::focus::{Unreachable, popup_focus_lost, popup_key_closes};
+use crate::focus::{
+    AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
+    sync_role, sync_value,
+};
 use crate::list::{ItemView, ListLayout};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
-use crate::select::{Item, Selection, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam, SelectionValue};
+use crate::tailwind::color_name;
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind, color_push_button};
 
@@ -38,6 +43,7 @@ impl Plugin for ColorPaletteComboPlugin {
                 on_selection_change,
             ),
         )
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
         .add_observer(on_insert_combo)
         .add_observer(on_remove_combo)
         .add_observer(on_insert_state)
@@ -53,6 +59,10 @@ impl Plugin for ColorPaletteComboPlugin {
 /// Opening the popup moves the keyboard focus to its palette, so the arrow keys, Enter and
 /// Space work on it. Escape closes it, as does the focus leaving the palette (Tab away, a
 /// click elsewhere); the focus then goes back to the button, unless it moved to another widget.
+///
+/// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a label:
+/// its value is the name of the selected colour (empty for none), it is expanded while the
+/// popup is open, and it controls the popup's palette.
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -65,10 +75,12 @@ pub struct ColorPaletteCombo;
 
 /// Marks the button of a [`ColorPaletteCombo`].
 ///
-/// Its [`Hovered`] says whether the pointer is on the combo, for the outside click.
+/// Its [`Hovered`] says whether the pointer is on the combo, for the outside click. A
+/// [`ColorPushButton`] is named after its colour; this one is not, since its value says the
+/// colour.
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Hovered)]
-struct ColorPaletteComboButton;
+pub(crate) struct ColorPaletteComboButton;
 
 /// Marks the popup of a [`ColorPaletteCombo`].
 ///
@@ -430,6 +442,31 @@ fn on_selection_change(
             color_square_background.0 = color;
             commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
         }
+    }
+}
+
+/// Keeps the button of each combo a combo box to assistive technology, with the name of the
+/// selected colour as its value and the popup's palette as what it controls. Bevy makes a
+/// node a button again when its `Button` changes, so this runs after it.
+fn sync_accessibility(
+    combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
+    selections: SelectionParam,
+    items: Query<&Item<Color>>,
+    mut nodes: Query<&mut AccessibilityNode>,
+) {
+    for (combo, sub_refs) in &combos {
+        let Ok(mut node) = nodes.get_mut(sub_refs.button) else {
+            continue;
+        };
+        let value = selections
+            .get(combo)
+            .and_then(SelectionValue::single)
+            .and_then(|selected| items.get(selected).ok())
+            .map_or_else(String::new, |item| color_name(item.data));
+        sync_role(&mut node, Role::ComboBox);
+        clear_label(&mut node);
+        sync_value(&mut node, &value);
+        sync_controls(&mut node, sub_refs.palette);
     }
 }
 

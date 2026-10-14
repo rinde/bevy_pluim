@@ -1,0 +1,56 @@
+// A combo's button is a combo box to assistive technology: its value is the
+// text of the selection (empty for none; neither the "Select.." placeholder nor
+// the chevron), and it is expanded while the popup is open. `third combo`
+// shares the selection of `first combo`, so its value follows the same pick.
+(
+    format_version: 3,
+    name: "a combo button is a combo box whose value follows a pick",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("first combo"), Component("ComboButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some(""),
+            states: [Collapsed, Enabled],
+        ))),
+        MoveTo(Within(Name("first combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("first combo"), Component("ComboButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some(""),
+            states: [Expanded],
+        ))),
+        MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
+        Click(Left),
+        Wait(2),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Accessible(
+            of: Within(Name("first combo"), Component("ComboButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some("Canada"),
+            states: [Collapsed],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("third combo"), Component("ComboButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some("Canada"),
+            states: [Collapsed],
+        ))),
+        // The combo with a selection of its own is untouched.
+        Check(App(Accessible(
+            of: Within(Name("own combo"), Component("ComboButton")),
+            role: Some("ComboBox"),
+            label: None,
+            value: Some(""),
+            states: [Collapsed],
+        ))),
+    ],
+    expect: [],
+)

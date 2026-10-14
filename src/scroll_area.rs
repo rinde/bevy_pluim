@@ -1,5 +1,7 @@
 //! `ScrollArea`: scrollable contents with vertical and/or horizontal scroll bars.
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::world::DeferredWorld;
@@ -35,9 +37,16 @@ impl Plugin for ScrollAreaPlugin {
 }
 
 /// A node with scroll bars. Build one with [`ScrollArea::bundle`].
+///
+/// To assistive technology it is a scroll view ([`Role::ScrollView`]); its scroll bars and
+/// their thumbs are not in the accessibility tree.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
-#[require(Node::default(), Name::new("ScrollArea"))]
+#[require(
+    Node::default(),
+    Name::new("ScrollArea"),
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::ScrollView)),
+)]
 #[component(on_insert=Self::on_insert)]
 pub struct ScrollArea;
 

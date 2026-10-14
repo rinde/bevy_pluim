@@ -1,0 +1,26 @@
+// A `SettingRow` is a group to assistive technology, labelled with its title.
+// Its description is the node's description, which `Accessible` does not read;
+// `tests/headless.rs` checks that.
+(
+    format_version: 3,
+    name: "a setting row is a group labelled with its title",
+    setup: App(SettingRows),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("appearance row"),
+            role: Some("Group"),
+            label: Some("Appearance"),
+            value: None,
+            states: [Shown],
+        ))),
+        Check(App(Accessible(
+            of: Name("last row"),
+            role: Some("Group"),
+            label: Some("Reset"),
+            value: None,
+            states: [],
+        ))),
+    ],
+    expect: [],
+)

@@ -1,0 +1,17 @@
+// A `Card` is a group to assistive technology, without a label.
+(
+    format_version: 3,
+    name: "a card is a group",
+    setup: App(Themed),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("themed card"),
+            role: Some("Group"),
+            label: None,
+            value: None,
+            states: [Shown],
+        ))),
+    ],
+    expect: [],
+)
