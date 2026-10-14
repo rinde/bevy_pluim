@@ -17,7 +17,7 @@ pub mod combo;
 pub mod divider;
 pub mod filter_chips;
 pub mod float;
-pub mod focus;
+pub(crate) mod focus;
 pub mod gallery;
 pub mod icon;
 pub mod icon_button;
