@@ -1355,3 +1355,44 @@ pub enum Variant {
     /// Shade 950.
     V950,
 }
+
+/// The accessible name of a colour: its Tailwind name (`blue-500`) when it is
+/// one of [`COLORS`], else its sRGB hex (`#3b82f6`, with the alpha appended
+/// only when it is not 1).
+pub(crate) fn color_name(color: Color) -> String {
+    COLORS
+        .iter()
+        .find(|tailwind| tailwind.color == color)
+        .map_or_else(
+            || Srgba::from(color).to_hex().to_lowercase(),
+            |tailwind| {
+                let class = format!("{:?}", tailwind.class).to_lowercase();
+                let variant = format!("{:?}", tailwind.variant);
+                format!("{class}-{}", variant.trim_start_matches('V'))
+            },
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tailwind_colour_is_named_after_its_class_and_shade() {
+        assert_eq!(color_name(Color::from(BLUE_500)), "blue-500");
+        assert_eq!(color_name(Color::from(SLATE_50)), "slate-50");
+    }
+
+    #[test]
+    fn a_colour_outside_tailwind_is_named_by_its_hex() {
+        assert_eq!(color_name(Color::srgb_u8(0x12, 0xab, 0xef)), "#12abef");
+    }
+
+    #[test]
+    fn the_alpha_of_a_colour_is_appended_only_when_not_one() {
+        assert_eq!(
+            color_name(Color::srgba_u8(0x12, 0xab, 0xef, 0x80)),
+            "#12abef80"
+        );
+    }
+}

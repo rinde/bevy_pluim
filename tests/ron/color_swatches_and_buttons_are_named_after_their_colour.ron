@@ -1,0 +1,48 @@
+// A colour has no text, so its accessible name is the name of the colour: the
+// Tailwind name (`blue-500`) of a swatch, and of the colour a palette combo's
+// button shows, which follows a pick. Index 60 is red-500 and 5 is slate-500
+// of the Tailwind colours in `COLORS`.
+(
+    format_version: 3,
+    name: "swatches and colour buttons are named after their colour",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Nth(60, Within(Name("palette"), Component("ItemView"))),
+            role: Some("ListItem"),
+            label: Some("red-500"),
+            value: None,
+            states: [],
+        ))),
+        Check(App(Accessible(
+            of: Nth(5, Within(Name("palette"), Component("ItemView"))),
+            role: Some("ListItem"),
+            label: Some("slate-500"),
+            value: None,
+            states: [],
+        ))),
+        // The button of a combo whose colour is slate-50 is named after it.
+        Check(App(Accessible(
+            of: Within(Name("one palette combo"), Component("ColorPushButton")),
+            role: Some("Button"),
+            label: Some("slate-50"),
+            value: None,
+            states: [],
+        ))),
+        // And follows a pick.
+        MoveTo(Within(Name("one palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        MoveTo(Nth(60, Within(Name("one palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("one palette combo"), Component("ColorPushButton")),
+            role: Some("Button"),
+            label: Some("red-500"),
+            value: None,
+            states: [],
+        ))),
+    ],
+    expect: [],
+)
