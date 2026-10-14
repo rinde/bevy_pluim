@@ -7,6 +7,7 @@
 //! The crate takes Bevy types only: anything that knows what a picked item
 //! *means* belongs in the application that uses the widgets.
 
+pub mod badge;
 pub mod breadcrumbs;
 pub mod card;
 pub mod color_palette;
@@ -43,6 +44,7 @@ use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::prelude::*;
 use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin};
 
+use crate::badge::BadgePlugin;
 use crate::breadcrumbs::BreadCrumbsPlugin;
 use crate::card::CardPlugin;
 use crate::color_palette::ColorPalettePlugin;
@@ -106,6 +108,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(IconButtonPlugin)
             .add_plugins(KbdPlugin)
             .add_plugins(PillPlugin)
+            .add_plugins(BadgePlugin)
             .add_plugins(FilterChipsPlugin)
             .add_plugins(ToolbarPlugin)
             .add_plugins(TooltipPlugin)
