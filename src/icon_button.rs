@@ -12,6 +12,7 @@ use itertools::Either;
 use crate::focus::TabStop;
 use crate::icon::{Icon, IconColor};
 use crate::theme::{Theme, ThemeColors};
+use crate::tooltip::Tooltip;
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`IconButton`].
@@ -73,7 +74,8 @@ impl IconButtonSize {
 /// It is a [`bevy::ui_widgets::Button`], so an action observes
 /// [`Activate`] on it, and it is disabled by
 /// inserting [`InteractionDisabled`]. `name` is its accessible name, the label
-/// of its [`AccessibilityNode`], since the icon has no text.
+/// of its [`AccessibilityNode`], since the icon has no text. The name is also
+/// shown as a [`Tooltip`] when the pointer rests on the button.
 ///
 /// Insert an `IconButton` again to change the icon (play and pause) or the name
 /// of a live button.
@@ -162,6 +164,10 @@ impl IconButton {
                 .insert(IconButtonRefs { icon_id })
                 .observe(handle_hover)
                 .observe(toggle_on_activate);
+        }
+        if let Some(button) = world.get::<Self>(entity) {
+            let tooltip = Tooltip::new(button.name.clone());
+            world.commands().entity(entity).insert(tooltip);
         }
         world
             .commands()

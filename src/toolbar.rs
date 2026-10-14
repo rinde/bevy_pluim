@@ -11,6 +11,7 @@ use crate::icon::{Icon, IconColor};
 use crate::icon_button::IconButtonSize;
 use crate::select::{Item, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
+use crate::tooltip::Tooltip;
 
 /// The width of a button of a [`ToolbarStyle::Filled`] toolbar, in logical pixels.
 const FILLED_WIDTH: f32 = 66.0;
@@ -46,7 +47,13 @@ impl Plugin for ToolbarPlugin {
             .register_type::<ToolbarButton>()
             .add_systems(
                 Update,
-                (sync_buttons, update_buttons, sync_accessible_names).chain(),
+                (
+                    sync_buttons,
+                    update_buttons,
+                    sync_accessible_names,
+                    sync_tooltips,
+                )
+                    .chain(),
             )
             .add_observer(on_activate);
     }
@@ -490,6 +497,28 @@ fn sync_accessible_names(
         };
         if node.label() != Some(item.data.label.as_str()) {
             node.set_label(item.data.label.as_str());
+        }
+    }
+}
+
+/// Gives the buttons of an underlined toolbar, whose labels are hidden, a [`Tooltip`] with the
+/// label of their tool.
+fn sync_tooltips(
+    buttons: Query<(Entity, &ToolbarButton, Option<&Tooltip>)>,
+    items: Query<&Item<Tool>>,
+    mut commands: Commands,
+) {
+    for (entity, button, tooltip) in &buttons {
+        if button.style != ToolbarStyle::Underlined {
+            continue;
+        }
+        let Ok(item) = items.get(button.item) else {
+            continue;
+        };
+        if tooltip.is_none_or(|t| t.text != item.data.label) {
+            commands
+                .entity(entity)
+                .insert(Tooltip::new(item.data.label.clone()));
         }
     }
 }
