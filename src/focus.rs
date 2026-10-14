@@ -4,6 +4,7 @@
 //! [`TabIndex`] and `draw_focus_ring` draws the [`ThemeColors::focus_ring`](crate::theme::ThemeColors)
 //! around the focused one while the focus is visible.
 
+use bevy::a11y::AccessibilityNode;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -25,7 +26,8 @@ impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, draw_focus_ring).add_systems(
             PostUpdate,
-            sync_tab_index.after(VisibilitySystems::VisibilityPropagate),
+            (sync_tab_index, sync_accessibility_hidden)
+                .after(VisibilitySystems::VisibilityPropagate),
         );
     }
 }
@@ -97,6 +99,26 @@ fn sync_tab_index(
         };
         if index.0 != wanted {
             index.0 = wanted;
+        }
+    }
+}
+
+/// Marks the [`AccessibilityNode`] of everything that is hidden (by the same rule as a
+/// [`TabStop`]'s) as hidden, and clears it when it shows again, so the platform's
+/// accessibility tree leaves it out. A node is written only when its flag changes.
+fn sync_accessibility_hidden(
+    mut nodes: Query<(Entity, &mut AccessibilityNode)>,
+    shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
+    parents: Query<&ChildOf>,
+) {
+    for (entity, mut node) in &mut nodes {
+        let hidden = is_hidden(entity, &shown, &parents);
+        if node.is_hidden() != hidden {
+            if hidden {
+                node.set_hidden();
+            } else {
+                node.clear_hidden();
+            }
         }
     }
 }
