@@ -58,10 +58,15 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                 PushButton::from_label("Add one"),
                 // A new count is a new `Badge`; the pill follows it.
                 Observer::new(
-                    |_: On<Activate>, mut badges: Query<&mut Badge, With<Counted>>| {
-                        for mut badge in &mut badges {
+                    |_: On<Activate>,
+                     mut commands: Commands,
+                     badges: Query<(Entity, &Badge), With<Counted>>| {
+                        for (entity, badge) in &badges {
                             let count = badge.text.parse::<usize>().unwrap_or(0);
-                            badge.text = (count + 1).to_string();
+                            commands.entity(entity).insert(Badge {
+                                text: (count + 1).to_string(),
+                                ..badge.clone()
+                            });
                         }
                     }
                 ),
