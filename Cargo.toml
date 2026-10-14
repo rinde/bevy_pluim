@@ -13,6 +13,7 @@ publish = false
 record = ["rin_bevy_ui_tester/record"]
 
 [dependencies]
+accesskit = "0.24"
 bevy = "0.19.1"
 derive_more = { version = "2.0.1", features = ["deref"] }
 educe = { version = "0.6.0", default-features = false, features = ["Default"] }

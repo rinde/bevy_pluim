@@ -1,5 +1,7 @@
 //! `Kbd`: a keyboard key cap, such as "Esc", shown in running text.
 
+use accesskit::{Node as AccessNode, Role};
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -27,7 +29,7 @@ impl Plugin for KbdPlugin {
 /// A key cap: a small bordered box around the name of a key. Display only.
 ///
 /// The border is the theme's `border` colour, the text its `text_secondary`
-/// colour, in the caption size. It reuses those two slots and has none of its own.
+/// colour, in the caption size. For a screen reader it is a label with the key as its value. It reuses those two slots and has none of its own.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
@@ -63,7 +65,12 @@ impl Kbd {
             return;
         };
         let text = this.0.clone();
-        world.commands().entity(context.entity).insert(Text(text));
+        let mut node = AccessNode::new(Role::Label);
+        node.set_value(text.as_str());
+        world
+            .commands()
+            .entity(context.entity)
+            .insert((Text(text), AccessibilityNode::from(node)));
         world
             .commands()
             .run_system_cached_with(theme_kbds, Some(context.entity));
