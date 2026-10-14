@@ -4372,3 +4372,57 @@ fn the_hud_example_builds_and_runs() {
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
 }
+
+fn ui_root_count(app: &mut App) -> usize {
+    app.world_mut()
+        .query_filtered::<(), With<UiRoot>>()
+        .iter(app.world())
+        .count()
+}
+
+#[test]
+fn a_toolbar_in_either_style_leaves_exactly_one_ui_root() {
+    for style in [ToolbarStyle::Filled, ToolbarStyle::Underlined] {
+        let mut app = headless_app();
+        spawn_toolbar(&mut app, style, Selection::builder().one());
+        assert_eq!(ui_root_count(&mut app), 1, "{style:?}");
+    }
+}
+
+#[test]
+fn filter_chips_and_a_gallery_leave_exactly_one_ui_root() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let chips_selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(three_chips().map(|data| Item { data })),
+        )
+        .id();
+    app.world_mut().spawn((
+        FilterChips,
+        Selection::reference(chips_selection),
+        ChildOf(root),
+    ));
+    let cards_selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(|label| Item {
+                    data: GalleryCard::new(Handle::default(), label, "G"),
+                })),
+        )
+        .id();
+    app.world_mut().spawn((
+        Gallery,
+        Selection::reference(cards_selection),
+        ChildOf(root),
+    ));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(ui_root_count(&mut app), 1);
+}
