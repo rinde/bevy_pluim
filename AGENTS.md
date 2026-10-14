@@ -169,6 +169,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `numeric_stepper` | `NumericStepper` |
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 | `segmented_control` | `SegmentedControl`s, one with its own selection and two sharing one |
+| `filter_chips` | `FilterChips` with counts, one row narrow so that it wraps and a second sharing the selection of the first |
 | `panel` | a closable `Panel` (the app despawns it on `PanelClosed`) and one whose body scrolls |
 | `setting_row` | a `SettingRows` column of `SettingRow`s with a segmented control, a stepper and a button in their slots |
 | `badge` | neutral and warning `Badge`s on icon buttons, and a button that raises a count |
@@ -734,7 +735,7 @@ a file can check any `Reflect` type of the app by short type path.
   `to_ron()`.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
-  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`,
+  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`, `FilterChips`,
   `Panel`, `SettingRows`, `Badge`, `Tooltip`, `Themed`, `IconButtons`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
@@ -815,6 +816,13 @@ a file can check any `Reflect` type of the app by short type path.
   says what a control shows with `App(Selected(of: Name(..), items: [..]))` and
   whether a segment is `Selected(..)`; each segment is a tab stop, so Tab walks
   Auto, Manual, Dark, Light, Dark, Light and Enter / Space selects the focused one.
+- **The `FilterChips` screen.** A row of `status chips` (All 4, Running 2, Waiting 1,
+  Problems 1; its own selection, All first), `mirror chips` (the same selection through
+  `Selection::reference`), `narrow chips` (Alpha, Beta, Gamma, Delta in 150 pixels, so they
+  wrap, with a selection of its own) and "Change theme". `App(Selected(of: Name(..),
+  items: [..]))` names an `Item<Chip>` by its label. Each chip is a tab stop, so Tab walks
+  the four status chips, the four mirror chips and the four narrow ones; Enter / Space
+  picks the focused one.
 - **The `Lists` screen** names every list after its selection so a file can
   reach it: `one-or-more list` and `one-or-more grid list` (one shared
   `Selection::reference`), `one list` (own items), `zero-or-one list` and

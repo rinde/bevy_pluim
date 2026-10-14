@@ -33,6 +33,7 @@ use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::filter_chips::{Chip, FilterChips};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
@@ -102,6 +103,12 @@ pub enum WidgetsSetup {
     /// segmented control` and `second shared segmented control` (Dark, Light,
     /// sharing one selection), then "Change theme".
     SegmentedControls,
+    /// Rows of filter chips, each with a `Name`: `status chips` (All 4, Running 2,
+    /// Waiting 1, Problems 1, with a selection of its own, All first), `mirror chips`
+    /// (the same selection through `Selection::reference`) and `narrow chips` (150
+    /// pixels wide, so that the chips wrap, with a selection of its own), then
+    /// "Change theme".
+    FilterChips,
     /// Two panels, each with a title, a subtitle and a close button, which
     /// closes the panel by despawning it: `closable panel` (a few lines in
     /// its body) and `tall panel`, whose 100 pixel high body is shorter than
@@ -144,6 +151,7 @@ impl AppSetup for WidgetsSetup {
             Self::ColorPalette => color_palette(world),
             Self::NumericStepper => numeric_stepper(world),
             Self::SegmentedControls => segmented_controls(world),
+            Self::FilterChips => filter_chips(world),
             Self::Panel => panel(world),
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
@@ -1053,6 +1061,52 @@ fn segmented_controls(world: &mut World) {
             SegmentedControl,
             Selection::reference(shared),
             Name::new("second shared segmented control"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn filter_chips(world: &mut World) {
+    let root = row_root(world);
+    let chips = [
+        Chip::with_count("All", 4),
+        Chip::with_count("Running", 2),
+        Chip::with_count("Waiting", 1),
+        Chip::with_count("Problems", 1),
+    ];
+    let status = world
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(chips.map(|data| Item { data })),
+        )
+        .id();
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            FilterChips,
+            Selection::reference(status),
+            Name::new("status chips"),
+        ));
+        root.spawn((
+            FilterChips,
+            Selection::reference(status),
+            Name::new("mirror chips"),
+        ));
+        root.spawn((
+            FilterChips,
+            Node {
+                width: Val::Px(150.0),
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: Val::Px(6.0),
+                row_gap: Val::Px(6.0),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["Alpha", "Beta", "Gamma", "Delta"].map(|label| Item {
+                    data: Chip::new(label),
+                })),
+            Name::new("narrow chips"),
         ));
         spawn_theme_button(root);
     });

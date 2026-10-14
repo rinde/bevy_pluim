@@ -25,6 +25,7 @@ use bevy::ui_widgets::ActiveDescendant;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboList};
+use rin_bevy_ui::filter_chips::Chip;
 use rin_bevy_ui::list::List;
 use rin_bevy_ui::select::{Item, Selection, SelectionValue};
 use rin_bevy_ui::tailwind::{COLORS, TailwindColor};
@@ -41,7 +42,7 @@ pub enum WidgetsCheck {
     /// `of` resolves to a widget (a `List`, `Combo`, `BreadCrumbs` or
     /// `ColorPalette`, or anything inside one), and the selection is the
     /// first one on it or above it; a `Selection::Ref` is followed. A text
-    /// item is named by its label, a colour item by its Tailwind colour
+    /// item or a chip is named by its label, a colour item by its Tailwind colour
     /// (`blue-500`) when it is one, else by its `Debug` text. The widget has
     /// to be laid out, so a scenario waits a frame after its setup. A bare
     /// selection entity without a `Node` cannot be named by a `Target`, but
@@ -159,6 +160,9 @@ fn selected_labels(world: &World, holder: Entity) -> Result<Vec<String>, String>
 fn label_of(world: &World, item: Entity) -> String {
     if let Some(Item { data }) = world.get::<Item<String>>(item) {
         return data.clone();
+    }
+    if let Some(Item { data }) = world.get::<Item<Chip>>(item) {
+        return data.label.clone();
     }
     if let Some(Item { data }) = world.get::<Item<Color>>(item) {
         return COLORS
