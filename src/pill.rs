@@ -1,5 +1,7 @@
 //! `Pill`: a small uppercase status tag with a tone, such as "RUNNING".
 
+use accesskit::{Node as AccessNode, Role};
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -46,7 +48,8 @@ pub enum PillTone {
 /// A status tag: short uppercase text on a rounded, tinted background.
 ///
 /// The text is shown in uppercase, semibold, and never wraps. Insert a new
-/// `Pill` on a live entity to change its tone or text.
+/// `Pill` on a live entity to change its tone or text. For a screen reader it is a status named
+/// by the text as given.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
@@ -99,7 +102,12 @@ impl Pill {
             return;
         };
         let text = this.text.to_uppercase();
-        world.commands().entity(context.entity).insert(Text(text));
+        let mut node = AccessNode::new(Role::Status);
+        node.set_label(this.text.as_str());
+        world
+            .commands()
+            .entity(context.entity)
+            .insert((Text(text), AccessibilityNode::from(node)));
         world
             .commands()
             .run_system_cached_with(theme_pills, Some(context.entity));
