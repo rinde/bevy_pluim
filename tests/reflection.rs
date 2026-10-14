@@ -34,7 +34,7 @@ use rin_bevy_ui::list::{CornerStyle, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::pill::Pill;
-use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::push_button::{ButtonSize, PushButton};
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
@@ -74,6 +74,7 @@ fn assert_component<T: Component>(registry: &TypeRegistry) {
 fn the_widget_components_are_in_the_type_registry() {
     with_registry(|registry| {
         assert_component::<PushButton>(registry);
+        assert_component::<ButtonSize>(registry);
         assert_component::<Combo>(registry);
         assert_component::<ComboButton>(registry);
         assert_component::<ComboList>(registry);
