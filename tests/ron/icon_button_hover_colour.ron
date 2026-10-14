@@ -1,0 +1,56 @@
+// An icon button rests at `background_primary` (gray-50), is `hovered_item`
+// (blue-200) under the pointer, `selected_hovered_item` (blue-600) while held
+// and `hovered_item` again once let go with the pointer still on it. A small
+// button's icon is `text_secondary` until the pointer is on it, then
+// `text_primary`.
+(
+    format_version: 3,
+    name: "an icon button shows hover and press colours and a small one brightens its icon",
+    setup: App(IconButtons),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Name("regular button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        MoveTo(Name("regular button")),
+        Check(Component(
+            target: Name("regular button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+        Press(Left),
+        Check(Component(
+            target: Name("regular button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Release(Left),
+        Check(Component(
+            target: Name("regular button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+        MoveTo(Screen((900.0, 500.0))),
+        Check(Component(
+            target: Name("regular button"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        // The small button's icon.
+        Check(Component(
+            target: Within(Name("small button"), Component("Icon")),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.36078432,green:0.38431373,blue:0.41568628,alpha:1.0))),
+        )),
+        MoveTo(Name("small button")),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("small button"), Component("Icon")),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+    ],
+    expect: [],
+)

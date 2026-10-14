@@ -33,7 +33,7 @@ use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::combo::Combo;
-use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
+use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
@@ -111,6 +111,11 @@ pub enum WidgetsSetup {
     /// badge (`plain button`), "Add badge", which raises the count of the first
     /// by one, and "Change theme".
     Badge,
+    /// Icon buttons, each with a `Name`: `small button`, `regular button`,
+    /// `large button`, `toggle button` (a `ToggleState` that starts off),
+    /// `warning button` and `danger button`, and "Change theme". `Clicks`
+    /// counts the `Activate`s of `regular button`.
+    IconButtons,
     /// A `tooltip anchor` push button with the tooltip "Anchor tip", an icon
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
@@ -136,6 +141,7 @@ impl AppSetup for WidgetsSetup {
             Self::Panel => panel(world),
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
+            Self::IconButtons => icon_buttons(world),
             Self::Tooltip => tooltip(world),
             Self::Themed => themed(world),
         }
@@ -1131,6 +1137,42 @@ fn badge(world: &mut World) {
                 }
             },
         );
+        spawn_theme_button(root);
+    });
+}
+
+fn icon_buttons(world: &mut World) {
+    world.init_resource::<Clicks>();
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            IconButton::new(Handle::default(), "Small", IconButtonSize::Small),
+            Name::new("small button"),
+        ));
+        root.spawn((
+            IconButton::new(Handle::default(), "Regular", IconButtonSize::Regular),
+            Name::new("regular button"),
+        ))
+        .observe(|_: On<Activate>, mut count: ResMut<Clicks>| count.0 += 1);
+        root.spawn((
+            IconButton::new(Handle::default(), "Large", IconButtonSize::Large),
+            Name::new("large button"),
+        ));
+        root.spawn((
+            IconButton::new(Handle::default(), "Toggle", IconButtonSize::Regular),
+            ToggleState(false),
+            Name::new("toggle button"),
+        ));
+        root.spawn((
+            IconButton::new(Handle::default(), "Warning", IconButtonSize::Large)
+                .with_tone(Tone::Warning),
+            Name::new("warning button"),
+        ));
+        root.spawn((
+            IconButton::new(Handle::default(), "Danger", IconButtonSize::Regular)
+                .with_tone(Tone::Danger),
+            Name::new("danger button"),
+        ));
         spawn_theme_button(root);
     });
 }
