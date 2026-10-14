@@ -214,9 +214,6 @@ of them (`just example gallery -- --run-all stack link`).
   the selections out and stale ones make later scenarios fail.
 - **The window has the display's scale factor.** The files state logical
   values (see "Scenario files"), so they pass at any scale factor.
-- **`leave_gallery_roots_alone` is temporary** (rinde/rin-bevy-ui-tester#86,
-  rinde/rin-bevy-ui#101): it takes `UiRoot` off the cursor overlay's roots.
-  Drop it once they stop getting `UiRoot`.
 - **`AppSetup::capture`** returns the `WidgetsSetup` the app was last built from
   (kept in the `CurrentScreen` resource), so **Record** and **New: current
   state** write `setup: App(Lists)` and the file loads back. What was done to
@@ -248,9 +245,9 @@ of them (`just example gallery -- --run-all stack link`).
   so a widget must not take `Single<.., With<UiRoot>>`: `ColorPaletteCombo`
   spawns its popup under its own topmost ancestor instead (and logs an `error!`
   if it has no parent).
-  The tester's cursor overlay is aimed at the app's default camera and so has
-  roots without a `UiTargetCamera`; they carry `NotUnderTest`, and the gallery
-  example takes `UiRoot` off whatever has it.
+  The tester's cursor overlay spawns its roots with a `UiTargetCamera`, so they
+  get no `UiRoot` (`the_cursor_overlays_roots_get_no_ui_root` in
+  `tests/scenarios.rs`).
 - **Mouse events.** Global observers (registered by `WidgetsPlugin`, not on
   `UiRoot`) watch Bevy's `Pointer<Over | Press | Release | Click | Drag | Out>`
   and re-trigger each as a `MouseEvent` on the original target, on the first hop
@@ -1020,10 +1017,6 @@ recorded_scenarios_gpu --features record`.
   test`. It fails on any file that does not pass; there is no allowlist, so a
   scenario that only fails with the UI drawn to an image is a bug to fix, not a
   name to list.
-- **The overlay's roots.** The recorder's `CursorOverlayPlugin` spawns root
-  `Node`s without a `UiTargetCamera`, so `UiRoot` counts them and logs its
-  one-root `error!` (#101; the recorder adds no `LogPlugin`, so it is not
-  shown). They are `Pickable::IGNORE`, so nothing breaks.
 - **CI.** The `record` job of `ci.yml` runs `just record` on lavapipe and uploads
   `target/recordings` as the `recordings` workflow artifact. It is not part of
   `just ci`, and it was written without being run on GitHub.

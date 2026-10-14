@@ -1374,3 +1374,26 @@ fn a_toolbar_is_a_toolbar_of_buttons_toggled_while_their_tool_is_active() {
     let report = play(&scenario);
     assert!(report.passed(), "{:?}", report.failures());
 }
+
+#[test]
+fn the_cursor_overlays_roots_get_no_ui_root() {
+    let mut app = App::new();
+    app.add_plugins((
+        rin_bevy_ui_tester::HeadlessPlugins::default(),
+        rin_bevy_ui_tester::overlay::CursorOverlayPlugin,
+    ));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(rin_bevy_ui::WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    spawn_camera_and_root(app.world_mut());
+    app.update();
+    app.update();
+
+    let roots = app
+        .world_mut()
+        .query_filtered::<Entity, With<rin_bevy_ui::UiRoot>>()
+        .iter(app.world())
+        .count();
+    assert_eq!(roots, 1, "only the app's own root is a UiRoot");
+}

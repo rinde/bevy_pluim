@@ -88,24 +88,6 @@ fn start_screen(world: &mut World) {
     }
 }
 
-/// Temporary workaround for rinde/rin-bevy-ui-tester#86 (and rinde/rin-bevy-ui#101):
-/// remove it when the overlay's roots no longer get `UiRoot`.
-///
-/// Takes `UiRoot` off the gallery's own top-level nodes (the cursor overlay and
-/// caption strip), which are marked `NotUnderTest` but, aimed at the app's
-/// default camera, carry no `UiTargetCamera` for `UiRoot` to go by. Without
-/// this the app has many roots and widgets that need the one (the palette
-/// combo's popup) are not built.
-fn leave_gallery_roots_alone(
-    added: On<Add, UiRoot>,
-    not_under_test: Query<(), With<NotUnderTest>>,
-    mut commands: Commands,
-) {
-    if not_under_test.contains(added.entity) {
-        commands.entity(added.entity).remove::<UiRoot>();
-    }
-}
-
 /// Puts the app back for a scenario: removes its UI, cameras and selections,
 /// but not the gallery's, and resets the theme. The scenario's setup builds the screen.
 fn reset_app(world: &mut World) {
@@ -220,7 +202,6 @@ fn main() -> AppExit {
         }))
         .add_plugins(WidgetsPlugin)
         .add_plugins(plugin)
-        .add_observer(leave_gallery_roots_alone)
         .add_systems(Startup, start_screen)
         .run()
 }
