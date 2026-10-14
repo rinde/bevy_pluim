@@ -993,7 +993,10 @@ fn numeric_stepper(world: &mut World) {
     world.entity_mut(root).with_children(|root| {
         root.spawn((NumericStepper::default(), Name::new("default stepper")));
         root.spawn((
-            NumericStepper::default(),
+            NumericStepper {
+                name: Some("Cars".into()),
+                ..default()
+            },
             Value::new_u16(10, 5, 15, 1),
             Name::new("u16 stepper"),
         ));
