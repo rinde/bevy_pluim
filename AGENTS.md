@@ -125,7 +125,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | --- | --- |
 | `lib.rs` | `WidgetsPlugin` (add this one plugin to an app), `UiRoot`, and `MouseEvent` with the observers that produce it |
 | `theme.rs` | `Theme` resource (colours, `body_font` and `display_font` handles defaulting to Bevy's font with the application loading its own, the `font_size_*` type scale, `control_radius` for buttons, list items, steppers and scroll bars and `panel_radius` for `Card` and `Float`), `ThemeColors` (also the text, divider, accent, danger, warning, info, pill, segmented, card and chip slots of the redesign; both defaults use a dark `large_shadow` and `small_shadow`, black, so neither theme glows; both meet WCAG AA contrast (4.5:1 for their text and ink pairs, 3:1 for `focus_ring` and `selection_ring`), guarded by `the_default_themes_meet_wcag_aa_contrast`, which exempts `text_disabled`, `text_tertiary` and the decorative borders; the shadow constants set colour only, offsets stay with the widgets; `Pill` and `Badge` share `pill_background` / `pill_text`), `DEFAULT_LIGHT_THEME_COLORS` / `DEFAULT_DARK_THEME_COLORS`, `ThemeMode`, `Theme::with_colors(light, dark)` for an app's own pair, `set_mode` / `mode` / `light_dark_toggle` (switch `colors`, the set in use; do not assign `colors` by hand), the shadow constants; also keeps `ClearColor` in step with the theme |
-| `tailwind.rs` | `COLORS`, all 242 Tailwind colours as `TailwindColor { class, variant, color }`, for colour pickers; the theme itself uses `bevy::color::palettes::tailwind` directly |
+| `tailwind.rs` | `COLORS`, all 242 Tailwind colours as `TailwindColor { class, variant, color }`, and `color_name(color)` (Tailwind name, else hex: the accessible name of swatches and colour buttons, and what `WidgetsCheck::Selected` uses), for colour pickers; the theme itself uses `bevy::color::palettes::tailwind` directly |
 | `select.rs` | the selection model: `Selection` (`Value` or `Ref`), `SelectionValue` (`One` / `ZeroOrOne` / `OneOrMore` / `ZeroOrMore`), the `Selection::builder()`, `Item<T>`, `ItemOf` / `ItemValues` / `ItemsRef`, `ItemsChanged`, and the `SelectionParam` / `ItemParam` system params |
 | `stack.rs` | `Stack { selection_ref }` shows the one `StackItem` child matching the selection; children are created lazily by a registered system (`StackChildSpawner`) and hidden, not despawned, when deselected |
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
@@ -769,7 +769,7 @@ a file can check any `Reflect` type of the app by short type path.
   same `dead_code` reason). A `Selection` holds entities, which mean nothing
   in a script, so `Selected` names the selected items by what they show, in
   the order they were selected: an `Item<String>` by its text, an
-  `Item<Color>` by its Tailwind colour (`blue-500`) when it is one. `of` is
+  `Item<Color>` by its Tailwind colour (`blue-500`) when it is one, else its hex (`color_name`). `of` is
   any target that resolves to a widget: the selection is the first on it or
   above it, and a `Selection::Ref` is followed, so the `List`, `Combo`,
   `BreadCrumbs` or `ColorPalette` that shares a selection reports it. It goes
