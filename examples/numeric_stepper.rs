@@ -40,13 +40,33 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         children![
-            NumericStepper,
-            (NumericStepper, Value::new_u16(10, 5, 15, 1)),
-            (NumericStepper, Value::new_u32(10, 5, 15, 1)),
-            (NumericStepper, Value::new_f32(10.0, 5.0, 15.0, 0.5)),
+            NumericStepper::default(),
+            (NumericStepper::default(), Value::new_u16(10, 5, 15, 1)),
+            (NumericStepper::default(), Value::new_u32(10, 5, 15, 1)),
+            (
+                NumericStepper::default(),
+                Value::new_f32(10.0, 5.0, 15.0, 0.5)
+            ),
+            (
+                NumericStepper {
+                    format: level,
+                    decrease_name: "Lower the level".into(),
+                    increase_name: "Raise the level".into(),
+                    ..default()
+                },
+                Value::new_u8(0, 0, 56, 7),
+            ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));
+}
+
+/// "Ground" at 0 and "+7", "+14", ... above it.
+fn level(value: &Value) -> String {
+    match value.as_u8() {
+        Some(0) | None => "Ground".to_string(),
+        Some(n) => format!("+{n}"),
+    }
 }
 
 #[derive(Component)]

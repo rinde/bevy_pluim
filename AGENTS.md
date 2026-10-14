@@ -134,7 +134,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
-| `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are `PushButton`s that step on `Activate`, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to, so only the buttons are tab stops |
+| `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are small `IconButton`s (accessible names `decrease_name` / `increase_name`, "Decrease" / "Increase" by default; icons `decrease_icon` / `increase_icon`, a drawn minus and plus when left at the default handle) that step on `Activate`; `format` (`fn(&Value) -> String`, default `Display`) says how the value is shown, in a label of at least `label_min_width` (54 px) so the buttons do not move; fields are read when the component is inserted, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to, so only the buttons are tab stops |
 | `panel.rs` | `Panel`: a `Card` 380 px wide with a header (title `Label`, optional subtitle beside it, optional close `IconButton` that triggers the `PanelClosed` entity event on the panel), a strip, a `Divider`, a body in a `ScrollArea` that grows with its content up to `max_body_height` (620) and then scrolls, and a footer above a divider. The app spawns contents as children of the entities in `PanelRefs` (`strip`, `body`, `footer`); an empty strip or footer is `Display::None`. Insert a `Panel` again to change title, subtitle, close icon or maximum height. Grow-then-scroll needs only `max_height` on the `ScrollArea` node (`a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls`) |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy** |
 | `label.rs` | `Label` with `Title` (`Label::title`, also `Label::header`), `Regular`, `Secondary`, `Caption` and `Overline` (shown in upper case, no letter spacing), sized and coloured from the theme's type scale and text slots |
@@ -749,9 +749,9 @@ a file can check any `Reflect` type of the app by short type path.
   `u32 stepper`, `f32 stepper`, `stepper by two`, and `shared stepper` with
   the `first mirror stepper` and `second mirror stepper` that point to it
   through `ValueRef`), so a file reaches one stepper's button with
-  `Within(Name("u16 stepper"), Role(role: Button, label: "+"))` and reads its
-  value with `TextOf(Name("u16 stepper"), Exact("- 11 +"))` (the "-", value
-  and "+" labels). Move the pointer to the button before every click: a wider
+  `Within(Name("u16 stepper"), Name("Increase"))` (the icon buttons have no text for a
+  `Role` label to match, so they are named after their accessible name) and reads its
+  value with `TextOf(Name("u16 stepper"), Exact("11"))`. Move the pointer to the button before every click: a wider
   value moves the buttons. A button at its limit is `InteractionDisabled`, so
   the tester's click on it does nothing (`numeric_stepper_bounds.ron`).
 - **The `Lists` screen** names every list after its selection so a file can
