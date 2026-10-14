@@ -4,6 +4,7 @@ use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy::text::LetterSpacing;
+use bevy::ui::widget::Label as UiLabel;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -25,11 +26,15 @@ impl Plugin for LabelPlugin {
 }
 
 /// Themed text.
+///
+/// It is also Bevy's [`Label`](bevy::ui::widget::Label), so it has an accessibility node with
+/// the role `Label` and its text as the value, kept in step when a `Label` is inserted again.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
 #[require(
     Name::new("Label"),
+    UiLabel,
     Node {
         align_self: AlignSelf::Center,
         ..default()
@@ -95,7 +100,11 @@ impl Label {
             | Self::Caption(text) => text.clone(),
             Self::Overline(text) => text.to_uppercase(),
         };
-        world.commands().entity(context.entity).insert(Text(text));
+        // Inserting Bevy's `Label` again marks it changed, so its system rereads the text.
+        world
+            .commands()
+            .entity(context.entity)
+            .insert((Text(text), UiLabel));
         world
             .commands()
             .run_system_cached_with(theme_labels, Some(context.entity));

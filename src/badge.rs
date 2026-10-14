@@ -1,5 +1,6 @@
 //! `Badge`: a count on the top-right corner of a button.
 
+use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
 use bevy::text::{LineBreak, TextLayout};
 
@@ -44,7 +45,8 @@ pub enum BadgeTone {
 /// Put it on an [`IconButton`](crate::icon_button::IconButton), or on the
 /// [`Item<Tool>`](crate::toolbar::Tool) of a [`Toolbar`](crate::toolbar::Toolbar) to badge that
 /// tool's button. The badge is 16 px high with a minimum width of 16 px, and does not block the
-/// pointer from the button under it. The application sets and updates the text by inserting a
+/// pointer from the button under it. It is not in the accessibility tree itself: its text is the
+/// description of the button's accessibility node. The application sets and updates the text by inserting a
 /// new `Badge`; removing the component, or an empty text, shows nothing.
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
@@ -134,8 +136,13 @@ fn badge_node() -> Node {
 /// theme.
 fn sync_badges(
     theme: Res<Theme>,
-    hosts: Query<
-        (Entity, Option<&Badge>, Option<&BadgeRef>),
+    mut hosts: Query<
+        (
+            Entity,
+            Option<&Badge>,
+            Option<&BadgeRef>,
+            Option<&mut AccessibilityNode>,
+        ),
         (With<Node>, Or<(With<Badge>, With<BadgeRef>)>),
     >,
     mut labels: Query<
@@ -150,8 +157,18 @@ fn sync_badges(
     mut commands: Commands,
 ) {
     let colors = &theme.colors;
-    for (host, badge, badge_ref) in &hosts {
+    for (host, badge, badge_ref, mut access) in &mut hosts {
         let badge = badge.filter(|b| !b.text.is_empty());
+        // The badge node stays out of the accessibility tree; its text describes the host.
+        if let Some(access) = access.as_mut() {
+            match badge {
+                Some(badge) if access.description() != Some(badge.text.as_str()) => {
+                    access.set_description(badge.text.as_str());
+                }
+                None if access.description().is_some() => access.clear_description(),
+                _ => {}
+            }
+        }
         let Some(badge) = badge else {
             if let Some(BadgeRef(label)) = badge_ref {
                 commands.entity(*label).despawn();

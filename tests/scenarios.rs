@@ -17,12 +17,17 @@ use bevy::picking::input::PointerInputSettings;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
+use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
 use rin_bevy_ui::filter_chips::{Chip, ChipView, FilterChips};
+use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
+use rin_bevy_ui::kbd::Kbd;
+use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::List;
 use rin_bevy_ui::panel::{Panel, PanelRefs};
+use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
@@ -1130,4 +1135,94 @@ fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
         (tall_overflow - 300.0).abs() < 1.5,
         "the rest scrolls: {tall_overflow}"
     );
+}
+
+// ---- Text widgets in the accessibility tree ----
+
+/// An app with a title, a pill, a key cap and an icon button with a badge of 3, all named.
+fn text_widgets_app() -> App {
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((Label::title("Trains"), Name::new("title")));
+        root.spawn((Pill::new("Running"), Name::new("pill")));
+        root.spawn((Kbd::new("Esc"), Name::new("kbd")));
+        root.spawn((
+            IconButton::new(Handle::default(), "Warnings", IconButtonSize::Regular),
+            Badge::count(3),
+            Name::new("warnings"),
+        ));
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+    app
+}
+
+fn accessibility_node(app: &mut App, name: &str) -> AccessibilityNode {
+    let entity = named(app, name);
+    app.world()
+        .get::<AccessibilityNode>(entity)
+        .unwrap()
+        .clone()
+}
+
+#[test]
+fn a_label_is_a_label_with_its_text_as_value_that_follows_a_new_label() {
+    let mut app = text_widgets_app();
+    let node = accessibility_node(&mut app, "title");
+    assert_eq!(format!("{:?}", node.role()), "Label");
+    assert_eq!(node.value(), Some("Trains"));
+
+    let entity = named(&mut app, "title");
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(Label::title("Stops"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(accessibility_node(&mut app, "title").value(), Some("Stops"));
+}
+
+#[test]
+fn a_pill_is_a_status_named_by_its_text_as_given() {
+    let mut app = text_widgets_app();
+    let node = accessibility_node(&mut app, "pill");
+    assert_eq!(format!("{:?}", node.role()), "Status");
+    assert_eq!(node.label(), Some("Running"));
+}
+
+#[test]
+fn a_kbd_is_a_label_with_the_key_as_value() {
+    let mut app = text_widgets_app();
+    let node = accessibility_node(&mut app, "kbd");
+    assert_eq!(format!("{:?}", node.role()), "Label");
+    assert_eq!(node.value(), Some("Esc"));
+}
+
+#[test]
+fn a_badge_describes_its_button_and_is_not_in_the_tree_itself() {
+    let mut app = text_widgets_app();
+    let node = accessibility_node(&mut app, "warnings");
+    assert_eq!(node.label(), Some("Warnings"));
+    assert_eq!(node.description(), Some("3"));
+    let badge = named(&mut app, "Badge");
+    assert!(app.world().get::<AccessibilityNode>(badge).is_none());
+
+    let entity = named(&mut app, "warnings");
+    app.world_mut().entity_mut(entity).insert(Badge::count(4));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(
+        accessibility_node(&mut app, "warnings").description(),
+        Some("4")
+    );
+
+    app.world_mut().entity_mut(entity).remove::<Badge>();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(accessibility_node(&mut app, "warnings").description(), None);
 }
