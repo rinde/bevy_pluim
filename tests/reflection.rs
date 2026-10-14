@@ -15,6 +15,7 @@ use bevy::ecs::reflect::{AppTypeRegistry, ReflectComponent, ReflectResource};
 use bevy::prelude::*;
 use bevy::reflect::TypeRegistry;
 use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -106,6 +107,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ToggleState>(registry);
         assert_component::<Kbd>(registry);
         assert_component::<Pill>(registry);
+        assert_component::<Badge>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
         assert_component::<Gallery>(registry);

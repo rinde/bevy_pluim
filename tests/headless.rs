@@ -26,6 +26,7 @@ use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, 
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
+use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -4046,4 +4047,100 @@ fn only_the_buttons_of_an_underlined_toolbar_have_a_tooltip_with_their_label() {
     for button in toolbar_buttons(&app, filled) {
         assert!(app.world().get::<Tooltip>(button).is_none());
     }
+}
+
+/// The badge node under `host`, with its text, if there is one.
+fn badge_under(app: &App, host: Entity) -> Option<(Entity, String)> {
+    let children = app.world().entity(host).get::<Children>()?;
+    children.iter().find_map(|c| {
+        let e = app.world().entity(c);
+        (e.get::<Name>().is_some_and(|n| n.as_str() == "Badge"))
+            .then(|| (c, e.get::<Text>().map(|t| t.0.clone()).unwrap_or_default()))
+    })
+}
+
+fn settle(app: &mut App) {
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
+fn a_badge_on_an_icon_button_appears_updates_and_disappears() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Trains", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button), None);
+
+    app.world_mut().entity_mut(button).insert(Badge::count(4));
+    settle(&mut app);
+    let (badge, text) = badge_under(&app, button).unwrap();
+    assert_eq!(text, "4");
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    let world = app.world();
+    assert_eq!(
+        world.get::<BackgroundColor>(badge).unwrap().0,
+        colors.pill_background
+    );
+    assert_eq!(world.get::<TextColor>(badge).unwrap().0, colors.pill_text);
+    let node = world.get::<Node>(badge).unwrap();
+    assert_eq!(node.position_type, PositionType::Absolute);
+    assert_eq!(node.height, Val::Px(16.0));
+    assert_eq!(node.min_width, Val::Px(16.0));
+    assert_eq!(world.get::<Pickable>(badge).unwrap(), &Pickable::IGNORE);
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Badge::count(12).with_tone(BadgeTone::Warning));
+    settle(&mut app);
+    let (same, text) = badge_under(&app, button).unwrap();
+    assert_eq!((same, text.as_str()), (badge, "12"));
+    assert_eq!(
+        app.world().get::<BackgroundColor>(badge).unwrap().0,
+        colors.warning_text
+    );
+
+    app.world_mut().entity_mut(button).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button), None);
+
+    app.world_mut().entity_mut(button).insert(Badge::count(1));
+    settle(&mut app);
+    assert!(badge_under(&app, button).is_some());
+    app.world_mut().entity_mut(button).remove::<Badge>();
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button), None);
+}
+
+#[test]
+fn a_badge_on_a_toolbar_item_shows_on_its_button_and_follows_the_item() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().one(),
+    );
+    let buttons = toolbar_buttons(&app, toolbar);
+    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item;
+    assert_eq!(badge_under(&app, buttons[1]), None);
+
+    app.world_mut().entity_mut(item).insert(Badge::count(6));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, buttons[1]).unwrap().1, "6");
+    assert_eq!(badge_under(&app, buttons[0]), None);
+
+    app.world_mut().entity_mut(item).insert(Badge::count(7));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, buttons[1]).unwrap().1, "7");
+
+    app.world_mut().entity_mut(item).remove::<Badge>();
+    settle(&mut app);
+    assert_eq!(badge_under(&app, buttons[1]), None);
 }
