@@ -383,6 +383,9 @@ of them (`just example gallery -- --run-all stack link`).
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
   (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+- **Hidden widgets are hidden from the accessibility tree.** `sync_accessibility_hidden`
+  in `focus.rs` runs next to `sync_tab_index` and marks the `AccessibilityNode` of
+  anything hidden by the tab stop rule (`is_hidden`) as hidden, clearing it on show.
 - **A combo's popup takes the keyboard focus while it is open.** Opening a `Combo` or a
   `ColorPaletteCombo` (the hook of `ComboState`, the observer of `State`) sets
   `InputFocus` to the popup's list (the palette, for the palette combo) with

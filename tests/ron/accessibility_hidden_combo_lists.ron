@@ -1,0 +1,16 @@
+// The list items of a closed combo are hidden from the accessibility tree;
+// opening the combo shows them.
+(
+    format_version: 3,
+    name: "the items of a closed combo are hidden from the accessibility tree",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("first combo"), Role(role: ListItem, label: "Canada")), role: None, label: None, value: None, states: [Hidden]))),
+        MoveTo(Within(Name("first combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("first combo"), Role(role: ListItem, label: "Canada")), role: None, label: None, value: None, states: [Shown]))),
+    ],
+    expect: [],
+)
