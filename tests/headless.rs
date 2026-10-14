@@ -34,6 +34,7 @@ use rin_bevy_ui::color_push_button::ColorPushButton;
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
+use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
@@ -3472,4 +3473,223 @@ fn a_theme_change_restyles_the_toolbar() {
         background(&app, buttons[0]),
         DEFAULT_DARK_THEME_COLORS.accent
     );
+}
+
+fn spawn_gallery(app: &mut App) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let cards = [
+        ("Steam", "Locomotives"),
+        ("Diesel", "Locomotives"),
+        ("Electric", "Locomotives"),
+        ("Passenger", "Wagons"),
+        ("Box wagon", "Wagons"),
+    ]
+    .map(|(label, group)| Item {
+        data: GalleryCard::new(Handle::default(), label, group),
+    });
+    let gallery = app
+        .world_mut()
+        .spawn((
+            Gallery,
+            Selection::builder().one().build_with_items(cards),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.update();
+    gallery
+}
+
+fn children_of(app: &App, entity: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(entity)
+        .get::<Children>()
+        .map(|children| children.iter().collect())
+        .unwrap_or_default()
+}
+
+/// The heading and the cards of each group of a gallery.
+fn gallery_groups(app: &App, gallery: Entity) -> Vec<(String, Vec<Entity>)> {
+    children_of(app, gallery)
+        .into_iter()
+        .filter(|child| !app.world().entity(*child).contains::<Divider>())
+        .map(|group| {
+            let parts = children_of(app, group);
+            let heading = app
+                .world()
+                .entity(parts[0])
+                .get::<Text>()
+                .unwrap()
+                .0
+                .clone();
+            (heading, children_of(app, parts[1]))
+        })
+        .collect()
+}
+
+fn card_label(app: &App, card: Entity) -> String {
+    let refs = app.world().entity(card).get::<GalleryCardRefs>().unwrap();
+    app.world()
+        .entity(refs.label)
+        .get::<Text>()
+        .unwrap()
+        .0
+        .clone()
+}
+
+fn picked_card_label(app: &App, gallery: Entity) -> Option<String> {
+    let selection = app.world().entity(gallery).get::<Selection>().unwrap();
+    let item = selection.as_selection().unwrap().single()?;
+    app.world()
+        .entity(item)
+        .get::<Item<GalleryCard>>()
+        .map(|item| item.data.label.clone())
+}
+
+fn border_top(app: &App, entity: Entity) -> Color {
+    app.world().entity(entity).get::<BorderColor>().unwrap().top
+}
+
+#[test]
+fn a_gallery_creates_a_card_per_item_under_the_heading_of_its_group() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+
+    let groups = gallery_groups(&app, gallery)
+        .into_iter()
+        .map(|(heading, cards)| {
+            let labels = cards
+                .iter()
+                .map(|card| card_label(&app, *card))
+                .collect::<Vec<_>>();
+            (heading, labels)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        groups,
+        [
+            (
+                "LOCOMOTIVES".to_string(),
+                vec!["Steam".to_string(), "Diesel".into(), "Electric".into()]
+            ),
+            (
+                "WAGONS".to_string(),
+                vec!["Passenger".to_string(), "Box wagon".into()]
+            ),
+        ]
+    );
+    // One vertical divider sits between the two groups.
+    let children = children_of(&app, gallery);
+    assert_eq!(children.len(), 3);
+    assert!(app.world().entity(children[1]).contains::<Divider>());
+}
+
+#[test]
+fn clicking_a_card_in_the_second_group_deselects_the_one_in_the_first() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+    let first = groups[0].1[0];
+    let wagon = groups[1].1[1];
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(picked_card_label(&app, gallery).as_deref(), Some("Steam"));
+    assert_eq!(border_top(&app, first), colors.selection_ring);
+
+    activate(&mut app, wagon);
+
+    assert_eq!(
+        picked_card_label(&app, gallery).as_deref(),
+        Some("Box wagon")
+    );
+    assert_eq!(border_top(&app, wagon), colors.selection_ring);
+    assert_eq!(border_top(&app, first), colors.border);
+    assert_eq!(background(&app, first), colors.card_surface);
+}
+
+#[test]
+fn a_selection_changed_through_selection_param_moves_the_ring() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+    let target = groups[0].1[2];
+    let item = app
+        .world()
+        .entity(target)
+        .get::<GalleryCardView>()
+        .unwrap()
+        .item;
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(gallery, |selection| selection.set_selection([item]));
+        })
+        .unwrap();
+    app.update();
+    app.update();
+
+    assert_eq!(border_top(&app, target), colors.selection_ring);
+    assert_eq!(background(&app, target), colors.hovered_selected_item);
+    assert_eq!(border_top(&app, groups[0].1[0]), colors.border);
+    let thickness = |card: Entity| app.world().entity(card).get::<Node>().unwrap().border.left;
+    assert_eq!(thickness(target), Val::Px(2.0));
+    assert_eq!(thickness(groups[0].1[0]), Val::Px(1.0));
+}
+
+#[test]
+fn a_gallery_shares_a_selection_by_reference_and_names_its_cards() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(|label| Item {
+                    data: GalleryCard::new(Handle::default(), label, "G"),
+                })),
+        )
+        .id();
+    let gallery = app
+        .world_mut()
+        .spawn((Gallery, Selection::reference(selection), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    app.update();
+    let cards = gallery_groups(&app, gallery).remove(0).1;
+    assert_eq!(cards.len(), 2);
+
+    activate(&mut app, cards[1]);
+
+    let item = app
+        .world()
+        .entity(cards[1])
+        .get::<GalleryCardView>()
+        .unwrap()
+        .item;
+    let selected = app.world().entity(selection).get::<Selection>().unwrap();
+    assert_eq!(selected.as_selection().unwrap().single(), Some(item));
+    let node = app
+        .world()
+        .entity(cards[1])
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.label(), Some("b"));
+}
+
+#[test]
+fn a_theme_change_restyles_the_gallery() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+
+    toggle_theme(&mut app);
+    app.update();
+    app.update();
+
+    let colors = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(border_top(&app, groups[0].1[0]), colors.selection_ring);
+    assert_eq!(background(&app, groups[1].1[0]), colors.card_surface);
 }
