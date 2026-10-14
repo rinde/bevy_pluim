@@ -8,7 +8,7 @@ use bevy::ui_widgets::{Activate, Button};
 use crate::divider::Divider;
 use crate::focus::TabStop;
 use crate::icon::{Icon, IconColor};
-use crate::icon_button::IconButtonSize;
+use crate::icon_button::{IconButtonSize, Tone};
 use crate::select::{Item, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::Tooltip;
@@ -145,9 +145,21 @@ pub struct Tool {
     /// A shortcut key shown as small text in the top-right corner of the button, such as `"1"`.
     /// The toolbar only shows it; the application binds the key.
     pub key_hint: Option<String>,
+    /// What the tool means. A [`Tone::Danger`] tool (a bulldoze tool) turns its icon and label
+    /// the danger hover colour under the pointer and, when active, is filled with the danger
+    /// colour with danger text. A [`Tone::Warning`] tool shows warning text, on the warning
+    /// background when hovered or active.
+    pub tone: Tone,
 }
 
 impl Tool {
+    /// This tool with `tone`.
+    #[must_use]
+    pub const fn with_tone(mut self, tone: Tone) -> Self {
+        self.tone = tone;
+        self
+    }
+
     /// A tool in group 0.
     pub fn new(icon: Handle<Image>, label: impl Into<String>) -> Self {
         Self::in_group(icon, label, 0)
@@ -160,6 +172,7 @@ impl Tool {
             label: label.into(),
             group,
             key_hint: None,
+            tone: Tone::Neutral,
         }
     }
 
@@ -409,16 +422,40 @@ struct ButtonLook {
     bar: bool,
 }
 
-/// The look of a button from its state: active, hovered or at rest. Used by the system that
-/// restyles buttons on every change, so a theme change under a resting pointer keeps the hover.
+/// The look of a button from its tone and state: active, hovered or at rest. Used by the system
+/// that restyles buttons on every change, so a theme change under a resting pointer keeps the
+/// hover.
 const fn button_look(
     colors: &ThemeColors,
     style: ToolbarStyle,
+    tone: Tone,
     active: bool,
     hovered: bool,
 ) -> ButtonLook {
+    if active {
+        match tone {
+            Tone::Danger => {
+                return ButtonLook {
+                    background: colors.danger,
+                    icon: IconColor::DangerText,
+                    bar: false,
+                };
+            }
+            Tone::Warning => {
+                return ButtonLook {
+                    background: colors.warning_background,
+                    icon: IconColor::WarningText,
+                    bar: false,
+                };
+            }
+            Tone::Neutral => {}
+        }
+    }
     let rest = if hovered {
-        colors.hovered_item
+        match tone {
+            Tone::Warning => colors.warning_background,
+            Tone::Danger | Tone::Neutral => colors.hovered_item,
+        }
     } else {
         Color::NONE
     };
@@ -435,16 +472,21 @@ const fn button_look(
         },
         (ToolbarStyle::Filled, false) => ButtonLook {
             background: rest,
-            icon: if hovered {
-                IconColor::TextPrimary
-            } else {
-                IconColor::TextSecondary
+            icon: match tone {
+                Tone::Warning => IconColor::WarningText,
+                Tone::Danger if hovered => IconColor::DangerHoverText,
+                _ if hovered => IconColor::TextPrimary,
+                _ => IconColor::TextSecondary,
             },
             bar: false,
         },
         (ToolbarStyle::Underlined, false) => ButtonLook {
             background: rest,
-            icon: IconColor::TextPrimary,
+            icon: match tone {
+                Tone::Warning => IconColor::WarningText,
+                Tone::Danger if hovered => IconColor::DangerHoverText,
+                _ => IconColor::TextPrimary,
+            },
             bar: false,
         },
     }
@@ -482,7 +524,13 @@ fn update_buttons(
         let active = selections
             .get(button.toolbar)
             .is_some_and(|selection| selection.is_selected(button.item));
-        let look = button_look(&theme.colors, button.style, active, hovered.get());
+        let look = button_look(
+            &theme.colors,
+            button.style,
+            item.data.tone,
+            active,
+            hovered.get(),
+        );
         let labels_shown = toolbars
             .get(button.toolbar)
             .is_ok_and(|labels| *labels == ToolbarLabels::Shown);
@@ -622,7 +670,7 @@ mod tests {
     #[test]
     fn the_active_filled_button_has_the_accent_background_and_accent_text() {
         for colors in [DEFAULT_LIGHT_THEME_COLORS, DEFAULT_DARK_THEME_COLORS] {
-            let look = button_look(&colors, ToolbarStyle::Filled, true, false);
+            let look = button_look(&colors, ToolbarStyle::Filled, Tone::Neutral, true, false);
             assert_eq!(look.background, colors.accent);
             assert_eq!(look.icon, IconColor::AccentText);
             assert!(!look.bar);
@@ -632,7 +680,7 @@ mod tests {
     #[test]
     fn the_active_underlined_button_has_the_subtle_accent_and_a_bar() {
         let colors = DEFAULT_DARK_THEME_COLORS;
-        let look = button_look(&colors, ToolbarStyle::Underlined, true, true);
+        let look = button_look(&colors, ToolbarStyle::Underlined, Tone::Neutral, true, true);
         assert_eq!(look.background, colors.accent_subtle);
         assert_eq!(look.icon, IconColor::AccentSubtleText);
         assert!(look.bar);
@@ -643,11 +691,11 @@ mod tests {
         let colors = DEFAULT_LIGHT_THEME_COLORS;
         for style in [ToolbarStyle::Filled, ToolbarStyle::Underlined] {
             assert_eq!(
-                button_look(&colors, style, false, true).background,
+                button_look(&colors, style, Tone::Neutral, false, true).background,
                 colors.hovered_item
             );
             assert_eq!(
-                button_look(&colors, style, false, false).background,
+                button_look(&colors, style, Tone::Neutral, false, false).background,
                 Color::NONE
             );
         }
