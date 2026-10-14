@@ -532,7 +532,7 @@ fn update_buttons(
             }
         }
         if let Some(hint) = refs.hint
-            && let Ok((mut text, mut color, mut font)) = labels.get_mut(hint)
+            && let Ok((mut text, mut color, mut font, _)) = labels.get_mut(hint)
         {
             let key = item.data.key_hint.as_deref().unwrap_or_default();
             if text.0 != key {
