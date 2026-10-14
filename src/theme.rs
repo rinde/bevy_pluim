@@ -206,9 +206,9 @@ pub struct ThemeColors {
     pub link: Color,
     /// The colour of a link while it is pressed.
     pub link_selected: Color,
-    /// The colour of the large shadow.
+    /// The colour of the large shadow, under floating panels and popups.
     pub large_shadow: Color,
-    /// The colour of the small shadow.
+    /// The colour of the small shadow, under buttons and other controls.
     pub small_shadow: Color,
     /// The colour of the ring around the widget that has keyboard focus.
     pub focus_ring: Color,
@@ -220,43 +220,44 @@ pub struct ThemeColors {
     pub text_tertiary: Color,
     /// The colour of divider lines.
     pub divider: Color,
-    /// The fill of the active tool.
+    /// The fill of the active tool in a filled toolbar, the design's accent.
     pub accent: Color,
     /// The text on [`accent`](Self::accent).
     pub accent_text: Color,
-    /// A subtle accent fill, such as a pressed button.
+    /// A subtle accent fill: an on toggle button or the active tool of an underlined toolbar.
     pub accent_subtle: Color,
     /// The text on [`accent_subtle`](Self::accent_subtle).
     pub accent_subtle_text: Color,
-    /// The bar on [`accent_subtle`](Self::accent_subtle).
+    /// The bar along the bottom edge of an on button filled with [`accent_subtle`](Self::accent_subtle).
     pub accent_subtle_bar: Color,
-    /// The ring around a selected widget.
+    /// The ring around a selected list row or gallery card.
     pub selection_ring: Color,
-    /// The strong hover of a selected row.
+    /// The background of a selected row or card while hovered, stronger than the selected one.
     pub hovered_selected_item: Color,
-    /// The fill of a dangerous action.
+    /// The fill of an active dangerous action, such as the bulldoze tool.
     pub danger: Color,
     /// The text on [`danger`](Self::danger).
     pub danger_text: Color,
-    /// The text of a dangerous action while hovered.
+    /// The text and icon of a dangerous action while hovered.
     pub danger_hover_text: Color,
     /// The background of a warning.
     pub warning_background: Color,
     /// The border of a warning.
     pub warning_border: Color,
-    /// The text of a warning.
+    /// The text and icon of a warning, and the fill of a warning badge.
     pub warning_text: Color,
     /// The background of an informational status, such as running.
     pub info_background: Color,
     /// The text of an informational status.
     pub info_text: Color,
-    /// The background of a waiting status.
+    /// The background of a waiting status, such as a `Pill` in the `Warning` tone.
     pub wait_background: Color,
     /// The text of a waiting status.
     pub wait_text: Color,
-    /// The background of a neutral pill or badge.
+    /// The background of a neutral pill or badge. A `Pill` and a `Badge` share the neutral
+    /// pill slots on purpose: the design gives them one neutral look.
     pub pill_background: Color,
-    /// The text of a neutral pill or badge.
+    /// The text of a neutral pill or badge, on [`pill_background`](Self::pill_background).
     pub pill_text: Color,
     /// The track of a segmented control.
     pub segmented_track: Color,
@@ -264,9 +265,9 @@ pub struct ThemeColors {
     pub segmented_selected: Color,
     /// The text of the selected segment.
     pub segmented_selected_text: Color,
-    /// The surface of a card in a gallery.
+    /// The surface of a card in a gallery and of a tooltip.
     pub card_surface: Color,
-    /// The border of a filter chip.
+    /// The border of an inactive filter chip.
     pub chip_border: Color,
     /// The fill of the active filter chip.
     pub chip_on: Color,
@@ -396,8 +397,13 @@ pub const SHADOW_LG: Color = Color::srgba(0.0, 0.0, 0.0, 0.15);
 /// An extra large shadow.
 pub const SHADOW_XL: Color = Color::srgba(0.0, 0.0, 0.0, 0.25);
 
-/// A small shadow that shows up on a dark background.
-pub const SHADOW_SM_DARK_MODE: Color = Color::srgba(1.0, 1.0, 1.0, 0.03);
+/// A small shadow on a dark background: black, like the large one, so neither
+/// default theme glows.
+///
+/// The shadow constants set colour only. Offset, blur and spread stay with the
+/// widgets, because Bevy's `ShadowStyle` already carries the offsets they use;
+/// the design's CSS geometry is not applied.
+pub const SHADOW_SM_DARK_MODE: Color = Color::srgba(0.0, 0.0, 0.0, 0.2);
 /// A large shadow on a dark background: black, and heavy enough to show.
 pub const SHADOW_LG_DARK_MODE: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
 /// The large shadow on a light background: a warm dark.
