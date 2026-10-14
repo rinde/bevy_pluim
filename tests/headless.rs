@@ -4611,3 +4611,31 @@ fn filter_chips_and_a_gallery_leave_exactly_one_ui_root() {
     }
     assert_eq!(ui_root_count(&mut app), 1);
 }
+
+#[test]
+fn a_numeric_stepper_is_a_spin_button_with_numeric_bounds_and_step() {
+    let mut app = headless_app();
+    let (stepper, _, increase) = spawn_stepper(&mut app, 1);
+
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.role(), accesskit::Role::SpinButton);
+    assert_eq!(node.numeric_value(), Some(1.0));
+    assert_eq!(node.min_numeric_value(), Some(0.0));
+    assert_eq!(node.max_numeric_value(), Some(3.0));
+    assert_eq!(node.numeric_value_step(), Some(1.0));
+    assert_eq!(node.value(), Some("1"));
+    assert_eq!(node.label(), None);
+
+    activate(&mut app, increase);
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(2.0));
+    assert_eq!(node.value(), Some("2"));
+}

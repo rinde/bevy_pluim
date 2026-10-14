@@ -1,0 +1,19 @@
+// A numeric stepper is one spin button: its own node says the value as text and
+// follows it when "+" is clicked, and its `name` is the label. The value text has
+// no node of its own.
+(
+    format_version: 3,
+    name: "a numeric stepper is a spin button with a value and a label",
+    setup: App(NumericStepper),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Name("u16 stepper"), role: Some("SpinButton"), label: Some("Cars"), value: Some("10"), states: []))),
+        Check(App(Accessible(of: Name("default stepper"), role: Some("SpinButton"), label: None, value: Some("1"), states: []))),
+        MoveTo(Within(Name("u16 stepper"), Name("Increase"))), Click(Left),
+        Check(App(Accessible(of: Name("u16 stepper"), role: Some("SpinButton"), label: Some("Cars"), value: Some("11"), states: []))),
+        MoveTo(Within(Name("first mirror stepper"), Name("Increase"))), Click(Left),
+        Check(App(Accessible(of: Name("shared stepper"), role: Some("SpinButton"), label: None, value: Some("4"), states: []))),
+        Check(App(Accessible(of: Name("second mirror stepper"), role: Some("SpinButton"), label: None, value: Some("4"), states: []))),
+    ],
+    expect: [],
+)

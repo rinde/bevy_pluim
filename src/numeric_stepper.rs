@@ -1,5 +1,7 @@
 //! `NumericStepper`: a value with a decrease and an increase button.
 
+use accesskit::{Node as AccessNode, Role};
+use bevy::a11y::AccessibilityNode;
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::relationship::RelatedSpawner;
@@ -15,7 +17,6 @@ use bevy::ui_widgets::Activate;
 use itertools::Either;
 
 use crate::icon_button::{IconButton, IconButtonSize};
-use crate::label::Label;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`NumericStepper`].
@@ -63,6 +64,11 @@ pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
 /// handle is replaced by a plain minus or plus drawn by the library. The
 /// fields are read when the component is inserted.
 ///
+/// The stepper is one spin button to a screen reader: its own node has the role
+/// `SpinButton`, the value, bounds and step as numbers, the text `format` shows as its
+/// value (kept in step when the value changes, also through a [`ValueRef`]) and `name` as
+/// its label. The value text has no accessibility node of its own, so it is not read twice.
+///
 /// The arrow keys step the value as well, while the focus is on the stepper or on one of
 /// its buttons (the keys bubble up to the stepper): the up and right arrows increase it,
 /// the down and left arrows decrease it, within the same bounds. The stepper is not a
@@ -86,6 +92,8 @@ pub struct NumericStepper {
     pub increase_name: String,
     /// The minimum width of the value label, in logical pixels.
     pub label_min_width: f32,
+    /// The accessible name of the stepper itself; a stepper without one has no label.
+    pub name: Option<String>,
 }
 
 fn default_format(value: &Value) -> String {
@@ -101,6 +109,7 @@ impl Default for NumericStepper {
             decrease_name: "Decrease".into(),
             increase_name: "Increase".into(),
             label_min_width: DEFAULT_LABEL_MIN_WIDTH_PX,
+            name: None,
         }
     }
 }
@@ -168,6 +177,11 @@ impl NumericStepper {
             }
         }
         let stepper_entity = context.entity;
+        let access_node = spin_button(&stepper, &value);
+        world
+            .commands()
+            .entity(context.entity)
+            .insert(AccessibilityNode::from(access_node));
 
         world
             .commands()
@@ -188,7 +202,12 @@ impl NumericStepper {
                         decrease.insert(InteractionDisabled);
                     }
                     spawner.spawn((
-                        Label::regular((stepper.format)(&value)),
+                        Name::new("Value"),
+                        Text((stepper.format)(&value)),
+                        Pickable {
+                            should_block_lower: false,
+                            ..default()
+                        },
                         Node {
                             min_width: Val::Px(stepper.label_min_width),
                             justify_content: JustifyContent::Center,
@@ -219,6 +238,26 @@ impl NumericStepper {
             .commands()
             .run_system_cached_with(theme_numeric_stepper, Some(context.entity));
     }
+}
+
+/// The accessibility node of a stepper showing `value`: a spin button.
+fn spin_button(stepper: &NumericStepper, value: &Value) -> AccessNode {
+    let mut node = AccessNode::new(Role::SpinButton);
+    if let Some(name) = &stepper.name {
+        node.set_label(name.as_str());
+    }
+    set_spin_value(&mut node, stepper.format, value);
+    node
+}
+
+/// Writes the number, bounds, step and text of `value` to `node`.
+fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
+    let (now, min, max, step) = value.numbers();
+    node.set_numeric_value(now);
+    node.set_min_numeric_value(min);
+    node.set_max_numeric_value(max);
+    node.set_numeric_value_step(step);
+    node.set_value(format(value));
 }
 
 /// Points a [`NumericStepper`] to the entity holding its [`Value`].
@@ -344,6 +383,41 @@ impl Value {
         stepped.decrement()
     }
 
+    /// The value, minimum, maximum and step as `f64`s.
+    fn numbers(&self) -> (f64, f64, f64, f64) {
+        match self {
+            Self::F32 {
+                value,
+                min,
+                max,
+                step,
+            } => (
+                f64::from(*value),
+                f64::from(*min),
+                f64::from(*max),
+                f64::from(*step),
+            ),
+            Self::U8(v) => (
+                f64::from(v.value),
+                f64::from(v.min),
+                f64::from(v.max),
+                f64::from(v.step),
+            ),
+            Self::U16(v) => (
+                f64::from(v.value),
+                f64::from(v.min),
+                f64::from(v.max),
+                f64::from(v.step),
+            ),
+            Self::U32(v) => (
+                f64::from(v.value),
+                f64::from(v.min),
+                f64::from(v.max),
+                f64::from(v.step),
+            ),
+        }
+    }
+
     /// The value as an `f32`, if it is one.
     #[must_use]
     pub const fn as_f32(&self) -> Option<f32> {
@@ -403,8 +477,21 @@ struct NumericStepperLabel(Entity);
 fn theme_numeric_stepper(
     numeric_stepper_ref: In<Option<Entity>>,
     mut numeric_steppers: Query<(&mut Node, &mut BorderColor), With<NumericStepper>>,
+    mut value_texts: Query<(&NumericStepperLabel, &mut TextColor, &mut TextFont)>,
     theme: Res<Theme>,
 ) {
+    for (label, mut text_color, mut text_font) in &mut value_texts {
+        if numeric_stepper_ref.is_some_and(|stepper| stepper != label.0) {
+            continue;
+        }
+        *text_color = TextColor(theme.colors.text_primary);
+        *text_font = TextFont {
+            font: theme.body_font.clone().into(),
+            font_size: FontSize::Px(theme.font_size_secondary),
+            ..default()
+        };
+    }
+
     let it = if let Some(numeric_stepper_ref) = numeric_stepper_ref.as_ref() {
         Either::Left(numeric_steppers.get_mut(*numeric_stepper_ref).into_iter())
     } else {
@@ -479,6 +566,12 @@ fn on_change(
     changed_values: Query<(Entity, &Value), Changed<Value>>,
     mut numeric_stepper_labels: Query<(&ValueRef, &NumericStepperLabel, &mut Text)>,
     steppers: Query<&NumericStepper>,
+    mut spin_buttons: Query<(
+        Entity,
+        Option<&ValueRef>,
+        &NumericStepper,
+        &mut AccessibilityNode,
+    )>,
     decrease: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Decrease>>,
     increase: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Increase>>,
     mut commands: Commands,
@@ -490,6 +583,12 @@ fn on_change(
                     .get(label.0)
                     .map_or(default_format as ValueFormat, |s| s.format);
                 text.0 = format(value);
+            }
+        }
+        for (stepper_entity, stepper_value_ref, stepper, mut node) in &mut spin_buttons {
+            // A stepper holding its own value has no `ValueRef`.
+            if stepper_value_ref.map_or(stepper_entity, |r| r.0) == value_ref {
+                set_spin_value(&mut node, stepper.format, value);
             }
         }
         for (button, button_value_ref, disabled) in &decrease {
