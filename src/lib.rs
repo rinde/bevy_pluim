@@ -24,6 +24,7 @@ pub mod label;
 pub mod link;
 pub mod list;
 pub mod numeric_stepper;
+pub mod panel;
 pub mod pill;
 pub mod push_button;
 pub mod scroll_area;
@@ -57,6 +58,7 @@ use crate::label::LabelPlugin;
 use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
+use crate::panel::PanelPlugin;
 use crate::pill::PillPlugin;
 use crate::push_button::PushButtonPlugin;
 use crate::scroll_area::ScrollAreaPlugin;
@@ -103,6 +105,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(FilterChipsPlugin)
             .add_plugins(ToolbarPlugin)
             .add_plugins(NumericStepperPlugin)
+            .add_plugins(PanelPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)
             .add_plugins(LinkPlugin)
