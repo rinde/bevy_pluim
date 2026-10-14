@@ -1359,7 +1359,8 @@ pub enum Variant {
 /// The accessible name of a colour: its Tailwind name (`blue-500`) when it is
 /// one of [`COLORS`], else its sRGB hex (`#3b82f6`, with the alpha appended
 /// only when it is not 1).
-pub(crate) fn color_name(color: Color) -> String {
+#[must_use]
+pub fn color_name(color: Color) -> String {
     COLORS
         .iter()
         .find(|tailwind| tailwind.color == color)

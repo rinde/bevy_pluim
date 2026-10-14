@@ -33,7 +33,7 @@ use rin_bevy_ui::combo::{Combo, ComboList};
 use rin_bevy_ui::filter_chips::Chip;
 use rin_bevy_ui::list::List;
 use rin_bevy_ui::select::{Item, Selection, SelectionValue};
-use rin_bevy_ui::tailwind::{COLORS, TailwindColor};
+use rin_bevy_ui::tailwind::color_name;
 use rin_bevy_ui_tester::targets::resolve;
 use rin_bevy_ui_tester::{AppCheck, CheckResult, Probe, ReflectAppCheck, Target};
 
@@ -336,19 +336,9 @@ fn label_of(world: &World, item: Entity) -> String {
         return data.label.clone();
     }
     if let Some(Item { data }) = world.get::<Item<Color>>(item) {
-        return COLORS
-            .iter()
-            .find(|tailwind| tailwind.color == *data)
-            .map_or_else(|| format!("{data:?}"), tailwind_name);
+        return color_name(*data);
     }
     format!("an item without a label ({item})")
-}
-
-/// The Tailwind name of a colour: `blue-500`.
-fn tailwind_name(tailwind: &TailwindColor) -> String {
-    let class = format!("{:?}", tailwind.class).to_lowercase();
-    let variant = format!("{:?}", tailwind.variant);
-    format!("{class}-{}", variant.trim_start_matches('V'))
 }
 
 /// Adds a `Selected` for each widget with a `W` (and passing the filter `F`)
