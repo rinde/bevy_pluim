@@ -4,6 +4,11 @@
 //! [`TabIndex`] and `draw_focus_ring` draws the [`ThemeColors::focus_ring`](crate::theme::ThemeColors)
 //! around the focused one while the focus is visible.
 
+#![expect(
+    clippy::redundant_pub_crate,
+    reason = "the module is crate-private so FocusPlugin stays out of the public API, while its items keep pub(crate) to say how far they reach (pub would trip unreachable_pub)"
+)]
+
 use accesskit::Role;
 use bevy::a11y::{AccessibilityNode, AccessibilitySystems};
 use bevy::camera::visibility::VisibilitySystems;
@@ -21,7 +26,7 @@ use crate::theme::Theme;
 ///
 /// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
-pub struct FocusPlugin;
+pub(crate) struct FocusPlugin;
 
 impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
