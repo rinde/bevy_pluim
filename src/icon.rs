@@ -44,6 +44,8 @@ pub enum IconColor {
     DangerText,
     /// [`ThemeColors::warning_text`].
     WarningText,
+    /// [`ThemeColors::danger_hover_text`], the text of a dangerous action while hovered.
+    DangerHoverText,
 }
 
 impl IconColor {
@@ -59,6 +61,7 @@ impl IconColor {
             Self::AccentSubtleText => colors.accent_subtle_text,
             Self::DangerText => colors.danger_text,
             Self::WarningText => colors.warning_text,
+            Self::DangerHoverText => colors.danger_hover_text,
         }
     }
 }

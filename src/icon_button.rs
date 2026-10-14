@@ -37,7 +37,20 @@ impl Plugin for IconButtonPlugin {
     }
 }
 
-/// The two sizes of an [`IconButton`].
+/// What an [`IconButton`] or a [`Tool`](crate::toolbar::Tool) of a
+/// [`Toolbar`](crate::toolbar::Toolbar) means, which picks its colours.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
+pub enum Tone {
+    /// The ordinary colours.
+    #[default]
+    Neutral,
+    /// A warning: the warning background, border and text.
+    Warning,
+    /// A dangerous action: the danger hover text, and the danger fill when on.
+    Danger,
+}
+
+/// The sizes of an [`IconButton`].
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum IconButtonSize {
     /// A 44 px button with a 22 px icon.
@@ -46,6 +59,8 @@ pub enum IconButtonSize {
     /// A 30 px button with a 16 px icon, whose icon is secondary text until the
     /// pointer is on the button.
     Small,
+    /// A 54 px button with a 24 px icon.
+    Large,
 }
 
 impl IconButtonSize {
@@ -55,6 +70,7 @@ impl IconButtonSize {
         match self {
             Self::Regular => 44.0,
             Self::Small => 30.0,
+            Self::Large => 54.0,
         }
     }
 
@@ -64,12 +80,20 @@ impl IconButtonSize {
         match self {
             Self::Regular => 22.0,
             Self::Small => 16.0,
+            Self::Large => 24.0,
         }
     }
 }
 
 /// A button that shows an [`Icon`] and nothing else: no border, the control
 /// radius and the primary background, the hover background under the pointer.
+///
+/// Its [`Tone`] changes the colours. A [`Tone::Warning`] button has the warning
+/// background, a 1 px warning border, a warning icon and a large shadow, is
+/// brighter under the pointer, and while on (a [`ToggleState`], such as its panel being open) shows
+/// a 3 px bar in the warning border colour. A [`Tone::Danger`] button turns its
+/// icon the danger hover colour under the pointer and, when on, is filled with
+/// the danger colour.
 ///
 /// It is a [`bevy::ui_widgets::Button`], so an action observes
 /// [`Activate`] on it, and it is disabled by
@@ -89,6 +113,8 @@ impl IconButtonSize {
         ..default()
     },
     BackgroundColor::default(),
+    BorderColor::default(),
+    BoxShadow::default(),
     Name::new("IconButton"),
     Button,
     Hovered,
@@ -101,6 +127,8 @@ pub struct IconButton {
     pub name: String,
     /// The size of the button.
     pub size: IconButtonSize,
+    /// What the button means; picks its colours.
+    pub tone: Tone,
 }
 
 /// Whether a toggle [`IconButton`] is on, such as a pause button while the game
@@ -145,7 +173,15 @@ impl IconButton {
             icon,
             name: name.into(),
             size,
+            tone: Tone::Neutral,
         }
+    }
+
+    /// This button with `tone`.
+    #[must_use]
+    pub const fn with_tone(mut self, tone: Tone) -> Self {
+        self.tone = tone;
+        self
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -175,37 +211,100 @@ impl IconButton {
     }
 }
 
-/// The background and the icon colour of a button, from its state.
+/// What the pointer and the app are doing to a button.
 #[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "the four independent facts of a button's state"
+    clippy::struct_excessive_bools,
+    reason = "four independent facts of a button's state"
 )]
-const fn look(
-    colors: &ThemeColors,
-    size: IconButtonSize,
+#[derive(Copy, Clone, Debug, Default)]
+struct ButtonState {
     disabled: bool,
     pressed: bool,
     hovered: bool,
     on: bool,
-) -> (Color, IconColor) {
+}
+
+/// How a button looks.
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Look {
+    background: Color,
+    border: Option<Color>,
+    icon: IconColor,
+    /// The colour and height of the bar along the bottom edge, when it shows.
+    bar: Option<(Color, f32)>,
+}
+
+/// The height of the bar of an on [`Tone::Warning`] button, in logical pixels.
+const WARNING_BAR_HEIGHT_PX: f32 = 3.0;
+/// How far a warning button moves from its background to its border colour under the pointer.
+const WARNING_BRIGHTEN: f32 = 0.25;
+
+/// The look of a button from its tone, size and state.
+fn look(colors: &ThemeColors, tone: Tone, size: IconButtonSize, state: ButtonState) -> Look {
+    let ButtonState {
+        disabled,
+        pressed,
+        hovered,
+        on,
+    } = state;
     if disabled {
-        return (colors.background_primary, IconColor::TextDisabled);
+        return Look {
+            background: colors.background_primary,
+            border: None,
+            icon: IconColor::TextDisabled,
+            bar: None,
+        };
     }
-    if on {
-        return (colors.accent_subtle, IconColor::AccentSubtleText);
+    match tone {
+        Tone::Warning => {
+            let background = if hovered || pressed || on {
+                colors
+                    .warning_background
+                    .mix(&colors.warning_border, WARNING_BRIGHTEN)
+            } else {
+                colors.warning_background
+            };
+            Look {
+                background,
+                border: Some(colors.warning_border),
+                icon: IconColor::WarningText,
+                bar: on.then_some((colors.warning_border, WARNING_BAR_HEIGHT_PX)),
+            }
+        }
+        Tone::Danger if on => Look {
+            background: colors.danger,
+            border: None,
+            icon: IconColor::DangerText,
+            bar: None,
+        },
+        Tone::Danger | Tone::Neutral => {
+            let background = if on {
+                colors.accent_subtle
+            } else if pressed {
+                colors.selected_hovered_item
+            } else if hovered {
+                colors.hovered_item
+            } else {
+                colors.background_primary
+            };
+            let icon = if on {
+                IconColor::AccentSubtleText
+            } else if tone == Tone::Danger && (hovered || pressed) {
+                IconColor::DangerHoverText
+            } else if size == IconButtonSize::Small && !hovered {
+                IconColor::TextSecondary
+            } else {
+                IconColor::TextPrimary
+            };
+            Look {
+                background,
+                border: None,
+                icon,
+                bar: (on && tone == Tone::Neutral)
+                    .then_some((colors.accent_subtle_bar, BAR_HEIGHT_PX)),
+            }
+        }
     }
-    let background = if pressed {
-        colors.selected_hovered_item
-    } else if hovered {
-        colors.hovered_item
-    } else {
-        colors.background_primary
-    };
-    let icon = match size {
-        IconButtonSize::Small if !hovered => IconColor::TextSecondary,
-        _ => IconColor::TextPrimary,
-    };
-    (background, icon)
 }
 
 /// Flips the [`ToggleState`] of a button that has one.
@@ -232,6 +331,7 @@ fn handle_hover(
             &IconButton,
             &IconButtonRefs,
             &mut BackgroundColor,
+            &mut BorderColor,
             Option<&ToggleState>,
         ),
         Without<InteractionDisabled>,
@@ -246,11 +346,20 @@ fn handle_hover(
     let pressed = matches!(kind, MouseKind::Pressed);
     let hovered = !matches!(kind, MouseKind::Out);
     let target = trigger.event().event_target();
-    if let Ok((button, refs, mut background, toggle)) = buttons.get_mut(target) {
+    if let Ok((button, refs, mut background, mut border, toggle)) = buttons.get_mut(target) {
         let on = toggle.is_some_and(|t| t.0);
-        let (color, icon) = look(&theme.colors, button.size, false, pressed, hovered, on);
-        *background = BackgroundColor(color);
-        commands.entity(refs.icon_id).insert(Icon { color: icon });
+        let state = ButtonState {
+            disabled: false,
+            pressed,
+            hovered,
+            on,
+        };
+        let look = look(&theme.colors, button.tone, button.size, state);
+        *background = BackgroundColor(look.background);
+        border.set_all(look.border.unwrap_or(Color::NONE));
+        commands
+            .entity(refs.icon_id)
+            .insert(Icon { color: look.icon });
     }
 }
 
@@ -294,6 +403,8 @@ fn theme_icon_buttons(
         &IconButton,
         &IconButtonRefs,
         &mut BackgroundColor,
+        &mut BorderColor,
+        &mut BoxShadow,
         &mut Node,
         Has<InteractionDisabled>,
         Has<Pressed>,
@@ -310,19 +421,46 @@ fn theme_icon_buttons(
     } else {
         Either::Right(buttons.iter_mut())
     };
-    for (entity, button, refs, mut background, mut node, disabled, pressed, hovered, toggle, bar) in
-        it
+    for (
+        entity,
+        button,
+        refs,
+        mut background,
+        mut border,
+        mut shadow,
+        mut node,
+        disabled,
+        pressed,
+        hovered,
+        toggle,
+        bar,
+    ) in it
     {
         let on = toggle.is_some_and(|t| t.0);
-        let (color, icon_color) = look(
-            &theme.colors,
-            button.size,
+        let state = ButtonState {
             disabled,
             pressed,
-            hovered.get(),
+            hovered: hovered.get(),
             on,
-        );
+        };
+        let Look {
+            background: color,
+            border: border_color,
+            icon: icon_color,
+            bar: bar_look,
+        } = look(&theme.colors, button.tone, button.size, state);
         background.0 = color;
+        border.set_all(border_color.unwrap_or(Color::NONE));
+        node.border = if border_color.is_some() {
+            UiRect::all(theme.border_thickness)
+        } else {
+            UiRect::ZERO
+        };
+        *shadow = if button.tone == Tone::Warning {
+            BoxShadow::from(theme.large_shadow())
+        } else {
+            BoxShadow::default()
+        };
         node.width = Val::Px(button.size.button_px());
         node.height = Val::Px(button.size.button_px());
         node.border_radius = BorderRadius::all(theme.control_radius);
@@ -334,11 +472,17 @@ fn theme_icon_buttons(
                 left: theme.control_radius,
                 right: theme.control_radius,
                 bottom: Val::Px(0.0),
-                height: Val::Px(BAR_HEIGHT_PX),
-                display: if on { Display::Flex } else { Display::None },
+                height: Val::Px(bar_look.map_or(BAR_HEIGHT_PX, |(_, height)| height)),
+                display: if bar_look.is_some() {
+                    Display::Flex
+                } else {
+                    Display::None
+                },
                 ..default()
             };
-            let bar_color = BackgroundColor(theme.colors.accent_subtle_bar);
+            let bar_color = BackgroundColor(
+                bar_look.map_or(theme.colors.accent_subtle_bar, |(color, _)| color),
+            );
             match bar.and_then(|b| bars.get_mut(b.0).ok()) {
                 Some((mut n, mut c)) => {
                     *n = bar_node;

@@ -36,7 +36,7 @@ use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::{Icon, IconColor};
-use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState};
+use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
@@ -4084,5 +4084,159 @@ fn only_the_buttons_of_an_underlined_toolbar_have_a_tooltip_with_their_label() {
     );
     for button in toolbar_buttons(&app, filled) {
         assert!(app.world().get::<Tooltip>(button).is_none());
+    }
+}
+
+fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Tone", size).with_tone(tone),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    button
+}
+
+fn icon_tint(app: &App, button: Entity) -> Color {
+    let icon = app.world().get::<IconButtonRefs>(button).unwrap().icon_id;
+    app.world().get::<ImageNode>(icon).unwrap().color
+}
+
+#[test]
+fn a_warning_icon_button_has_the_warning_colours_at_rest_hovered_and_on() {
+    let mut app = headless_app();
+    let button = spawn_toned_icon_button(&mut app, Tone::Warning, IconButtonSize::Large);
+    let light = DEFAULT_LIGHT_THEME_COLORS;
+
+    let node = app.world().get::<Node>(button).unwrap();
+    assert_eq!((node.width, node.height), (Val::Px(54.0), Val::Px(54.0)));
+    assert_eq!(node.border, UiRect::all(Val::Px(1.0)));
+    assert_eq!(background(&app, button), light.warning_background);
+    assert_eq!(border_top(&app, button), light.warning_border);
+    assert_eq!(icon_tint(&app, button), light.warning_text);
+    assert_eq!(
+        app.world().get::<BoxShadow>(button).unwrap().0[0].color,
+        light.large_shadow
+    );
+
+    // Hovered, under the dark theme.
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    hover_and_toggle_theme(&mut app, button);
+    app.update();
+    let brighter = dark.warning_background.mix(&dark.warning_border, 0.25);
+    assert_eq!(background(&app, button), brighter);
+    assert_ne!(brighter, dark.warning_background);
+    assert_eq!(border_top(&app, button), dark.warning_border);
+    assert_eq!(icon_tint(&app, button), dark.warning_text);
+
+    // On: a 3 px bar in the border colour.
+    app.world_mut().entity_mut(button).insert(ToggleState(true));
+    app.update();
+    app.update();
+    let bar = app.world().get::<Children>(button).unwrap()[1];
+    let bar_node = app.world().get::<Node>(bar).unwrap();
+    assert_eq!(bar_node.display, Display::Flex);
+    assert_eq!(bar_node.height, Val::Px(3.0));
+    assert_eq!(
+        app.world().get::<BackgroundColor>(bar).unwrap().0,
+        dark.warning_border
+    );
+}
+
+#[test]
+fn a_danger_icon_button_turns_danger_when_hovered_and_filled_when_on() {
+    let mut app = headless_app();
+    let button = spawn_toned_icon_button(&mut app, Tone::Danger, IconButtonSize::Regular);
+    let light = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, button), light.background_primary);
+    assert_eq!(icon_tint(&app, button), light.text_primary);
+    assert_eq!(
+        app.world().get::<Node>(button).unwrap().border,
+        UiRect::ZERO
+    );
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    hover_and_toggle_theme(&mut app, button);
+    app.update();
+    assert_eq!(background(&app, button), dark.hovered_item);
+    assert_eq!(icon_tint(&app, button), dark.danger_hover_text);
+
+    app.world_mut().entity_mut(button).insert(ToggleState(true));
+    app.update();
+    app.update();
+    assert_eq!(background(&app, button), dark.danger);
+    assert_eq!(icon_tint(&app, button), dark.danger_text);
+}
+
+#[test]
+fn a_neutral_icon_button_keeps_its_ordinary_colours() {
+    let mut app = headless_app();
+    let button = spawn_toned_icon_button(&mut app, Tone::Neutral, IconButtonSize::Regular);
+    let light = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, button), light.background_primary);
+    assert_eq!(icon_tint(&app, button), light.text_primary);
+
+    app.world_mut().entity_mut(button).insert(ToggleState(true));
+    app.update();
+    app.update();
+    assert_eq!(background(&app, button), light.accent_subtle);
+}
+
+#[test]
+fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
+    for style in [ToolbarStyle::Filled, ToolbarStyle::Underlined] {
+        let mut app = headless_app();
+        let root = app.world_mut().spawn(Node::default()).id();
+        let toolbar = app
+            .world_mut()
+            .spawn((
+                Toolbar::new(style),
+                Selection::builder().zero_or_one().build_with_items([
+                    Item {
+                        data: Tool::new(Handle::default(), "Select"),
+                    },
+                    Item {
+                        data: Tool::new(Handle::default(), "Bulldoze").with_tone(Tone::Danger),
+                    },
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+        for _ in 0..3 {
+            app.update();
+        }
+        let buttons = toolbar_buttons(&app, toolbar);
+        let bulldoze = buttons[1];
+        let tint = |app: &App, b: Entity| {
+            let icon = app.world().get::<ToolbarButtonRefs>(b).unwrap().icon;
+            app.world().get::<ImageNode>(icon).unwrap().color
+        };
+        let light = DEFAULT_LIGHT_THEME_COLORS;
+        assert_eq!(background(&app, bulldoze), Color::NONE);
+
+        app.world_mut().entity_mut(bulldoze).insert(Hovered(true));
+        app.world_mut().run_schedule(Update);
+        app.world_mut().run_schedule(Update);
+        assert_eq!(background(&app, bulldoze), light.hovered_item);
+        assert_eq!(tint(&app, bulldoze), light.danger_hover_text);
+        let refs = *app.world().get::<ToolbarButtonRefs>(bulldoze).unwrap();
+        if let Some(label) = refs.label {
+            assert_eq!(
+                app.world().get::<TextColor>(label).unwrap().0,
+                light.danger_hover_text
+            );
+        }
+
+        app.world_mut().entity_mut(bulldoze).insert(Hovered(false));
+        activate(&mut app, bulldoze);
+        app.update();
+        assert_eq!(background(&app, bulldoze), light.danger);
+        assert_eq!(tint(&app, bulldoze), light.danger_text);
+        // The neutral tool next to it is untouched.
+        assert_eq!(background(&app, buttons[0]), Color::NONE);
     }
 }
