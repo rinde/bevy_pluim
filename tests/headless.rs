@@ -4527,6 +4527,39 @@ fn a_badge_on_a_toolbar_item_shows_on_its_button_and_follows_the_item() {
     assert_eq!(badge_under(&app, buttons[1]), None);
 }
 
+#[test]
+fn a_badge_on_a_toolbar_item_describes_its_button_for_accessibility() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().one(),
+    );
+    let buttons = toolbar_buttons(&app, toolbar);
+    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item;
+    let description = |app: &App, button: Entity| {
+        app.world()
+            .get::<AccessibilityNode>(button)
+            .and_then(|node| node.description().map(str::to_owned))
+    };
+    assert_eq!(description(&app, buttons[1]), None);
+
+    app.world_mut().entity_mut(item).insert(Badge::count(6));
+    settle(&mut app);
+    assert_eq!(description(&app, buttons[1]).as_deref(), Some("6"));
+    assert_eq!(description(&app, buttons[0]), None);
+    let (badge, _) = badge_under(&app, buttons[1]).unwrap();
+    assert!(app.world().get::<AccessibilityNode>(badge).is_none());
+
+    app.world_mut().entity_mut(item).insert(Badge::count(7));
+    settle(&mut app);
+    assert_eq!(description(&app, buttons[1]).as_deref(), Some("7"));
+
+    app.world_mut().entity_mut(item).remove::<Badge>();
+    settle(&mut app);
+    assert_eq!(description(&app, buttons[1]), None);
+}
+
 fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app

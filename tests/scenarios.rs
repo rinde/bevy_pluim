@@ -166,6 +166,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Badge,
         WidgetsSetup::IconButtons,
         WidgetsSetup::Tooltip,
+        WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
     ];
     for screen in screens {

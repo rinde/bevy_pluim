@@ -9,7 +9,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
-use crate::focus::{AccessibilitySync, TabStop, sync_role};
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role};
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
 
@@ -122,9 +122,10 @@ fn on_insert_link_state(t: On<Insert, LinkState>, q: Query<&LinkState>, mut comm
 /// It runs every frame rather than on change: Bevy's reset of the role happens when the
 /// link's `Button` changes, which the link's `AccessibilityNode` does not show, so there is no
 /// cheaper filter. `sync_role` writes only when the role differs, so nothing is marked changed.
-fn sync_accessibility(mut links: Query<&mut AccessibilityNode, With<Link>>) {
-    for mut node in &mut links {
+fn sync_accessibility(mut links: Query<(&Link, &mut AccessibilityNode)>) {
+    for (link, mut node) in &mut links {
         sync_role(&mut node, Role::Link);
+        sync_label(&mut node, &link.label);
     }
 }
 
