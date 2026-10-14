@@ -1,0 +1,22 @@
+// The accessibility node of a widget in a hidden `Stack` panel is hidden
+// (`Display::None` on the panel) and of the shown one is not; they swap when
+// the tab changes. Panel A has palette combos (`ColorPushButton`s), Panel B a
+// list whose first row is "1".
+(
+    format_version: 3,
+    name: "widgets in a hidden stack panel are hidden from the accessibility tree",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Component("ColorPushButton"))), role: None, label: None, value: None, states: [Shown]))),
+        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Component("ColorPushButton"))), role: None, label: None, value: None, states: [Hidden]))),
+        Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Role(role: ListItem, label: "1"))), role: None, label: None, value: None, states: [Shown]))),
+        MoveTo(Role(role: ListItem, label: "Panel A")), Click(Left),
+        Wait(2),
+        Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Component("ColorPushButton"))), role: None, label: None, value: None, states: [Shown]))),
+        Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Role(role: ListItem, label: "1"))), role: None, label: None, value: None, states: [Hidden]))),
+    ],
+    expect: [],
+)
