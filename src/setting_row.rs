@@ -1,5 +1,7 @@
 //! `SettingRow`: a title over a description on the left and a slot for a control on the right.
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -35,11 +37,15 @@ impl Plugin for SettingRowPlugin {
 /// The row does not make the control: spawn it as a child of
 /// [`SettingRowRefs::control_slot`]. Put the rows in a [`SettingRows`] column, which keeps the
 /// divider between consecutive rows and none after the last.
+///
+/// To assistive technology it is a group ([`Role::Group`]) labelled with its title and
+/// described by its description.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_add=Self::on_add)]
 #[require(
     Name::new("SettingRow"),
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::Group)),
     Node {
         flex_direction: FlexDirection::Column,
         align_self: AlignSelf::Stretch,
@@ -96,6 +102,10 @@ impl SettingRow {
         };
         let title = row.title.clone();
         let description = row.description.clone();
+        if let Some(mut node) = world.get_mut::<AccessibilityNode>(context.entity) {
+            node.set_label(title.as_str());
+            node.set_description(description.as_str());
+        }
 
         let mut title_id = Entity::PLACEHOLDER;
         let mut description_id = Entity::PLACEHOLDER;

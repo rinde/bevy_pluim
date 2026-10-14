@@ -3,6 +3,7 @@
 //! The popup closes again on a click outside of it. From the keyboard, opening it puts the
 //! focus on its list and Escape closes it again.
 
+use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -14,10 +15,13 @@ use bevy::ui_widgets::Activate;
 use itertools::Itertools;
 
 use crate::float::Float;
-use crate::focus::{Unreachable, popup_focus_lost, popup_key_closes};
+use crate::focus::{
+    AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
+    sync_role, sync_value,
+};
 use crate::list::{List, NoDefaultItems};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
-use crate::select::{Item, Selection, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
 
@@ -30,6 +34,7 @@ pub struct ComboPlugin;
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (close_combos_on_outside_click, selection_change))
+            .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_insert_combo);
     }
 }
@@ -37,8 +42,11 @@ impl Plugin for ComboPlugin {
 /// A button that opens a [`List`] in a [`Float`].
 ///
 /// The popup closes again on a click outside of it. The button toggles it when
-/// it is [`Activate`]d (a click, or Enter or Space on a focused button) and says
-/// whether it is open as `aria-expanded` on its [`AccessibilityNode`].
+/// it is [`Activate`]d (a click, or Enter or Space on a focused button).
+///
+/// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a
+/// label: its value is the text of the selected items joined with ", " (empty for none),
+/// it is expanded while the popup is open, and it controls the popup's list.
 ///
 /// Opening the popup moves the keyboard focus to its list, so the arrow keys, Enter and
 /// Space work on it. Escape closes it, as does the focus leaving the list (Tab away, a click
@@ -299,18 +307,47 @@ fn update_selection(
     let label = if selection.is_empty() {
         PLACEHOLDER_TEXT.to_string()
     } else {
-        selection
-            .iter()
-            .map(|item| {
-                if item == Entity::PLACEHOLDER {
-                    ""
-                } else {
-                    items.get(item).map_or("", |item| item.data.as_str())
-                }
-            })
-            .join(", ")
+        selected_text(selection, &items)
     };
     text.0 = label;
+}
+
+/// The text of the items in `selection`, joined with ", ".
+fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> String {
+    selection
+        .iter()
+        .map(|item| {
+            if item == Entity::PLACEHOLDER {
+                ""
+            } else {
+                items.get(item).map_or("", |item| item.data.as_str())
+            }
+        })
+        .join(", ")
+}
+
+/// Keeps the button of each combo a combo box to assistive technology, with the text of the
+/// selected items as its value and the popup's list as what it controls. Neither the chevron
+/// nor the placeholder is part of it: with nothing selected the value is empty. Bevy makes a
+/// node a button again when its `Button` changes, so this runs after it.
+fn sync_accessibility(
+    combos: Query<(Entity, &ComboSubRefs), With<Combo>>,
+    selections: SelectionParam,
+    items: Query<&Item<String>>,
+    mut nodes: Query<&mut AccessibilityNode>,
+) {
+    for (combo, sub_refs) in &combos {
+        let Ok(mut node) = nodes.get_mut(sub_refs.button_id) else {
+            continue;
+        };
+        let value = selections
+            .get(combo)
+            .map_or_else(String::new, |selection| selected_text(selection, &items));
+        sync_role(&mut node, Role::ComboBox);
+        clear_label(&mut node);
+        sync_value(&mut node, &value);
+        sync_controls(&mut node, sub_refs.list_id);
+    }
 }
 
 /// Closes an open combo when the left button is released outside of it.

@@ -1,6 +1,7 @@
 //! `Panel`: a card with a header, a close button and a body that grows to a
 //! maximum height and then scrolls.
 
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -8,6 +9,7 @@ use bevy::ui_widgets::Activate;
 
 use crate::card::Card;
 use crate::divider::Divider;
+use crate::focus::sync_label;
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::label::Label;
 use crate::scroll_area::ScrollArea;
@@ -44,6 +46,8 @@ pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 ///
 /// Insert a `Panel` again to change the title, the subtitle, the close button or
 /// the maximum height of a live panel.
+///
+/// To assistive technology it is a group, as a [`Card`] is, labelled with its title.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -264,16 +268,20 @@ fn spawn_parts(commands: &mut Commands, panel: Entity) {
     });
 }
 
-/// Puts a panel's title, subtitle, close button and maximum height on its parts.
+/// Puts a panel's title, subtitle, close button and maximum height on its parts, and its
+/// title on its accessibility node.
 fn sync_panel(
     panel: In<Entity>,
-    panels: Query<(&Panel, &PanelRefs)>,
+    mut panels: Query<(&Panel, &PanelRefs, Option<&mut AccessibilityNode>)>,
     mut nodes: Query<&mut Node>,
     mut commands: Commands,
 ) {
-    let Ok((panel, refs)) = panels.get(*panel) else {
+    let Ok((panel, refs, accessibility_node)) = panels.get_mut(*panel) else {
         return;
     };
+    if let Some(mut accessibility_node) = accessibility_node {
+        sync_label(&mut accessibility_node, &panel.title);
+    }
     let show = |shown: bool| if shown { Display::Flex } else { Display::None };
     commands
         .entity(refs.title)

@@ -35,7 +35,7 @@ use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
-use rin_bevy_ui::color_push_button::ColorPushButton;
+use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
@@ -1307,6 +1307,49 @@ fn a_color_palette_combo_button_says_whether_its_popup_is_open() {
         Some(&PaletteComboState::Closed)
     );
     assert_eq!(expanded(&app, button), Some(false));
+}
+
+/// The node ids the accessibility node of `entity` says it controls.
+fn controls(app: &App, entity: Entity) -> Vec<u64> {
+    app.world()
+        .get::<AccessibilityNode>(entity)
+        .unwrap()
+        .controls()
+        .iter()
+        .map(|id| id.0)
+        .collect()
+}
+
+#[test]
+fn a_combo_button_controls_its_list() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    let list = app.world().get::<ComboSubRefs>(combo).unwrap().list_id;
+    assert_eq!(controls(&app, button), vec![list.to_bits()]);
+}
+
+#[test]
+fn a_color_palette_combo_button_controls_its_palette() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let (_, button) = spawn_palette_combo(&mut app);
+    let palette = single_entity_with::<ColorPalette>(&mut app);
+    assert_eq!(controls(&app, button), vec![palette.to_bits()]);
+}
+
+#[test]
+fn a_color_push_button_outside_a_combo_is_named_after_its_colour() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app.world_mut().spawn((ColorPushButton, ChildOf(root))).id();
+    app.update();
+    let square = app.world().get::<ColorSquareRef>(button).unwrap().0;
+    app.world_mut().entity_mut(square).insert(BackgroundColor(
+        bevy::color::palettes::tailwind::RED_500.into(),
+    ));
+    app.update();
+    let node = app.world().get::<AccessibilityNode>(button).unwrap();
+    assert_eq!(node.label(), Some("red-500"));
 }
 
 /// A colour palette combo's selection over two colours.
@@ -3589,6 +3632,49 @@ fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
     assert_eq!(
         app.world().get::<ChildOf>(control).unwrap().parent(),
         refs.control_slot
+    );
+}
+
+#[test]
+fn a_setting_row_is_a_group_labelled_with_its_title_and_described_by_its_description() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let row = app
+        .world_mut()
+        .spawn((SettingRow::new("Theme", "Light or dark"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let node = app.world().get::<AccessibilityNode>(row).unwrap();
+    assert_eq!(node.role(), accesskit::Role::Group);
+    assert_eq!(node.label(), Some("Theme"));
+    assert_eq!(node.description(), Some("Light or dark"));
+}
+
+#[test]
+fn a_panel_is_a_group_labelled_with_its_title_which_follows_a_new_panel() {
+    let mut app = headless_app();
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let node = |app: &App| {
+        let node = app.world().get::<AccessibilityNode>(panel).unwrap();
+        (node.role(), node.label().map(str::to_owned))
+    };
+    assert_eq!(
+        node(&app),
+        (accesskit::Role::Group, Some("Trains".to_owned()))
+    );
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Stops"));
+    app.update();
+    app.update();
+    assert_eq!(
+        node(&app),
+        (accesskit::Role::Group, Some("Stops".to_owned()))
     );
 }
 

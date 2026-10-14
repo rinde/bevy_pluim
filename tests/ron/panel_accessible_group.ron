@@ -1,0 +1,32 @@
+// A `Panel` is a group to assistive technology, labelled with its title; its
+// close button keeps its own name.
+(
+    format_version: 3,
+    name: "a panel is a group labelled with its title",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("closable panel"),
+            role: Some("Group"),
+            label: Some("Trains"),
+            value: None,
+            states: [Shown],
+        ))),
+        Check(App(Accessible(
+            of: Name("tall panel"),
+            role: Some("Group"),
+            label: Some("Stops"),
+            value: None,
+            states: [],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("closable panel"), Component("IconButton")),
+            role: Some("Button"),
+            label: Some("Close"),
+            value: None,
+            states: [],
+        ))),
+    ],
+    expect: [],
+)

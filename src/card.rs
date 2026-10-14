@@ -1,5 +1,7 @@
 //! `Card`: a themed background, border, radius and shadow on a node.
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -25,9 +27,15 @@ impl Plugin for CardPlugin {
 }
 
 /// A node with a themed background, border, corner radius and shadow.
+///
+/// To assistive technology it is a group ([`Role::Group`]) of what it holds, without a label.
 #[derive(Component, Copy, Clone, Debug, Reflect)]
 #[reflect(Component)]
-#[require(BoxShadow::default(), Node::default())]
+#[require(
+    BoxShadow::default(),
+    Node::default(),
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::Group)),
+)]
 #[component(on_insert=Self::on_insert)]
 pub struct Card;
 

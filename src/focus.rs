@@ -74,6 +74,34 @@ pub(crate) fn sync_label(node: &mut Mut<AccessibilityNode>, label: &str) {
     }
 }
 
+/// Sets the value of `node` to `value`, writing it only when it differs.
+pub(crate) fn sync_value(node: &mut Mut<AccessibilityNode>, value: &str) {
+    if node.value() != Some(value) {
+        node.set_value(value);
+    }
+}
+
+/// Clears the label of `node`, writing it only when it has one.
+pub(crate) fn clear_label(node: &mut Mut<AccessibilityNode>) {
+    if node.label().is_some() {
+        node.clear_label();
+    }
+}
+
+/// Says that `node` controls `controlled`, the widget it opens or acts on, writing it only
+/// when it differs.
+pub(crate) fn sync_controls(node: &mut Mut<AccessibilityNode>, controlled: Entity) {
+    let wanted = [node_id(controlled)];
+    if node.controls() != wanted {
+        node.set_controls(wanted);
+    }
+}
+
+/// The id of the accessibility node of `entity`, as Bevy builds it for the platform.
+pub(crate) const fn node_id(entity: Entity) -> accesskit::NodeId {
+    accesskit::NodeId(entity.to_bits())
+}
+
 /// Marks a widget that Tab reaches.
 ///
 /// Its [`TabIndex`] is kept by `sync_tab_index`: 0 while the widget is usable, -1 while it

@@ -1,5 +1,7 @@
 //! `Link`: a clickable text whose look follows its [`LinkState`].
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -7,7 +9,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, TabStop, sync_role};
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
 
@@ -25,6 +27,7 @@ impl Plugin for LinkPlugin {
                 .pipe(theme_link)
                 .run_if(resource_changed::<Theme>),
         )
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
         .add_observer(on_insert_link_state);
     }
 }
@@ -35,6 +38,8 @@ impl Plugin for LinkPlugin {
 /// [`Activate`](bevy::ui_widgets::Activate) when it is used. A
 /// [`LinkState::Disabled`] link keeps its `Button` and has [`InteractionDisabled`]
 /// instead, so it never activates and does not react to the pointer.
+///
+/// To assistive technology it is a link ([`Role::Link`]), not a button.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -109,6 +114,14 @@ fn on_insert_link_state(t: On<Insert, LinkState>, q: Query<&LinkState>, mut comm
         }
     }
     commands.run_system_cached_with(theme_link, Some(link));
+}
+
+/// Keeps each link a link to assistive technology. Bevy makes a node a button again when its
+/// `Button` changes, so this runs after it.
+fn sync_accessibility(mut links: Query<&mut AccessibilityNode, With<Link>>) {
+    for mut node in &mut links {
+        sync_role(&mut node, Role::Link);
+    }
 }
 
 fn handle_hover(

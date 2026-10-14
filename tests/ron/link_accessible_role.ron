@@ -1,0 +1,37 @@
+// A `Link` is a link to assistive technology, not a button: it keeps Bevy's
+// `Button` component (so `Role(role: Button, ..)` still finds a crumb), and its
+// accessibility node says `Link`. The current crumb of a `BreadCrumbs` trail
+// stays a link, a disabled one.
+(
+    format_version: 3,
+    name: "a link is a link to assistive technology",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            role: Some("Link"),
+            label: None,
+            value: None,
+            states: [Disabled],
+        ))),
+        // Home > Panel B: "Home" is an enabled link, "Panel B" the disabled one.
+        MoveTo(Role(role: Button, label: "Go to Panel B")), Click(Left),
+        Wait(2),
+        Check(App(Accessible(
+            of: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            role: Some("Link"),
+            label: None,
+            value: None,
+            states: [Enabled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B")),
+            role: Some("Link"),
+            label: None,
+            value: None,
+            states: [Disabled],
+        ))),
+    ],
+    expect: [],
+)

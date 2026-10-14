@@ -1,0 +1,25 @@
+// A `ScrollArea` is a scroll view to assistive technology, whether or not its
+// contents overflow.
+(
+    format_version: 3,
+    name: "a scroll area is a scroll view",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(
+            of: Name("vertical scroll area"),
+            role: Some("ScrollView"),
+            label: None,
+            value: None,
+            states: [Shown],
+        ))),
+        Check(App(Accessible(
+            of: Name("fitting scroll area"),
+            role: Some("ScrollView"),
+            label: None,
+            value: None,
+            states: [],
+        ))),
+    ],
+    expect: [],
+)

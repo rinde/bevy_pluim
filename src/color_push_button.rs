@@ -8,6 +8,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
+use crate::color_palette_combo::ColorPaletteComboButton;
 use crate::focus::TabStop;
 use crate::tailwind::color_name;
 use crate::theme::Theme;
@@ -100,9 +101,13 @@ impl ColorPushButton {
 
 /// Keeps the label of each button's [`AccessibilityNode`] at the name of its colour.
 /// Bevy clears the label of a button without text when it is added, so this also
-/// sets it again after that.
+/// sets it again after that. The button of a palette combo is left alone: it is a combo
+/// box whose value says the colour.
 fn sync_accessible_names(
-    buttons: Query<(Entity, &ColorSquareRef), With<ColorPushButton>>,
+    buttons: Query<
+        (Entity, &ColorSquareRef),
+        (With<ColorPushButton>, Without<ColorPaletteComboButton>),
+    >,
     squares: Query<&BackgroundColor, With<ColorSquare>>,
     mut nodes: Query<&mut AccessibilityNode>,
 ) {
