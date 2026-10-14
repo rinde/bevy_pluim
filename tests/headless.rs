@@ -24,6 +24,7 @@ use bevy::picking::events::{Click, Out, Over, Pointer, Press, Release};
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
+use bevy::text::LetterSpacing;
 use bevy::ui::{InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use bevy::window::{PrimaryWindow, WindowPlugin};
@@ -2607,7 +2608,7 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
         );
         assert_eq!(
             look(app, overline),
-            (c.text_secondary, FontSize::Px(theme.font_size_caption))
+            (c.text_secondary, FontSize::Px(theme.font_size_overline))
         );
     };
     check(&app);
@@ -2620,10 +2621,21 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
         let mut theme = app.world_mut().get_resource_mut::<Theme>().unwrap();
         theme.light_dark_toggle();
         theme.font_size_small = 13.0;
+        theme.font_size_overline = 12.0;
     }
     app.update();
     app.update();
     check(&app);
+    let overline_font = app.world().entity(overline).get::<TextFont>().unwrap();
+    assert_eq!(overline_font.weight, FontWeight::SEMIBOLD);
+    assert_eq!(
+        app.world().entity(overline).get::<LetterSpacing>().unwrap(),
+        &LetterSpacing::Px(0.5)
+    );
+    assert_eq!(
+        app.world().entity(regular).get::<LetterSpacing>().unwrap(),
+        &LetterSpacing::default()
+    );
 }
 
 #[derive(Resource, Default)]

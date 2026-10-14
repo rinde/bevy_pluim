@@ -68,13 +68,11 @@ pub struct Theme {
     /// Defaults to Bevy's default font; the application loads its own and sets the handle.
     pub display_font: Handle<Font>,
 
-    /// The size of a title, in the display font.
+    /// The size of a title, in the display font (the redesign's display size: 22 px, up from 18).
     #[educe(Default = 22.0)]
     pub font_size_title: f32,
-    /// The size of the title of a row.
-    #[educe(Default = 16.0)]
-    pub font_size_row_title: f32,
-    /// The size of body text.
+    /// The size of body text, also of a [`Link`](crate::link::Link) (the redesign's body size:
+    /// 15 px, down from 18 for links).
     #[educe(Default = 15.0)]
     pub font_size_body: f32,
     /// The size of secondary text: buttons, labels and list items.
@@ -83,9 +81,12 @@ pub struct Theme {
     /// The size of the text of small controls.
     #[educe(Default = 12.0)]
     pub font_size_small: f32,
-    /// The size of captions, overlines and badges.
+    /// The size of key caps ([`Kbd`](crate::kbd::Kbd)).
     #[educe(Default = 10.0)]
     pub font_size_caption: f32,
+    /// The size of an [`Overline`](crate::label::Label::Overline) label, in semibold.
+    #[educe(Default = 11.0)]
+    pub font_size_overline: f32,
     /// The size of the text of a filter chip.
     #[educe(Default = 13.0)]
     pub font_size_chip: f32,
