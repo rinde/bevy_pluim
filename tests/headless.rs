@@ -53,6 +53,7 @@ use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarStyle};
+use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
 /// `combo.rs`/`list.rs` need pointer input and picking resources; all
@@ -3885,4 +3886,131 @@ fn a_theme_change_restyles_the_gallery() {
     let colors = DEFAULT_DARK_THEME_COLORS;
     assert_eq!(border_top(&app, groups[0].1[0]), colors.selection_ring);
     assert_eq!(background(&app, groups[1].1[0]), colors.card_surface);
+}
+
+/// Advances `Time` by 200 ms and runs `Update` only: `PreUpdate`'s `update_is_hovered` would
+/// put the `Hovered` of the headless app, which has no pointer over anything, back to false.
+fn tick(app: &mut App) {
+    app.world_mut()
+        .get_resource_mut::<Time>()
+        .unwrap()
+        .advance_by(std::time::Duration::from_millis(200));
+    app.world_mut().run_schedule(Update);
+}
+
+/// An icon button under a root.
+fn tooltip_app() -> (App, Entity) {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Pause", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    tick(&mut app);
+    tick(&mut app);
+    (app, button)
+}
+
+fn tooltip_popups(app: &mut App) -> Vec<String> {
+    let world = app.world_mut();
+    let mut query = world.query_filtered::<&Children, With<TooltipPopup>>();
+    let children: Vec<Entity> = query
+        .iter(world)
+        .flat_map(RelationshipTarget::iter)
+        .collect();
+    children
+        .into_iter()
+        .filter_map(|c| world.get::<Text>(c).map(|t| t.0.clone()))
+        .collect()
+}
+
+#[test]
+fn hovering_an_icon_button_longer_than_the_delay_shows_its_name_and_leaving_hides_it() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    assert!(
+        tooltip_popups(&mut app).is_empty(),
+        "shown before the delay"
+    );
+
+    for _ in 0..3 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+
+    app.world_mut().entity_mut(button).insert(Hovered(false));
+    tick(&mut app);
+    tick(&mut app);
+    assert!(tooltip_popups(&mut app).is_empty());
+}
+
+#[test]
+fn a_press_hides_the_tooltip_until_the_pointer_has_left_and_returned() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+
+    app.world_mut().entity_mut(button).insert(Pressed);
+    tick(&mut app);
+    tick(&mut app);
+    assert!(tooltip_popups(&mut app).is_empty());
+
+    app.world_mut().entity_mut(button).remove::<Pressed>();
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert!(
+        tooltip_popups(&mut app).is_empty(),
+        "came back while still hovered"
+    );
+
+    app.world_mut().entity_mut(button).insert(Hovered(false));
+    tick(&mut app);
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+}
+
+#[test]
+fn despawning_the_icon_button_removes_its_tooltip() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+
+    app.world_mut().entity_mut(button).despawn();
+    tick(&mut app);
+    assert!(tooltip_popups(&mut app).is_empty());
+}
+
+#[test]
+fn only_the_buttons_of_an_underlined_toolbar_have_a_tooltip_with_their_label() {
+    let mut app = headless_app();
+    let underlined = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().zero_or_one(),
+    );
+    let filled = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    app.update();
+    let rail = toolbar_buttons(&app, underlined)[1];
+    assert_eq!(
+        app.world().get::<Tooltip>(rail).map(|t| t.text.as_str()),
+        Some("Rail")
+    );
+    for button in toolbar_buttons(&app, filled) {
+        assert!(app.world().get::<Tooltip>(button).is_none());
+    }
 }

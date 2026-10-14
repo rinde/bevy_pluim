@@ -41,6 +41,7 @@ use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::stack::Stack;
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton};
+use rin_bevy_ui::tooltip::Tooltip;
 
 fn app_with_widgets() -> App {
     let mut app = App::new();
@@ -111,6 +112,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<GalleryCardView>(registry);
         assert_component::<Toolbar>(registry);
         assert_component::<ToolbarButton>(registry);
+        assert_component::<Tooltip>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
     });
