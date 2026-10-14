@@ -130,7 +130,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click |
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it |
-| `list.rs` | `List` with `ListLayout` and `CornerStyle` (`CornerStyle::Separated` is the panel style: no border or background, 6 px padding, 2 px gaps, rows rounded on all corners, the selected row `hovered_selected_item` with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
+| `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>` |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
@@ -307,7 +307,17 @@ of them (`just example gallery -- --run-all stack link`).
   hover.
   The crumbs of `BreadCrumbs` observe `Activate`; the current crumb is a
   disabled `Link`.
-- **A list can render its own item views.** `ItemViewCreator` (next to the `List`, a registered system, like `Stack`'s `StackChildSpawner`) is run once per item with an `ItemViewSpawner { item, view }` and spawns the contents under the `ItemView`, which the list still owns, spawns and despawns with `ItemsChanged` and themes. The items need not be `Item<String>`. Such a view is `CustomView`: its children take the pointer, so hover colours come from `Hovered` (`custom_view_hover`) and press and release from a global `MouseEvent` observer that walks up from the target to the view, ignoring a target inside a nested `Button` (which handles its own press; `Button` also stops the click from reaching the `ListBox`). Selection and `Selected` are as for default views.
+- **A list can render its own item views.** `ItemViewCreator` (next to the
+  `List`, a registered system, like `Stack`'s `StackChildSpawner`) is run once
+  per item with an `ItemViewSpawner { item, view }` and spawns the contents
+  under the `ItemView`, which the list still owns, spawns and despawns with
+  `ItemsChanged` and themes. The items need not be `Item<String>`. Such a view
+  is `CustomView`: its children take the pointer, so hover colours come from
+  `Hovered` (`custom_view_hover`) and press and release from a global
+  `MouseEvent` observer that walks up from the target to the view, ignoring a
+  target inside a nested `Button` (which handles its own press; `Button` also
+  stops the click from reaching the `ListBox`). Selection and `Selected` are as
+  for default views.
 - **Lists are `ListBox`es, and `Selection` keeps the last word.** A `List` is a
   `bevy::ui_widgets::ListBox` and its `ItemView`s are `ListItem`s (`Selectable`,
   `Role::ListItem`); `WidgetsPlugin` adds `ListBoxPlugin` unless the app has it.

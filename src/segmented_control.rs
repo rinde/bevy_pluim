@@ -53,6 +53,9 @@ impl Plugin for SegmentedControlPlugin {
 
 /// A track of text segments that picks one item, like a small tab bar or a switch.
 ///
+/// The track and its segments are rounded by [`Theme::control_radius`], like the other controls,
+/// not by radii of their own.
+///
 /// Give it a [`Selection`] (own, with its [`Item<String>`]s, or a
 /// [`Selection::Ref`] to one that other widgets share) of the kind
 /// [`SelectionValue::One`](crate::select::SelectionValue::One); it shows one [`Segment`] per
