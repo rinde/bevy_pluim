@@ -933,26 +933,26 @@ fn color_palette(world: &mut World) {
 fn numeric_stepper(world: &mut World) {
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
-        root.spawn((NumericStepper, Name::new("default stepper")));
+        root.spawn((NumericStepper::default(), Name::new("default stepper")));
         root.spawn((
-            NumericStepper,
+            NumericStepper::default(),
             Value::new_u16(10, 5, 15, 1),
             Name::new("u16 stepper"),
         ));
         root.spawn((
-            NumericStepper,
+            NumericStepper::default(),
             Value::new_u32(10, 5, 15, 1),
             Name::new("u32 stepper"),
         ));
         root.spawn((
-            NumericStepper,
+            NumericStepper::default(),
             Value::new_f32(10.0, 5.0, 15.0, 0.5),
             Name::new("f32 stepper"),
         ));
         // A step that does not divide the range: from 7 one more step would
         // pass the maximum of 8, and from 1 one fewer the minimum of 0.
         root.spawn((
-            NumericStepper,
+            NumericStepper::default(),
             Value::new_u8(5, 0, 8, 2),
             Name::new("stepper by two"),
         ));
@@ -960,18 +960,18 @@ fn numeric_stepper(world: &mut World) {
         // point to it through `ValueRef`.
         let shared = root
             .spawn((
-                NumericStepper,
+                NumericStepper::default(),
                 Value::new_u32(3, 0, 6, 1),
                 Name::new("shared stepper"),
             ))
             .id();
         root.spawn((
-            NumericStepper,
+            NumericStepper::default(),
             ValueRef(shared),
             Name::new("first mirror stepper"),
         ));
         root.spawn((
-            NumericStepper,
+            NumericStepper::default(),
             ValueRef(shared),
             Name::new("second mirror stepper"),
         ));

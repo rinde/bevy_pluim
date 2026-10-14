@@ -1,5 +1,6 @@
 //! `NumericStepper`: a value with a decrease and an increase button.
 
+use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnWith;
@@ -8,12 +9,13 @@ use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::FocusedInput;
 use bevy::prelude::*;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 use itertools::Either;
 
+use crate::icon_button::{IconButton, IconButtonSize};
 use crate::label::Label;
-use crate::push_button::PushButton;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`NumericStepper`].
@@ -38,28 +40,105 @@ impl Plugin for NumericStepperPlugin {
     }
 }
 
+/// How a [`NumericStepper`] shows its [`Value`].
+pub type ValueFormat = fn(&Value) -> String;
+
+/// The default width of the value label, in logical pixels, so that the buttons
+/// do not move as the text changes.
+pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
+
 /// A [`Value`] with a decrease and an increase button.
 ///
 /// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
 ///
-/// The buttons are [`PushButton`]s that change the value when they are
+/// The buttons are small [`IconButton`]s that change the value when they are
 /// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
 /// [`InteractionDisabled`] until the value moves away from that bound again. The
 /// stepper owns that component on its buttons: it enables a button whenever the
 /// value allows a step, so do not disable one yourself.
 ///
+/// The application chooses how the value is shown with `format` (the
+/// default is [`Value`]'s `Display`), the icons and accessible names of the
+/// buttons, and the minimum width of the value label. An icon left at its default
+/// handle is replaced by a plain minus or plus drawn by the library. The
+/// fields are read when the component is inserted.
+///
 /// The arrow keys step the value as well, while the focus is on the stepper or on one of
 /// its buttons (the keys bubble up to the stepper): the up and right arrows increase it,
 /// the down and left arrows decrease it, within the same bounds. The stepper is not a
 /// tab stop itself; its buttons are.
-#[derive(Component, Clone, Copy, Debug, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component, from_reflect = false)]
 #[component(on_insert=Self::on_insert)]
 #[require(Node::default())]
-pub struct NumericStepper;
+pub struct NumericStepper {
+    /// Turns the value into the text between the buttons.
+    #[reflect(ignore)]
+    pub format: ValueFormat,
+    /// The icon of the decrease button, white on transparent (see
+    /// [`Icon`](crate::icon::Icon)).
+    pub decrease_icon: Handle<Image>,
+    /// The icon of the increase button.
+    pub increase_icon: Handle<Image>,
+    /// The accessible name of the decrease button, also its `Name`.
+    pub decrease_name: String,
+    /// The accessible name of the increase button, also its `Name`.
+    pub increase_name: String,
+    /// The minimum width of the value label, in logical pixels.
+    pub label_min_width: f32,
+}
+
+fn default_format(value: &Value) -> String {
+    value.to_string()
+}
+
+impl Default for NumericStepper {
+    fn default() -> Self {
+        Self {
+            format: default_format,
+            decrease_icon: Handle::default(),
+            increase_icon: Handle::default(),
+            decrease_name: "Decrease".into(),
+            increase_name: "Increase".into(),
+            label_min_width: DEFAULT_LABEL_MIN_WIDTH_PX,
+        }
+    }
+}
+
+/// A white-on-transparent 16 px minus or plus.
+fn glyph(plus: bool) -> Image {
+    const SIZE: u32 = 16;
+    let mut data = vec![0u8; (SIZE * SIZE * 4) as usize];
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let horizontal = (7..9).contains(&y) && (2..14).contains(&x);
+            let vertical = plus && (7..9).contains(&x) && (2..14).contains(&y);
+            if horizontal || vertical {
+                let at = ((y * SIZE + x) * 4) as usize;
+                if let Some(pixel) = data.get_mut(at..at + 4) {
+                    pixel.copy_from_slice(&[255; 4]);
+                }
+            }
+        }
+    }
+    Image::new(
+        Extent3d {
+            width: SIZE,
+            height: SIZE,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    )
+}
 
 impl NumericStepper {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let Some(stepper) = world.entity(context.entity).get::<Self>().cloned() else {
+            return;
+        };
         let (value, value_ref) = if let Some(value) = world.entity(context.entity).get::<Value>() {
             (*value, ValueRef(context.entity))
         } else if let Some(value_ref) = world.entity(context.entity).get::<ValueRef>().copied() {
@@ -78,23 +157,58 @@ impl NumericStepper {
             (default_value, value_ref)
         };
 
+        let mut decrease_icon = stepper.decrease_icon.clone();
+        let mut increase_icon = stepper.increase_icon.clone();
+        if let Some(mut images) = world.get_resource_mut::<Assets<Image>>() {
+            if decrease_icon == Handle::default() {
+                decrease_icon = images.add(glyph(false));
+            }
+            if increase_icon == Handle::default() {
+                increase_icon = images.add(glyph(true));
+            }
+        }
+        let stepper_entity = context.entity;
+
         world
             .commands()
             .entity(context.entity)
             .insert(Children::spawn(SpawnWith(
                 move |spawner: &mut RelatedSpawner<ChildOf>| {
-                    let mut decrease =
-                        spawner.spawn((PushButton::from_label("-"), Decrease, value_ref));
+                    let mut decrease = spawner.spawn((
+                        IconButton::new(
+                            decrease_icon,
+                            stepper.decrease_name.clone(),
+                            IconButtonSize::Small,
+                        ),
+                        Name::new(stepper.decrease_name.clone()),
+                        Decrease,
+                        value_ref,
+                    ));
                     if !value.can_decrement() {
                         decrease.insert(InteractionDisabled);
                     }
                     spawner.spawn((
-                        Label::regular(value.to_string()),
-                        NumericStepperLabel,
+                        Label::regular((stepper.format)(&value)),
+                        Node {
+                            min_width: Val::Px(stepper.label_min_width),
+                            justify_content: JustifyContent::Center,
+                            align_self: AlignSelf::Center,
+                            ..default()
+                        },
+                        TextLayout::default().with_justify(Justify::Center),
+                        NumericStepperLabel(stepper_entity),
                         value_ref,
                     ));
-                    let mut increase =
-                        spawner.spawn((PushButton::from_label("+"), Increase, value_ref));
+                    let mut increase = spawner.spawn((
+                        IconButton::new(
+                            increase_icon,
+                            stepper.increase_name.clone(),
+                            IconButtonSize::Small,
+                        ),
+                        Name::new(stepper.increase_name.clone()),
+                        Increase,
+                        value_ref,
+                    ));
                     if !value.can_increment() {
                         increase.insert(InteractionDisabled);
                     }
@@ -282,8 +396,9 @@ impl std::fmt::Display for Value {
 struct Increase;
 #[derive(Component, Clone, Copy, Debug)]
 struct Decrease;
+/// The value label of a stepper, which knows the stepper for its `format`.
 #[derive(Component, Clone, Copy, Debug)]
-struct NumericStepperLabel;
+struct NumericStepperLabel(Entity);
 
 fn theme_numeric_stepper(
     numeric_stepper_ref: In<Option<Entity>>,
@@ -362,15 +477,19 @@ fn on_key_input(
 
 fn on_change(
     changed_values: Query<(Entity, &Value), Changed<Value>>,
-    mut numeric_stepper_labels: Query<(&ValueRef, &mut Text), With<NumericStepperLabel>>,
+    mut numeric_stepper_labels: Query<(&ValueRef, &NumericStepperLabel, &mut Text)>,
+    steppers: Query<&NumericStepper>,
     decrease: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Decrease>>,
     increase: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Increase>>,
     mut commands: Commands,
 ) {
     for (value_ref, value) in &changed_values {
-        for (text_value_ref, mut text) in &mut numeric_stepper_labels {
+        for (text_value_ref, label, mut text) in &mut numeric_stepper_labels {
             if text_value_ref.0 == value_ref {
-                text.0 = value.to_string();
+                let format = steppers
+                    .get(label.0)
+                    .map_or(default_format as ValueFormat, |s| s.format);
+                text.0 = format(value);
             }
         }
         for (button, button_value_ref, disabled) in &decrease {

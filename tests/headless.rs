@@ -1580,7 +1580,7 @@ fn spawn_stepper(app: &mut App, initial: u8) -> (Entity, Entity, Entity) {
     let stepper = app
         .world_mut()
         .spawn((
-            NumericStepper,
+            NumericStepper::default(),
             Value::new_u8(initial, 0, 3, 1),
             ChildOf(root),
         ))
@@ -1622,6 +1622,60 @@ fn activating_the_buttons_of_a_numeric_stepper_steps_its_value() {
     assert_eq!(stepper_value(&app, stepper), 0);
 }
 
+fn level_text(value: &Value) -> String {
+    match value.as_u8() {
+        Some(0) => "Ground".to_string(),
+        Some(level) => format!("+{level}"),
+        None => String::new(),
+    }
+}
+
+#[test]
+fn a_numeric_stepper_shows_its_custom_format_and_updates_it_on_a_change() {
+    let mut app = headless_app();
+    let stepper = app
+        .world_mut()
+        .spawn((
+            NumericStepper {
+                format: level_text,
+                decrease_name: "Lower the level".into(),
+                increase_name: "Raise the level".into(),
+                ..default()
+            },
+            Value::new_u8(0, 0, 14, 7),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let children: Vec<Entity> = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .collect();
+    let text = |app: &App| app.world().get::<Text>(children[1]).unwrap().0.clone();
+    assert_eq!(text(&app), "Ground");
+    assert_eq!(
+        app.world().get::<IconButton>(children[0]).unwrap().name,
+        "Lower the level"
+    );
+    assert_eq!(
+        app.world().get::<IconButton>(children[2]).unwrap().name,
+        "Raise the level"
+    );
+
+    activate(&mut app, children[2]);
+    assert_eq!(text(&app), "+7");
+    activate(&mut app, children[2]);
+    assert_eq!(text(&app), "+14");
+    assert!(is_disabled(&app, children[2]));
+    activate(&mut app, children[0]);
+    activate(&mut app, children[0]);
+    assert_eq!(text(&app), "Ground");
+    assert!(is_disabled(&app, children[0]));
+}
+
 #[test]
 fn one_arrow_key_steps_a_reinserted_numeric_stepper_once() {
     use bevy::input::ButtonState;
@@ -1633,7 +1687,9 @@ fn one_arrow_key_steps_a_reinserted_numeric_stepper_once() {
         .spawn((Window::default(), PrimaryWindow))
         .id();
     let (stepper, _, _) = spawn_stepper(&mut app, 0);
-    app.world_mut().entity_mut(stepper).insert(NumericStepper);
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(NumericStepper::default());
     app.update();
     app.update();
     app.world_mut()
