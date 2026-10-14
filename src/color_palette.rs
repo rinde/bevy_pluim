@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
@@ -13,6 +14,7 @@ use crate::list::{
     sync_selected,
 };
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
+use crate::tailwind::color_name;
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
 
@@ -33,6 +35,7 @@ impl Plugin for ColorPalettePlugin {
                     .pipe(theme_items)
                     .run_if(resource_changed::<Theme>),
                 on_selection_change,
+                sync_accessible_names,
             ),
         )
         .add_observer(on_insert_selection)
@@ -45,8 +48,8 @@ impl Plugin for ColorPalettePlugin {
 /// Like a [`List`] it is a [`ListBox`](bevy::ui_widgets::ListBox) and its swatches
 /// ([`ItemView`]s) are [`ListItem`](bevy::ui_widgets::ListItem)s, so a swatch of the
 /// selection carries [`Selected`]. The [`Selection`] stays the one source of truth:
-/// [`Selected`] follows it, see [`List`]. A swatch has no label, so it has no accessible
-/// name yet.
+/// [`Selected`] follows it, see [`List`]. A swatch's accessible name is the name of its
+/// colour: its Tailwind name (`blue-500`) or else its hex (`#3b82f6`).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -143,6 +146,28 @@ fn on_items_changed(
     }
 
     commands.run_system_cached_with(theme_items, Some(*list_ref));
+}
+
+/// Keeps the label of each swatch's [`AccessibilityNode`] at the name of its colour.
+fn sync_accessible_names(
+    swatches: Query<(Entity, &ItemView)>,
+    palettes: Query<(), With<ColorPalette>>,
+    items: Query<&Item<Color>>,
+    mut nodes: Query<&mut AccessibilityNode>,
+) {
+    for (entity, view) in &swatches {
+        if !palettes.contains(view.list_ref) {
+            continue;
+        }
+        let (Ok(Item { data }), Ok(mut node)) = (items.get(view.item_ref), nodes.get_mut(entity))
+        else {
+            continue;
+        };
+        let name = color_name(*data);
+        if node.label() != Some(name.as_str()) {
+            node.set_label(name);
+        }
+    }
 }
 
 fn on_insert_selection(
