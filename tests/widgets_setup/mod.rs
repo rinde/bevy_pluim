@@ -1229,10 +1229,15 @@ fn badge(world: &mut World) {
             Name::new("plain button"),
         ));
         root.spawn(PushButton::from_label("Add badge")).observe(
-            |_: On<Activate>, mut badges: Query<&mut Badge, With<CountedButton>>| {
-                for mut badge in &mut badges {
+            |_: On<Activate>,
+             mut commands: Commands,
+             badges: Query<(Entity, &Badge), With<CountedButton>>| {
+                for (entity, badge) in &badges {
                     let count = badge.text.parse::<usize>().unwrap_or(0);
-                    badge.text = (count + 1).to_string();
+                    commands.entity(entity).insert(Badge {
+                        text: (count + 1).to_string(),
+                        ..badge.clone()
+                    });
                 }
             },
         );

@@ -4548,6 +4548,7 @@ fn the_hud_example_builds_and_runs() {
     for _ in 0..6 {
         app.update();
     }
+    assert_eq!(ui_root_count(&mut app), 1);
     let world = app.world_mut();
     // The Trains panel is open at the start, with a row for each of the four trains,
     // and the Warnings panel is made hidden.
