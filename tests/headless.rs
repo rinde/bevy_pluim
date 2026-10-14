@@ -3179,7 +3179,7 @@ fn of_three_setting_rows_only_the_first_two_show_a_divider() {
     assert_eq!(display(&app, fourth), Display::None);
 }
 
-fn tools()-> [Tool; 4] {
+fn tools() -> [Tool; 4] {
     [
         Tool::in_group(Handle::default(), "Select", 0),
         Tool::in_group(Handle::default(), "Rail", 1),
