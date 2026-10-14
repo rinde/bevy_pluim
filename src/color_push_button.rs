@@ -1,5 +1,6 @@
 //! `ColorPushButton`: a button showing a colour square.
 
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
@@ -8,6 +9,7 @@ use bevy::ui_widgets::Button;
 use itertools::Either;
 
 use crate::focus::TabStop;
+use crate::tailwind::color_name;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`ColorPushButton`].
@@ -25,6 +27,7 @@ impl Plugin for ColorPushButtonPlugin {
                     .pipe(update_theme)
                     .run_if(resource_changed::<Theme>),
                 restyle_on_disabled_change,
+                sync_accessible_names,
             ),
         );
     }
@@ -34,6 +37,8 @@ impl Plugin for ColorPushButtonPlugin {
 ///
 /// Like [`PushButton`](crate::push_button::PushButton) it is a
 /// [`bevy::ui_widgets::Button`] and triggers [`Activate`](bevy::ui_widgets::Activate).
+/// Its accessible name is the name of the colour it shows: a Tailwind name
+/// (`blue-500`) or else a hex (`#3b82f6`).
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -90,6 +95,25 @@ impl ColorPushButton {
         world
             .commands()
             .run_system_cached_with(update_theme, Some(context.entity));
+    }
+}
+
+/// Keeps the label of each button's [`AccessibilityNode`] at the name of its colour.
+/// Bevy clears the label of a button without text when it is added, so this also
+/// sets it again after that.
+fn sync_accessible_names(
+    buttons: Query<(Entity, &ColorSquareRef), With<ColorPushButton>>,
+    squares: Query<&BackgroundColor, With<ColorSquare>>,
+    mut nodes: Query<&mut AccessibilityNode>,
+) {
+    for (entity, ColorSquareRef(square)) in &buttons {
+        let (Ok(color), Ok(mut node)) = (squares.get(*square), nodes.get_mut(entity)) else {
+            continue;
+        };
+        let name = color_name(color.0);
+        if node.label() != Some(name.as_str()) {
+            node.set_label(name);
+        }
     }
 }
 
