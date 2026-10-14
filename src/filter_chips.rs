@@ -1,12 +1,14 @@
 //! `FilterChips`: a wrapping row of pill-shaped options, one of them active, each with an
 //! optional count.
 
+use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
 use crate::focus::TabStop;
-use crate::select::{Item, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
 
 /// The height of a chip.
@@ -31,23 +33,35 @@ impl Plugin for FilterChipsPlugin {
         app.register_type::<Item<Chip>>()
             .register_type::<Chip>()
             .register_type::<ChipView>()
-            .add_systems(Update, (sync_chips, update_chips).chain())
+            .add_systems(
+                Update,
+                (
+                    sync_chips,
+                    (|| None::<Entity>)
+                        .pipe(theme_chips)
+                        .run_if(resource_changed::<Theme>),
+                    restyle_changed_chips,
+                )
+                    .chain(),
+            )
             .add_observer(on_activate);
     }
 }
 
-/// A wrapping row of pill-shaped options over a [`Selection`](crate::select::Selection) of [`Item<Chip>`]s, with the
+/// A wrapping row of pill-shaped options over a [`Selection`] of [`Item<Chip>`]s, with the
 /// active one filled.
 ///
 /// Put it on an entity together with a selection that has [`Chip`] items, such as
 /// `Selection::builder().one().build_with_items([Item { data: Chip::with_count("All", 4) }])`,
-/// or with a [`Selection::Ref`](crate::select::Selection::Ref) to one. The selection should be a `One`: exactly one chip is
+/// or with a [`Selection::Ref`] to one. The selection should be a `One`: exactly one chip is
 /// active, and activating the active chip changes nothing. Which chips there are is the
 /// application's: add and remove the items to change them. To change a count, change the
 /// [`Chip`] in its [`Item`]; the chip is kept and its text changes.
 ///
 /// A chip is a [`Button`] and a tab stop: Enter and Space on a focused chip pick it, like a
 /// click. The chips wrap onto further lines when the row is too narrow.
+///
+/// There is no arrow-key navigation between chips: each chip is a tab stop of its own.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -92,11 +106,20 @@ impl Chip {
 /// One chip of a [`FilterChips`]: a pill that picks its item when it is activated.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(on_add = Self::on_add)]
 pub struct ChipView {
     /// The [`Item<Chip>`] this chip shows.
     pub item: Entity,
     /// The [`FilterChips`] this chip belongs to.
     pub chips: Entity,
+}
+
+impl ChipView {
+    fn on_add(mut world: DeferredWorld, context: HookContext) {
+        world
+            .commands()
+            .run_system_cached_with(theme_chips, Some(context.entity));
+    }
 }
 
 /// The text children of a [`ChipView`].
@@ -238,22 +261,28 @@ const fn chip_style(colors: &ThemeColors, active: bool, hovered: bool) -> ChipSt
     }
 }
 
-/// Puts the text, colours and fonts of every chip in step with its item, its selection, the
-/// pointer and the theme.
-fn update_chips(
+/// Puts the text, colours and fonts of one chip, or of every chip when `chip` is `None`, in
+/// step with its item, its selection, the pointer and the theme. Run for a new chip from its
+/// hook, for all of them when the [`Theme`] changes and by [`restyle_changed_chips`].
+fn theme_chips(
+    chip: In<Option<Entity>>,
     theme: Res<Theme>,
     selections: SelectionParam,
     items: Query<&Item<Chip>>,
     mut views: Query<(
+        Entity,
         &ChipView,
-        Ref<ChipRefs>,
+        &ChipRefs,
         &Hovered,
         &mut BackgroundColor,
         &mut BorderColor,
     )>,
     mut texts: Query<(&mut Text, &mut TextColor, &mut TextFont, &mut Node)>,
 ) {
-    for (view, refs, hovered, mut background, mut border) in &mut views {
+    for (entity, view, refs, hovered, mut background, mut border) in &mut views {
+        if chip.0.is_some_and(|id| id != entity) {
+            continue;
+        }
         let Ok(item) = items.get(view.item) else {
             continue;
         };
@@ -264,7 +293,6 @@ fn update_chips(
         background.set_if_neq(BackgroundColor(style.background));
         border.set_if_neq(BorderColor::all(style.border));
 
-        let restyle_font = theme.is_changed() || refs.is_added();
         let count_text = item
             .data
             .count
@@ -293,14 +321,38 @@ fn update_chips(
             if node.margin.left != margin {
                 node.margin.left = margin;
             }
-            if restyle_font {
-                *font = chip_font(&theme);
-            }
+            *font = chip_font(&theme);
+        }
+    }
+}
+
+/// Restyles the chips whose state changed: the pointer came or went, their [`Chip`] changed,
+/// or a selection changed. Does nothing in a frame where none did.
+fn restyle_changed_chips(
+    hovered: Query<Entity, (With<ChipView>, Changed<Hovered>)>,
+    views: Query<(Entity, &ChipView)>,
+    changed_items: Query<Entity, Changed<Item<Chip>>>,
+    changed_selections: Query<(), Changed<Selection>>,
+    mut commands: Commands,
+) {
+    if !changed_selections.is_empty() {
+        commands.run_system_cached_with(theme_chips, None);
+        return;
+    }
+    for chip in &hovered {
+        commands.run_system_cached_with(theme_chips, Some(chip));
+    }
+    for item in &changed_items {
+        for (chip, _) in views.iter().filter(|(_, view)| view.item == item) {
+            commands.run_system_cached_with(theme_chips, Some(chip));
         }
     }
 }
 
 /// Picks the chip that was used (a click, or Enter or Space on it).
+///
+/// This relies on `toggle_selected` doing nothing for the active chip of a `One` selection: the
+/// selection stays as it is, so activating the active chip changes nothing.
 fn on_activate(t: On<Activate>, views: Query<&ChipView>, mut selections: SelectionParam) {
     let Ok(view) = views.get(t.event().event_target()) else {
         return;
