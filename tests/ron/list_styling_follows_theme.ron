@@ -39,7 +39,7 @@
         Check(Component(
             target: Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada")),
             path: "BackgroundColor.0",
-            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
         )),
         Check(Component(
             target: Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada")),
