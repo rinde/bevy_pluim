@@ -1,0 +1,25 @@
+// A tooltip shows its text only after the pointer has rested on its node for
+// half a second (30 frames at 60 per second), and hides when the pointer
+// leaves. The popup text exists only while it shows.
+(
+    format_version: 3,
+    name: "a tooltip shows after the pointer rests on its node and hides when it leaves",
+    setup: App(Tooltip),
+    steps: [
+        Wait(2),
+        Check(Not(Exists(Text("Anchor tip")))),
+        MoveTo(Name("tooltip anchor")),
+        Wait(10),
+        Check(Not(Exists(Text("Anchor tip")))),
+        Wait(40),
+        Check(Visible(Text("Anchor tip"))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(Not(Exists(Text("Anchor tip")))),
+        // The icon button has a tooltip of its own, its name.
+        MoveTo(Name("help button")),
+        Wait(50),
+        Check(Visible(Text("Help"))),
+    ],
+    expect: [],
+)

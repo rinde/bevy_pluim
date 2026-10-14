@@ -1,0 +1,22 @@
+// A panel shows its title, subtitle and a close button. The button triggers
+// PanelClosed on the panel and the screen's observer despawns that panel; the
+// other panel stays, and so does the screen.
+(
+    format_version: 3,
+    name: "a panel's close button closes the panel and only that one",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        Check(Visible(Within(Name("closable panel"), Text("Trains")))),
+        Check(Visible(Within(Name("closable panel"), Text("3 open")))),
+        Check(Visible(Within(Name("closable panel"), Text("Line 3")))),
+        Check(Exists(Name("tall panel"))),
+        MoveTo(Within(Name("closable panel"), Component("IconButton"))),
+        Click(Left),
+        Wait(2),
+        Check(Not(Exists(Name("closable panel")))),
+        Check(Exists(Name("tall panel"))),
+        Check(Visible(Within(Name("tall panel"), Text("Stops")))),
+    ],
+    expect: [Not(Exists(Name("closable panel")))],
+)

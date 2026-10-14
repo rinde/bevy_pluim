@@ -219,6 +219,12 @@ fn spawn_parts(commands: &mut Commands, panel: Entity) {
                             flex_shrink: 0.0,
                             ..default()
                         },
+                        // The wheel scrolls the node it hits, so the body (which covers the
+                        // contents) lets the pointer through to them.
+                        Pickable {
+                            should_block_lower: false,
+                            ..default()
+                        },
                         ChildOf(contents),
                     ));
                 },
