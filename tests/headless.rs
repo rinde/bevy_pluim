@@ -3308,6 +3308,24 @@ fn activating_a_chip_selects_it_and_fills_it() {
 }
 
 #[test]
+fn activating_the_active_chip_leaves_the_selection_unchanged() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let before = app
+        .world()
+        .entity(chips)
+        .get::<Selection>()
+        .unwrap()
+        .clone();
+
+    activate(&mut app, views[0]);
+
+    let after = app.world().entity(chips).get::<Selection>().unwrap();
+    assert_eq!(*after, before);
+}
+
+#[test]
 fn updating_the_count_of_an_item_changes_the_text_of_its_chip_without_respawning_it() {
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
