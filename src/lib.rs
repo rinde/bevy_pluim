@@ -17,6 +17,7 @@ pub mod divider;
 pub mod filter_chips;
 pub mod float;
 pub mod focus;
+pub mod gallery;
 pub mod icon;
 pub mod icon_button;
 pub mod kbd;
@@ -51,6 +52,7 @@ use crate::divider::DividerPlugin;
 use crate::filter_chips::FilterChipsPlugin;
 use crate::float::FloatPlugin;
 use crate::focus::FocusPlugin;
+use crate::gallery::GalleryPlugin;
 use crate::icon::IconPlugin;
 use crate::icon_button::IconButtonPlugin;
 use crate::kbd::KbdPlugin;
@@ -104,6 +106,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(PillPlugin)
             .add_plugins(FilterChipsPlugin)
             .add_plugins(ToolbarPlugin)
+            .add_plugins(GalleryPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(PanelPlugin)
             .add_plugins(ThemePlugin)

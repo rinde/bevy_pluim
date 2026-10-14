@@ -24,6 +24,7 @@ use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
+use rin_bevy_ui::gallery::{Gallery, GalleryCardView};
 use rin_bevy_ui::icon::Icon;
 use rin_bevy_ui::icon_button::{IconButton, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
@@ -105,6 +106,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Pill>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
+        assert_component::<Gallery>(registry);
+        assert_component::<GalleryCardView>(registry);
         assert_component::<Toolbar>(registry);
         assert_component::<ToolbarButton>(registry);
         assert_component::<Label>(registry);
