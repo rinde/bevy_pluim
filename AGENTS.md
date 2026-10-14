@@ -58,7 +58,7 @@ runs on GitHub's side; the coordinator starts every agent, in its own session.
 
 | Agent | Model | Does |
 | --- | --- | --- |
-| `coordinator` | Sonnet | Decides what is ready, dispatches implementers and reviewers, checks on GitHub that each did its job, merges. Writes no code. |
+| `coordinator` | Sonnet | Decides what is ready, dispatches implementers and reviewers, checks on GitHub that each did its job, merges, and turns what is left undone (review nits, questions on an issue) into issues it refines and labels `ready-for-agent`. Writes no code. |
 | `implementer-sonnet`, `implementer-opus` | Sonnet, Opus | Implements one issue in a worktree under `.claude/worktrees/` on a branch `RINUI-<number>/<slug>`, opens a pull request that `Closes #N`, and follows it up on review, red CI or a merge conflict. Runs the `implement-issue` skill. |
 | `reviewer-sonnet`, `reviewer-opus` | Sonnet, Opus | Reviews one pull request in a worktree of its own, makes sure CI passed on its head, and posts one review that approves or requests changes, with inline comments. Runs the `review-pr` skill. |
 
@@ -94,6 +94,8 @@ A verdict counts only for the commit it names, so a push makes it stale. An
 approved pull request with CI passed and no conflict is squash-merged unless
 the issue has `require-human-review`. After three rounds of changes requested,
 the coordinator stops, comments and takes `ready-for-agent` off the issue.
+A question an implementer puts on an issue is not left for a human: the
+coordinator decides it, comments the decision and puts `ready-for-agent` back.
 
 | How | What |
 | --- | --- |
