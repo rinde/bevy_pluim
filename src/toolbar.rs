@@ -323,12 +323,24 @@ fn spawn_button(
             IconButtonSize::Regular.icon_px(),
         ),
     };
+    // The children are spawned under the button's entity, which is reserved first, so no node is
+    // ever parentless when it is added (a parentless `Node` becomes a `UiRoot`).
+    let button = commands.spawn_empty().id();
     let icon = commands
-        .spawn((Icon::bundle(Handle::default(), icon_px), Pickable::IGNORE))
+        .spawn((
+            Icon::bundle(Handle::default(), icon_px),
+            Pickable::IGNORE,
+            ChildOf(button),
+        ))
         .id();
     let label = (style == ToolbarStyle::Filled).then(|| {
         commands
-            .spawn((Text::new(""), label_font(theme), Pickable::IGNORE))
+            .spawn((
+                Text::new(""),
+                label_font(theme),
+                Pickable::IGNORE,
+                ChildOf(button),
+            ))
             .id()
     });
     let hint = hint.then(|| {
@@ -349,6 +361,7 @@ fn spawn_button(
                     ..default()
                 },
                 Pickable::IGNORE,
+                ChildOf(button),
             ))
             .id()
     });
@@ -367,51 +380,40 @@ fn spawn_button(
                 },
                 BackgroundColor(theme.colors.accent_subtle_bar),
                 Pickable::IGNORE,
+                ChildOf(button),
             ))
             .id()
     });
-    let button = commands
-        .spawn((
-            Name::new("ToolbarButton"),
-            ToolbarButton {
-                item,
-                toolbar,
-                style,
-            },
-            ToolbarButtonRefs {
-                icon,
-                label,
-                hint,
-                bar,
-            },
-            Button,
-            Hovered::default(),
-            TabStop,
-            Node {
-                width: Val::Px(width),
-                height: Val::Px(height),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                row_gap: Val::Px(LABEL_GAP),
-                flex_shrink: 0.0,
-                border_radius: BorderRadius::all(theme.control_radius),
-                ..default()
-            },
-            BackgroundColor(Color::NONE),
-            ChildOf(toolbar),
-        ))
-        .id();
-    commands.entity(button).add_children(&[icon]);
-    if let Some(label) = label {
-        commands.entity(button).add_children(&[label]);
-    }
-    if let Some(hint) = hint {
-        commands.entity(button).add_children(&[hint]);
-    }
-    if let Some(bar) = bar {
-        commands.entity(button).add_children(&[bar]);
-    }
+    commands.entity(button).insert((
+        Name::new("ToolbarButton"),
+        ToolbarButton {
+            item,
+            toolbar,
+            style,
+        },
+        ToolbarButtonRefs {
+            icon,
+            label,
+            hint,
+            bar,
+        },
+        Button,
+        Hovered::default(),
+        TabStop,
+        Node {
+            width: Val::Px(width),
+            height: Val::Px(height),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            row_gap: Val::Px(LABEL_GAP),
+            flex_shrink: 0.0,
+            border_radius: BorderRadius::all(theme.control_radius),
+            ..default()
+        },
+        BackgroundColor(Color::NONE),
+        ChildOf(toolbar),
+    ));
 }
 
 /// How a button looks.

@@ -165,35 +165,47 @@ fn chip_font(theme: &Theme) -> TextFont {
 }
 
 fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entity) {
+    // The children are spawned under the chip's reserved entity, so no node is ever parentless.
+    let chip = commands.spawn_empty().id();
     let label = commands
-        .spawn((Text::new(""), ChipLabel, chip_font(theme), Pickable::IGNORE))
+        .spawn((
+            Text::new(""),
+            ChipLabel,
+            chip_font(theme),
+            Pickable::IGNORE,
+            ChildOf(chip),
+        ))
         .id();
     let count = commands
-        .spawn((Text::new(""), ChipCount, chip_font(theme), Pickable::IGNORE))
-        .id();
-    commands
         .spawn((
-            Name::new("Chip"),
-            ChipView { item, chips },
-            ChipRefs { label, count },
-            Button,
-            Hovered::default(),
-            TabStop,
-            Node {
-                height: Val::Px(CHIP_HEIGHT),
-                padding: UiRect::horizontal(Val::Px(CHIP_PADDING)),
-                border: UiRect::all(theme.border_thickness),
-                border_radius: BorderRadius::all(Val::Px(CHIP_HEIGHT / 2.0)),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                flex_shrink: 0.0,
-                ..default()
-            },
-            BackgroundColor(Color::NONE),
-            BorderColor::all(theme.colors.chip_border),
-            ChildOf(chips),
+            Text::new(""),
+            ChipCount,
+            chip_font(theme),
+            Pickable::IGNORE,
+            ChildOf(chip),
         ))
-        .add_children(&[label, count]);
+        .id();
+    commands.entity(chip).insert((
+        Name::new("Chip"),
+        ChipView { item, chips },
+        ChipRefs { label, count },
+        Button,
+        Hovered::default(),
+        TabStop,
+        Node {
+            height: Val::Px(CHIP_HEIGHT),
+            padding: UiRect::horizontal(Val::Px(CHIP_PADDING)),
+            border: UiRect::all(theme.border_thickness),
+            border_radius: BorderRadius::all(Val::Px(CHIP_HEIGHT / 2.0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            flex_shrink: 0.0,
+            ..default()
+        },
+        BackgroundColor(Color::NONE),
+        BorderColor::all(theme.colors.chip_border),
+        ChildOf(chips),
+    ));
 }
 
 /// How a chip looks.

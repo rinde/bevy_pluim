@@ -205,10 +205,13 @@ fn sync_cards(
 }
 
 fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Entity, item: Entity) {
+    // The children are spawned under the card's reserved entity, so no node is ever parentless.
+    let card = commands.spawn_empty().id();
     let image = commands
         .spawn((
             Icon::bundle(Handle::default(), IMAGE_HEIGHT),
             Pickable::IGNORE,
+            ChildOf(card),
         ))
         // The image is wider than tall, which `Icon::bundle`'s square is not.
         .insert(Node {
@@ -228,34 +231,33 @@ fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Enti
                 ..default()
             },
             Pickable::IGNORE,
+            ChildOf(card),
         ))
         .id();
-    commands
-        .spawn((
-            Name::new("GalleryCard"),
-            GalleryCardView { item, gallery },
-            GalleryCardRefs { image, label },
-            Button,
-            Hovered::default(),
-            TabStop,
-            Node {
-                width: Val::Px(CARD_WIDTH),
-                height: Val::Px(CARD_HEIGHT),
-                padding: UiRect::all(Val::Px(CARD_PADDING)),
-                border: UiRect::all(theme.border_thickness),
-                border_radius: BorderRadius::all(theme.control_radius),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                row_gap: Val::Px(CARD_GAP),
-                flex_shrink: 0.0,
-                ..default()
-            },
-            BackgroundColor(theme.colors.card_surface),
-            BorderColor::all(theme.colors.border),
-            ChildOf(row),
-        ))
-        .add_children(&[image, label]);
+    commands.entity(card).insert((
+        Name::new("GalleryCard"),
+        GalleryCardView { item, gallery },
+        GalleryCardRefs { image, label },
+        Button,
+        Hovered::default(),
+        TabStop,
+        Node {
+            width: Val::Px(CARD_WIDTH),
+            height: Val::Px(CARD_HEIGHT),
+            padding: UiRect::all(Val::Px(CARD_PADDING)),
+            border: UiRect::all(theme.border_thickness),
+            border_radius: BorderRadius::all(theme.control_radius),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            row_gap: Val::Px(CARD_GAP),
+            flex_shrink: 0.0,
+            ..default()
+        },
+        BackgroundColor(theme.colors.card_surface),
+        BorderColor::all(theme.colors.border),
+        ChildOf(row),
+    ));
 }
 
 /// How a card looks.
