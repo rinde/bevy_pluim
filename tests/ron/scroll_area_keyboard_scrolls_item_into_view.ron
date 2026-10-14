@@ -1,14 +1,14 @@
 // The arrow keys move a list's active descendant, and the list asks for the row to be
 // scrolled into view (`ScrollIntoView`), which the `ScrollArea` around it answers: the
 // "scrolling list" is twelve rows in a "list scroll area" 100 pixels high. Tab reaches it
-// as the seventh list tab stop. The wheel keeps working afterwards.
+// as the eighth list tab stop. The wheel keeps working afterwards.
 (
     format_version: 3,
     name: "arrowing down a list scrolls its scroll area to the active row",
     setup: App(Lists),
     steps: [
         Wait(2),
-        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
         Wait(1),
         Check(App(Focused(of: Name("scrolling list")))),
         Check(Component(

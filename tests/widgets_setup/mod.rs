@@ -334,6 +334,14 @@ fn lists(world: &mut World) {
                 .zero_or_more()
                 .build_with_items(countries()),
         ));
+        root.spawn((
+            Name::new("separated list"),
+            List,
+            CornerStyle::Separated,
+            Selection::builder()
+                .one()
+                .build_with_items(["NL", "CA", "ID", "PT", "BE"].map(Item::new)),
+        ));
         // A list taller than its scroll area, which the wheel scrolls: the
         // list itself does not scroll, the area around it does.
         root.spawn((

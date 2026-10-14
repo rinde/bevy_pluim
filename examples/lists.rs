@@ -97,6 +97,17 @@ fn setup(mut commands: Commands) {
                     Item::new("Belgium")
                 ])
             ),
+            (
+                List,
+                CornerStyle::Separated,
+                Selection::builder().one().build_with_items([
+                    Item::new("Netherlands"),
+                    Item::new("Canada"),
+                    Item::new("Indonesia"),
+                    Item::new("Portugal"),
+                    Item::new("Belgium")
+                ])
+            ),
             (PushButton::from_label("Change theme"), ThemeButton),
         ],
     ));

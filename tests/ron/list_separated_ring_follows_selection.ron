@@ -1,0 +1,58 @@
+// The selected row of a separated list has the selection_ring border and the
+// hovered_selected_item background, the others neither; picking another row
+// moves both. The pointer rests on "Change theme" so that no row is hovered.
+(
+    format_version: 3,
+    name: "the selected row of a separated list has the ring and picking another moves it",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Check(App(Selected(of: Name("separated list"), items: ["NL"]))),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "NL")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.9137254953384399,green:0.7137255072593689,blue:0.4156862795352936,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "NL")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9058823585510254,green:0.8901960849761963,blue:0.8509804010391235,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "CA")),
+            path: "BorderColor.top",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "CA")),
+            path: "BackgroundColor.0",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        MoveTo(Within(Name("separated list"), Role(role: ListItem, label: "CA"))), Click(Left),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(App(Selected(of: Name("separated list"), items: ["CA"]))),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "CA")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.9137254953384399,green:0.7137255072593689,blue:0.4156862795352936,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "CA")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9058823585510254,green:0.8901960849761963,blue:0.8509804010391235,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "NL")),
+            path: "BorderColor.top",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated list"), Role(role: ListItem, label: "NL")),
+            path: "BackgroundColor.0",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+    ],
+    expect: [App(Selected(of: Name("separated list"), items: ["CA"]))],
+)
