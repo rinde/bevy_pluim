@@ -20,7 +20,7 @@ use bevy::input_focus::{InputFocus, InputFocusVisible};
 use bevy::mesh::MeshPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
-use bevy::picking::events::{Click, Pointer, Press, Release};
+use bevy::picking::events::{Click, Out, Over, Pointer, Press, Release};
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
@@ -544,6 +544,81 @@ fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
     app.update();
     assert_eq!(state(&app, plain), None);
     assert_eq!(app.world().get::<Children>(plain).unwrap().len(), 1);
+}
+
+/// Says the pointer moves onto (`over`) or off `target`, as picking would.
+fn pointer_over_or_out(app: &mut App, target: Entity, over: bool) {
+    let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    if over {
+        app.world_mut().trigger(Pointer::new(
+            PointerId::Mouse,
+            pointer_location(),
+            Over { hit },
+            target,
+        ));
+    } else {
+        app.world_mut().trigger(Pointer::new(
+            PointerId::Mouse,
+            pointer_location(),
+            Out { hit },
+            target,
+        ));
+    }
+    app.update();
+}
+
+#[test]
+fn an_icon_button_shows_the_hover_colour_under_the_pointer_and_the_press_colour_when_held() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Pause", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, button), colors.background_primary);
+
+    pointer_over_or_out(&mut app, button, true);
+    assert_eq!(background(&app, button), colors.hovered_item);
+
+    press(&mut app, button);
+    assert_eq!(background(&app, button), colors.selected_hovered_item);
+
+    click_and_release(&mut app, button);
+    assert_eq!(background(&app, button), colors.hovered_item);
+
+    pointer_over_or_out(&mut app, button, false);
+    assert_eq!(background(&app, button), colors.background_primary);
+}
+
+#[test]
+fn a_small_icon_button_turns_its_icon_from_secondary_to_primary_text_on_hover() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Close", IconButtonSize::Small),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(icon_tint(&app, button), colors.text_secondary);
+
+    pointer_over_or_out(&mut app, button, true);
+    app.update();
+    assert_eq!(icon_tint(&app, button), colors.text_primary);
+
+    pointer_over_or_out(&mut app, button, false);
+    app.update();
+    assert_eq!(icon_tint(&app, button), colors.text_secondary);
 }
 
 #[test]

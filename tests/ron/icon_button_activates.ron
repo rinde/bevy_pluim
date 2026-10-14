@@ -1,0 +1,28 @@
+// An icon button is a `Button`: `Activate` fires when it is let go over it
+// (the IconButtons screen counts them for `regular button` in `Clicks`), not
+// when the press ended elsewhere. A toggle button flips its `ToggleState` on
+// each activation; a plain one has none.
+(
+    format_version: 3,
+    name: "an icon button activates on release and a toggle button flips its state",
+    setup: App(IconButtons),
+    steps: [
+        Wait(2),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        MoveTo(Name("regular button")),
+        Click(Left),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        // Pressed on it, let go over another button: nothing is activated.
+        Press(Left),
+        MoveTo(Name("large button")),
+        Release(Left),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        Check(Component(target: Name("toggle button"), path: "ToggleState.0", is: Eq(false))),
+        MoveTo(Name("toggle button")),
+        Click(Left),
+        Check(Component(target: Name("toggle button"), path: "ToggleState.0", is: Eq(true))),
+        Click(Left),
+        Check(Component(target: Name("toggle button"), path: "ToggleState.0", is: Eq(false))),
+    ],
+    expect: [],
+)
