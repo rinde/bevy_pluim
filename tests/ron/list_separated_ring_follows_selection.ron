@@ -12,7 +12,7 @@
         Check(Component(
             target: Within(Name("separated list"), Role(role: ListItem, label: "NL")),
             path: "BorderColor.top",
-            is: Eq(Srgba((red:0.9137254953384399,green:0.7137255072593689,blue:0.4156862795352936,alpha:1.0))),
+            is: Eq(Srgba((red:0.6823529601097107,green:0.4313725531101227,blue:0.0784313753247261,alpha:1.0))),
         )),
         Check(Component(
             target: Within(Name("separated list"), Role(role: ListItem, label: "NL")),
@@ -36,7 +36,7 @@
         Check(Component(
             target: Within(Name("separated list"), Role(role: ListItem, label: "CA")),
             path: "BorderColor.top",
-            is: Eq(Srgba((red:0.9137254953384399,green:0.7137255072593689,blue:0.4156862795352936,alpha:1.0))),
+            is: Eq(Srgba((red:0.6823529601097107,green:0.4313725531101227,blue:0.0784313753247261,alpha:1.0))),
         )),
         Check(Component(
             target: Within(Name("separated list"), Role(role: ListItem, label: "CA")),

@@ -294,7 +294,7 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     )),
     selected_item: Color::Srgba(BLUE_500),
     hovered_item: Color::Srgba(BLUE_200),
-    selected_hovered_item: Color::Srgba(BLUE_600),
+    selected_hovered_item: Color::Srgba(BLUE_400),
     border: Color::Srgba(GRAY_200),
     border_highlight: Color::Srgba(BLUE_400),
     text_primary: Color::Srgba(GRAY_900),
@@ -313,7 +313,7 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     accent_subtle: Color::srgb_u8(0xF8, 0xE6, 0xC8),
     accent_subtle_text: Color::srgb_u8(0x7A, 0x4E, 0x0E),
     accent_subtle_bar: Color::srgb_u8(0xE9, 0xB6, 0x6A),
-    selection_ring: Color::srgb_u8(0xE9, 0xB6, 0x6A),
+    selection_ring: Color::srgb_u8(0xAE, 0x6E, 0x14),
     hovered_selected_item: Color::srgb_u8(0xE7, 0xE3, 0xD9),
     danger: Color::srgb_u8(0xF6, 0xC3, 0xB6),
     danger_text: Color::srgb_u8(0x5C, 0x1A, 0x0C),
@@ -530,5 +530,168 @@ mod tests {
             let shadow = colors.large_shadow.to_srgba();
             assert!(shadow.red < 0.3 && shadow.green < 0.3 && shadow.blue < 0.3);
         }
+    }
+
+    /// The WCAG 2.x relative luminance of a colour in sRGB.
+    fn relative_luminance(color: Color) -> f32 {
+        let c = color.to_srgba();
+        let linear = |v: f32| {
+            if v <= 0.039_28 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.0722_f32.mul_add(
+            linear(c.blue),
+            0.7152_f32.mul_add(linear(c.green), 0.2126 * linear(c.red)),
+        )
+    }
+
+    /// The WCAG 2.x contrast ratio of two colours, from 1 to 21.
+    fn contrast_ratio(a: Color, b: Color) -> f32 {
+        let (la, lb) = (relative_luminance(a), relative_luminance(b));
+        let (light, dark) = if la > lb { (la, lb) } else { (lb, la) };
+        (light + 0.05) / (dark + 0.05)
+    }
+
+    #[test]
+    fn the_contrast_ratio_matches_the_wcag_extremes() {
+        let ratio = contrast_ratio(Color::BLACK, Color::WHITE);
+        assert!((ratio - 21.0).abs() < 0.01, "{ratio}");
+        assert!((contrast_ratio(Color::WHITE, Color::WHITE) - 1.0).abs() < 0.001);
+    }
+
+    /// Exempt from the checks below, by WCAG 1.4.3: `text_disabled` (inactive
+    /// components are exempt) and `text_tertiary` (placeholder and caption
+    /// text the redesign allows to be quieter). Decorative colours (`border`,
+    /// `divider`, `chip_border`, `warning_border`, the `accent_subtle_bar`)
+    /// are not read as information and are exempt as well.
+    #[test]
+    fn the_default_themes_meet_wcag_aa_contrast() {
+        let mut failures = Vec::new();
+        for (theme, c) in [
+            ("light", DEFAULT_LIGHT_THEME_COLORS),
+            ("dark", DEFAULT_DARK_THEME_COLORS),
+        ] {
+            // Normal text, 4.5:1.
+            let text = [
+                (
+                    "text_primary on background_primary",
+                    c.text_primary,
+                    c.background_primary,
+                ),
+                (
+                    "text_primary on card_surface",
+                    c.text_primary,
+                    c.card_surface,
+                ),
+                (
+                    "text_secondary on background_primary",
+                    c.text_secondary,
+                    c.background_primary,
+                ),
+                (
+                    "text_secondary on card_surface",
+                    c.text_secondary,
+                    c.card_surface,
+                ),
+                (
+                    "text_primary on hovered_item",
+                    c.text_primary,
+                    c.hovered_item,
+                ),
+                (
+                    "text_primary on hovered_selected_item",
+                    c.text_primary,
+                    c.hovered_selected_item,
+                ),
+                (
+                    "text_primary on selected_item",
+                    c.text_primary,
+                    c.selected_item,
+                ),
+                (
+                    "text_primary on selected_hovered_item",
+                    c.text_primary,
+                    c.selected_hovered_item,
+                ),
+                ("accent_text on accent", c.accent_text, c.accent),
+                (
+                    "accent_subtle_text on accent_subtle",
+                    c.accent_subtle_text,
+                    c.accent_subtle,
+                ),
+                ("danger_text on danger", c.danger_text, c.danger),
+                (
+                    "danger_hover_text on background_primary",
+                    c.danger_hover_text,
+                    c.background_primary,
+                ),
+                (
+                    "warning_text on warning_background",
+                    c.warning_text,
+                    c.warning_background,
+                ),
+                (
+                    "info_text on info_background",
+                    c.info_text,
+                    c.info_background,
+                ),
+                (
+                    "wait_text on wait_background",
+                    c.wait_text,
+                    c.wait_background,
+                ),
+                (
+                    "pill_text on pill_background",
+                    c.pill_text,
+                    c.pill_background,
+                ),
+                ("chip_on_ink on chip_on", c.chip_on_ink, c.chip_on),
+                (
+                    "text_secondary on background_primary (chip)",
+                    c.text_secondary,
+                    c.background_primary,
+                ),
+                (
+                    "segmented_selected_text on segmented_selected",
+                    c.segmented_selected_text,
+                    c.segmented_selected,
+                ),
+                (
+                    "text_primary on segmented_track",
+                    c.text_primary,
+                    c.segmented_track,
+                ),
+                ("link on background_primary", c.link, c.background_primary),
+            ];
+            for (name, fg, bg) in text {
+                let ratio = contrast_ratio(fg, bg);
+                if ratio < 4.5 {
+                    failures.push(format!("{theme}: {name} is {ratio:.2}, needs 4.5"));
+                }
+            }
+            // Non-text, 3:1.
+            let non_text = [
+                (
+                    "focus_ring on background_primary",
+                    c.focus_ring,
+                    c.background_primary,
+                ),
+                (
+                    "selection_ring on background_primary",
+                    c.selection_ring,
+                    c.background_primary,
+                ),
+            ];
+            for (name, fg, bg) in non_text {
+                let ratio = contrast_ratio(fg, bg);
+                if ratio < 3.0 {
+                    failures.push(format!("{theme}: {name} is {ratio:.2}, needs 3"));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 }
