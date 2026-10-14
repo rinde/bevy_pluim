@@ -29,6 +29,7 @@ impl Plugin for PushButtonPlugin {
                     .pipe(theme_push_button)
                     .run_if(resource_changed::<Theme>),
                 restyle_on_disabled_change,
+                restyle_on_size_change,
             ),
         );
     }
@@ -53,6 +54,7 @@ impl Plugin for PushButtonPlugin {
         ..default()
     },
     Name::new("PushButton"),
+    ButtonSize,
     Button,
     Hovered,
     TabStop,
@@ -60,6 +62,22 @@ impl Plugin for PushButtonPlugin {
 pub struct PushButton {
     label: String,
     icon: Option<String>,
+}
+
+/// The size of a [`PushButton`]. Insert `ButtonSize::Compact` with the button, or later; a theme
+/// change keeps it.
+///
+/// `Regular` is padded by [`Theme::item_padding`], has a 14 px label and a small shadow.
+/// `Compact` is [`Theme::compact_button_height`] high with [`Theme::compact_button_padding`], a
+/// smaller radius, a semibold 12 px label and no shadow, for buttons inside a row.
+#[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
+pub enum ButtonSize {
+    /// The usual size.
+    #[default]
+    Regular,
+    /// A small button for a row of other content.
+    Compact,
 }
 
 /// Marks the label text of a [`PushButton`].
@@ -194,6 +212,16 @@ fn restyle_on_disabled_change(
     }
 }
 
+/// Restyles a [`PushButton`] whose [`ButtonSize`] was changed after it was spawned.
+fn restyle_on_size_change(
+    changed: Query<Entity, (With<PushButtonRefs>, Changed<ButtonSize>)>,
+    mut commands: Commands,
+) {
+    for entity in &changed {
+        commands.run_system_cached_with(theme_push_button, Some(entity));
+    }
+}
+
 fn theme_push_button(
     button_id: In<Option<Entity>>,
     theme: Res<Theme>,
@@ -208,6 +236,7 @@ fn theme_push_button(
             Has<Pressed>,
             &Hovered,
             Has<NoDefaultHover>,
+            &ButtonSize,
         ),
         With<PushButton>,
     >,
@@ -235,6 +264,7 @@ fn theme_push_button(
         pressed,
         hovered,
         no_default_hover,
+        size,
     ) in it
     {
         // A button with `NoDefaultHover` is coloured by its owner, so it rests here.
@@ -245,10 +275,24 @@ fn theme_push_button(
             hovered.get() && !no_default_hover,
         );
         border_color.set_all(theme.colors.border);
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        *box_shadow = theme.small_shadow().into();
         node.border = UiRect::all(theme.border_thickness);
-        node.padding = theme.item_padding;
+        let compact = *size == ButtonSize::Compact;
+        if compact {
+            node.border_radius = BorderRadius::all(theme.compact_button_radius);
+            *box_shadow = BoxShadow::default();
+            node.padding = theme.compact_button_padding;
+            node.height = theme.compact_button_height;
+        } else {
+            node.border_radius = BorderRadius::all(theme.control_radius);
+            *box_shadow = theme.small_shadow().into();
+            node.padding = theme.item_padding;
+            node.height = Val::Auto;
+        }
+        let (font_size, weight) = if compact {
+            (theme.font_size_small, FontWeight::SEMIBOLD)
+        } else {
+            (theme.font_size_secondary, FontWeight::default())
+        };
 
         // label
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
@@ -259,7 +303,8 @@ fn theme_push_button(
             });
             *text_font = TextFont {
                 font: theme.body_font.clone().into(),
-                font_size: FontSize::Px(theme.font_size_secondary),
+                font_size: FontSize::Px(font_size),
+                weight,
                 ..default()
             };
         }
@@ -275,7 +320,8 @@ fn theme_push_button(
             });
             *text_font = TextFont {
                 font: theme.body_font.clone().into(),
-                font_size: FontSize::Px(theme.font_size_secondary),
+                font_size: FontSize::Px(font_size),
+                weight,
                 ..default()
             };
         }

@@ -103,6 +103,16 @@ pub struct Theme {
     #[educe(Default = UiRect::axes(Val::Px(12.0), Val::Px(8.0)))]
     pub item_padding: UiRect,
 
+    /// The height of a compact [`PushButton`](crate::push_button::PushButton).
+    #[educe(Default = Val::Px(28.0))]
+    pub compact_button_height: Val,
+    /// The padding inside a compact [`PushButton`](crate::push_button::PushButton).
+    #[educe(Default = UiRect::axes(Val::Px(10.0), Val::Px(0.0)))]
+    pub compact_button_padding: UiRect,
+    /// The radius of the corners of a compact [`PushButton`](crate::push_button::PushButton).
+    #[educe(Default = Val::Px(6.0))]
+    pub compact_button_radius: Val,
+
     /// The padding inside a colour push button.
     #[educe(Default = UiRect::axes(Val::Px(6.0), Val::Px(4.0)))]
     pub color_button_padding: UiRect,

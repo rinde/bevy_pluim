@@ -44,7 +44,7 @@ use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner,
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{PushButton, PushButtonRefs};
+use rin_bevy_ui::push_button::{ButtonSize, PushButton, PushButtonRefs};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
@@ -887,6 +887,70 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
     assert_eq!(label_color(&app), colors.text_primary);
+}
+
+#[test]
+fn a_compact_push_button_is_small_and_keeps_it_after_a_theme_change() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(ButtonSize::Compact);
+    app.update();
+    app.update();
+
+    let label = app
+        .world()
+        .entity(button)
+        .get::<PushButtonRefs>()
+        .unwrap()
+        .label_id;
+    let check = |app: &App| {
+        let theme = app.world().get_resource::<Theme>().unwrap();
+        let node = app.world().entity(button).get::<Node>().unwrap();
+        assert_eq!(node.padding, theme.compact_button_padding);
+        assert_eq!(node.height, Val::Px(28.0));
+        assert_eq!(node.border_radius, BorderRadius::all(Val::Px(6.0)));
+        assert!(
+            app.world()
+                .entity(button)
+                .get::<BoxShadow>()
+                .unwrap()
+                .0
+                .is_empty()
+        );
+        let font = app.world().entity(label).get::<TextFont>().unwrap();
+        assert_eq!(font.font_size, FontSize::Px(12.0));
+        assert_eq!(font.weight, FontWeight::SEMIBOLD);
+    };
+    check(&app);
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    app.update();
+    app.update();
+    check(&app);
+
+    // Back to the regular size.
+    app.world_mut()
+        .entity_mut(button)
+        .insert(ButtonSize::Regular);
+    app.update();
+    app.update();
+    let theme = app.world().get_resource::<Theme>().unwrap();
+    let node = app.world().entity(button).get::<Node>().unwrap();
+    assert_eq!(node.padding, theme.item_padding);
+    assert_eq!(node.height, Val::Auto);
+    assert!(
+        !app.world()
+            .entity(button)
+            .get::<BoxShadow>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
 }
 
 #[test]
