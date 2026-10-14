@@ -1,0 +1,34 @@
+// The body of a panel grows with its content up to its maximum height and then
+// scrolls. The tall panel's body is limited to 100 pixels and holds twelve
+// lines, so the wheel over it scrolls its contents, while the closable panel's
+// three lines fit and never scroll. A positive wheel y is "up".
+(
+    format_version: 3,
+    name: "a panel body taller than its maximum scrolls and a short one does not",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Within(Name("tall panel"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(0.0),
+        )),
+        MoveTo(Within(Name("tall panel"), Text("Line 1"))),
+        Wheel(x: 0.0, y: -30.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("tall panel"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(30.0),
+        )),
+        MoveTo(Within(Name("closable panel"), Text("Line 1"))),
+        Wheel(x: 0.0, y: -30.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("closable panel"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(0.0),
+        )),
+    ],
+    expect: [],
+)

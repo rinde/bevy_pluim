@@ -135,7 +135,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square |
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are small `IconButton`s (accessible names `decrease_name` / `increase_name`, "Decrease" / "Increase" by default; icons `decrease_icon` / `increase_icon`, a drawn minus and plus when left at the default handle) that step on `Activate`; `format` (`fn(&Value) -> String`, default `Display`) says how the value is shown, in a label of at least `label_min_width` (54 px) so the buttons do not move; fields are read when the component is inserted, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to, so only the buttons are tab stops |
-| `panel.rs` | `Panel`: a `Card` 380 px wide with a header (title `Label`, optional subtitle beside it, optional close `IconButton` that triggers the `PanelClosed` entity event on the panel), a strip, a `Divider`, a body in a `ScrollArea` that grows with its content up to `max_body_height` (620) and then scrolls, and a footer above a divider. The app spawns contents as children of the entities in `PanelRefs` (`strip`, `body`, `footer`); an empty strip or footer is `Display::None`. Insert a `Panel` again to change title, subtitle, close icon or maximum height. Grow-then-scroll needs only `max_height` on the `ScrollArea` node (`a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls`) |
+| `panel.rs` | `Panel`: a `Card` 380 px wide with a header (title `Label`, optional subtitle beside it, optional close `IconButton` that triggers the `PanelClosed` entity event on the panel), a strip, a `Divider`, a body in a `ScrollArea` that grows with its content up to `max_body_height` (620) and then scrolls, and a footer above a divider. The app spawns contents as children of the entities in `PanelRefs` (`strip`, `body`, `footer`); an empty strip or footer is `Display::None`. Insert a `Panel` again to change title, subtitle, close icon or maximum height. The body is `should_block_lower: false`, or it would cover the scroll contents and the wheel would never reach them. Grow-then-scroll needs only `max_height` on the `ScrollArea` node (`a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls`) |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy**. `ButtonSize::Compact` (insert it with the button or later) makes it 28 px high with 10 px side padding, a 6 px radius, a semibold 12 px label and no shadow (`Theme::compact_button_*`, `font_size_small`); `Regular` is the default |
 | `label.rs` | `Label` with `Title` (`Label::title`, also `Label::header`), `Regular`, `Secondary`, `Caption` and `Overline` (shown in upper case, no letter spacing), sized and coloured from the theme's type scale and text slots |
 | `focus.rs` | the crate-private `TabStop` marker (requires `TabIndex`), `sync_tab_index` and the focus ring, see "Keyboard focus" below |
@@ -169,9 +169,16 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `numeric_stepper` | `NumericStepper` |
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 | `segmented_control` | `SegmentedControl`s, one with its own selection and two sharing one |
+| `panel` | a closable `Panel` (the app despawns it on `PanelClosed`) and one whose body scrolls |
+| `setting_row` | a `SettingRows` column of `SettingRow`s with a segmented control, a stepper and a button in their slots |
+| `badge` | neutral and warning `Badge`s on icon buttons, and a button that raises a count |
+| `tooltip` | a `Tooltip` on a push button and the one an `IconButton` has |
 | `image_gallery` | a `Gallery` of locomotives and wagons in a horizontal `ScrollArea` |
 | `hud` | the redesign's HUD composed from the widgets over sample data, no game: pause button and `Kbd`, a panel `Toolbar` with badges driving a `Stack` of `Panel`s (trains with `FilterChips` and `Pill` rows, stops, warnings, preferences with `SettingRow`s), and a tool dock whose active tool brings an option bar (`SegmentedControl`s, `NumericStepper`, vehicle `Gallery`). Its icons are drawn at startup. The UI lives in `examples/hud/ui/mod.rs`, which `tests/headless.rs` includes with `#[path]` for a smoke test |
 | `gallery` | the tester's gallery: the widgets in one window, and a **Scenarios** window listing every file of `tests/ron/` (one group per widget) to watch play, step, take over or record; see [The gallery](#the-gallery) |
+
+`panel`, `badge` and `tooltip` draw their icon with `examples/common/mod.rs`
+(`mod common;`; a directory without a `main.rs` is not an example).
 
 Every example has a button that toggles the light and dark theme (the gallery's
 is on its screens, the `hud`'s is the Appearance setting of its Preferences
@@ -717,7 +724,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`,
-  `Themed`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Tooltip`, `Themed`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -766,6 +773,21 @@ a file can check any `Reflect` type of the app by short type path.
   value with `TextOf(Name("u16 stepper"), Exact("11"))`. Move the pointer to the button before every click: a wider
   value moves the buttons. A button at its limit is `InteractionDisabled`, so
   the tester's click on it does nothing (`numeric_stepper_bounds.ron`).
+- **The `Panel`, `SettingRows`, `Badge` and `Tooltip` screens.** `Panel`
+  has `closable panel` (title "Trains", subtitle "3 open", three lines; its
+  `PanelClosed` observer despawns it) and `tall panel` (100 px maximum body,
+  twelve lines, so the wheel scrolls it: read `ScrollPosition.0.y` of its
+  `ScrollContents`); the close button is `Component("IconButton")` within the
+  panel, as an icon button has no text for a `Role` label to match. Panel
+  and `SettingRow` do not share a screen: `SettingRows` is the `setting rows`
+  column of `appearance row` (a `SegmentedControl`), `text size row` (a
+  stepper) and `last row` (a button), whose dividers are `Nth(i, Within(Name
+  ("setting rows"), Name("Divider")))` and read `Node.display`. `Badge` has
+  `counted button` (3), `warning button` (12), `plain button` and "Add badge";
+  the pill is a `Name("Badge")` child with the count as its text. `Tooltip` has
+  `tooltip anchor` (tip "Anchor tip") and `help button` (an icon button, tip
+  "Help"); the popup's text exists only while it shows, so `Exists(Text(..))`
+  says whether it does, after `Wait(40)` frames (0.5 s at 60 per second).
 - **The `Lists` screen** names every list after its selection so a file can
   reach it: `one-or-more list` and `one-or-more grid list` (one shared
   `Selection::reference`), `one list` (own items), `zero-or-one list` and

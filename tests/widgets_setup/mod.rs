@@ -27,22 +27,28 @@ use bevy::color::palettes::tailwind::{
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
+use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
+use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
+use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue,
 };
+use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::tooltip::Tooltip;
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
 
 use crate::common::spawn_camera_and_root;
@@ -91,6 +97,24 @@ pub enum WidgetsSetup {
     /// `first mirror stepper` and `second mirror stepper` point to it), and
     /// "Change theme".
     NumericStepper,
+    /// Two panels, each with a title, a subtitle and a close button, which
+    /// closes the panel by despawning it: `closable panel` (a few lines in
+    /// its body) and `tall panel`, whose 100 pixel high body is shorter than
+    /// its twelve lines and so scrolls. Then "Change theme".
+    Panel,
+    /// A `setting rows` column of three `SettingRow`s (`appearance row` with
+    /// a segmented control, `text size row` with a numeric stepper and `last
+    /// row` with a button) and "Change theme".
+    SettingRows,
+    /// An icon button named `counted button` with a neutral badge saying 3, a
+    /// `warning button` with a warning badge saying 12, an icon button with no
+    /// badge (`plain button`), "Add badge", which raises the count of the first
+    /// by one, and "Change theme".
+    Badge,
+    /// A `tooltip anchor` push button with the tooltip "Anchor tip", an icon
+    /// button named "Help" (which has a tooltip of its own, "Help") and
+    /// "Change theme".
+    Tooltip,
     /// One of each widget whose colours follow the theme, side by side: a
     /// `themed button` ("Other"), a `themed card` and a `themed list` of
     /// three items (the first selected), then "Change theme".
@@ -109,6 +133,10 @@ impl AppSetup for WidgetsSetup {
             Self::Tabs => tabs(world),
             Self::ColorPalette => color_palette(world),
             Self::NumericStepper => numeric_stepper(world),
+            Self::Panel => panel(world),
+            Self::SettingRows => setting_rows(world),
+            Self::Badge => badge(world),
+            Self::Tooltip => tooltip(world),
             Self::Themed => themed(world),
         }
         Ok(())
@@ -975,6 +1003,152 @@ fn numeric_stepper(world: &mut World) {
             ValueRef(shared),
             Name::new("second mirror stepper"),
         ));
+        spawn_theme_button(root);
+    });
+}
+
+fn panel(world: &mut World) {
+    let root = row_root(world);
+    let top = Node {
+        align_self: AlignSelf::FlexStart,
+        ..default()
+    };
+    let closable = world
+        .spawn((
+            Panel::new("Trains")
+                .with_subtitle("3 open")
+                .with_close_icon(Handle::default()),
+            Name::new("closable panel"),
+            top.clone(),
+            ChildOf(root),
+        ))
+        .observe(|closed: On<PanelClosed>, mut commands: Commands| {
+            commands.entity(closed.entity).despawn();
+        })
+        .id();
+    let tall = world
+        .spawn((
+            Panel::new("Stops")
+                .with_close_icon(Handle::default())
+                .with_max_body_height(100.0),
+            Name::new("tall panel"),
+            top,
+            ChildOf(root),
+        ))
+        .id();
+    world.entity_mut(root).with_children(spawn_theme_button);
+    world.flush();
+    for (panel, lines) in [(closable, 3), (tall, 12)] {
+        let Some(body) = world.get::<PanelRefs>(panel).map(|refs| refs.body) else {
+            continue;
+        };
+        for line in 1..=lines {
+            world.spawn((Label::regular(format!("Line {line}")), ChildOf(body)));
+        }
+    }
+}
+
+fn setting_rows(world: &mut World) {
+    let root = row_root(world);
+    let rows = world
+        .spawn((
+            SettingRows,
+            Name::new("setting rows"),
+            Node {
+                width: px(400),
+                ..default()
+            },
+            ChildOf(root),
+        ))
+        .id();
+    let mut slots = Vec::new();
+    for (name, title, description) in [
+        ("appearance row", "Appearance", "Light or dark"),
+        ("text size row", "Text size", "Points"),
+        ("last row", "Reset", "Back to the defaults"),
+    ] {
+        let row = world
+            .spawn((
+                SettingRow::new(title, description),
+                Name::new(name),
+                ChildOf(rows),
+            ))
+            .id();
+        slots.push(row);
+    }
+    world.flush();
+    let slot =
+        |world: &World, row: Entity| world.get::<SettingRowRefs>(row).map(|r| r.control_slot);
+    if let Some(slot) = slots.first().and_then(|row| slot(world, *row)) {
+        world.spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Light", "Dark"].map(Item::new)),
+            ChildOf(slot),
+        ));
+    }
+    if let Some(slot) = slots.get(1).and_then(|row| slot(world, *row)) {
+        world.spawn((
+            NumericStepper::default(),
+            Value::new_u8(12, 8, 20, 1),
+            ChildOf(slot),
+        ));
+    }
+    if let Some(slot) = slots.get(2).and_then(|row| slot(world, *row)) {
+        world.spawn((PushButton::from_label("Reset"), ChildOf(slot)));
+    }
+    world.entity_mut(root).with_children(spawn_theme_button);
+}
+
+/// Marks the button whose badge "Add badge" raises.
+#[derive(Component)]
+struct CountedButton;
+
+fn badge(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            IconButton::new(Handle::default(), "Trains", IconButtonSize::Large),
+            Badge::count(3),
+            CountedButton,
+            Name::new("counted button"),
+        ));
+        root.spawn((
+            IconButton::new(Handle::default(), "Warnings", IconButtonSize::Large),
+            Badge::count(12).with_tone(BadgeTone::Warning),
+            Name::new("warning button"),
+        ));
+        root.spawn((
+            IconButton::new(Handle::default(), "Stops", IconButtonSize::Large),
+            Name::new("plain button"),
+        ));
+        root.spawn(PushButton::from_label("Add badge")).observe(
+            |_: On<Activate>, mut badges: Query<&mut Badge, With<CountedButton>>| {
+                for mut badge in &mut badges {
+                    let count = badge.text.parse::<usize>().unwrap_or(0);
+                    badge.text = (count + 1).to_string();
+                }
+            },
+        );
+        spawn_theme_button(root);
+    });
+}
+
+fn tooltip(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            PushButton::from_label("Anchor"),
+            Tooltip::new("Anchor tip"),
+            Name::new("tooltip anchor"),
+        ));
+        root.spawn(IconButton::new(
+            Handle::default(),
+            "Help",
+            IconButtonSize::Large,
+        ))
+        .insert(Name::new("help button"));
         spawn_theme_button(root);
     });
 }
