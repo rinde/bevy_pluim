@@ -751,7 +751,8 @@ a file can check any `Reflect` type of the app by short type path.
   - **A variant** is found by Bevy's automatic registration, so adding one
     needs no registration call; add it to the smoke test in
     `tests/scenarios.rs` as well.
-  - **`Buttons`** also keeps the `Clicks` resource, the `Activate`s of "Add".
+  - **`Buttons`** also keeps the `Clicks` resource, the `Activate`s of "Add",
+    and has a "Disabled" button (`InteractionDisabled`), which Tab skips.
   - **`AppSetup::capture`** (recording a session from the app as it is) is not
     implemented: only the tester's gallery and recorder call it, which these
     tests do not run, so it would go untested.
@@ -775,6 +776,24 @@ a file can check any `Reflect` type of the app by short type path.
   so a recording suggests the selections that changed. Add a variant here
   when a claim about widgets cannot be said with `Component(..)` or
   `Resource(..)`.
+- **The accessibility check** is `App(Accessible(of: .., role: Some("Button"),
+  label: Some("Add"), value: None, states: [Disabled]))`
+  (`WidgetsCheck::Accessible`): `AccessibilityNode` wraps an `accesskit::Node`,
+  which reflection cannot read, so `Component(..)` cannot say what a widget
+  exposes. `of` resolves like `Selected`'s, but the node is read on that entity,
+  not above it, and a failure says `<target> has no AccessibilityNode` when it
+  has none. `role` is the `accesskit::Role` by its `Debug` name (`"Button"`,
+  `"ListItem"`); `label` and `value` are compared exactly; `None` is not
+  checked. `states` are `AccessibleState`s that must all hold, unlisted ones
+  are not checked: `Selected` / `NotSelected`, `Toggled` / `NotToggled` and
+  `Expanded` / `Collapsed` need the state set (a node that cannot be expanded
+  is neither), `Disabled` / `Enabled` and `Hidden` / `Shown` read a flag. A
+  failure names every difference: `<target> has role Button, not ComboBox, is
+  enabled, not Disabled`. **A `PushButton` has no label yet**: Bevy labels its
+  `bevy::ui::Button`s with their text, not the `bevy::ui_widgets::Button`s ours
+  are, so `accessible_names_today.ron` checks only the role and the disabled
+  state. The tester's `Role(role: Button, label: ..)` still finds the button,
+  because it reads the text.
 - **Targets on a screen with several of one widget.** The `NumericStepper`
   screen puts a `Name` on every stepper (`default stepper`, `u16 stepper`,
   `u32 stepper`, `f32 stepper`, `stepper by two`, and `shared stepper` with

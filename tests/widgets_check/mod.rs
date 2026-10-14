@@ -8,6 +8,10 @@
 //! `App(Selected(of: .., items: [..]))` and a Rust scenario
 //! `Check::app(WidgetsCheck::Selected { .. })`.
 //!
+//! `AccessibilityNode` wraps an `accesskit::Node`, which is not `Reflect`, so
+//! `Component(..)` cannot read it either. `Accessible` reads its role, label,
+//! value and states and names them in a script.
+//!
 //! Pull it in with `mod widgets_check;`. It lives under `tests/` because the
 //! library does not depend on the tester. Like `widgets_setup`, it is its own
 //! module and not part of `common`, so a target that does not use it does not
@@ -18,6 +22,7 @@
     reason = "`pub` is the only visibility clippy accepts in a private test module"
 )]
 
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::query::QueryFilter;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
@@ -66,6 +71,146 @@ pub enum WidgetsCheck {
         /// The row it is.
         is: Target,
     },
+    /// The `AccessibilityNode` on the entity `of` names (not above it) has
+    /// this role, label and value, and every state in `states`.
+    ///
+    /// `role` is the `accesskit::Role` by its `Debug` name (`"Button"`,
+    /// `"ListItem"`, `"Label"`); `label` and `value` are compared exactly. A
+    /// field that is `None` is not checked, nor is a state that is not
+    /// listed. A failure names every field that differed.
+    Accessible {
+        /// The widget whose accessibility node is read.
+        of: Target,
+        /// The role, by its `Debug` name, if it is checked.
+        role: Option<String>,
+        /// The label, if it is checked.
+        label: Option<String>,
+        /// The value, if it is checked.
+        value: Option<String>,
+        /// The states that must hold.
+        states: Vec<AccessibleState>,
+    },
+}
+
+/// A state of an `AccessibilityNode` that [`WidgetsCheck::Accessible`] checks.
+///
+/// `accesskit` leaves selected, toggled and expanded unset on a node that
+/// cannot be selected, toggled or expanded, so the negative states ask for the
+/// state to be set and false: a button with no expanded state is neither
+/// `Expanded` nor `Collapsed`. Disabled and hidden are flags, so `Enabled` and
+/// `Shown` hold whenever the flag is not set.
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccessibleState {
+    /// Selected is set and true.
+    Selected,
+    /// Selected is set and false.
+    NotSelected,
+    /// Toggled is set and on.
+    Toggled,
+    /// Toggled is set and off.
+    NotToggled,
+    /// Expanded is set and true.
+    Expanded,
+    /// Expanded is set and false.
+    Collapsed,
+    /// The disabled flag is set.
+    Disabled,
+    /// The disabled flag is not set.
+    Enabled,
+    /// The hidden flag is set.
+    Hidden,
+    /// The hidden flag is not set.
+    Shown,
+}
+
+impl AccessibleState {
+    /// Whether the state holds on `node`, and if not, what `node` says
+    /// instead.
+    fn check(self, node: &AccessibilityNode) -> Result<(), String> {
+        let tristate = |set: Option<bool>, yes: &str, no: &str| match set {
+            Some(true) => yes.to_owned(),
+            Some(false) => no.to_owned(),
+            None => format!("neither {yes} nor {no}"),
+        };
+        let flag = |set: bool, yes: &str, no: &str| (if set { yes } else { no }).to_owned();
+        let toggled = node.toggled().map(|toggled| {
+            if toggled == true.into() {
+                Some(true)
+            } else if toggled == false.into() {
+                Some(false)
+            } else {
+                None
+            }
+        });
+        let (holds, actual) = match self {
+            Self::Selected | Self::NotSelected => (
+                node.is_selected() == Some(self == Self::Selected),
+                tristate(node.is_selected(), "selected", "not selected"),
+            ),
+            Self::Toggled | Self::NotToggled => (
+                toggled == Some(Some(self == Self::Toggled)),
+                match toggled {
+                    Some(None) => "mixed".to_owned(),
+                    other => tristate(other.flatten(), "toggled", "not toggled"),
+                },
+            ),
+            Self::Expanded | Self::Collapsed => (
+                node.is_expanded() == Some(self == Self::Expanded),
+                tristate(node.is_expanded(), "expanded", "collapsed"),
+            ),
+            Self::Disabled | Self::Enabled => (
+                node.is_disabled() == (self == Self::Disabled),
+                flag(node.is_disabled(), "disabled", "enabled"),
+            ),
+            Self::Hidden | Self::Shown => (
+                node.is_hidden() == (self == Self::Hidden),
+                flag(node.is_hidden(), "hidden", "shown"),
+            ),
+        };
+        if holds { Ok(()) } else { Err(actual) }
+    }
+}
+
+/// What differs between the `AccessibilityNode` on `entity` and the role,
+/// label, value and states expected of it, each said as `has role Button, not
+/// ComboBox`.
+fn accessible_differences(
+    world: &World,
+    entity: Entity,
+    role: Option<&String>,
+    label: Option<&String>,
+    value: Option<&String>,
+    states: &[AccessibleState],
+) -> Result<Vec<String>, String> {
+    let node = world
+        .get::<AccessibilityNode>(entity)
+        .ok_or_else(|| "has no AccessibilityNode".to_owned())?;
+    let mut differences = Vec::new();
+    if let Some(role) = role {
+        let actual = format!("{:?}", node.role());
+        if actual != *role {
+            differences.push(format!("has role {actual}, not {role}"));
+        }
+    }
+    let mut text = |what: &str, actual: Option<&str>, expected: Option<&String>| {
+        let Some(expected) = expected else {
+            return;
+        };
+        match actual {
+            Some(actual) if actual == expected => {}
+            Some(actual) => differences.push(format!("has {what} {actual:?}, not {expected:?}")),
+            None => differences.push(format!("has no {what}, not {expected:?}")),
+        }
+    };
+    text("label", node.label(), label);
+    text("value", node.value(), value);
+    differences.extend(states.iter().filter_map(|state| {
+        state
+            .check(node)
+            .err()
+            .map(|actual| format!("is {actual}, not {state:?}"))
+    }));
+    Ok(differences)
 }
 
 impl AppCheck for WidgetsCheck {
@@ -97,6 +242,32 @@ impl AppCheck for WidgetsCheck {
                     Some(active) if active == row => Ok(()),
                     Some(active) => Err(format!("{active} is active in {of:?}, not {is:?}")),
                     None => Err(format!("{of:?} has no active row, not {is:?}")),
+                }
+            }
+            Self::Accessible {
+                of,
+                role,
+                label,
+                value,
+                states,
+            } => {
+                let world = probe.world();
+                let widget = resolve(world, of)?
+                    .widget
+                    .ok_or_else(|| format!("{of:?} names a position, not a widget"))?;
+                let differences = accessible_differences(
+                    world,
+                    widget,
+                    role.as_ref(),
+                    label.as_ref(),
+                    value.as_ref(),
+                    states,
+                )
+                .map_err(|missing| format!("{of:?} {missing}"))?;
+                if differences.is_empty() {
+                    Ok(())
+                } else {
+                    Err(format!("{of:?} {}", differences.join(", ")))
                 }
             }
             Self::Focused { of } => {

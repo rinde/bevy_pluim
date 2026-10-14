@@ -11,6 +11,7 @@ use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
 use bevy::ecs::system::RunSystemOnce;
 use std::path::Path;
 
+use bevy::a11y::AccessibilityNode;
 use bevy::camera::{CameraUpdateSystems, NormalizedRenderTarget, RenderTarget};
 use bevy::picking::input::PointerInputSettings;
 use bevy::prelude::*;
@@ -33,7 +34,7 @@ use rin_bevy_ui_tester::{
 };
 
 use common::{spawn_camera_and_root, widgets_app};
-use widgets_check::WidgetsCheck;
+use widgets_check::{AccessibleState, WidgetsCheck};
 use widgets_setup::{Clicks, WidgetsSetup};
 
 fn add_button() -> Target {
@@ -632,6 +633,209 @@ fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
     assert!(
         (scrolled - wanted).abs() < 1.0,
         "scrolled {scrolled}, wanted {wanted} (three moves of {step} px at {per_pixel} per pixel)"
+    );
+}
+
+// ---- `WidgetsCheck::Accessible` ----
+
+/// An app with a node named "described" whose `AccessibilityNode` has role
+/// `Unknown`, label "Answer", value "42" and is expanded, a "plain" node
+/// without an `AccessibilityNode`, and a disabled push button "Off", all laid
+/// out.
+fn accessible_app() -> App {
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    let mut described = AccessibilityNode::default();
+    described.set_label("Answer");
+    described.set_value("42");
+    described.set_expanded(true);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((Node::default(), Name::new("described"), described));
+        root.spawn((Node::default(), Name::new("plain")));
+        root.spawn((PushButton::from_label("Off"), InteractionDisabled));
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+    app
+}
+
+/// Runs `Accessible` on `of` on the app as it is.
+fn accessible(
+    app: &App,
+    of: Target,
+    role: Option<&str>,
+    label: Option<&str>,
+    value: Option<&str>,
+    states: &[AccessibleState],
+) -> CheckResult {
+    WidgetsCheck::Accessible {
+        of,
+        role: role.map(ToString::to_string),
+        label: label.map(ToString::to_string),
+        value: value.map(ToString::to_string),
+        states: states.to_vec(),
+    }
+    .run(&Probe::new(app.world()))
+}
+
+#[test]
+fn accessible_passes_when_role_label_value_and_states_match() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(
+            &app,
+            Target::name("described"),
+            Some("Unknown"),
+            Some("Answer"),
+            Some("42"),
+            &[AccessibleState::Expanded, AccessibleState::Enabled],
+        ),
+        Ok(())
+    );
+}
+
+#[test]
+fn accessible_does_not_check_what_it_is_not_given() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(&app, Target::name("described"), None, None, None, &[]),
+        Ok(())
+    );
+}
+
+#[test]
+fn accessible_names_a_different_role() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(
+            &app,
+            Target::name("described"),
+            Some("ComboBox"),
+            None,
+            None,
+            &[]
+        ),
+        Err(r#"Name("described") has role Unknown, not ComboBox"#.to_owned())
+    );
+}
+
+#[test]
+fn accessible_names_a_different_label() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(
+            &app,
+            Target::name("described"),
+            None,
+            Some("Question"),
+            None,
+            &[]
+        ),
+        Err(r#"Name("described") has label "Answer", not "Question""#.to_owned())
+    );
+}
+
+#[test]
+fn accessible_names_a_different_value() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(&app, Target::name("described"), None, None, Some("43"), &[]),
+        Err(r#"Name("described") has value "42", not "43""#.to_owned())
+    );
+}
+
+#[test]
+fn accessible_names_a_state_that_does_not_hold() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(
+            &app,
+            Target::name("described"),
+            None,
+            None,
+            None,
+            &[AccessibleState::Collapsed]
+        ),
+        Err(r#"Name("described") is expanded, not Collapsed"#.to_owned())
+    );
+}
+
+#[test]
+fn accessible_names_every_difference() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(
+            &app,
+            Target::name("described"),
+            Some("Button"),
+            None,
+            None,
+            &[AccessibleState::Disabled, AccessibleState::Hidden]
+        ),
+        Err(
+            r#"Name("described") has role Unknown, not Button, is enabled, not Disabled, is shown, not Hidden"#
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn accessible_asks_a_negative_state_to_be_set() {
+    // The node can be neither selected nor toggled, so it is not `NotSelected`
+    // or `NotToggled` either.
+    let app = accessible_app();
+    assert_eq!(
+        accessible(
+            &app,
+            Target::name("described"),
+            None,
+            None,
+            None,
+            &[AccessibleState::NotSelected, AccessibleState::NotToggled]
+        ),
+        Err(
+            r#"Name("described") is neither selected nor not selected, not NotSelected, is neither toggled nor not toggled, not NotToggled"#
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn accessible_reads_a_disabled_push_button() {
+    let app = accessible_app();
+    let button = || Target::role(WidgetRole::Button, "Off");
+    assert_eq!(
+        accessible(
+            &app,
+            button(),
+            Some("Button"),
+            None,
+            None,
+            &[AccessibleState::Disabled]
+        ),
+        Ok(())
+    );
+    assert_eq!(
+        accessible(
+            &app,
+            button(),
+            None,
+            None,
+            None,
+            &[AccessibleState::Enabled]
+        ),
+        Err(r#"Role(role: Button, label: "Off") is disabled, not Enabled"#.to_owned())
+    );
+}
+
+#[test]
+fn accessible_fails_on_a_node_without_an_accessibility_node() {
+    let app = accessible_app();
+    assert_eq!(
+        accessible(&app, Target::name("plain"), None, None, None, &[]),
+        Err(r#"Name("plain") has no AccessibilityNode"#.to_owned())
     );
 }
 
