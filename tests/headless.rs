@@ -2971,6 +2971,85 @@ fn a_segmented_control_follows_a_theme_change() {
     assert_eq!(background(&app, segments[0]), colors.segmented_selected);
 }
 
+#[test]
+fn an_unselected_segment_shows_primary_text_while_hovered_and_secondary_after() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    let label_color = |app: &App, segment: Entity| {
+        let label = app.world().entity(segment).get::<Children>().unwrap()[0];
+        app.world().entity(label).get::<TextColor>().unwrap().0
+    };
+    assert_eq!(label_color(&app, segments[1]), colors.text_secondary);
+
+    app.world_mut()
+        .entity_mut(segments[1])
+        .insert(Hovered(true));
+    app.world_mut().run_schedule(Update);
+    app.world_mut().run_schedule(Update);
+    assert_eq!(label_color(&app, segments[1]), colors.text_primary);
+    assert_eq!(background(&app, segments[1]), colors.segmented_track);
+    assert_eq!(label_color(&app, segments[2]), colors.text_secondary);
+
+    app.world_mut()
+        .entity_mut(segments[1])
+        .insert(Hovered(false));
+    app.world_mut().run_schedule(Update);
+    app.world_mut().run_schedule(Update);
+    assert_eq!(label_color(&app, segments[1]), colors.text_secondary);
+}
+
+#[test]
+fn a_hovered_selected_segment_keeps_the_selected_text() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+
+    app.world_mut()
+        .entity_mut(segments[0])
+        .insert(Hovered(true));
+    app.world_mut().run_schedule(Update);
+    app.world_mut().run_schedule(Update);
+
+    let label = app.world().entity(segments[0]).get::<Children>().unwrap()[0];
+    assert_eq!(
+        app.world().entity(label).get::<TextColor>().unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.segmented_selected_text
+    );
+}
+
+#[test]
+fn adding_and_removing_items_adds_and_removes_segments() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let removed = app.world().entity(segments_of(&app, control)[1]);
+    let removed_item = removed.get::<Segment>().unwrap().item_ref;
+    // The control's own selection holds its items.
+    let items_ref = control;
+
+    app.world_mut().entity_mut(removed_item).despawn();
+    app.world_mut().spawn((Item::new("New"), ItemOf(items_ref)));
+    app.update();
+    app.update();
+    app.update();
+
+    let texts: Vec<_> = segments_of(&app, control)
+        .into_iter()
+        .map(|s| segment_text(&app, s))
+        .collect();
+    assert_eq!(texts, ["Auto", "Off", "New"]);
+    assert_eq!(selected_segments(&app, control), ["Auto"]);
+    // The new segment is styled and works.
+    let segments = segments_of(&app, control);
+    assert_eq!(
+        background(&app, segments[2]),
+        DEFAULT_LIGHT_THEME_COLORS.segmented_track
+    );
+    activate(&mut app, segments[2]);
+    assert_eq!(selected_segments(&app, control), ["New"]);
+}
+
 // ---- Separated lists ----
 
 /// A `CornerStyle::Separated` list over a `One` selection of `labels`.

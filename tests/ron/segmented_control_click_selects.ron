@@ -1,0 +1,25 @@
+// The first segment of `own segmented control` starts selected; a click on the other selects
+// it instead, and a click on the selected segment changes nothing. The two shared controls
+// are not touched.
+(
+    format_version: 3,
+    name: "clicking a segment selects it",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Auto"]))),
+        Check(Selected(Role(role: Button, label: "Auto"))),
+        MoveTo(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Click(Left),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        Check(Selected(Within(Name("own segmented control"), Role(role: Button, label: "Manual")))),
+        Check(Not(Selected(Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+        MoveTo(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Click(Left),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Dark"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("own segmented control"), items: ["Manual"])),
+    ],
+)
