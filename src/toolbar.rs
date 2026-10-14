@@ -619,11 +619,20 @@ fn update_buttons(
 /// toggled on while its tool is active and off otherwise. Bevy clears the label of a button
 /// that has no text of its own when it is added, so this runs after it.
 fn sync_accessibility(
-    mut toolbars: Query<&mut AccessibilityNode, (With<Toolbar>, Without<ToolbarButton>)>,
+    mut toolbars: Query<
+        &mut AccessibilityNode,
+        (
+            With<Toolbar>,
+            Without<ToolbarButton>,
+            Changed<AccessibilityNode>,
+        ),
+    >,
     mut buttons: Query<(&ToolbarButton, &mut AccessibilityNode)>,
     items: Query<&Item<Tool>>,
     selections: SelectionParam,
 ) {
+    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
+    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut toolbars {
         sync_role(&mut node, Role::Toolbar);
     }

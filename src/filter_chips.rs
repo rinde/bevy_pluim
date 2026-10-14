@@ -369,11 +369,20 @@ fn accessible_name(chip: &Chip) -> String {
 /// toggled while it is active. Bevy makes a node a button again when its `Button` changes, and
 /// takes the name from only one of the chip's two texts, so this runs after it.
 fn sync_accessibility(
-    mut rows: Query<&mut AccessibilityNode, (With<FilterChips>, Without<ChipView>)>,
+    mut rows: Query<
+        &mut AccessibilityNode,
+        (
+            With<FilterChips>,
+            Without<ChipView>,
+            Changed<AccessibilityNode>,
+        ),
+    >,
     mut chips: Query<(&ChipView, &mut AccessibilityNode)>,
     items: Query<&Item<Chip>>,
     selections: SelectionParam,
 ) {
+    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
+    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut rows {
         sync_role(&mut node, Role::RadioGroup);
     }
@@ -405,6 +414,12 @@ fn on_activate(t: On<Activate>, views: Query<&ChipView>, mut selections: Selecti
 mod tests {
     use super::*;
     use crate::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS};
+
+    #[test]
+    fn a_chip_is_named_after_its_label_and_its_count_without_a_trailing_space() {
+        assert_eq!(accessible_name(&Chip::new("All")), "All");
+        assert_eq!(accessible_name(&Chip::with_count("All", 4)), "All 4");
+    }
 
     #[test]
     fn the_active_chip_is_filled_and_the_others_are_outlined() {
