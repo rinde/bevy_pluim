@@ -93,7 +93,7 @@ fn theme_kbds(
         text_color.0 = theme.colors.text_secondary;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
-            font_size: FontSize::Px(theme.font_size_caption),
+            font_size: Theme::font_size(theme.font_size_caption),
             weight: FontWeight::SEMIBOLD,
             ..default()
         };

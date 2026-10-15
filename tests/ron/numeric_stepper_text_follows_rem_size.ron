@@ -1,0 +1,26 @@
+// A stepper's value is secondary text, 0.7 rem, so it follows Bevy's `RemSize`.
+// `ron_scenarios` also plays this file with the rem size at 1.5 times the
+// default (`[text 1.5x]`): the steppers still fit the window, and the value
+// label keeps its minimum width (54 px) from "10.0" to "10.5", so the buttons
+// do not move while the value changes.
+(
+    format_version: 3,
+    name: "a stepper sizes its value in rem and its buttons stay put at any text size",
+    setup: App(NumericStepper),
+    steps: [
+        Wait(2),
+        Check(Component(target: Within(Name("f32 stepper"), Name("Value")), path: "TextFont.font_size", is: Eq(Rem(0.7)))),
+        Check(Component(target: Within(Name("f32 stepper"), Name("Value")), path: "ComputedNode.size.x", unit: Logical, is: Eq(54.0))),
+        Capture(name: "increase", value: Component(target: Within(Name("f32 stepper"), Name("Increase")), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        MoveTo(Within(Name("f32 stepper"), Name("Increase"))),
+        Click(Left),
+        Check(TextOf(Name("f32 stepper"), Exact("10.5"))),
+        Wait(1),
+        Check(Component(target: Within(Name("f32 stepper"), Name("Value")), path: "ComputedNode.size.x", unit: Logical, is: Eq(54.0))),
+        Check(Component(target: Within(Name("f32 stepper"), Name("Increase")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(Captured("increase")))),
+        MoveTo(Within(Name("default stepper"), Name("Decrease"))),
+        MoveTo(Within(Name("second mirror stepper"), Name("Increase"))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)

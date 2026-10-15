@@ -186,7 +186,7 @@ fn theme_link(
             continue;
         };
         text_font.font = theme.body_font.clone().into();
-        text_font.font_size = FontSize::Px(theme.font_size_body);
+        text_font.font_size = Theme::font_size(theme.font_size_body);
         match state {
             LinkState::Enabled => text_color.0 = theme.colors.link,
             LinkState::Disabled => text_color.0 = theme.colors.text_primary,

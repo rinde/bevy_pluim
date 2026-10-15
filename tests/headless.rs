@@ -26,7 +26,7 @@ use bevy::picking::events::{
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
-use bevy::text::LetterSpacing;
+use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use bevy::window::{PrimaryWindow, WindowPlugin};
@@ -981,7 +981,7 @@ fn a_compact_push_button_is_small_and_keeps_it_after_a_theme_change() {
                 .is_empty()
         );
         let font = app.world().entity(label).get::<TextFont>().unwrap();
-        assert_eq!(font.font_size, FontSize::Px(12.0));
+        assert_eq!(font.font_size, FontSize::Rem(0.6));
         assert_eq!(font.weight, FontWeight::SEMIBOLD);
     };
     check(&app);
@@ -2633,10 +2633,10 @@ fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
         .label_id;
     assert_eq!(
         font_of(&app, button_label),
-        (body.clone().into(), FontSize::Px(20.0))
+        (body.clone().into(), FontSize::Rem(1.0))
     );
-    assert_eq!(font_of(&app, regular), (body.into(), FontSize::Px(20.0)));
-    assert_eq!(font_of(&app, header), (display.into(), FontSize::Px(30.0)));
+    assert_eq!(font_of(&app, regular), (body.into(), FontSize::Rem(1.0)));
+    assert_eq!(font_of(&app, header), (display.into(), FontSize::Rem(1.5)));
 }
 
 #[test]
@@ -2664,23 +2664,38 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
         let c = theme.colors;
         assert_eq!(
             look(app, title),
-            (c.text_primary, FontSize::Px(theme.font_size_title))
+            (
+                c.text_primary,
+                FontSize::Rem(theme.font_size_title / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, regular),
-            (c.text_primary, FontSize::Px(theme.font_size_secondary))
+            (
+                c.text_primary,
+                FontSize::Rem(theme.font_size_secondary / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, secondary),
-            (c.text_secondary, FontSize::Px(theme.font_size_secondary))
+            (
+                c.text_secondary,
+                FontSize::Rem(theme.font_size_secondary / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, caption),
-            (c.text_tertiary, FontSize::Px(theme.font_size_small))
+            (
+                c.text_tertiary,
+                FontSize::Rem(theme.font_size_small / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, overline),
-            (c.text_secondary, FontSize::Px(theme.font_size_overline))
+            (
+                c.text_secondary,
+                FontSize::Rem(theme.font_size_overline / DEFAULT_REM_SIZE_PX)
+            )
         );
     };
     check(&app);
@@ -4460,8 +4475,8 @@ fn a_badge_on_an_icon_button_appears_updates_and_disappears() {
     assert_eq!(world.get::<TextColor>(badge).unwrap().0, colors.pill_text);
     let node = world.get::<Node>(badge).unwrap();
     assert_eq!(node.position_type, PositionType::Absolute);
-    assert_eq!(node.height, Val::Px(16.0));
-    assert_eq!(node.min_width, Val::Px(16.0));
+    assert_eq!(node.height, Val::Rem(0.8));
+    assert_eq!(node.min_width, Val::Rem(0.8));
     assert_eq!(world.get::<Pickable>(badge).unwrap(), &Pickable::IGNORE);
 
     app.world_mut()

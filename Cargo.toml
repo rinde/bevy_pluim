@@ -23,7 +23,9 @@ strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
 # The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
-bevy = { version = "0.20.0", features = ["bevy_ui_debug"] }
+# `debug` is Bevy's switch for `ScheduleBuildSettings::shuffle_seed`, which
+# `tests/scenarios.rs` shuffles the schedules with.
+bevy = { version = "0.20.0", features = ["bevy_ui_debug", "debug"] }
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
