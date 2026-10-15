@@ -143,12 +143,12 @@ fn handle_hover(
             theme.colors.background_secondary
         }
         MouseKind::Out => theme.colors.background_primary,
-        MouseKind::Click(_) | MouseKind::Drag(_) => return,
+        MouseKind::Click(_) | MouseKind::Drag => return,
     };
     let link_color = match trigger.event().kind {
         MouseKind::Over | MouseKind::Released | MouseKind::Out => theme.colors.link,
         MouseKind::Pressed => theme.colors.link_selected,
-        MouseKind::Click(_) | MouseKind::Drag(_) => return,
+        MouseKind::Click(_) | MouseKind::Drag => return,
     };
     let Ok((mut link_bg, children)) = links.get_mut(trigger.event().event_target()) else {
         return;

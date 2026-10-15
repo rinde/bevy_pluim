@@ -341,7 +341,7 @@ fn handle_hover(
     mut commands: Commands,
 ) {
     let kind = trigger.event().kind;
-    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag(_)) {
+    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
     let pressed = matches!(kind, MouseKind::Pressed);

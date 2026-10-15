@@ -131,7 +131,7 @@ it can play another worktree's files) and never `cp -r` the 19G `target/`
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
 | `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
-| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
+| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, themed here; each bar is also a `bevy_ui_widgets` `Scrollbar` aimed at the contents and its thumb a `ScrollbarThumb` (no `Node`), so the widget sizes and places the thumb, scrolls the contents when it is dragged and pages them on a click on the track, while `show_scroll_bars` hides a bar whose axis fits; and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
@@ -258,10 +258,11 @@ of them (`just example gallery -- --run-all stack link`).
   `PointerRelease`, `PointerClick`, `PointerDragEnd` and `PointerCancel`: an
   observer on `UiRoot` would never see those for a button. `PointerOver`,
   `PointerDrag` and `PointerOut` are not stopped. `MouseKind` says what the pointer did:
-  `Over`, `Pressed`, `Released`, `Click(button)` and `Drag(delta)`, plus `Out`.
+  `Over`, `Pressed`, `Released`, `Click(button)` and `Drag`, plus `Out`.
   `Click` is a press and a release on the same node, which `Released` cannot
-  say (it also ends a press that began elsewhere), and `Drag` carries the
-  movement since the previous drag event. The combo's outside-click handler
+  say (it also ends a press that began elsewhere), and `Drag` is a move with a
+  button held, which widgets ignore (the scroll thumb's drag is the
+  `bevy_ui_widgets` `Scrollbar`'s). The combo's outside-click handler
   reads `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot
   starve it.
 - **"Is the pointer on it?" is picking's `Hovered`.** A system that asks where
@@ -292,7 +293,7 @@ of them (`just example gallery -- --run-all stack link`).
   requires `Pickable::default()` so it blocks the pointer and gets `MouseEvent`s.
   A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
-  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`) in
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin` and `ScrollbarPlugin`) in
   its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
   tester's `HeadlessPlugins` add all of `UiWidgetsPlugins`; adding twice panics),
   so the order of `WidgetsPlugin` and `UiWidgetsPlugins` does not matter; an app

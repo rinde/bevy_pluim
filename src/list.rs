@@ -240,7 +240,7 @@ fn handle_mouse_events(
     // A click and a drag say nothing new about the pointer being on the view: the over,
     // press, release and out events around them set the colours. A drag in particular can
     // arrive after the pointer left the view, so it must not put it back under the pointer.
-    if matches!(t.event().kind, MouseKind::Click(_) | MouseKind::Drag(_)) {
+    if matches!(t.event().kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
     let Ok((

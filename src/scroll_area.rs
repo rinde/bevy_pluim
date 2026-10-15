@@ -1,4 +1,9 @@
 //! `ScrollArea`: scrollable contents with vertical and/or horizontal scroll bars.
+//!
+//! The scroll bars are `bevy_ui_widgets` [`Scrollbar`]s: the widget sizes and places
+//! each thumb, scrolls the contents when the thumb is dragged and pages them on a click
+//! on the track. This module keeps the layout, the look, the wheel and scrolling a
+//! focused row into view.
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
@@ -8,7 +13,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
-use bevy::ui_widgets::ScrollIntoView;
+use bevy::ui_widgets::{ControlOrientation, ScrollIntoView, Scrollbar, ScrollbarThumb};
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -24,7 +29,7 @@ impl Plugin for ScrollAreaPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(scroll_into_view)
             .add_systems(Update, update_scroll_position)
-            .add_systems(PostUpdate, handle_scroll_change)
+            .add_systems(PostUpdate, show_scroll_bars)
             .add_systems(
                 Update,
                 (|| None::<Entity>)
@@ -121,9 +126,16 @@ impl ScrollArea {
                     ))
                     .id();
 
+                let mut spawn_bar = |orientation| {
+                    s.spawn((
+                        ScrollBar(orientation),
+                        Scrollbar::new(contents_ref, orientation.control_orientation(), 0.0),
+                    ))
+                    .id()
+                };
                 let refs = ScrollAreaRefs {
-                    v_scrollbar: v_scroll.then(|| s.spawn(ScrollBar(Orientation::Vertical)).id()),
-                    h_scrollbar: h_scroll.then(|| s.spawn(ScrollBar(Orientation::Horizontal)).id()),
+                    v_scrollbar: v_scroll.then(|| spawn_bar(Orientation::Vertical)),
+                    h_scrollbar: h_scroll.then(|| spawn_bar(Orientation::Horizontal)),
                 };
                 s.world_mut().entity_mut(contents_ref).insert(refs);
                 s.world_mut()
@@ -135,6 +147,9 @@ impl ScrollArea {
 }
 
 /// A scroll bar with a thumb, along the given [`Orientation`].
+///
+/// [`ScrollArea::bundle`] spawns it with the `bevy_ui_widgets` [`Scrollbar`] that
+/// scrolls the area's [`ScrollContents`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 #[require(Node::default(), Visibility::Inherited, Name::new("ScrollBar"))]
@@ -148,6 +163,16 @@ pub enum Orientation {
     Horizontal,
     /// Scrolls up and down.
     Vertical,
+}
+
+impl Orientation {
+    /// The same axis as `bevy_ui_widgets` names it.
+    const fn control_orientation(self) -> ControlOrientation {
+        match self {
+            Self::Horizontal => ControlOrientation::Horizontal,
+            Self::Vertical => ControlOrientation::Vertical,
+        }
+    }
 }
 
 impl ScrollBar {
@@ -168,23 +193,15 @@ impl ScrollBar {
             .commands()
             .entity(context.entity)
             .with_children(|spawner| {
-                spawner
-                    .spawn(ScrollThumb)
-                    .observe(handle_hover)
-                    .observe(handle_thumb_drag);
+                spawner.spawn(ScrollThumb).observe(handle_hover);
             });
     }
 }
 
+/// The thumb of a [`ScrollBar`]: a `bevy_ui_widgets` [`ScrollbarThumb`], which has no
+/// `Node` because the widget sizes and places it along its track.
 #[derive(Component, Clone, Copy, Debug)]
-#[require(
-    Pickable::default(),
-    Node {
-        position_type: PositionType::Absolute,
-        ..default()
-    },
-    Name::new("ScrollThumb")
-)]
+#[require(ScrollbarThumb, Pickable::default(), Name::new("ScrollThumb"))]
 struct ScrollThumb;
 
 fn handle_hover(
@@ -198,60 +215,11 @@ fn handle_hover(
         MouseKind::Released => theme.colors.selected_item,
         MouseKind::Out => theme.colors.scroll_thumb_background,
         // A click or a drag leaves the colour of the press and release before it.
-        MouseKind::Click(_) | MouseKind::Drag(_) => return,
+        MouseKind::Click(_) | MouseKind::Drag => return,
     };
     if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
         *background = BackgroundColor(color);
     }
-}
-
-/// Scrolls the contents by as much as the thumb moved along its scroll bar.
-fn handle_thumb_drag(
-    drag: On<MouseEvent>,
-    thumbs: Query<&ChildOf, With<ScrollThumb>>,
-    scroll_bars: Query<&ScrollBar>,
-    mut scroll_contents: Query<(&mut ScrollPosition, &ComputedNode, &ScrollAreaRefs)>,
-) {
-    let MouseKind::Drag(delta) = drag.event().kind else {
-        return;
-    };
-    let Ok(scroll_bar_entity) = thumbs.get(drag.event().event_target()).map(ChildOf::parent) else {
-        return;
-    };
-    let Ok(scroll_bar) = scroll_bars.get(scroll_bar_entity) else {
-        return;
-    };
-    let (index, is_this_bar): (usize, fn(&ScrollAreaRefs) -> Option<Entity>) = match scroll_bar.0 {
-        Orientation::Horizontal => (0, |refs| refs.h_scrollbar),
-        Orientation::Vertical => (1, |refs| refs.v_scrollbar),
-    };
-    let Some((mut scroll_position, contents_dims, _)) = scroll_contents
-        .iter_mut()
-        .find(|(_, _, refs)| is_this_bar(refs) == Some(scroll_bar_entity))
-    else {
-        return;
-    };
-
-    let contents_length =
-        contents_dims.content_size()[index] * contents_dims.inverse_scale_factor();
-    let visible_length = contents_dims.size()[index] * contents_dims.inverse_scale_factor();
-    let max_scroll_offset = contents_length - visible_length;
-    // The thumb is as long as the visible part is of the contents (see
-    // `scroll_system`), so it travels the rest of the visible length.
-    let track_length = visible_length * (1.0 - visible_length / contents_length);
-    if max_scroll_offset < f32::EPSILON || track_length < f32::EPSILON {
-        return;
-    }
-    // Start from the current `ScrollPosition`, not from where the layout last
-    // showed the contents (`ComputedNode::scroll_position`): that is floored
-    // and only refreshed by the next layout pass, so the several drags a
-    // frame can hold would each start from the same value and only the last
-    // would count. The wheel keeps `ScrollPosition` in range (see
-    // `update_scroll_position`), so the clamp is only a guard, for a content
-    // size that shrank since.
-    let start = scroll_position.0[index].clamp(0.0, max_scroll_offset);
-    scroll_position.0[index] =
-        (start + delta[index] * max_scroll_offset / track_length).clamp(0.0, max_scroll_offset);
 }
 
 /// Scrolls the [`ScrollContents`] around an entity just far enough to show it.
@@ -361,99 +329,38 @@ fn update_scroll_position(
     }
 }
 
-fn handle_scroll_change(
-    scroll_contents: Query<
-        Entity,
-        (
-            With<ScrollContents>,
-            Or<(Changed<ScrollPosition>, Changed<ComputedNode>)>,
-        ),
-    >,
-    mut commands: Commands,
+/// Hides a scroll bar while the contents fit along its axis, and shows it again when
+/// they overflow. The thumb's size and place are the [`Scrollbar`]'s.
+fn show_scroll_bars(
+    scroll_contents: Query<(&ComputedNode, &ScrollAreaRefs), Changed<ComputedNode>>,
+    mut scroll_bars: Query<&mut Visibility, With<ScrollBar>>,
 ) {
-    for e in scroll_contents {
-        commands.run_system_cached_with(scroll_system, e);
-    }
-}
-
-fn scroll_system(
-    changed_scroll_contents_entity: In<Entity>,
-    scroll_contents: Query<(&ScrollPosition, &ComputedNode, &ScrollAreaRefs), With<ScrollContents>>,
-    mut scroll_bars: Query<(&ComputedNode, &Children, &mut Visibility), With<ScrollBar>>,
-    mut scroll_thumbs: Query<&mut Node, With<ScrollThumb>>,
-) {
-    let Ok((scroll_pos, contents_dims, refs)) =
-        scroll_contents.get(*changed_scroll_contents_entity)
-    else {
-        return;
-    };
-
-    let mut update_thumb = |entity: Entity, orientation| {
-        let Ok((_, scrollbar_children, mut scrollbar_visibility)) = scroll_bars.get_mut(entity)
-        else {
-            return;
-        };
-        let Some(mut thumb_node) = scrollbar_children
-            .iter()
-            .next()
-            .and_then(|thumb| scroll_thumbs.get_mut(thumb).ok())
-        else {
-            return;
-        };
-
-        let index = match orientation {
-            Orientation::Horizontal => 0,
-            Orientation::Vertical => 1,
-        };
-        let contents_length =
-            contents_dims.content_size()[index] * contents_dims.inverse_scale_factor();
-        let visible_length = contents_dims.size()[index] * contents_dims.inverse_scale_factor();
-
-        let mut thumb_length = if visible_length < f32::EPSILON {
-            0.0
-        } else if visible_length >= contents_length {
-            *scrollbar_visibility = Visibility::Hidden;
-            visible_length
-        } else {
-            *scrollbar_visibility = Visibility::Inherited;
-            (visible_length / contents_length) * visible_length
-        };
-
-        let max_scroll_offset = contents_length - visible_length;
-        let mut ratio = if max_scroll_offset < f32::EPSILON {
-            0.0
-        } else {
-            scroll_pos.0[index] / max_scroll_offset
-        };
-
-        // create scrollbar bouncing/shrinking effect when reaching the edges
-        if ratio < 0.0 {
-            thumb_length *= (1.0 + ratio).clamp(0.7, 1.0);
-            ratio = 0.0;
-        } else if ratio > 1.0 {
-            thumb_length *= (2.0 - ratio).clamp(0.7, 1.0);
-            ratio = 1.0;
-        }
-
-        match orientation {
-            Orientation::Horizontal => {
-                thumb_node.width = Val::Px(thumb_length);
-                thumb_node.left =
-                    Val::Px((ratio * (visible_length - thumb_length)).clamp(0.0, visible_length));
+    for (contents, refs) in scroll_contents {
+        let bars = [
+            (
+                refs.h_scrollbar,
+                contents.size().x,
+                contents.content_size().x,
+            ),
+            (
+                refs.v_scrollbar,
+                contents.size().y,
+                contents.content_size().y,
+            ),
+        ];
+        for (bar, visible_length, contents_length) in bars {
+            let Some(mut visibility) = bar.and_then(|bar| scroll_bars.get_mut(bar).ok()) else {
+                continue;
+            };
+            if visible_length < f32::EPSILON {
+                continue;
             }
-            Orientation::Vertical => {
-                thumb_node.height = Val::Px(thumb_length);
-                thumb_node.top =
-                    Val::Px((ratio * (visible_length - thumb_length)).clamp(0.0, visible_length));
-            }
+            visibility.set_if_neq(if visible_length >= contents_length {
+                Visibility::Hidden
+            } else {
+                Visibility::Inherited
+            });
         }
-    };
-
-    if let Some(v_scroll) = refs.v_scrollbar {
-        update_thumb(v_scroll, Orientation::Vertical);
-    }
-    if let Some(h_scroll) = refs.h_scrollbar {
-        update_thumb(h_scroll, Orientation::Horizontal);
     }
 }
 
@@ -466,7 +373,7 @@ fn theme_scroll_area(
         (With<ScrollBar>, Without<ScrollContents>),
     >,
     mut scroll_thumbs: Query<
-        (&mut Node, &mut BackgroundColor, &mut BorderColor),
+        (&mut ScrollbarThumb, &mut BackgroundColor, &mut BorderColor),
         (
             With<ScrollThumb>,
             Without<ScrollContents>,
@@ -499,26 +406,17 @@ fn theme_scroll_area(
             sb_background_color.0 = theme.colors.background_secondary;
             sb_node.border_radius = BorderRadius::all(theme.control_radius);
 
-            let Some((mut thumb_node, mut thumb_background_color, mut thumb_border_color)) =
-                children
-                    .iter()
-                    .next()
-                    .and_then(|thumb_entity| scroll_thumbs.get_mut(thumb_entity).ok())
+            let Some((mut thumb, mut thumb_background_color, mut thumb_border_color)) = children
+                .iter()
+                .next()
+                .and_then(|thumb_entity| scroll_thumbs.get_mut(thumb_entity).ok())
             else {
                 return;
             };
 
-            match orientation {
-                Orientation::Horizontal => {
-                    thumb_node.height = theme.scroll_bar_width;
-                }
-                Orientation::Vertical => {
-                    thumb_node.width = theme.scroll_bar_width;
-                }
-            }
-            // thumb_node.border = UiRect::all(theme.border_thickness);
+            // The thumb is as thick as its scroll bar: the `Scrollbar` sizes it.
             thumb_background_color.0 = theme.colors.scroll_thumb_background;
-            thumb_node.border_radius = BorderRadius::all(theme.control_radius);
+            thumb.border_radius = BorderRadius::all(theme.control_radius);
             thumb_border_color.set_all(theme.colors.border);
         };
 
