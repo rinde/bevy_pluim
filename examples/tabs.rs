@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
+use bevy::ui_widgets::Activate;
 use bevy_egui::EguiPlugin;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::card::Card;
@@ -326,11 +327,7 @@ fn items() -> impl Iterator<Item = Item<String>> {
 #[derive(Component)]
 struct ThemeButton;
 
-fn on_press(
-    trigger: On<Pointer<Release>>,
-    button: Query<(), With<ThemeButton>>,
-    mut theme: ResMut<Theme>,
-) {
+fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
     if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
