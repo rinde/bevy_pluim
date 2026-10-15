@@ -180,6 +180,26 @@ yourself, with your best judgment, and put it on GitHub:
 Only what no agent can do goes to a human: billing, secrets, permissions, a
 dependency closed as not planned, and `require-human-review`.
 
+### 6. Remove finished worktrees
+
+Every agent builds in a worktree under `.claude/worktrees/` with a `target/`
+of 10 GB or more, so before the report, remove each one that no agent of
+this run is still using (`git worktree list`, then
+`git worktree remove --force <path>` and `git worktree prune`):
+
+- a reviewer's, once its verdict is posted;
+- an implementer's, once its pull request is merged or closed, or its issue
+  is closed;
+- a detached or branch worktree of any earlier run whose pull request is
+  merged or closed, or whose issue is closed.
+
+Keep the worktree of a pull request that is still open while an agent is
+working in it. If a worktree to remove has uncommitted changes or commits
+not on GitHub, save them first with `git -C <path> diff HEAD` (and
+`git -C <path> log -p origin/main..HEAD`) into a file under the scratchpad,
+and name that file in the report. Report how much disk space was freed
+(`df -h .` before and after).
+
 ## Rules
 
 - Never write or review code, approve a pull request, or push a commit
