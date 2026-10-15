@@ -209,7 +209,7 @@ fn row_root(world: &mut World) -> Entity {
 fn spawn_theme_button(parent: &mut ChildSpawner) {
     parent
         .spawn(PushButton::from_label("Change theme"))
-        .observe(|_: On<Pointer<Release>>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
+        .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
 }
 
 /// The items the country selections draw from.
@@ -385,7 +385,7 @@ fn lists(world: &mut World) {
             ),
         ));
         root.spawn(PushButton::from_label("Add country")).observe(
-            move |_: On<Pointer<Click>>, mut commands: Commands, mut added: Local<usize>| {
+            move |_: On<Activate>, mut commands: Commands, mut added: Local<usize>| {
                 let Some(country) = MORE_COUNTRIES.get(*added % MORE_COUNTRIES.len()) else {
                     return;
                 };
@@ -526,7 +526,7 @@ fn push_to_selection(
 
 /// Takes the last panel off the trail.
 fn pop_on_pointer_release(
-    _: On<Pointer<Release>>,
+    _: On<Activate>,
     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
 ) {
     selections.update_selection_single(SelectionValue::pop);
@@ -535,7 +535,7 @@ fn pop_on_pointer_release(
 /// Spawns a button that adds the panel `target` to the trail when released.
 fn spawn_go_to(parent: &mut ChildSpawner, label: &'static str, target: BreadCrumbsAction) {
     parent.spawn(PushButton::from_label(label)).observe(
-        move |_: On<Pointer<Release>>,
+        move |_: On<Activate>,
               mut selections: SelectionParam<With<BreadCrumbsSelection>>,
               items: ItemParam<String, &BreadCrumbsAction>| {
             push_to_selection(target, &mut selections, &items);
@@ -581,7 +581,7 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 parent
                     .spawn(PushButton::from_label("Go to panel A variant"))
                     .observe(
-                        |_: On<Pointer<Release>>,
+                        |_: On<Activate>,
                          mut selections: SelectionParam<With<BreadCrumbsSelection>>,
                          items: ItemParam<String, &BreadCrumbsAction>| {
                             let Some(variant) = items.find_item_ref(|_, action| {

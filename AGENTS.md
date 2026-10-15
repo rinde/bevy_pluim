@@ -297,9 +297,7 @@ of them (`just example gallery -- --run-all stack link`).
   "the button was used" is `Activate`, so an action observes `Activate` (on the
   button, or on an ancestor: it bubbles); how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one
-  thing. The `Pointer<Release>` observers in the examples predate this and fire
-  on a release that does not activate (the button was pressed elsewhere); move
-  them to `Activate` when touching them. A disabled `PushButton` (insert
+  thing. A disabled `PushButton` (insert
   `InteractionDisabled`) shows its text in `ThemeColors::text_disabled` and
   ignores hover. A `Link` is disabled through its `LinkState`, not by inserting
   `InteractionDisabled` yourself: `LinkState::Disabled` keeps the `Button` and

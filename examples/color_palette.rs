@@ -5,6 +5,7 @@ use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
+use bevy::ui_widgets::Activate;
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rin_bevy_ui::WidgetsPlugin;
@@ -201,18 +202,14 @@ struct RemoveComboButton;
 #[derive(Component)]
 struct ExtraComponentsArea;
 
-fn on_press(
-    trigger: On<Pointer<Release>>,
-    button: Query<(), With<ThemeButton>>,
-    mut theme: ResMut<Theme>,
-) {
+fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
     if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }
 }
 
 fn on_press_add_combo_button(
-    trigger: On<Pointer<Release>>,
+    trigger: On<Activate>,
     button: Query<(), With<AddComboButton>>,
     area: Single<Entity, With<ExtraComponentsArea>>,
     mut commands: Commands,
@@ -231,7 +228,7 @@ fn on_press_add_combo_button(
 }
 
 fn on_press_remove_combo_button(
-    trigger: On<Pointer<Release>>,
+    trigger: On<Activate>,
     button: Query<(), With<RemoveComboButton>>,
     area: Single<&Children, With<ExtraComponentsArea>>,
     mut commands: Commands,
