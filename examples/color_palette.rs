@@ -3,7 +3,9 @@
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
+use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -17,6 +19,19 @@ use rin_bevy_ui::select::{Item, Selection};
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::theme::Theme;
 
+/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
+///
+/// A template that inserted it at once would do so before the scene gives the entity its
+/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
+/// the scene's `Node` would overwrite what the bundle's hooks set on it.
+fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
+    let entity = context.entity.id();
+    context.entity.world_scope(|world| {
+        world.commands().entity(entity).insert(bundle);
+    });
+    EmptySceneEffect
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -28,9 +43,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
-        .add_observer(on_press_add_combo_button)
-        .add_observer(on_press_remove_combo_button)
         .add_systems(Startup, setup)
         .run();
 }
@@ -55,183 +67,181 @@ fn setup(mut commands: Commands) {
         .id();
 
     // Root container
-    commands.spawn((
+    commands.spawn_scene(bsn! {
         Node {
             justify_content: JustifyContent::SpaceEvenly,
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
-            ..default()
-        },
-        children![
-            (
-                Selection::reference(selection_ref),
-                ColorPalette,
-                ListLayout::VerticalGrid { columns: 11 },
-            ),
-            (
-                Node {
-                    width: Val::Px(430.0),
-                    height: Val::Px(300.0),
-                    ..default()
-                },
-                ScrollArea::bundle(
-                    move |parent| {
-                        parent.spawn((
+        }
+        Children [
+            ~{Selection::reference(selection_ref)}
+            ~{ColorPalette}
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            --
+            Node {
+                width: px(430.0),
+                height: px(300.0),
+            }
+            // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; its
+            // contents are scenes, applied to the entities its contents spawner spawns.
+            template(move |context| {
+                Ok(insert_after_scene(context, ScrollArea::bundle(
+                    move |parent: &mut ChildSpawner| {
+                        let palette = bsn! {
                             Pickable {
                                 should_block_lower: false,
-                                ..default()
-                            },
-                            ColorPalette,
-                            ListLayout::VerticalGrid { columns: 11 },
-                            Selection::reference(selection_ref),
-                        ));
+                            }
+                            ~{ColorPalette}
+                            ~{ListLayout::VerticalGrid { columns: 11 }}
+                            ~{Selection::reference(selection_ref)}
+                        };
+                        apply(parent, palette);
                     },
                     true,
-                    true
-                )
-            ),
-            (
-                Node {
-                    width: Val::Px(230.0),
-                    height: Val::Px(600.0),
-                    ..default()
-                },
-                ScrollArea::bundle(
-                    move |parent| {
-                        parent.spawn((
+                    true,
+                )))
+            })
+            --
+            Node {
+                width: px(230.0),
+                height: px(600.0),
+            }
+            template(move |context| {
+                Ok(insert_after_scene(context, ScrollArea::bundle(
+                    move |parent: &mut ChildSpawner| {
+                        let palette = bsn! {
                             Pickable {
                                 should_block_lower: false,
-                                ..default()
-                            },
-                            ColorPalette,
-                            ListLayout::VerticalGrid { columns: 11 },
-                            Selection::builder()
-                                .zero_or_one()
-                                .build_with_items_ref(selection_ref),
-                        ));
+                            }
+                            ~{ColorPalette}
+                            ~{ListLayout::VerticalGrid { columns: 11 }}
+                            // `Selection::builder()` gives a bundle, which `template` inserts.
+                            template(move |context| {
+                                context.entity.insert(
+                                    Selection::builder()
+                                        .zero_or_one()
+                                        .build_with_items_ref(selection_ref),
+                                );
+                                Ok(EmptySceneEffect)
+                            })
+                        };
+                        apply(parent, palette);
                     },
                     true,
-                    true
-                )
-            ),
-            (
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::reference(selection_ref2),
-            ),
-            (
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::reference(selection_ref2),
-            ),
-            (
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::builder()
-                    .zero_or_one()
-                    .build_with_items_ref(selection_ref),
-            ),
-            (
-                Node {
-                    width: Val::Px(100.0),
-                    height: Val::Px(100.0),
-                    ..default()
-                },
-                ScrollArea::bundle(
-                    move |parent| {
-                        parent.spawn((
+                    true,
+                )))
+            })
+            --
+            ColorPaletteCombo
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            ~{Selection::reference(selection_ref2)}
+            --
+            ColorPaletteCombo
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            ~{Selection::reference(selection_ref2)}
+            --
+            ColorPaletteCombo
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            template(move |context| {
+                context.entity.insert(
+                    Selection::builder()
+                        .zero_or_one()
+                        .build_with_items_ref(selection_ref),
+                );
+                Ok(EmptySceneEffect)
+            })
+            --
+            Node {
+                width: px(100.0),
+                height: px(100.0),
+            }
+            template(move |context| {
+                Ok(insert_after_scene(context, ScrollArea::bundle(
+                    move |parent: &mut ChildSpawner| {
+                        let combo = bsn! {
                             Pickable {
                                 should_block_lower: false,
-                                ..default()
-                            },
-                            ColorPaletteCombo,
-                            ListLayout::VerticalGrid { columns: 11 },
-                            Selection::reference(selection_ref),
-                        ));
-                        parent.spawn((
+                            }
+                            ColorPaletteCombo
+                            ~{ListLayout::VerticalGrid { columns: 11 }}
+                            ~{Selection::reference(selection_ref)}
+                        };
+                        apply(parent, combo);
+                        let card = bsn! {
                             Node {
-                                min_width: Val::Px(50.0),
-                                width: Val::Px(100.0),
-                                height: Val::Px(100.0),
+                                min_width: px(50.0),
+                                width: px(100.0),
+                                height: px(100.0),
                                 align_items: AlignItems::Center,
                                 justify_content: JustifyContent::Center,
-                                ..default()
-                            },
-                            Card,
+                            }
+                            ~{Card}
                             Pickable {
                                 should_block_lower: false,
-                                ..default()
-                            },
-                        ));
+                            }
+                        };
+                        apply(parent, card);
                     },
                     true,
-                    true
-                )
-            ),
-            (
-                Node::DEFAULT,
-                children![
-                    (PushButton::from_label("Change theme"), ThemeButton),
-                    (PushButton::from_label("+"), AddComboButton),
-                    (PushButton::from_label("-"), RemoveComboButton),
-                ]
-            ),
-            (Node::DEFAULT, ExtraComponentsArea)
-        ],
-    ));
+                    true,
+                )))
+            })
+            --
+            Node
+            Children [
+                ~{PushButton::from_label("Change theme")}
+                on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+                --
+                ~{PushButton::from_label("+")}
+                on(add_combo)
+                --
+                ~{PushButton::from_label("-")}
+                on(remove_combo)
+            ]
+            --
+            Node
+            ExtraComponentsArea
+        ]
+    });
 }
 
-fn color_palette() -> Vec<impl Bundle> {
+/// Spawns `scene` as a child of the entity `parent` spawns for.
+fn apply(parent: &mut ChildSpawner, scene: impl Scene) {
+    if let Err(error) = parent.spawn_empty().apply_scene(scene) {
+        error!("cannot spawn a scroll area's contents: {error:?}");
+    }
+}
+
+fn color_palette() -> Vec<Item<Color>> {
     COLORS.iter().map(|c| Item { data: c.color }).collect()
 }
 
-#[derive(Component)]
-struct ThemeButton;
-
-#[derive(Component)]
-struct AddComboButton;
-
-#[derive(Component)]
-struct RemoveComboButton;
-
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct ExtraComponentsArea;
 
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
-    }
-}
-
-fn on_press_add_combo_button(
-    trigger: On<Activate>,
-    button: Query<(), With<AddComboButton>>,
+fn add_combo(
+    _: On<Activate>,
     area: Single<Entity, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        commands.entity(*area).with_children(|parent| {
-            parent.spawn((
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::builder()
-                    .zero_or_one()
-                    .build_with_items(color_palette()),
-            ));
-        });
-    }
+    commands.entity(*area).with_children(|parent| {
+        parent.spawn((
+            ColorPaletteCombo,
+            ListLayout::VerticalGrid { columns: 11 },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(color_palette()),
+        ));
+    });
 }
 
-fn on_press_remove_combo_button(
-    trigger: On<Activate>,
-    button: Query<(), With<RemoveComboButton>>,
+fn remove_combo(
+    _: On<Activate>,
     area: Single<&Children, With<ExtraComponentsArea>>,
     mut commands: Commands,
 ) {
-    if button.get(trigger.event().event_target()).is_ok()
-        && let Some(last) = area.iter().last()
-    {
+    if let Some(last) = area.iter().last() {
         commands.entity(last).despawn();
     }
 }

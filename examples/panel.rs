@@ -29,51 +29,53 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let close = common::cross_icon(&mut images);
-    let root = commands
-        .spawn(Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+    let trains = Panel::new("Trains")
+        .with_subtitle("3 open")
+        .with_close_icon(close.clone());
+    let stops = Panel::new("Stops")
+        .with_close_icon(close)
+        .with_max_body_height(150.0);
+    commands.spawn_scene(bsn! {
+        Node {
+            width: percent(100.0),
+            height: percent(100.0),
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::FlexStart,
-            column_gap: Val::Px(10.0),
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        })
-        .id();
-    // The app decides what closing means: this one despawns the panel.
-    let closable = commands
-        .spawn((
-            Panel::new("Trains")
-                .with_subtitle("3 open")
-                .with_close_icon(close.clone()),
-            ChildOf(root),
-        ))
-        .observe(|closed: On<PanelClosed>, mut commands: Commands| {
-            commands.entity(closed.entity).despawn();
-        })
-        .id();
-    // A body past 150 pixels scrolls.
-    let tall = commands
-        .spawn((
-            Panel::new("Stops")
-                .with_close_icon(close)
-                .with_max_body_height(150.0),
-            ChildOf(root),
-        ))
-        .id();
-    commands
-        .spawn((PushButton::from_label("Change theme"), ChildOf(root)))
-        .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
+            column_gap: px(10.0),
+            padding: UiRect::all(px(10.0)),
+        }
+        Children [
+            // The app decides what closing means: this one despawns the panel.
+            common::inserted(trains)
+            Lines(3)
+            on(|closed: On<PanelClosed>, mut commands: Commands| {
+                commands.entity(closed.entity).despawn();
+            })
+            --
+            // A body past 150 pixels scrolls.
+            common::inserted(stops)
+            Lines(12)
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+        ]
+    });
     // The panels name their bodies once spawned; the app fills them.
-    commands.queue(move |world: &mut World| {
+    commands.queue(|world: &mut World| {
         world.flush();
-        for (panel, lines) in [(closable, 3), (tall, 12)] {
-            let Some(body) = world.get::<PanelRefs>(panel).map(|refs| refs.body) else {
-                continue;
-            };
+        let panels: Vec<(Entity, usize)> = world
+            .query::<(&PanelRefs, &Lines)>()
+            .iter(world)
+            .map(|(refs, lines)| (refs.body, lines.0))
+            .collect();
+        for (body, lines) in panels {
             for line in 1..=lines {
                 world.spawn((Label::regular(format!("Line {line}")), ChildOf(body)));
             }
         }
     });
 }
+
+/// How many lines of text the body of a panel gets.
+#[derive(Component, Default, Clone)]
+struct Lines(usize);

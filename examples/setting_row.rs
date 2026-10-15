@@ -29,70 +29,68 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-    let root = commands
-        .spawn(Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+    commands.spawn_scene(bsn! {
+        Node {
+            width: percent(100.0),
+            height: percent(100.0),
             flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(10.0),
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        })
-        .id();
-    let rows = commands
-        .spawn((
-            SettingRows,
-            Node {
-                width: Val::Px(420.0),
-                ..default()
-            },
-            ChildOf(root),
-        ))
-        .id();
-    let appearance = commands
-        .spawn((
-            SettingRow::new("Appearance", "Light or dark"),
-            ChildOf(rows),
-        ))
-        .id();
-    let text_size = commands
-        .spawn((SettingRow::new("Text size", "In points"), ChildOf(rows)))
-        .id();
-    let reset = commands
-        .spawn((
-            SettingRow::new("Reset", "Back to the defaults"),
-            ChildOf(rows),
-        ))
-        .id();
-    commands
-        .spawn((PushButton::from_label("Change theme"), ChildOf(root)))
-        .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
+            row_gap: px(10.0),
+            padding: UiRect::all(px(10.0)),
+        }
+        Children [
+            SettingRows
+            Node { width: px(420.0) }
+            Children [
+                ~{SettingRow::new("Appearance", "Light or dark")} Control::Appearance
+                --
+                ~{SettingRow::new("Text size", "In points")} Control::TextSize
+                --
+                ~{SettingRow::new("Reset", "Back to the defaults")} Control::Reset
+            ]
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+        ]
+    });
     // The rows name their control slots once spawned; the app fills them.
-    commands.queue(move |world: &mut World| {
+    commands.queue(|world: &mut World| {
         world.flush();
-        let slot = |world: &World, row: Entity| {
-            world
-                .get::<SettingRowRefs>(row)
-                .map(|refs| refs.control_slot)
-        };
-        if let Some(slot) = slot(world, appearance) {
-            world.spawn((
-                SegmentedControl,
-                Selection::builder()
-                    .one()
-                    .build_with_items(["Light", "Dark"].map(Item::new)),
-                ChildOf(slot),
-            ));
-        }
-        if let Some(slot) = slot(world, text_size) {
-            world.spawn((
-                NumericStepper::default(),
-                Value::new_u8(12, 8, 20, 1),
-                ChildOf(slot),
-            ));
-        }
-        if let Some(slot) = slot(world, reset) {
-            world.spawn((PushButton::from_label("Reset"), ChildOf(slot)));
+        let rows: Vec<(Entity, Control)> = world
+            .query::<(&SettingRowRefs, &Control)>()
+            .iter(world)
+            .map(|(refs, control)| (refs.control_slot, *control))
+            .collect();
+        for (slot, control) in rows {
+            match control {
+                Control::Appearance => {
+                    world.spawn((
+                        SegmentedControl,
+                        Selection::builder()
+                            .one()
+                            .build_with_items(["Light", "Dark"].map(Item::new)),
+                        ChildOf(slot),
+                    ));
+                }
+                Control::TextSize => {
+                    world.spawn((
+                        NumericStepper::default(),
+                        Value::new_u8(12, 8, 20, 1),
+                        ChildOf(slot),
+                    ));
+                }
+                Control::Reset => {
+                    world.spawn((PushButton::from_label("Reset"), ChildOf(slot)));
+                }
+            }
         }
     });
+}
+
+/// The control a row gets in its slot.
+#[derive(Component, Default, Clone, Copy)]
+enum Control {
+    #[default]
+    Appearance,
+    TextSize,
+    Reset,
 }

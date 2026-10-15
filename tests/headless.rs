@@ -4725,6 +4725,8 @@ fn the_hud_example_builds_and_runs() {
     });
     app.add_plugins(InputPlugin);
     app.add_plugins(DefaultPickingPlugins);
+    // The HUD is spawned from scenes (`bsn!`), which need the asset and scene plugins.
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
     app.init_resource::<ClearColor>();
     app.init_resource::<Assets<Image>>();
     app.add_plugins((WidgetsPlugin, hud_ui::HudPlugin));

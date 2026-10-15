@@ -3,7 +3,9 @@
 use std::sync::LazyLock;
 
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
+use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::card::Card;
@@ -18,6 +20,19 @@ use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tailwind::{COLORS, TailwindColor, Variant};
 use rin_bevy_ui::theme::Theme;
 
+/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
+///
+/// A template that inserted it at once would do so before the scene gives the entity its
+/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
+/// the scene's `Node` would overwrite what the bundle's hooks set on it.
+fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
+    let entity = context.entity.id();
+    context.entity.world_scope(|world| {
+        world.commands().entity(entity).insert(bundle);
+    });
+    EmptySceneEffect
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -29,7 +44,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Update, update_theme.run_if(resource_changed::<Theme>))
         .add_systems(Startup, setup)
         .run();
@@ -54,8 +68,14 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             StackItem::new(commands.register_system(create_card_demo)),
         ),
     ];
+    // `Stack` takes the selection's entity, which a scene cannot hand it from the tab list
+    // beside it, so the tabs' selection is an entity of its own that both refer to.
+    let tabs = commands
+        .spawn(Selection::builder().one().build_with_items(items))
+        .id();
+
     // Root container
-    commands.spawn((
+    commands.spawn_scene(bsn! {
         Node {
             display: Display::Grid,
             grid_template_columns: vec![
@@ -64,142 +84,163 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 GridTrack::max_content(),
             ],
             grid_template_rows: vec![GridTrack::min_content(), GridTrack::flex(1.0)],
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        },
-        Root,
-        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-            let selection_ref = parent
-                .spawn((
-                    List,
-                    CornerStyle::Tabs,
-                    ListLayout::Horizontal,
-                    Selection::builder().one().build_with_items(items),
-                ))
-                .id();
-
+            width: percent(100.0),
+            height: percent(100.0),
+        }
+        Children [
+            List
+            ~{CornerStyle::Tabs}
+            ~{ListLayout::Horizontal}
+            ~{Selection::reference(tabs)}
+            --
             // filler
-            parent.spawn((
-                BorderColor::all(theme_border_color),
-                Node {
-                    max_width: Val::Percent(100.0),
-                    border: UiRect::bottom(Val::Px(1.0)),
-                    ..default()
-                },
-            ));
+            BorderColor::all(theme_border_color)
+            Node {
+                max_width: percent(100.0),
+                border: UiRect::bottom(px(1.0)),
+            }
+            --
+            ~{PushButton::from_label("Toggle theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+            --
+            Node {
+                grid_column: GridPlacement::span(3),
+                display: Display::Flex,
+                align_items: AlignItems::FlexStart,
+                width: percent(100.0),
+                height: percent(100.0),
+            }
+            ~{Stack { selection_ref: tabs }}
+        ]
+    });
+}
 
-            parent.spawn((PushButton::from_label("Toggle theme"), ThemeButton));
+/// The children of a stack item, as scenes: [`StackChildSpawner::spawn`] takes a bundle,
+/// so this one spawns `scenes` as the children of the entity it is inserted on.
+fn scene_children(scenes: impl SceneList) -> impl Bundle {
+    Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
+        let target = parent.target_entity();
+        parent
+            .world_mut()
+            .entity_mut(target)
+            .queue_spawn_related_scenes::<Children>(scenes);
+    }))
+}
 
-            parent.spawn((
-                Node {
-                    grid_column: GridPlacement::span(3),
-                    display: Display::Flex,
-                    align_items: AlignItems::FlexStart,
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    ..default()
-                },
-                Stack { selection_ref },
-            ));
-        })),
-    ));
+/// Spawns `scene` as a child of the entity `parent` spawns for.
+fn apply(parent: &mut ChildSpawner, scene: impl Scene) {
+    if let Err(error) = parent.spawn_empty().apply_scene(scene) {
+        error!("cannot spawn a scroll area's contents: {error:?}");
+    }
 }
 
 fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    let colors = commands
+        .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
+        .id();
+    let selection_ref = commands
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items_ref(colors),
+        )
+        .id();
+
     spawner.spawn(
         &mut commands,
-        Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-            parent.spawn(Label::regular("Panel A"));
-
-            let colors = parent
-                .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
-                .id();
-
-            let selection_ref = parent
-                .spawn(
+        scene_children(bsn_list! {
+            ~{Label::regular("Panel A")}
+            --
+            ColorPaletteCombo
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            ~{Selection::reference(selection_ref)}
+            --
+            ColorPaletteCombo
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            // `Selection::builder()` gives a bundle, which `template` inserts.
+            template(move |context| {
+                context.entity.insert(
                     Selection::builder()
                         .zero_or_one()
                         .build_with_items_ref(colors),
-                )
-                .id();
-
-            parent.spawn((
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::reference(selection_ref),
-            ));
-            parent.spawn((
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::builder()
-                    .zero_or_one()
-                    .build_with_items_ref(colors),
-            ));
-            parent.spawn((
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::reference(selection_ref),
-            ));
-            parent.spawn((
-                Card,
-                Node {
-                    height: Val::Px(200.0),
-                    margin: UiRect::all(Val::Px(5.0)),
-                    padding: UiRect::all(Val::Px(10.0)),
-                    align_items: AlignItems::FlexStart,
-                    row_gap: Val::Px(10.0),
-                    column_gap: Val::Px(10.0),
-                    ..default()
-                },
-                children![
-                    (
-                        Combo,
-                        Selection::builder().zero_or_one().build_with_items([
-                            Item::new("Netherlands"),
-                            Item::new("Canada"),
-                            Item::new("Indonesia"),
-                            Item::new("Portugal"),
-                            Item::new("Belgium")
-                        ]),
-                    ),
-                    PushButton::from_label("Button on a card")
-                ],
-            ));
-            parent.spawn(PushButton::from_label("hello"));
-        })),
+                );
+                Ok(EmptySceneEffect)
+            })
+            --
+            ColorPaletteCombo
+            ~{ListLayout::VerticalGrid { columns: 11 }}
+            ~{Selection::reference(selection_ref)}
+            --
+            ~{Card}
+            Node {
+                height: px(200.0),
+                margin: UiRect::all(px(5.0)),
+                padding: UiRect::all(px(10.0)),
+                align_items: AlignItems::FlexStart,
+                row_gap: px(10.0),
+                column_gap: px(10.0),
+            }
+            Children [
+                ~{Combo}
+                template(|context| {
+                    context.entity.insert(
+                        Selection::builder()
+                            .zero_or_one()
+                            .build_with_items(countries()),
+                    );
+                    Ok(EmptySceneEffect)
+                })
+                --
+                ~{PushButton::from_label("Button on a card")}
+            ]
+            --
+            ~{PushButton::from_label("hello")}
+        }),
     );
 }
 
 fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn(
         &mut commands,
-        (children![
-            Label::header("Panel B"),
-            ScrollArea::bundle(
-                |parent| {
-                    parent.spawn((List, Selection::builder().one().build_with_items(items())));
-                },
-                true,
-                false,
-            ),
-            (
-                Node {
-                    align_self: AlignSelf::Start,
-                    ..default()
-                },
-                children![(
-                    List,
-                    Selection::builder().zero_or_one().build_with_items([
-                        Item::new("Netherlands"),
-                        Item::new("Canada"),
-                        Item::new("Indonesia"),
-                        Item::new("Portugal"),
-                        Item::new("Belgium")
-                    ]),
-                )]
-            ),
-        ],),
+        scene_children(bsn_list! {
+            ~{Label::header("Panel B")}
+            --
+            // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; its
+            // contents are a scene, applied to the entity its contents spawner spawns.
+            template(|context| {
+                Ok(insert_after_scene(context, ScrollArea::bundle(
+                    |parent: &mut ChildSpawner| {
+                        let list = bsn! {
+                            List
+                            template(|context| {
+                                context.entity.insert(
+                                    Selection::builder().one().build_with_items(items()),
+                                );
+                                Ok(EmptySceneEffect)
+                            })
+                        };
+                        apply(parent, list);
+                    },
+                    true,
+                    false,
+                )))
+            })
+            --
+            Node {
+                align_self: AlignSelf::Start,
+            }
+            Children [
+                List
+                template(|context| {
+                    context.entity.insert(
+                        Selection::builder()
+                            .zero_or_one()
+                            .build_with_items(countries()),
+                    );
+                    Ok(EmptySceneEffect)
+                })
+            ]
+        }),
     );
 }
 
@@ -224,118 +265,112 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                 grid_auto_flow: GridAutoFlow::Row,
                 ..default()
             },
-            children![
-                Label::header("Card demo"),
-                (
-                    Node::default(),
-                    Pickable {
-                        should_block_lower: false,
-                        ..default()
-                    },
-                    ScrollArea::bundle(
-                        move |parent| {
-                            parent.spawn((
-                                Node {
-                                    row_gap: Val::Px(16.0),
-                                    column_gap: Val::Px(16.0),
-                                    flex_wrap: FlexWrap::Wrap,
-                                    justify_content: JustifyContent::Center,
-                                    margin: UiRect::px(8.0, 8.0, 8.0, 0.0),
-                                    ..default()
-                                },
-                                Pickable {
-                                    should_block_lower: false,
-                                    ..default()
-                                },
-                                Children::spawn(SpawnIter((0..300).map(move |i| {
-                                    (
-                                        Node {
-                                            min_width: Val::Px(50.0),
-                                            width: Val::Px(100.0),
-                                            height: Val::Px(100.0),
-                                            align_items: AlignItems::Center,
-                                            justify_content: JustifyContent::Center,
-                                            ..default()
-                                        },
-                                        Card,
-                                        Pickable {
-                                            should_block_lower: false,
-                                            ..default()
-                                        },
-                                        children![
-                                            (
-                                                Pickable {
-                                                    should_block_lower: false,
-                                                    ..default()
-                                                },
-                                                Node {
-                                                    position_type: PositionType::Absolute,
-                                                    top: Val::Px(0.0),
-                                                    height: Val::Percent(50.0),
-                                                    width: Val::Percent(100.0),
-                                                    border_radius: BorderRadius::top(Val::Px(10.0)),
-                                                    ..default()
-                                                },
-                                                BackgroundColor(
-                                                    LIGHT_COLORS
-                                                        .get((i / 10) % LIGHT_COLORS.len())
-                                                        .map_or(Color::NONE, |c| c.color)
-                                                )
-                                            ),
-                                            (
-                                                CardBackground,
-                                                BackgroundColor(background_color),
-                                                Pickable {
-                                                    should_block_lower: false,
-                                                    ..default()
-                                                },
-                                                Node {
-                                                    padding: UiRect::px(5.0, 5.0, 3.0, 3.0),
-                                                    border_radius: BorderRadius::top(Val::Px(5.0)),
-                                                    ..default()
-                                                },
-                                                children![Label::regular(format!("{i}")),]
-                                            ),
-                                        ],
-                                    )
-                                }))),
-                            ));
-                        },
+            scene_children(bsn_list! {
+                ~{Label::header("Card demo")}
+                --
+                Node
+                Pickable {
+                    should_block_lower: false,
+                }
+                template(move |context| {
+                    Ok(insert_after_scene(context, ScrollArea::bundle(
+                        move |parent: &mut ChildSpawner| apply(parent, cards(background_color)),
                         true,
-                        true
-                    )
-                )
-            ],
+                        true,
+                    )))
+                })
+            }),
         ),
     );
 }
 
-#[derive(Component)]
+/// A wrapping grid of 300 numbered cards.
+fn cards(background_color: Color) -> impl Scene {
+    let cards = (0..300)
+        .map(|i| {
+            let color = LIGHT_COLORS
+                .get((i / 10) % LIGHT_COLORS.len())
+                .map_or(Color::NONE, |c| c.color);
+            bsn! {
+                Node {
+                    min_width: px(50.0),
+                    width: px(100.0),
+                    height: px(100.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                }
+                ~{Card}
+                Pickable {
+                    should_block_lower: false,
+                }
+                Children [
+                    Pickable {
+                        should_block_lower: false,
+                    }
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: px(0.0),
+                        height: percent(50.0),
+                        width: percent(100.0),
+                        border_radius: BorderRadius::top(px(10.0)),
+                    }
+                    BackgroundColor(color)
+                    --
+                    CardBackground
+                    BackgroundColor(background_color)
+                    Pickable {
+                        should_block_lower: false,
+                    }
+                    Node {
+                        padding: UiRect::px(5.0, 5.0, 3.0, 3.0),
+                        border_radius: BorderRadius::top(px(5.0)),
+                    }
+                    Children [
+                        ~{Label::regular(format!("{i}"))}
+                    ]
+                ]
+            }
+        })
+        .collect::<Vec<_>>();
+    bsn! {
+        Node {
+            row_gap: px(16.0),
+            column_gap: px(16.0),
+            flex_wrap: FlexWrap::Wrap,
+            justify_content: JustifyContent::Center,
+            margin: UiRect::px(8.0, 8.0, 8.0, 0.0),
+        }
+        Pickable {
+            should_block_lower: false,
+        }
+        Children [ {cards} ]
+    }
+}
+
+#[derive(Component, Default, Clone)]
 struct CardBackground;
 
-fn color_palette() -> Vec<impl Bundle> {
+fn color_palette() -> Vec<Item<Color>> {
     COLORS.iter().map(|c| Item { data: c.color }).collect()
+}
+
+fn countries() -> [Item<String>; 5] {
+    [
+        Item::new("Netherlands"),
+        Item::new("Canada"),
+        Item::new("Indonesia"),
+        Item::new("Portugal"),
+        Item::new("Belgium"),
+    ]
 }
 
 fn items() -> impl Iterator<Item = Item<String>> {
     (1..100).map(|i| Item::new(i.to_string()))
 }
 
-#[derive(Component)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
-    }
-}
-
-#[derive(Component)]
-struct Root;
-
 fn update_theme(
     theme: Res<Theme>,
-    mut card_background: Query<&mut BackgroundColor, (With<CardBackground>, Without<Root>)>,
+    mut card_background: Query<&mut BackgroundColor, With<CardBackground>>,
 ) {
     for mut card_background_color in &mut card_background {
         card_background_color.0 = theme.colors.background_primary;
