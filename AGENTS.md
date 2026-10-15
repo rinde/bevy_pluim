@@ -117,7 +117,9 @@ does not exist yet, then `touch tests/*.rs src/lib.rs`.
 Never share one `CARGO_TARGET_DIR` between worktrees (stale artifacts, and
 `ron_scenarios` reads `tests/ron` through a path compiled into its binary, so
 it can play another worktree's files) and never `cp -r` the 19G `target/`
-(it fills the disk). The skills check `df -h .` first.
+(it fills the disk). The skills check `df -h .` first. What worktrees share
+is sccache's cache, not a `target/`: the `justfile` compiles through sccache
+when it is installed (see [Running things](#running-things)).
 
 ## Where to find what
 
@@ -568,6 +570,11 @@ of them (`just example gallery -- --run-all stack link`).
 `rust-toolchain.toml` pins the compiler, and the `justfile` is the one place
 commands are defined; every recipe is a plain `cargo` call you can read out
 of it. You need `just` and, for `unused-deps`, `cargo-machete`.
+`sccache` is optional: when it is on the `PATH` the `justfile` exports it as
+`RUSTC_WRAPPER`, so a fresh worktree gets its dependencies from the cache
+instead of compiling Bevy again. A `RUSTC_WRAPPER` you set yourself wins, and
+`RUSTC_WRAPPER= just test` builds without it. Plain `cargo` calls do not go
+through the `justfile` and so do not use it.
 
 | Task | `just` | Plain cargo |
 | --- | --- | --- |
