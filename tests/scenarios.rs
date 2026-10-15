@@ -8,6 +8,7 @@ mod widgets_check;
 mod widgets_setup;
 
 use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
+use bevy::ecs::schedule::{InternedScheduleLabel, ScheduleLabel, SingleThreadedExecutor};
 use bevy::ecs::system::RunSystemOnce;
 use std::path::Path;
 
@@ -920,6 +921,62 @@ fn every_scenario_file_passes_with_the_ui_drawn_to_an_image() {
         let report = scenario.run_in(&mut app);
         if !report.passed() {
             failed.push((path.display().to_string(), report.failures().clone()));
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+}
+
+/// Fixed seeds for shuffling a schedule: never the clock, so a failure
+/// reproduces from the seed it names.
+const SHUFFLE_SEEDS: [u64; 4] = [1, 2, 3, 0x5eed_cafe];
+
+/// The schedules this crate adds systems to, by name.
+fn shuffled_schedules() -> [(&'static str, InternedScheduleLabel); 4] {
+    [
+        ("PreUpdate", PreUpdate.intern()),
+        ("Update", Update.intern()),
+        ("PostUpdate", PostUpdate.intern()),
+        ("Last", Last.intern()),
+    ]
+}
+
+/// Has `schedule` run its systems in an order shuffled by `seed` wherever
+/// nothing orders them, on the single-threaded executor so the order is the
+/// seed's alone.
+fn shuffle(app: &mut App, schedule: InternedScheduleLabel, seed: u64) {
+    app.edit_schedule(schedule, |schedule| {
+        let mut settings = schedule.get_build_settings();
+        settings.shuffle_seed = Some(seed);
+        schedule.set_build_settings(settings);
+        schedule.set_executor(SingleThreadedExecutor::new());
+    });
+}
+
+#[test]
+fn every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed() {
+    // A system that runs at the right moment only because nothing happened to
+    // run it earlier passes under one seed and fails under another. A failure
+    // names the file, the schedule and the seed, and replays from them.
+    let registry = Registry::default();
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
+    let mut failed = Vec::new();
+    for path in ron_files(dir).unwrap() {
+        let scenario = load_ron_file(&path, &registry).unwrap();
+        for (name, schedule) in shuffled_schedules() {
+            for seed in SHUFFLE_SEEDS {
+                let mut app = widgets_app();
+                registry.install(app.world_mut());
+                shuffle(&mut app, schedule, seed);
+                let report = scenario.run_in(&mut app);
+                if !report.passed() {
+                    failed.push((
+                        path.display().to_string(),
+                        name,
+                        seed,
+                        report.failures().clone(),
+                    ));
+                }
+            }
         }
     }
     assert!(failed.is_empty(), "{failed:#?}");
