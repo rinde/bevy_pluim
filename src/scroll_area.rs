@@ -177,7 +177,7 @@ impl ScrollBar {
 
 #[derive(Component, Clone, Copy, Debug)]
 #[require(
-    Button,
+    Pickable::default(),
     Node {
         position_type: PositionType::Absolute,
         ..default()
