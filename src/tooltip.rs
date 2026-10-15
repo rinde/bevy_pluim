@@ -39,7 +39,7 @@ impl Plugin for TooltipPlugin {
 /// A short text shown in a popup below the node after the pointer has rested on it for
 /// [`TOOLTIP_DELAY_SECS`].
 ///
-/// The popup is a [`Float`] under the topmost ancestor of the node, below the node and kept
+/// The popup is a [`Float`] child of the node, placed in the viewport below the node and kept
 /// inside the window, and goes above it when it would run off the bottom. It hides when the
 /// pointer leaves the node or presses it (and does not come back until the pointer has left
 /// and returned), and it never takes the pointer. An
@@ -113,7 +113,6 @@ fn update_tooltips(
         &mut TooltipClock,
         Option<&TooltipRef>,
     )>,
-    parents: Query<&ChildOf>,
     mut popup_texts: Query<&mut Text, With<TooltipText>>,
     popups: Query<&Children, With<TooltipPopup>>,
     theme: Res<Theme>,
@@ -131,11 +130,7 @@ fn update_tooltips(
         let wanted = hovered.get() && !clock.suppressed && clock.elapsed >= TOOLTIP_DELAY_SECS;
         match (wanted, popup) {
             (true, None) => {
-                let root = parents.root_ancestor(entity);
-                if root == entity {
-                    continue;
-                }
-                let popup = spawn_popup(&mut commands, &theme, entity, root, &tooltip.text);
+                let popup = spawn_popup(&mut commands, &theme, entity, &tooltip.text);
                 commands.entity(entity).insert(TooltipRef(popup));
             }
             (true, Some(TooltipRef(popup))) => {
@@ -159,13 +154,7 @@ fn update_tooltips(
     }
 }
 
-fn spawn_popup(
-    commands: &mut Commands,
-    theme: &Theme,
-    owner: Entity,
-    root: Entity,
-    text: &str,
-) -> Entity {
+fn spawn_popup(commands: &mut Commands, theme: &Theme, owner: Entity, text: &str) -> Entity {
     let popup = commands
         .spawn((
             Name::new("Tooltip popup"),
@@ -177,7 +166,7 @@ fn spawn_popup(
             // Hidden until `place_popups` has the laid-out size to place it with.
             Visibility::Hidden,
             Pickable::IGNORE,
-            ChildOf(root),
+            ChildOf(owner),
         ))
         .id();
     commands.spawn((
@@ -196,8 +185,9 @@ fn despawn_popup_with_owner(
     refs: Query<&TooltipRef>,
     mut commands: Commands,
 ) {
+    // The popup is a child of the node, so it goes with a despawned node by itself.
     if let Ok(TooltipRef(popup)) = refs.get(t.event().event_target()) {
-        commands.entity(*popup).despawn();
+        commands.entity(*popup).try_despawn();
     }
 }
 

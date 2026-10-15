@@ -89,15 +89,10 @@ pub(crate) struct ColorPaletteComboButton;
 #[require(Hovered)]
 struct ColorPaletteComboFloat;
 
-/// Builds a [`ColorPaletteCombo`]: its button, as a child, and its popup.
+/// Builds a [`ColorPaletteCombo`]: its button and its popup, both children of the combo.
 ///
-/// The popup is a child of the combo's own topmost ancestor, not of the combo,
-/// so that nothing between them (a scroll area, a card) clips it or draws over
-/// it. It is not looked up by [`UiRoot`](crate::UiRoot): an app may have more
-/// than one, so the combo's own root is the one that is certain to be on its
-/// screen. The parent must be there when the combo is inserted, so spawn the
-/// combo as a child. A combo without a parent has no such root, so it logs an
-/// `error!` and gets neither button nor popup.
+/// The popup is a [`Float`], placed in the viewport rather than in the combo, so nothing
+/// around the combo (a scroll area, a card) clips it or draws over it.
 ///
 /// The popup is named after its combo, `<combo name> popup`, so that a scenario
 /// or a query finds it by name whatever the order the combos were spawned in.
@@ -112,18 +107,9 @@ fn on_insert_combo(
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
     selections: SelectionParam,
-    parents: Query<&ChildOf>,
     names: Query<&Name>,
 ) {
     let combo = t.event().event_target();
-    if !parents.contains(combo) {
-        error!(
-            "ColorPaletteCombo {combo} has no parent, so it has no UI root to hold its popup: \
-             spawn it as a child"
-        );
-        return;
-    }
-    let root = parents.root_ancestor(combo);
     let popup_name = popup_name(names.get(combo).ok());
 
     let mut button_id = Entity::PLACEHOLDER;
@@ -146,8 +132,6 @@ fn on_insert_combo(
                 },
             ))
             .id();
-    });
-    commands.entity(root).with_children(|parent| {
         float_id = parent
             .spawn((
                 Float,
@@ -270,8 +254,9 @@ fn on_remove_combo(
     sub_refs: Query<&SubRefs>,
     mut commands: Commands,
 ) {
+    // The popup is a child of the combo, so it goes with a despawned combo by itself.
     if let Ok(sub_refs) = sub_refs.get(t.event().event_target()) {
-        commands.entity(sub_refs.float_id).despawn();
+        commands.entity(sub_refs.float_id).try_despawn();
     }
 }
 
@@ -343,7 +328,7 @@ fn on_insert_state(
     }
 }
 
-/// Places the popup of a combo under its button, centred on it.
+/// Places the popup of a combo under its button, centred on it, in viewport coordinates.
 ///
 /// The popup is moved in until it is 10 pixels from the window's left and right
 /// edges, and goes above the button instead of under it when it would run off the bottom. Only
