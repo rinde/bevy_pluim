@@ -288,8 +288,39 @@ fn combos(world: &mut World) {
             Name::new("country list"),
             Selection::reference(selection_ref),
         ));
+        // A combo in a scroll area lower than its open list, out of the flow
+        // so that nothing else moves and last so that the tab order stays: the
+        // list is not clipped by the area and takes clicks below it.
+        root.spawn((
+            Name::new("combo scroll area"),
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(300),
+                left: px(1000),
+                width: px(220),
+                height: px(SMALL_SCROLL_AREA_HEIGHT),
+                ..default()
+            },
+            ScrollArea::bundle(
+                |contents| {
+                    contents.spawn((
+                        Combo,
+                        Name::new("scrolled combo"),
+                        Selection::builder()
+                            .zero_or_one()
+                            .build_with_items(countries()),
+                    ));
+                },
+                true,
+                false,
+            ),
+        ));
     });
 }
+
+/// The height of the scroll areas that hold a combo on the [`WidgetsSetup::Combos`] and
+/// [`WidgetsSetup::ColorPalette`] screens: lower than the combo's open popup.
+const SMALL_SCROLL_AREA_HEIGHT: f32 = 100.0;
 
 /// The countries the "Add country" button of the [`WidgetsSetup::Lists`]
 /// screen adds, one per click, in this order and then again.
@@ -992,6 +1023,35 @@ fn color_palette(world: &mut World) {
                 },
                 true,
                 true,
+            ),
+        ));
+        // A combo in a scroll area lower than its open popup, under the palette
+        // scroll area, out of the flow so that nothing else moves and last so
+        // that the tab order stays: the popup is not clipped by the area and
+        // takes clicks below it.
+        root.spawn((
+            Name::new("palette combo scroll area"),
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(400),
+                left: px(900),
+                width: px(200),
+                height: px(SMALL_SCROLL_AREA_HEIGHT),
+                ..default()
+            },
+            ScrollArea::bundle(
+                move |contents| {
+                    contents.spawn((
+                        ColorPaletteCombo,
+                        ListLayout::VerticalGrid { columns: 11 },
+                        Selection::builder()
+                            .zero_or_one()
+                            .build_with_items_ref(selection_ref),
+                        Name::new("scrolled palette combo"),
+                    ));
+                },
+                true,
+                false,
             ),
         ));
     });

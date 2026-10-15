@@ -27,7 +27,7 @@ use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::LetterSpacing;
-use bevy::ui::{InteractionDisabled, Pressed, Selected};
+use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
@@ -1452,24 +1452,26 @@ fn a_color_palette_combo_popup_is_named_after_its_combo() {
         let popups = entities_named(&mut app, popup);
         assert_eq!(popups.len(), 1, "one {popup:?}, got {popups:?}");
         assert_eq!(
-            app.world().entity(popups[0]).get::<ChildOf>().map(|c| c.0),
-            Some(root),
-            "{popup:?} stays a child of the root"
+            app.world()
+                .entity(popups[0])
+                .get::<ChildOf>()
+                .and_then(|c| app.world().get::<Name>(c.0))
+                .map(Name::as_str),
+            Some(popup.trim_end_matches(" popup")),
+            "{popup:?} is a child of its combo"
         );
     }
 }
 
 #[test]
-fn a_color_palette_combo_spawns_its_popup_under_the_topmost_ancestor_of_the_combo() {
+fn a_color_palette_combo_spawns_its_popup_as_a_fixed_child_of_the_combo() {
     let mut app = headless_app();
-    let first_root = app.world_mut().spawn(Node::default()).id();
-    let second_root = app.world_mut().spawn(Node::default()).id();
-    let panel = app
+    let root = app.world_mut().spawn(Node::default()).id();
+    let panel = app.world_mut().spawn((Node::default(), ChildOf(root))).id();
+    let combo = app
         .world_mut()
-        .spawn((Node::default(), ChildOf(second_root)))
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(panel)))
         .id();
-    app.world_mut()
-        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(panel)));
 
     app.update();
     app.update();
@@ -1478,13 +1480,13 @@ fn a_color_palette_combo_spawns_its_popup_under_the_topmost_ancestor_of_the_comb
     assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
     assert_eq!(
         app.world().entity(floats[0]).get::<ChildOf>().map(|c| c.0),
-        Some(second_root),
-        "under the combo's own root, not the first one ({first_root})"
+        Some(combo)
     );
+    assert!(app.world().entity(floats[0]).contains::<FixedNode>());
 }
 
 #[test]
-fn a_color_palette_combo_without_a_parent_gets_no_popup() {
+fn a_color_palette_combo_without_a_parent_gets_its_popup() {
     let mut app = headless_app();
     let combo = app
         .world_mut()
@@ -1494,13 +1496,11 @@ fn a_color_palette_combo_without_a_parent_gets_no_popup() {
     app.update();
     app.update();
 
-    assert!(
-        app.world()
-            .entity(combo)
-            .get::<PaletteComboState>()
-            .is_none()
+    assert_eq!(
+        app.world().entity(combo).get::<PaletteComboState>(),
+        Some(&PaletteComboState::Closed)
     );
-    assert!(palette_combo_floats(&mut app).is_empty());
+    assert_eq!(palette_combo_floats(&mut app).len(), 1);
 }
 
 /// The selection of the only [`ColorPalette`] of the app.
@@ -4365,6 +4365,22 @@ fn a_press_hides_the_tooltip_until_the_pointer_has_left_and_returned() {
         tick(&mut app);
     }
     assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+}
+
+#[test]
+fn a_tooltip_popup_is_a_fixed_child_of_its_node() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    let world = app.world_mut();
+    let popups: Vec<(Option<Entity>, bool)> = world
+        .query_filtered::<(Option<&ChildOf>, Has<FixedNode>), With<TooltipPopup>>()
+        .iter(world)
+        .map(|(parent, fixed)| (parent.map(ChildOf::parent), fixed))
+        .collect();
+    assert_eq!(popups, [(Some(button), true)]);
 }
 
 #[test]
