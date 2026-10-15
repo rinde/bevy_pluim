@@ -131,12 +131,12 @@ when it is installed (see [Running things](#running-things)).
 | `select.rs` | the selection model: `Selection` (`Value` or `Ref`), `SelectionValue` (`One` / `ZeroOrOne` / `OneOrMore` / `ZeroOrMore`), the `Selection::builder()`, `Item<T>`, `ItemOf` / `ItemValues` / `ItemsRef`, `ItemsChanged`, and the `SelectionParam` / `ItemParam` system params |
 | `stack.rs` | `Stack { selection_ref }` shows the one `StackItem` child matching the selection; children are created lazily by a registered system (`StackChildSpawner`) and hidden, not despawned, when deselected |
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
-| `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
-| `float.rs` | `Float`: absolute-positioned, `GlobalZIndex(1000)`, large shadow; the popup layer for combos |
+| `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls. To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
+| `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
-| `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup's palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
+| `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup, a `Float` child of the combo, is centred under the button when it opens, 10 px inside the window, above the button when it would run off the bottom; its palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square; its accessible name is the name of that colour (same rule as a swatch), kept by a system because Bevy clears a text-less button's label on add; a `ColorPaletteCombo`'s button is not, its colour is its value instead |
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are small `IconButton`s (accessible names `decrease_name` / `increase_name`, "Decrease" / "Increase" by default; icons `decrease_icon` / `increase_icon`, a drawn minus and plus when left at the default handle) that step on `Activate`; `format` (`fn(&Value) -> String`, default `Display`) says how the value is shown, in a label of at least `label_min_width` (54 px) so the buttons do not move; fields are read when the component is inserted, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to, so only the buttons are tab stops. The stepper's own node is one spin button: an `AccessibilityNode` with `Role::SpinButton`, `numeric_value` / `min_numeric_value` / `max_numeric_value` / `numeric_value_step` from the `Value` (as `f64`), `value` the text `format` shows (kept in step by `on_change`, also for mirrors through `ValueRef`) and `name: Option<String>` as its label (none by default); the value text is a plain `Text`, not a `Label`, so it has no node of its own |
 | `panel.rs` | `Panel`: a `Card` 380 px wide with a header (title `Label`, optional subtitle beside it, optional close `IconButton` that triggers the `PanelClosed` entity event on the panel), a strip, a `Divider`, a body in a `ScrollArea` that grows with its content up to `max_body_height` (620) and then scrolls, and a footer above a divider. The app spawns contents as children of the entities in `PanelRefs` (`strip`, `body`, `footer`); an empty strip or footer is `Display::None`. Insert a `Panel` again to change title, subtitle, close icon or maximum height. The body is `should_block_lower: false`, or it would cover the scroll contents and the wheel would never reach them. Grow-then-scroll needs only `max_height` on the `ScrollArea` node (`a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls`). It is a `Role::Group` (from `Card`) with no label of its own that is `labelled_by` its title `Label` (so a new `Panel` needs no relabelling); the close button keeps its own name (`panel_accessible_group.ron`) |
@@ -156,7 +156,7 @@ when it is installed (see [Running things](#running-things)).
 | `filter_chips.rs` | `FilterChips` over a `One` `Selection` (own or `Selection::Ref`) of `Item<Chip>` (`Chip { label, count: Option<usize> }`): a wrapping row (6 px gap) of 30 px pill `ChipView`s, each a `Button` and tab stop that picks its item on `Activate`; the active chip is filled with `chip_on` / `chip_on_ink`, the others outlined in `chip_border` with `text_secondary` text (`text_primary` on hover) and the count at 0.6 alpha. Changing the `Chip` in an `Item` updates its chip's text in place; adding, removing or reordering items respawns the chips. Text size is `Theme::font_size_chip`. Styled by `theme_chips` (new chip, `Theme` change, hover, selection or item change), not every frame; no arrow-key navigation between chips, each is a tab stop. To a screen reader the row is a `Role::RadioGroup` and each chip a `Role::RadioButton` labelled with its label and count (`Waiting 3`), toggled while active (`filter_chips_accessible_radio_group.ron`) |
 | `gallery.rs` | `Gallery` over a `One` `Selection` (own or `Selection::Ref`) of `Item<GalleryCard>` (`GalleryCard { image, label, group }`): neighbouring items with the same `group` form a group, an overline `Label` over a row of 104 x 92 px `GalleryCardView`s (6 px gap; each a `Button` and tab stop that picks its item on `Activate` with `toggle_selected`), groups side by side with a vertical `Divider` between them. A card is a `card_surface` with a 1 px `border` and control radius, a 72 x 30 `Icon` image above a 12 px semibold label that wraps; hover is `hovered_item`; the picked card has a 2 px `selection_ring` border and the `hovered_selected_item` background. The gallery does not shrink, so put it in a horizontal `ScrollArea` to scroll it. Changing the items or their groups respawns the groups; changing a `GalleryCard` updates in place. To a screen reader the gallery is a `Role::RadioGroup` and each card a `Role::RadioButton` labelled with its item's label, toggled while picked |
 | `toolbar.rs` | `Toolbar { style }` over a `Selection` (own or `Selection::Ref`) of `Item<Tool>` (`Tool { icon, label, group, key_hint, tone }`): a row of `ToolbarButton`s (`Button`s and tab stops) that pick their item on `Activate` with `toggle_selected`, so a `One` toolbar keeps its tool and a `ZeroOrOne` one clears when the open one is activated; a vertical `Divider` goes between neighbouring tools of different `group`. `ToolbarStyle::Filled` is 66 x 60 px with a label under a 22 px icon, the active button filled with `accent` and `AccentText` ink; `Underlined` is 44 px icon-only, the active one `accent_subtle` with an `AccentSubtleText` icon and an `accent_subtle_bar` bar. A tool's `tone` (`Tool::with_tone`) recolours it: `Danger` turns icon and label `danger_hover_text` when hovered and fills the active button with `danger` and `DangerText` (a bulldoze tool); `Warning` shows `WarningText` on `warning_background` when hovered or active. The tool's label is the `AccessibilityNode` label in both. `ToolbarLabels` (`Shown` default, `Hidden`; immutable, required by `Toolbar`) hides the labels of a `Filled` toolbar: the label gets `Display::None` and the buttons shrink to 56 x 52 px, without respawning; `Underlined` is unaffected. Changing the items, their groups or the style respawns the buttons; changing a `Tool` updates in place. A tool with a `key_hint` (`Tool::with_key_hint("1")`) gets an absolutely placed hint text (10 px semibold, 5 px from the top, 7 px from the right) in the button's ink at 60 % opacity, so it follows the active state; the library only shows it, the app binds the key. To a screen reader the toolbar is a `Role::Toolbar`; its buttons stay `Role::Button`, `toggled` true while their tool is active and false otherwise |
-| `tooltip.rs` | `Tooltip { text }`: after the pointer (`Hovered`) rests on the node for `TOOLTIP_DELAY_SECS` (0.5 s) a `TooltipPopup` `Float` (`card_surface`, `border`, small `text_primary`) is spawned under the node's topmost ancestor, hidden until laid out, then centred under the node, kept 6 px inside the primary window and put above the node when it would run off the bottom; it never takes the pointer. Leaving the node or a `Pressed` hides it, and a press keeps it hidden until the pointer has left and returned. `IconButton` inserts one with its name; the buttons of an underlined `Toolbar` (labels hidden) get one with their tool's label |
+| `tooltip.rs` | `Tooltip { text }`: after the pointer (`Hovered`) rests on the node for `TOOLTIP_DELAY_SECS` (0.5 s) a `TooltipPopup` `Float` (`card_surface`, `border`, small `text_primary`) is spawned as a child of the node, hidden until laid out, then centred under the node, kept 6 px inside the primary window and put above the node when it would run off the bottom; it never takes the pointer. Leaving the node or a `Pressed` hides it, and a press keeps it hidden until the pointer has left and returned. `IconButton` inserts one with its name; the buttons of an underlined `Toolbar` (labels hidden) get one with their tool's label |
 
 ### Examples
 
@@ -284,9 +284,8 @@ of them (`just example gallery -- --run-all stack link`).
   `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
   `PostStartup` system logs an `error!` (it does not panic) unless there is
   exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`,
-  so a widget must not take `Single<.., With<UiRoot>>`: `ColorPaletteCombo`
-  spawns its popup under its own topmost ancestor instead (and logs an `error!`
-  if it has no parent).
+  so a widget must not take `Single<.., With<UiRoot>>`; a popup is a `Float`
+  child of its widget instead, which needs no root at all.
   The tester's cursor overlay spawns its roots with a `UiTargetCamera`, so they
   get no `UiRoot` (`the_cursor_overlays_roots_get_no_ui_root` in
   `tests/scenarios.rs`).
@@ -513,7 +512,9 @@ of them (`just example gallery -- --run-all stack link`).
   triggers when the arrow keys, Home or End move its active descendant. It finds
   the `ScrollContents` above the entity and moves its `ScrollPosition` by the
   least that shows the entity, per axis only where the contents scroll and within
-  `[0, max]`; an entity outside any scroll area is left alone. It reads the
+  `[0, max]`; an entity outside any scroll area is left alone, and so is one in a
+  `FixedNode` (a combo's popup) inside one, since scrolling the area would not
+  show it. It reads the
   entity's laid-out position, so it is one layout pass behind like the wheel's
   `ComputedNode`. The wheel is untouched
   (`scroll_area_keyboard_scrolls_item_into_view.ron`).
@@ -981,6 +982,10 @@ a file can check any `Reflect` type of the app by short type path.
   the icon of the combo's `PushButton`, `Within(Name("first combo"),
   Text("\\/"))`; a `PushButton` icon is `text_primary` like its label (and
   `text_disabled` when disabled).
+  `scrolled combo` (its own selection) sits in the 100 pixel high `combo
+  scroll area`, absolutely placed at the right (x 1000, y 300) and spawned last
+  so nothing moves and the tab order stays; its list reaches below the area and
+  "Belgium" there is picked (`combo_in_scroll_area_popup_is_not_clipped`).
 - **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
   `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
   is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:
@@ -1017,9 +1022,9 @@ a file can check any `Reflect` type of the app by short type path.
   swatch is `Selected` (`Check(Selected(Nth(60, ..)))`) and has a `BorderColor.top`
   other than `background_primary`. A combo's
   button is its `ColorPushButton` and the colour it shows the
-  `BackgroundColor.0` of its `ColorSquare`. The popup is a child of the combo's
-  topmost ancestor (its screen's root), not of the combo, and is named after
-  it when it is spawned (`first palette combo popup`, `second palette combo
+  `BackgroundColor.0` of its `ColorSquare`. The popup is a `Float` child of the
+  combo, so `Within(Name("first palette combo"), ..)` reaches into it as well,
+  and is named after it when it is spawned (`first palette combo popup`, `second palette combo
   popup`, `own palette combo popup`; a combo with only its default name has
   `ColorPaletteCombo popup`), whatever order the combos are in. Its swatches
   are `Nth(60, Within(Name("first palette combo popup"),
@@ -1039,7 +1044,11 @@ a file can check any `Reflect` type of the app by short type path.
   pixel) its centre is the button's plus or minus 0.5. The popup's palette refers to
   the combo's selection from the moment it is spawned, so
   `color_palette_combo_pick_as_first_action` opens `own palette combo` and picks a
-  swatch as its first steps, with no wait.
+  swatch as its first steps, with no wait. `scrolled palette combo` (its own
+  selection) sits in the 100 pixel high `palette combo scroll area`, absolutely
+  placed under `palette scroll area` and spawned last so the tab order stays;
+  its popup reaches below the area and a swatch there is picked
+  (`color_palette_combo_in_scroll_area_popup_is_not_clipped`).
 - **The `Themed` screen and the theme scenarios.** One of each widget that
   follows the theme in a row: `themed button` (a `PushButton` "Other"),
   `themed card`, `themed list` (`One`, `Two`, `Three`, the first selected) and
