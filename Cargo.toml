@@ -14,7 +14,7 @@ record = ["rin_bevy_ui_tester/record"]
 
 [dependencies]
 accesskit = "0.24"
-bevy = "0.19.1"
+bevy = "0.20.0"
 derive_more = { version = "2.0.1", features = ["deref"] }
 educe = { version = "0.6.0", default-features = false, features = ["Default"] }
 itertools = "0.14.0"
@@ -23,11 +23,11 @@ strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
 # The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
-bevy = { version = "0.19.1", features = ["bevy_ui_debug"] }
+bevy = { version = "0.20.0", features = ["bevy_ui_debug"] }
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
-rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "c8615dcf92c46972bff0be6747cf5c48d8e9fdb4", features = ["gallery"] }
+rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "c2c1d3e2b53bdee74210e2649362ead17bf501a8", features = ["gallery"] }
 
 # Plays every `.ron` file in tests/ron, one test per file, with the tester's own
 # `main` instead of libtest.

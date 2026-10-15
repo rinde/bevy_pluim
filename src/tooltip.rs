@@ -192,7 +192,7 @@ fn spawn_popup(
 }
 
 fn despawn_popup_with_owner(
-    t: On<Remove, Tooltip>,
+    t: On<Remove<Tooltip>>,
     refs: Query<&TooltipRef>,
     mut commands: Commands,
 ) {

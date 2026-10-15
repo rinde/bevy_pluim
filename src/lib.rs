@@ -39,8 +39,10 @@ pub mod theme;
 pub mod toolbar;
 pub mod tooltip;
 
+use bevy::ecs::event::PropagateEntityTrigger;
 use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
+use bevy::picking::events::{PointerEvent, PointerTraversal};
 use bevy::prelude::*;
 use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin};
 
@@ -120,12 +122,12 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(LinkPlugin)
             .add_systems(PostStartup, setup)
             .add_observer(add_ui_root)
-            .add_observer(observer_transformer::<Over>)
-            .add_observer(observer_transformer::<Press>)
-            .add_observer(observer_transformer::<Release>)
-            .add_observer(observer_transformer::<Click>)
-            .add_observer(observer_transformer::<Drag>)
-            .add_observer(observer_transformer::<Out>);
+            .add_observer(observer_transformer::<PointerOver>)
+            .add_observer(observer_transformer::<PointerPress>)
+            .add_observer(observer_transformer::<PointerRelease>)
+            .add_observer(observer_transformer::<PointerClick>)
+            .add_observer(observer_transformer::<PointerDrag>)
+            .add_observer(observer_transformer::<PointerOut>);
     }
 
     /// `DefaultPlugins` and the tester's `HeadlessPlugins` bring Bevy's
@@ -154,7 +156,7 @@ impl Plugin for WidgetsPlugin {
 }
 
 fn add_ui_root(
-    t: On<Add, Node>,
+    t: On<Add<Node>>,
     app_root: Query<(), (Without<ChildOf>, Without<UiTargetCamera>)>,
     mut commands: Commands,
 ) {
@@ -201,7 +203,8 @@ enum MouseKind {
     Out,
 }
 
-/// A pointer interaction with `entity`, re-triggered from Bevy's `Pointer<_>` events.
+/// A pointer interaction with `entity`, re-triggered from Bevy's pointer events
+/// ([`PointerEvent`]s such as `PointerPress`).
 #[derive(EntityEvent, Copy, Clone, Debug)]
 struct MouseEvent {
     entity: Entity,
@@ -212,58 +215,64 @@ trait ToMouseEvent {
     fn to_mouse_kind(&self) -> MouseKind;
 }
 
-impl ToMouseEvent for Over {
+impl ToMouseEvent for PointerOver {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Over
     }
 }
 
-impl ToMouseEvent for Press {
+impl ToMouseEvent for PointerPress {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Pressed
     }
 }
 
-impl ToMouseEvent for Release {
+impl ToMouseEvent for PointerRelease {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Released
     }
 }
 
-impl ToMouseEvent for Click {
+impl ToMouseEvent for PointerClick {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Click(self.button)
     }
 }
 
-impl ToMouseEvent for Drag {
+impl ToMouseEvent for PointerDrag {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Drag(self.delta)
     }
 }
 
-impl ToMouseEvent for Out {
+impl ToMouseEvent for PointerOut {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Out
     }
 }
 
-fn observer_transformer<E>(trigger: On<Pointer<E>>, mut commands: Commands)
+/// Re-triggers a pointer event `E` as a [`MouseEvent`]. The `Trigger` bound says that
+/// `E` bubbles through [`PointerTraversal`], as every pointer event does, which is what
+/// gives `On<E>` its `original_event_target`.
+fn observer_transformer<E>(trigger: On<E>, mut commands: Commands)
 where
-    E: std::fmt::Debug + Clone + Reflect + ToMouseEvent,
+    E: PointerEvent
+        + ToMouseEvent
+        + for<'t> EntityEvent<Trigger<'t> = PropagateEntityTrigger<true, E, PointerTraversal>>,
 {
     // The event bubbles up through the hierarchy, rewriting its own target at
     // every hop; the widget that was actually hit is the original target, and
     // only the first hop re-triggers, so one event is one `MouseEvent`.
     //
     // This is a global observer rather than one on `UiRoot` because Bevy's
-    // `Button` stops `Press`, `Release`, `Click` and `DragEnd` from bubbling,
+    // `Button` stops `PointerPress`, `PointerRelease`, `PointerClick` and
+    // `PointerDragEnd` from bubbling,
     // which would keep them from ever reaching the root.
     let original = trigger.original_event_target();
     if trigger.event_target() == original {
         commands.trigger(MouseEvent {
             entity: original,
-            kind: trigger.event().event.to_mouse_kind(),
+            kind: trigger.event().to_mouse_kind(),
         });
     }
 }

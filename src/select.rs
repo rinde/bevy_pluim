@@ -159,7 +159,7 @@ impl SelectionBuilderWithValue {
 }
 
 fn on_add_selection(
-    t: On<Insert, Selection>,
+    t: On<Insert<Selection>>,
     selections: Query<(&Selection, Option<&ItemsRef>, Option<&ItemValues>)>,
     item_values_query: Query<&ItemValues>,
     mut commands: Commands,

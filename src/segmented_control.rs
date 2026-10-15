@@ -337,7 +337,7 @@ fn on_items_changed(
 }
 
 fn on_insert_selection(
-    t: On<Insert, Selection>,
+    t: On<Insert<Selection>>,
     controls: Query<(), With<SegmentedControl>>,
     selections: SelectionParam,
     mut commands: Commands,

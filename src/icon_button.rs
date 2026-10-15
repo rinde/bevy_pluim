@@ -138,7 +138,7 @@ pub struct IconButton {
 /// Insert it on an [`IconButton`] to make it a toggle: an
 /// [`Activate`] (a click, or Enter / Space) inserts
 /// the flipped value, which restyles the button and is what an app observes
-/// (`On<Insert, ToggleState>`). An app can insert a value itself to set it from
+/// (`On<Insert<ToggleState>>`). An app can insert a value itself to set it from
 /// outside, for a keyboard shortcut or because the game paused itself. A button
 /// without it is a plain, momentary button. It is one on/off button, not part of
 /// a group. To a screen reader a button with it is a toggle button, pressed while
@@ -321,7 +321,7 @@ fn toggle_on_activate(
 }
 
 /// Restyles a button whose [`ToggleState`] was just inserted.
-fn restyle_on_toggle(t: On<Insert, ToggleState>, mut commands: Commands) {
+fn restyle_on_toggle(t: On<Insert<ToggleState>>, mut commands: Commands) {
     commands.run_system_cached_with(theme_icon_buttons, Some(t.event().event_target()));
 }
 

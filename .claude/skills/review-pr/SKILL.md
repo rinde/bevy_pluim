@@ -98,7 +98,7 @@ Work through all of it, and say where in the code each finding lives:
    which takes Bevy types only; one `Plugin` per widget, registered in
    `WidgetsPlugin`; styling from `Res<Theme>` through a `theme_*` system in the
    `AGENTS.md` pattern, with no hard-coded colours outside `theme.rs` and
-   `tailwind.rs`; widgets observe `MouseEvent`, not raw `Pointer<…>`; state is
+   `tailwind.rs`; widgets observe `MouseEvent`, not raw `PointerPress` and friends; state is
    an immutable component, setup lives in hooks and `#[require(…)]`; no
    `unwrap`, `expect`, `panic!`, indexing or `allow` in library code, and none
    of the Bevy accessors `clippy.toml` bans; every public item has a doc

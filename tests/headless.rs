@@ -20,7 +20,9 @@ use bevy::input_focus::{InputFocus, InputFocusVisible};
 use bevy::mesh::MeshPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
-use bevy::picking::events::{Click, Out, Over, Pointer, Press, Release};
+use bevy::picking::events::{
+    Pointer, PointerClick, PointerOut, PointerOver, PointerPress, PointerRelease,
+};
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
@@ -551,19 +553,17 @@ fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
 fn pointer_over_or_out(app: &mut App, target: Entity, over: bool) {
     let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
     if over {
-        app.world_mut().trigger(Pointer::new(
-            PointerId::Mouse,
-            pointer_location(),
-            Over { hit },
-            target,
-        ));
+        app.world_mut().trigger(PointerOver {
+            entity: target,
+            pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+            hit,
+        });
     } else {
-        app.world_mut().trigger(Pointer::new(
-            PointerId::Mouse,
-            pointer_location(),
-            Out { hit },
-            target,
-        ));
+        app.world_mut().trigger(PointerOut {
+            entity: target,
+            pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+            hit,
+        });
     }
     app.update();
 }
@@ -667,22 +667,13 @@ fn a_press_on_a_link_restyles_it() {
     app.update();
 
     let before = *app.world().entity(link).get::<BackgroundColor>().unwrap();
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 1,
-                height: 1,
-            },
-            position: Vec2::ZERO,
-        },
-        Press {
-            count: 1,
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        link,
-    ));
+    app.world_mut().trigger(PointerPress {
+        entity: link,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
     app.update();
 
     let after = *app.world().entity(link).get::<BackgroundColor>().unwrap();
@@ -733,22 +724,13 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
 
     let background = |app: &App| app.world().entity(link).get::<BackgroundColor>().unwrap().0;
     let before = background(&app);
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 1,
-                height: 1,
-            },
-            position: Vec2::ZERO,
-        },
-        Press {
-            count: 1,
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        link,
-    ));
+    app.world_mut().trigger(PointerPress {
+        entity: link,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
     app.update();
 
     assert_eq!(background(&app), before);
@@ -792,41 +774,32 @@ const fn pointer_location() -> Location {
 }
 
 fn press(app: &mut App, target: Entity) {
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        pointer_location(),
-        Press {
-            count: 1,
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        target,
-    ));
+    app.world_mut().trigger(PointerPress {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
     app.update();
 }
 
 /// Bevy's picking emits `Click` before `Release` when the button comes up.
 fn click_and_release(app: &mut App, target: Entity) {
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        pointer_location(),
-        Click {
-            count: 1,
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            duration: std::time::Duration::ZERO,
-        },
-        target,
-    ));
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        pointer_location(),
-        Release {
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        target,
-    ));
+    app.world_mut().trigger(PointerClick {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        duration: std::time::Duration::ZERO,
+    });
+    app.world_mut().trigger(PointerRelease {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
     app.update();
 }
 
@@ -1772,17 +1745,14 @@ fn a_click_with_another_button_on_a_swatch_leaves_the_popup_open() {
     let mut app = headless_app();
     let (combo, _, swatches) = open_palette_combo_over(&mut app, two_color_selection());
 
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        pointer_location(),
-        Click {
-            count: 1,
-            button: PointerButton::Secondary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            duration: std::time::Duration::ZERO,
-        },
-        swatches[1],
-    ));
+    app.world_mut().trigger(PointerClick {
+        entity: swatches[1],
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button: PointerButton::Secondary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        duration: std::time::Duration::ZERO,
+    });
     app.update();
 
     assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);

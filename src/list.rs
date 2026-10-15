@@ -623,7 +623,7 @@ fn on_items_changed(
 }
 
 fn on_insert_selection(
-    t: On<Insert, Selection>,
+    t: On<Insert<Selection>>,
     lists: Query<(), (With<List>, With<Selection>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
     mut commands: Commands,
@@ -792,7 +792,7 @@ fn theme_lists(
     }
 }
 
-const fn theme_item_border(
+fn theme_item_border(
     node: &mut Node,
     corner_style: CornerStyle,
     layout: ListLayout,
