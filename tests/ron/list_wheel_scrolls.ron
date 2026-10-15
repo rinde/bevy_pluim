@@ -10,6 +10,10 @@
 (
     format_version: 3,
     name: "the wheel over a list scrolls it",
+    // The scroll positions it checks are those of rows sized for the default
+    // text size; with larger text the rows are taller and the area scrolls
+    // further, so it does not run in the `text 1.5x` variant.
+    variants: ["default", "scale 2"],
     setup: App(Lists),
     steps: [
         Wait(2),

@@ -205,7 +205,7 @@ fn theme_setting_rows(
         *color = TextColor(theme.colors.text_primary);
         *font = TextFont {
             font: theme.body_font.clone().into(),
-            font_size: FontSize::Px(theme.font_size_body),
+            font_size: Theme::font_size(theme.font_size_body),
             weight: FontWeight::SEMIBOLD,
             ..default()
         };

@@ -206,7 +206,7 @@ fn theme_segmented_controls(
         text_color.0 = segment_colors(&theme.colors, selected, hovered.get()).1;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
-            font_size: FontSize::Px(SEGMENT_FONT_SIZE),
+            font_size: Theme::font_size(SEGMENT_FONT_SIZE),
             weight: FontWeight::SEMIBOLD,
             ..default()
         };

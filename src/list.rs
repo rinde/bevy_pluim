@@ -731,7 +731,7 @@ fn theme_item_labels(
     for (mut text_color, mut text_font) in it {
         text_color.0 = theme.colors.text_primary;
         text_font.font = theme.body_font.clone().into();
-        text_font.font_size = FontSize::Px(theme.font_size_secondary);
+        text_font.font_size = Theme::font_size(theme.font_size_secondary);
     }
 }
 

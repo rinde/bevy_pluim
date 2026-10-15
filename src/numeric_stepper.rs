@@ -487,7 +487,7 @@ fn theme_numeric_stepper(
         *text_color = TextColor(theme.colors.text_primary);
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
-            font_size: FontSize::Px(theme.font_size_secondary),
+            font_size: Theme::font_size(theme.font_size_secondary),
             ..default()
         };
     }
