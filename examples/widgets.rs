@@ -10,6 +10,7 @@ use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
+use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::list::List;
@@ -161,14 +162,14 @@ fn setup(mut commands: Commands) {
 
     commands.entity(root).with_children(|spawner| {
         spawner.spawn(PushButton::from_label("Add List")).observe(
-            move |_: On<Pointer<Press>>, mut commands: Commands| {
+            move |_: On<Activate>, mut commands: Commands| {
                 commands
                     .entity(root)
                     .with_child((List, Selection::reference(country_selection)));
             },
         );
         spawner.spawn(PushButton::from_label("Add Combo")).observe(
-            move |_: On<Pointer<Press>>, mut commands: Commands| {
+            move |_: On<Activate>, mut commands: Commands| {
                 commands
                     .entity(root)
                     .with_child((Combo, Selection::reference(country_selection)));
@@ -176,7 +177,7 @@ fn setup(mut commands: Commands) {
         );
         spawner
             .spawn(PushButton::from_label("Add PushButton"))
-            .observe(move |_: On<Pointer<Press>>, mut commands: Commands| {
+            .observe(move |_: On<Activate>, mut commands: Commands| {
                 commands
                     .entity(root)
                     .with_child(PushButton::from_label("Hello"));
@@ -187,11 +188,7 @@ fn setup(mut commands: Commands) {
 #[derive(Component)]
 struct ThemeButton;
 
-fn on_press(
-    trigger: On<Pointer<Release>>,
-    button: Query<(), With<ThemeButton>>,
-    mut theme: ResMut<Theme>,
-) {
+fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
     if button.get(trigger.event().event_target()).is_ok() {
         theme.light_dark_toggle();
     }

@@ -283,9 +283,12 @@ of them (`just example gallery -- --run-all stack link`).
   only the node it lies on counts. It follows `PointerId::Mouse` only, not touch;
   the outside click reads the mouse button anyway. It is updated in `PreUpdate`,
   so an `Update` system sees this frame's pointer.
-- **Buttons are `bevy::ui_widgets::Button`.** `PushButton`, `ColorPushButton` and
-  `Link` (the other widgets still use `bevy::ui::Button`, until they are moved
-  over) are headless `bevy_ui_widgets` buttons: `Pressed` while held, `Activate`
+- **Buttons are `bevy::ui_widgets::Button`.** Every button
+  (`PushButton`, `ColorPushButton`, `Link`, `IconButton` and the rest) is a
+  headless `bevy_ui_widgets` button, and nothing uses the deprecated `bevy::ui`
+  `Button` or `Interaction`. The scroll thumb is no button: a plain node that
+  requires `Pickable::default()` so it blocks the pointer and gets `MouseEvent`s.
+  A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
   `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`) in
   its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
@@ -297,9 +300,7 @@ of them (`just example gallery -- --run-all stack link`).
   "the button was used" is `Activate`, so an action observes `Activate` (on the
   button, or on an ancestor: it bubbles); how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one
-  thing. The `Pointer<Release>` observers in the examples predate this and fire
-  on a release that does not activate (the button was pressed elsewhere); move
-  them to `Activate` when touching them. A disabled `PushButton` (insert
+  thing. A disabled `PushButton` (insert
   `InteractionDisabled`) shows its text in `ThemeColors::text_disabled` and
   ignores hover. A `Link` is disabled through its `LinkState`, not by inserting
   `InteractionDisabled` yourself: `LinkState::Disabled` keeps the `Button` and
