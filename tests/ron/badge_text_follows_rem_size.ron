@@ -1,0 +1,24 @@
+// A badge's count is 10 px text at the default rem size of 20 px, 0.5 rem, so
+// it follows Bevy's `RemSize`. `ron_scenarios` also plays this file with the
+// rem size at 1.5 times the default (`[text 1.5x]`): the pill grows with its
+// count, which stays inside it, and the buttons still fit the window.
+(
+    format_version: 3,
+    name: "a badge sizes its count in rem and holds it at any text size",
+    setup: App(Badge),
+    steps: [
+        Wait(2),
+        Check(Component(target: Within(Name("warning button"), Name("Badge")), path: "TextFont.font_size", is: Eq(Rem(0.5)))),
+        // The badge is the text node itself, so its laid-out text must fit its box.
+        Capture(name: "badge", value: Component(target: Within(Name("warning button"), Name("Badge")), path: "ComputedNode.size.y", unit: Logical)),
+        Check(Component(target: Within(Name("warning button"), Name("Badge")), path: "TextLayoutInfo.size.y", unit: Logical, is: Le(Captured("badge")))),
+        Capture(name: "badge width", value: Component(target: Within(Name("warning button"), Name("Badge")), path: "ComputedNode.size.x", unit: Logical)),
+        Check(Component(target: Within(Name("warning button"), Name("Badge")), path: "TextLayoutInfo.size.x", unit: Logical, is: Le(Captured("badge width")))),
+        MoveTo(Name("counted button")),
+        MoveTo(Name("warning button")),
+        MoveTo(Name("plain button")),
+        MoveTo(Role(role: Button, label: "Add badge")),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)

@@ -14,6 +14,7 @@ mod icons;
 
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
+use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
 use icons::Icons;
 use rin_bevy_ui::badge::Badge;
@@ -25,7 +26,7 @@ use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueChange};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, PushButton};
@@ -147,6 +148,7 @@ enum Pref {
     Appearance,
     WarningsButton,
     ToolLabels,
+    TextSize,
 }
 
 #[derive(Component)]
@@ -634,6 +636,7 @@ fn fill_panels(
                         "Tool labels",
                         "Names under the tool icons",
                     ),
+                    (Pref::TextSize, "Text size", "The size of all text"),
                 ] {
                     commands.spawn((SettingRow::new(title, description), pref, ChildOf(rows)));
                 }
@@ -679,6 +682,20 @@ fn fill_setting_rows(
         let options = match pref {
             Pref::Appearance => ["Dark", "Light"],
             Pref::WarningsButton | Pref::ToolLabels => ["Shown", "Hidden"],
+            Pref::TextSize => {
+                commands
+                    .spawn((
+                        NumericStepper {
+                            format: percent,
+                            name: Some("Text size".to_string()),
+                            ..default()
+                        },
+                        Value::new_u16(100, 75, 150, 25),
+                        ChildOf(refs.control_slot),
+                    ))
+                    .observe(set_text_size);
+                continue;
+            }
         };
         commands.spawn((
             SegmentedControl,
@@ -688,6 +705,18 @@ fn fill_setting_rows(
                 .build_with_items(options.map(Item::new)),
             ChildOf(refs.control_slot),
         ));
+    }
+}
+
+/// "100%" for a value of 100.
+fn percent(value: &Value) -> String {
+    format!("{}%", value.as_u16().unwrap_or(100))
+}
+
+/// Scales all text, the widgets' included, by setting the root font size.
+fn set_text_size(change: On<ValueChange>, mut rem_size: ResMut<RemSize>) {
+    if let Some(percent) = change.value.as_u16() {
+        rem_size.0 = DEFAULT_REM_SIZE_PX * f32::from(percent) / 100.0;
     }
 }
 
@@ -726,6 +755,8 @@ fn apply_preferences(
                     node.display = if shown { Display::Flex } else { Display::None };
                 }
             }
+            // A stepper, which sets the text size itself.
+            Pref::TextSize => {}
             Pref::ToolLabels => {
                 for dock in &docks {
                     commands.entity(dock).insert(if shown {

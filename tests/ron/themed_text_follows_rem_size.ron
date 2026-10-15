@@ -1,0 +1,24 @@
+// The widgets size their text in rem (`Theme::font_size`), so it follows Bevy's
+// `RemSize`: secondary text (14 px at the default rem size of 20 px) is 0.7 rem,
+// a title 1.1 rem. `ron_scenarios` also plays this file with the rem size at 1.5
+// times the default (`[text 1.5x]`), where the text is larger and every widget
+// of the Themed screen must still be inside the window and hold its text.
+(
+    format_version: 3,
+    name: "the themed widgets size their text in rem and fit the window at any text size",
+    setup: App(Themed),
+    steps: [
+        Wait(2),
+        Check(Component(target: Text("Other"), path: "TextFont.font_size", is: Eq(Rem(0.7)))),
+        Check(Component(target: Text("A card"), path: "TextFont.font_size", is: Eq(Rem(0.7)))),
+        Check(Component(target: Text("Two"), path: "TextFont.font_size", is: Eq(Rem(0.7)))),
+        // The button grows with its label.
+        Capture(name: "button", value: Component(target: Name("themed button"), path: "ComputedNode.size.y", unit: Logical)),
+        Check(Component(target: Text("Other"), path: "ComputedNode.size.y", unit: Logical, is: Lt(Captured("button")))),
+        MoveTo(Name("themed button")),
+        MoveTo(Name("themed card")),
+        MoveTo(Within(Name("themed list"), Role(role: ListItem, label: "Three"))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)

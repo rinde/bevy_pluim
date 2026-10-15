@@ -137,7 +137,7 @@ fn theme_pills(
         text_color.0 = text;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
-            font_size: FontSize::Px(PILL_FONT_SIZE),
+            font_size: Theme::font_size(PILL_FONT_SIZE),
             weight: FontWeight::SEMIBOLD,
             ..default()
         };

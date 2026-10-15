@@ -2,13 +2,16 @@
 
 use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
-use bevy::text::{LineBreak, TextLayout};
+use bevy::text::{DEFAULT_REM_SIZE_PX, LineBreak, TextLayout};
 
 use crate::select::Item;
 use crate::theme::Theme;
 use crate::toolbar::{Tool, ToolbarButton};
 
-/// The height, and the minimum width, of a badge, in logical pixels.
+/// The height, and the minimum width, of a badge, in logical pixels at the default rem size.
+///
+/// It is laid out in rem, so it grows with the text: in pixels a larger rem size would clip
+/// the count.
 const BADGE_SIZE_PX: f32 = 16.0;
 /// The padding to the left and right of the text of a badge, in logical pixels.
 const BADGE_PADDING_PX: f32 = 4.0;
@@ -111,7 +114,7 @@ fn mirror_item_badges(
 fn badge_font(theme: &Theme) -> TextFont {
     TextFont {
         font: theme.body_font.clone().into(),
-        font_size: FontSize::Px(BADGE_FONT_SIZE_PX),
+        font_size: Theme::font_size(BADGE_FONT_SIZE_PX),
         weight: FontWeight::SEMIBOLD,
         ..default()
     }
@@ -122,12 +125,12 @@ fn badge_node() -> Node {
         position_type: PositionType::Absolute,
         top: Val::Px(BADGE_OFFSET_PX),
         right: Val::Px(BADGE_OFFSET_PX),
-        height: Val::Px(BADGE_SIZE_PX),
-        min_width: Val::Px(BADGE_SIZE_PX),
+        height: Val::Rem(BADGE_SIZE_PX / DEFAULT_REM_SIZE_PX),
+        min_width: Val::Rem(BADGE_SIZE_PX / DEFAULT_REM_SIZE_PX),
         padding: UiRect::horizontal(Val::Px(BADGE_PADDING_PX)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
-        border_radius: BorderRadius::all(Val::Px(BADGE_SIZE_PX / 2.0)),
+        border_radius: BorderRadius::all(Val::Rem(BADGE_SIZE_PX / 2.0 / DEFAULT_REM_SIZE_PX)),
         ..default()
     }
 }

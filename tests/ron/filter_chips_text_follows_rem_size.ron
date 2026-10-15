@@ -1,0 +1,22 @@
+// A chip's text is `Theme::font_size_chip` (13 px at the default rem size of
+// 20 px), 0.65 rem, so it follows Bevy's `RemSize`. `ron_scenarios` also plays
+// this file with the rem size at 1.5 times the default (`[text 1.5x]`): the
+// chip grows with its text, which stays inside the chip's border, and the
+// chips still fit the window.
+(
+    format_version: 3,
+    name: "a chip sizes its text in rem and holds it at any text size",
+    setup: App(FilterChips),
+    steps: [
+        Wait(2),
+        Check(Component(target: Within(Name("status chips"), Text("Running")), path: "TextFont.font_size", is: Eq(Rem(0.65)))),
+        // The text stays inside the chip's 1 px border, top and bottom.
+        Capture(name: "chip", value: Component(target: Nth(1, Within(Name("status chips"), Name("Chip"))), path: "ComputedNode.size.y", unit: Logical)),
+        Check(Component(target: Within(Name("status chips"), Text("Running")), path: "ComputedNode.size.y", unit: Logical, is: Le(Captured(name: "chip", plus: -2)))),
+        MoveTo(Within(Name("status chips"), Role(role: Button, label: "Problems 1"))),
+        MoveTo(Within(Name("mirror chips"), Role(role: Button, label: "Problems 1"))),
+        MoveTo(Within(Name("narrow chips"), Role(role: Button, label: "Gamma "))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)
