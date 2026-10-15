@@ -226,7 +226,7 @@ of them (`just example gallery -- --run-all stack link`).
 | --- | --- |
 | `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
-| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and every `tests/ron/` file played again with the UI drawn to an image (`image_target_app`) |
+| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and every `tests/ron/` file played again with the UI drawn to an image (`image_target_app`), and every `tests/ron/` file played under shuffled schedules, see [Determinism](#determinism) |
 | `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
 | `tests/recorded_scenarios_gpu.rs` | needs `--features record` and a GPU, and is `#[ignore]`d: records every `tests/ron/` file offscreen, see [Recording the scenarios](#recording-the-scenarios) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
@@ -997,6 +997,26 @@ a file can check any `Reflect` type of the app by short type path.
   button the pointer rests on shows the new theme's `hovered_item`. A button
   let go with the pointer still on it is `hovered_item` too, not
   `selected_item`.
+
+### Determinism
+
+Since Bevy 0.20 many system sets (the UI's in `PostUpdate`) are ordered only
+where systems' data access conflicts, so a system that runs at the right
+moment only by luck would pass on one order and fail on another.
+`every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` in
+`tests/scenarios.rs` plays every `tests/ron/` file once for each of
+`PreUpdate`, `Update`, `PostUpdate` and `Last` and each of `SHUFFLE_SEEDS`
+(fixed, never the clock), with that schedule built with
+`ScheduleBuildSettings::shuffle_seed` and the single-threaded executor, so the
+order is the seed's alone. The `debug` Bevy feature that provides the seed is
+in `[dev-dependencies]` only.
+
+- **Reproduce a failure** from the file, schedule and seed it names: call
+  `shuffle(&mut app, schedule, seed)` on a `widgets_app()` after
+  `Registry::install` and play that file with `scenario.run_in(&mut app)`, or
+  narrow the test's loops to that file, schedule and seed.
+- **Fix it by ordering** the system through the data it touches (`.after(..)`
+  or a set). Never widen the seed list or skip the file.
 
 ### Recording the scenarios
 
