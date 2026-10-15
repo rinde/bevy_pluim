@@ -108,7 +108,7 @@ struct ColorPaletteComboFloat;
 /// has no [`Selection`] yet gets the reference when it is given one, see
 /// [`on_selection_change`].
 fn on_insert_combo(
-    t: On<Insert, ColorPaletteCombo>,
+    t: On<Insert<ColorPaletteCombo>>,
     mut commands: Commands,
     list_layouts: Query<&ListLayout>,
     selections: SelectionParam,
@@ -266,7 +266,7 @@ fn close_on_focus_lost(
 }
 
 fn on_remove_combo(
-    t: On<Remove, ColorPaletteCombo>,
+    t: On<Remove<ColorPaletteCombo>>,
     sub_refs: Query<&SubRefs>,
     mut commands: Commands,
 ) {
@@ -307,7 +307,7 @@ impl State {
 }
 
 fn on_insert_state(
-    t: On<Insert, State>,
+    t: On<Insert<State>>,
     state: Query<(&State, &SubRefs)>,
     mut accessibility_nodes: Query<&mut AccessibilityNode>,
     mut focus: ResMut<InputFocus>,

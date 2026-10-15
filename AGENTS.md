@@ -249,13 +249,15 @@ of them (`just example gallery -- --run-all stack link`).
   get no `UiRoot` (`the_cursor_overlays_roots_get_no_ui_root` in
   `tests/scenarios.rs`).
 - **Mouse events.** Global observers (registered by `WidgetsPlugin`, not on
-  `UiRoot`) watch Bevy's `Pointer<Over | Press | Release | Click | Drag | Out>`
-  and re-trigger each as a `MouseEvent` on the original target, on the first hop
-  of the event only. `MouseEvent` is crate-private: it is how widgets inside
-  this crate react to the pointer. They are global because Bevy's `Button`
-  calls `propagate(false)` on `Press`, `Release`, `Click`, `DragEnd` and
-  `Cancel`: an observer on `UiRoot` would never see those for a button. `Over`,
-  `Drag` and `Out` are not stopped. `MouseKind` says what the pointer did:
+  `UiRoot`) watch Bevy's flat pointer events `PointerOver`, `PointerPress`,
+  `PointerRelease`, `PointerClick`, `PointerDrag` and `PointerOut` (one generic
+  observer over the `PointerEvent` trait) and re-trigger each as a `MouseEvent`
+  on the original target, on the first hop of the event only. `MouseEvent` is
+  crate-private: it is how widgets inside this crate react to the pointer. They
+  are global because Bevy's `Button` calls `propagate(false)` on `PointerPress`,
+  `PointerRelease`, `PointerClick`, `PointerDragEnd` and `PointerCancel`: an
+  observer on `UiRoot` would never see those for a button. `PointerOver`,
+  `PointerDrag` and `PointerOut` are not stopped. `MouseKind` says what the pointer did:
   `Over`, `Pressed`, `Released`, `Click(button)` and `Drag(delta)`, plus `Out`.
   `Click` is a press and a release on the same node, which `Released` cannot
   say (it also ends a press that began elsewhere), and `Drag` carries the
@@ -444,9 +446,9 @@ of them (`just example gallery -- --run-all stack link`).
   `ItemValues`.
 - **Scroll area contents keep their natural size.** `ScrollContents` uses
   `align_items: FlexStart` instead of stretching its children. Taffy 0.10
-  (Bevy 0.19) reports no overflow for a grid whose items overflow it, so a
-  `List` or palette stretched to the area's height would leave nothing to
-  scroll. For the same reason, don't give scroll contents `height: 100%`.
+  (Bevy 0.19) reported no overflow for a grid whose items overflow it, so a
+  `List` or palette stretched to the area's height left nothing to scroll; the
+  workaround is kept on taffy 0.14 (Bevy 0.20) until `Stretch` is retried. For the same reason, don't give scroll contents `height: 100%`.
   The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
   wheel and thumb scenarios fail.
 - **A scroll area's scroll position is kept in range.** The wheel handler
@@ -475,9 +477,9 @@ of them (`just example gallery -- --run-all stack link`).
   (`scroll_area_keyboard_scrolls_item_into_view.ron`).
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
-- **Widgets observe `MouseEvent`, not raw `Pointer<…>`.**
-  The only `Pointer<…>` in the library is the producer in `lib.rs`; do not add
-  more. `MouseKind` says `Over`, `Pressed`, `Released`, `Click` and `Drag`,
+- **Widgets observe `MouseEvent`, not raw pointer events (`PointerPress` and
+  friends).** The only observers of them in the library are the producer in
+  `lib.rs`; do not add more. `MouseKind` says `Over`, `Pressed`, `Released`, `Click` and `Drag`,
   so a widget can tell a click (a press and a release on the same node) from a
   release that ends a press begun elsewhere, and can follow a drag.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
@@ -494,7 +496,9 @@ of them (`just example gallery -- --run-all stack link`).
   not tracked by hand; a `PushButton` with `NoDefaultHover` rests at
   `background_primary` for its owner to colour.
 - **Corner radius is a `Node` field.** Since Bevy 0.18 `BorderRadius` is
-  `Node::border_radius`, not a component; set it on the node.
+  `Node::border_radius`, not a component; set it on the node. Since Bevy 0.20
+  its corners are `CornerRadius`es and its constructors (`BorderRadius::all`,
+  `top`, ..) are not `const`, so a function that builds one cannot be either.
 - **No hard-coded colours outside `theme.rs` and `tailwind.rs`.** Add a slot
   to `ThemeColors` (both default themes) rather than inlining a colour. One
   `Color::BLACK` border in `color_palette_combo.rs` predates this rule.
@@ -594,10 +598,11 @@ drives scripted pointer and keyboard scenarios against the widgets
 - **Bumping it** means changing `rev` in `Cargo.toml` and `Cargo.lock`
   together (`cargo update -p rin_bevy_ui_tester`); `--locked` in CI fails if
   they disagree.
-- **Bevy upgrades land in the tester first.** It pins `bevy = "=0.19.1"`
+- **Bevy upgrades land in the tester first.** It pins `bevy = "=0.20.0"`
   exactly, so this crate's `bevy` requirement must resolve to the same version;
   upgrade Bevy in the tester (and rails), bump the `rev` here, then raise
-  `bevy` here.
+  `bevy` here. The move to 0.20 went that way: the tester upgraded on its own
+  (rinde/rin-bevy-ui-tester#125) and this crate followed.
 - **Locally**, Cargo needs your git credentials for the private repository:
   set `CARGO_NET_GIT_FETCH_WITH_CLI=true` so it uses the `git` binary (and so
   your credential helper or SSH agent) instead of its built-in client.
@@ -674,7 +679,7 @@ plugin, note it in the PR rather than pulling in a window.
 A scenario drives the widgets with scripted pointer and keyboard input through
 `rin_bevy_ui_tester` (see its README for the `Step`, `Target` and `Check`
 vocabulary) and asserts on what they did. Prefer it to hand-written
-`Pointer<..>` triggers whenever the claim is about what a person would see
+`PointerPress` (and other pointer event) triggers whenever the claim is about what a person would see
 after using the UI.
 
 - **Where.** Scenarios go in `tests/scenarios.rs`, a test target of its own, so

@@ -245,7 +245,7 @@ fn close_on_focus_lost(
     }
 }
 
-fn on_insert_combo(t: On<Insert, Combo>, selections: SelectionParam, mut commands: Commands) {
+fn on_insert_combo(t: On<Insert<Combo>>, selections: SelectionParam, mut commands: Commands) {
     let combo_ref = t.event().event_target();
     let Some(combo_selection) = selections.get_ref(combo_ref) else {
         return;

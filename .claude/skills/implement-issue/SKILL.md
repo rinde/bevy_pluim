@@ -74,7 +74,7 @@ point `CARGO_TARGET_DIR` at the main checkout's `target/`, and never `cp -r` it
 Follow the rules in `AGENTS.md` without exception: no application or game
 state, one plugin per widget registered in `WidgetsPlugin`, styling from
 `Res<Theme>` with no hard-coded colours, `MouseEvent` rather than raw
-`Pointer<…>`, no panics, and every public item documented. Name tests as
+pointer events (`PointerPress`, ..), no panics, and every public item documented. Name tests as
 sentences, and drive widget behaviour through a headless `App` in `tests/` as
 `AGENTS.md` describes. Keep the change to what the issue asks; note anything
 else worth doing in the pull request rather than doing it.

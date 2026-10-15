@@ -171,7 +171,7 @@ fn sync_accessible_names(
 }
 
 fn on_insert_selection(
-    t: On<Insert, Selection>,
+    t: On<Insert<Selection>>,
     color_palettes: Query<&Selection, With<ColorPalette>>,
     selections: SelectionParam,
     mut commands: Commands,

@@ -100,7 +100,7 @@ impl Link {
 }
 
 /// Adds or removes [`InteractionDisabled`] to match the [`LinkState`], and restyles the link.
-fn on_insert_link_state(t: On<Insert, LinkState>, q: Query<&LinkState>, mut commands: Commands) {
+fn on_insert_link_state(t: On<Insert<LinkState>>, q: Query<&LinkState>, mut commands: Commands) {
     let link = t.event().event_target();
     let Ok(state) = q.get(link) else {
         return;
