@@ -1,6 +1,7 @@
 //! `SegmentedControl`: one with its own selection, and two that share one.
 
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -33,29 +34,32 @@ fn setup(mut commands: Commands) {
                 .build_with_items(["Dark", "Light"].map(Item::new)),
         )
         .id();
-    let root = commands
-        .spawn((
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(10.0),
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
-            },
-            children![
-                (
-                    SegmentedControl,
+    commands.spawn_scene(bsn! {
+        Node {
+            width: percent(100.0),
+            height: percent(100.0),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(10.0),
+            padding: UiRect::all(px(10.0)),
+        }
+        Children [
+            SegmentedControl
+            // `Selection::builder()` gives a bundle, which `template` inserts.
+            template(|context| {
+                context.entity.insert(
                     Selection::builder()
                         .one()
                         .build_with_items(["Auto", "Manual"].map(Item::new)),
-                ),
-                (SegmentedControl, Selection::reference(shared)),
-                (SegmentedControl, Selection::reference(shared)),
-            ],
-        ))
-        .id();
-    commands
-        .spawn((PushButton::from_label("Change theme"), ChildOf(root)))
-        .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
+                );
+                Ok(EmptySceneEffect)
+            })
+            --
+            SegmentedControl ~{Selection::reference(shared)}
+            --
+            SegmentedControl ~{Selection::reference(shared)}
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+        ]
+    });
 }

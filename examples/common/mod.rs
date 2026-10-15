@@ -1,4 +1,5 @@
-//! A small icon drawn at startup, shared by the examples that need an image for an icon button.
+//! A small icon drawn at startup, shared by the examples that need an image for an icon button,
+//! and the `bsn!` entry that inserts a widget holding it.
 
 #![expect(
     unreachable_pub,
@@ -39,4 +40,15 @@ pub fn cross_icon(images: &mut Assets<Image>) -> Handle<Image> {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),
     ))
+}
+
+/// A `bsn!` entry that inserts `component` as it is.
+///
+/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a widget that holds
+/// one (an `IconButton`, a `Panel` with a close icon)
+/// goes in through this.
+pub fn inserted<C: Component + Clone>(
+    component: C,
+) -> impl Template<Output = C> + Send + Sync + 'static {
+    template(move |_| Ok(component.clone()))
 }

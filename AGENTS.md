@@ -183,8 +183,48 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `icon_button` | `IconButton`: small, regular and large buttons, a toggle, warning and danger tones, and the theme toggle |
 | `gallery` | the tester's gallery: the widgets in one window, and a **Scenarios** window listing every file of `tests/ron/` (one group per widget) to watch play, step, take over or record; see [The gallery](#the-gallery) |
 
-`panel`, `badge` and `tooltip` draw their icon with `examples/common/mod.rs`
-(`mod common;`; a directory without a `main.rs` is not an example).
+`icon_button`, `panel`, `badge` and `tooltip` draw their icon with
+`examples/common/mod.rs` (`mod common;`; a directory without a `main.rs` is not
+an example), which also has their `inserted` helper (see below).
+
+**The examples build their trees with `bsn!`.** Every example but `gallery`
+spawns its nodes as scenes (`bsn!` / `bsn_list!` and `spawn_scene`), with
+`on(..)` for observers; a single entity may still be a plain `spawn`, as may
+the `tests/widgets_setup` screens. **Never change a library component for
+`bsn!`**: no `Default`, `Clone` or other derive added only so a scene can
+patch it. Insert a prepared value instead: `~{PushButton::from_label("Add")}`
+or `~{value}` from a variable. A template's output must be a component, which
+the scene inserts together with the entity's `ChildOf` and its other
+components. A bundle without a `Node` (the selection builder's) may be inserted
+by the template itself, `template(|context| { context.entity.insert(bundle);
+Ok(EmptySceneEffect) })`. A bundle with a `Node` must not: the template runs
+before the scene gives the entity its parent, so `add_ui_root` would take it
+for a `UiRoot`, and the scene's own `Node` would overwrite what the bundle's
+hooks set (a `ScrollArea`'s grid). Such a bundle goes in through a local
+`insert_after_scene(context, bundle)`, which queues the insert for after the
+scene is applied. For the same reason a scene spawned under a parent outside a
+parent scene is `commands.spawn(ChildOf(parent)).apply_scene(..)`, never
+`spawn_scene(..)` followed by an insert of `ChildOf`. The examples work around
+what does not fit yet:
+
+- `~{..}` takes only an `Unpin` value, and a `Handle` is not one, so a widget
+  holding one (`IconButton`, `NumericStepper`, a `Panel` with a close icon)
+  goes in through a local `inserted(value)` helper, a template whose output is
+  that value.
+- `Selection::builder()` returns a bundle, so it goes in a `template(..)`;
+  `Divider::vertical()` too, through `insert_after_scene`.
+- `ScrollArea::bundle` takes a closure that spawns the contents, so it goes in
+  through `insert_after_scene` and the closure applies a scene with
+  `spawn_empty().apply_scene(..)`.
+- `StackChildSpawner::spawn` takes a bundle, so a stack item's scenes are
+  queued from that bundle by a local `scene_children` helper
+  (`queue_spawn_related_scenes::<Children>`).
+- `Stack` takes the selection's entity and cannot take a `#name` of an entity
+  in the same scene, so the selection a `Stack` and its tabs share is spawned
+  first, as an entity of its own.
+
+`the_hud_example_builds_and_runs` in `tests/headless.rs` adds `AssetPlugin` and
+Bevy's `ScenePlugin`, which spawning a scene needs.
 
 Every example has a button that toggles the light and dark theme (the gallery's
 is on its screens, the `hud`'s is the Appearance setting of its Preferences

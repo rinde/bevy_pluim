@@ -12,8 +12,11 @@
 
 mod icons;
 
+use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::SystemId;
+use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
 use icons::Icons;
@@ -151,19 +154,19 @@ enum Pref {
     TextSize,
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct PauseButton;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct RunLabel;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct WarningsButton;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct WarningsPanel;
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct Dock;
 
 /// The chips that filter a list of trains.
@@ -192,47 +195,55 @@ fn spawn_hud(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut them
     let train_rows = commands.register_system(train_row);
     commands.insert_resource(TrainRows(train_rows));
 
-    let root = commands
-        .spawn(Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        })
-        .id();
-    spawn_run_state(&mut commands, root, &icons);
-    spawn_panels(&mut commands, root, &icons);
-    spawn_dock(&mut commands, root, &icons);
+    let bar = spawn_panel_bar(&mut commands, &icons);
+    let tools = spawn_dock_tools(&mut commands, &icons);
+    let run_state = run_state(&icons);
+    let panels = panels(bar, &icons);
+    let dock = dock(tools);
+    commands.spawn_scene(bsn! {
+        Node {
+            width: percent(100.0),
+            height: percent(100.0),
+        }
+        Children [
+            @{run_state}
+            --
+            @{panels}
+            --
+            @{dock}
+        ]
+    });
     commands.insert_resource(icons);
 }
 
 /// Top left: the pause button, what the game is doing and the key that toggles it.
-fn spawn_run_state(commands: &mut Commands, root: Entity, icons: &Icons) {
-    commands.spawn((
-        Card,
+fn run_state(icons: &Icons) -> impl Scene {
+    let pause = icons.pause.clone();
+    bsn! {
+        ~{Card}
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(16.0),
-            top: Val::Px(16.0),
+            left: px(16.0),
+            top: px(16.0),
             align_items: AlignItems::Center,
-            column_gap: Val::Px(10.0),
-            padding: UiRect::axes(Val::Px(8.0), Val::Px(6.0)),
-            ..default()
-        },
-        ChildOf(root),
-        children![
-            (
-                IconButton::new(icons.pause.clone(), "Pause", IconButtonSize::Regular),
-                ToggleState(false),
-                PauseButton,
-            ),
-            (Label::regular("Running"), RunLabel),
-            Kbd::new("P"),
-        ],
-    ));
+            column_gap: px(10.0),
+            padding: UiRect::axes(px(8.0), px(6.0)),
+        }
+        Children [
+            inserted(IconButton::new(pause, "Pause", IconButtonSize::Regular))
+            ~{ToggleState(false)}
+            PauseButton
+            --
+            ~{Label::regular("Running")}
+            RunLabel
+            --
+            ~{Kbd::new("P")}
+        ]
+    }
 }
 
-/// Top right: the warnings button, the panel toolbar and the panel it opens.
-fn spawn_panels(commands: &mut Commands, root: Entity, icons: &Icons) {
+/// The items of the panel toolbar, each with the creator of its panel, and their selection.
+fn spawn_panel_bar(commands: &mut Commands, icons: &Icons) -> Entity {
     let bar = commands.spawn_empty().id();
     let panels = [
         (
@@ -273,70 +284,58 @@ fn spawn_panels(commands: &mut Commands, root: Entity, icons: &Icons) {
         .entity(bar)
         .insert(Selection::Value(SelectionValue::ZeroOrOne(first)));
     commands.insert_resource(PanelBar(bar));
-
-    let column = commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: Val::Px(16.0),
-                right: Val::Px(16.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexEnd,
-                row_gap: Val::Px(10.0),
-                ..default()
-            },
-            ChildOf(root),
-        ))
-        .id();
-    let row = commands
-        .spawn((
-            Node {
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(10.0),
-                ..default()
-            },
-            ChildOf(column),
-        ))
-        .id();
-    commands.spawn((
-        IconButton::new(icons.bell.clone(), "Warnings", IconButtonSize::Large)
-            .with_tone(Tone::Warning),
-        ToggleState(false),
-        Badge::count(WARNINGS.len()),
-        WarningsButton,
-        ChildOf(row),
-    ));
-    commands.spawn((
-        Card,
-        Node {
-            padding: UiRect::all(Val::Px(4.0)),
-            ..default()
-        },
-        ChildOf(row),
-        children![(
-            Toolbar::new(ToolbarStyle::Underlined),
-            Selection::reference(bar)
-        )],
-    ));
-    commands.spawn((
-        panel_for(PanelKind::Warnings, icons.close.clone()),
-        PanelKind::Warnings,
-        WarningsPanel,
-        ChildOf(column),
-    ));
-    commands.spawn((
-        Stack { selection_ref: bar },
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::FlexEnd,
-            ..default()
-        },
-        ChildOf(column),
-    ));
+    bar
 }
 
-/// Bottom: the tool dock, with the bar of the active tool above it.
-fn spawn_dock(commands: &mut Commands, root: Entity, icons: &Icons) {
+/// Top right: the warnings button, the panel toolbar over `bar` and the panel it opens.
+fn panels(bar: Entity, icons: &Icons) -> impl Scene {
+    let bell = icons.bell.clone();
+    let close = icons.close.clone();
+    bsn! {
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(16.0),
+            right: px(16.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::FlexEnd,
+            row_gap: px(10.0),
+        }
+        Children [
+            Node {
+                align_items: AlignItems::Center,
+                column_gap: px(10.0),
+            }
+            Children [
+                inserted(IconButton::new(bell, "Warnings", IconButtonSize::Large).with_tone(Tone::Warning))
+                ~{ToggleState(false)}
+                ~{Badge::count(WARNINGS.len())}
+                WarningsButton
+                --
+                ~{Card}
+                Node {
+                    padding: UiRect::all(px(4.0)),
+                }
+                Children [
+                    ~{Toolbar::new(ToolbarStyle::Underlined)}
+                    ~{Selection::reference(bar)}
+                ]
+            ]
+            --
+            inserted(panel_for(PanelKind::Warnings, close))
+            ~{PanelKind::Warnings}
+            WarningsPanel
+            --
+            ~{Stack { selection_ref: bar }}
+            Node {
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::FlexEnd,
+            }
+        ]
+    }
+}
+
+/// The tools of the tool dock, each with the creator of its option bar, and their selection.
+fn spawn_dock_tools(commands: &mut Commands, icons: &Icons) -> Entity {
     let selection = commands.spawn_empty().id();
     let hint = commands.register_system(
         |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
@@ -391,45 +390,81 @@ fn spawn_dock(commands: &mut Commands, root: Entity, icons: &Icons) {
             .entity(selection)
             .insert(Selection::Value(SelectionValue::One(*first)));
     }
-
-    let bottom = commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                right: Val::Px(0.0),
-                bottom: Val::Px(16.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                row_gap: Val::Px(10.0),
-                ..default()
-            },
-            ChildOf(root),
-        ))
-        .id();
-    commands.spawn((
-        Stack {
-            selection_ref: selection,
-        },
-        ChildOf(bottom),
-    ));
-    commands.spawn((
-        Card,
-        Node {
-            padding: UiRect::all(Val::Px(6.0)),
-            ..default()
-        },
-        ChildOf(bottom),
-        children![(
-            Toolbar::new(ToolbarStyle::Filled),
-            Selection::reference(selection),
-            Dock,
-        )],
-    ));
     commands.insert_resource(DockTools { selection, tools });
+    selection
 }
 
-fn option_bar() -> (Card, Node) {
+/// Bottom: the tool dock over `selection`, with the bar of the active tool above it.
+fn dock(selection: Entity) -> impl Scene {
+    bsn! {
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(0.0),
+            right: px(0.0),
+            bottom: px(16.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(10.0),
+        }
+        Children [
+            ~{Stack { selection_ref: selection }}
+            --
+            ~{Card}
+            Node {
+                padding: UiRect::all(px(6.0)),
+            }
+            Children [
+                ~{Toolbar::new(ToolbarStyle::Filled)}
+                ~{Selection::reference(selection)}
+                Dock
+            ]
+        ]
+    }
+}
+
+/// The children of an entity, as scenes: [`StackChildSpawner::spawn`] takes a bundle, so this
+/// one spawns `scenes` as the children of the entity it is inserted on.
+fn scene_children(scenes: impl SceneList) -> impl Bundle {
+    Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
+        let target = parent.target_entity();
+        parent
+            .world_mut()
+            .entity_mut(target)
+            .queue_spawn_related_scenes::<Children>(scenes);
+    }))
+}
+
+/// A `bsn!` entry that inserts `component` as it is.
+///
+/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a widget that holds
+/// one (an `IconButton`, a `Panel` with a close icon)
+/// goes in through this.
+fn inserted<C: Component + Clone>(
+    component: C,
+) -> impl Template<Output = C> + Send + Sync + 'static {
+    template(move |_| Ok(component.clone()))
+}
+
+/// A `bsn!` entry for [`Divider::vertical`], which gives a bundle rather than a component.
+fn vertical_divider() -> impl Template<Output = EmptySceneEffect> + Send + Sync + 'static {
+    template(|context| Ok(insert_after_scene(context, Divider::vertical())))
+}
+
+/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
+///
+/// A template that inserted it at once would do so before the scene gives the entity its
+/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
+/// the scene's `Node` would overwrite what the bundle's hooks set on it.
+fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
+    let entity = context.entity.id();
+    context.entity.world_scope(|world| {
+        world.commands().entity(entity).insert(bundle);
+    });
+    EmptySceneEffect
+}
+
+/// A bar of options above the tool dock, holding `contents`.
+fn option_bar(contents: impl SceneList) -> impl Bundle {
     (
         Card,
         Node {
@@ -438,51 +473,65 @@ fn option_bar() -> (Card, Node) {
             padding: UiRect::axes(Val::Px(14.0), Val::Px(10.0)),
             ..default()
         },
+        scene_children(contents),
     )
 }
 
 /// The bar for the tools that have no options: how to get back to the Select tool.
 fn hint_bar() -> impl Bundle {
-    (
-        option_bar(),
-        children![Kbd::new("Esc"), Label::secondary("to go back to Select")],
-    )
+    option_bar(bsn_list! {
+        ~{Kbd::new("Esc")}
+        --
+        ~{Label::secondary("to go back to Select")}
+    })
 }
 
 /// The Rail tool's options.
 fn rail_bar() -> impl Bundle {
-    (
-        option_bar(),
-        children![
-            Label::overline("Tracks"),
-            (
-                SegmentedControl,
+    option_bar(bsn_list! {
+        ~{Label::overline("Tracks")}
+        --
+        SegmentedControl
+        // `Selection::builder()` gives a bundle, which `template` inserts.
+        template(|context| {
+            context.entity.insert(
                 Selection::builder()
                     .one()
                     .build_with_items(["Single", "Double"].map(Item::new)),
-            ),
-            Divider::vertical(),
-            Label::overline("Level"),
-            (
-                NumericStepper {
-                    format: level,
-                    ..default()
-                },
-                Value::new_u8(0, 0, 56, 7),
-            ),
-            Divider::vertical(),
-            Label::overline("Signals"),
-            (
-                SegmentedControl,
+            );
+            Ok(EmptySceneEffect)
+        })
+        --
+        vertical_divider()
+        --
+        ~{Label::overline("Level")}
+        --
+        inserted(NumericStepper {
+            format: level,
+            ..default()
+        })
+        ~{Value::new_u8(0, 0, 56, 7)}
+        --
+        vertical_divider()
+        --
+        ~{Label::overline("Signals")}
+        --
+        SegmentedControl
+        template(|context| {
+            context.entity.insert(
                 Selection::builder()
                     .one()
                     .build_with_items(["None", "Block"].map(Item::new)),
-            ),
-            Divider::vertical(),
-            Kbd::new("R"),
-            Label::secondary("rotate"),
-        ],
-    )
+            );
+            Ok(EmptySceneEffect)
+        })
+        --
+        vertical_divider()
+        --
+        ~{Kbd::new("R")}
+        --
+        ~{Label::secondary("rotate")}
+    })
 }
 
 /// "Ground" at 0 and "+7", "+14", ... above it.
@@ -505,22 +554,22 @@ fn vehicle_bar(icons: &Icons) -> impl Bundle {
     .map(|(label, image, group)| Item {
         data: GalleryCard::new(image.clone(), label, group),
     });
-    (
-        option_bar(),
-        children![(
-            Node {
-                width: Val::Px(520.0),
-                ..default()
-            },
-            ScrollArea::bundle(
+    option_bar(bsn_list! {
+        Node {
+            width: px(520.0),
+        }
+        // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it.
+        template(move |context| {
+            let cards = cards.clone();
+            Ok(insert_after_scene(context, ScrollArea::bundle(
                 move |spawner| {
                     spawner.spawn((Gallery, Selection::builder().one().build_with_items(cards)));
                 },
                 false,
                 true,
-            ),
-        )],
-    )
+            )))
+        })
+    })
 }
 
 fn panel_for(kind: PanelKind, close: Handle<Image>) -> Panel {
@@ -554,28 +603,30 @@ fn train_row(spawner: In<ItemViewSpawner>, trains: Query<&Item<Train>>, mut comm
         return;
     };
     let train = train.data;
-    commands.spawn((
-        Node {
-            flex_grow: 1.0,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::SpaceBetween,
-            padding: UiRect::axes(Val::Px(10.0), Val::Px(8.0)),
-            ..default()
-        },
-        ChildOf(view),
-        children![
-            (
+    commands
+        // Parented before the scene adds its `Node`, or it would be taken for a `UiRoot`.
+        .spawn(ChildOf(view))
+        .apply_scene(bsn! {
+            Node {
+                flex_grow: 1.0,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                padding: UiRect::axes(px(10.0), px(8.0)),
+            }
+            Children [
                 Node {
                     flex_direction: FlexDirection::Column,
-                    ..default()
-                },
-                children![Label::regular(train.name), Label::caption(train.route)],
-            ),
-            Pill::new(train.status.label()).with_tone(train.status.tone()),
-        ],
-    ));
+                }
+                Children [
+                    ~{Label::regular(train.name)}
+                    --
+                    ~{Label::caption(train.route)}
+                ]
+                --
+                ~{Pill::new(train.status.label()).with_tone(train.status.tone())}
+            ]
+        });
 }
-
 /// Fills the strip, body and footer of a panel that was just made.
 fn fill_panels(
     panels: Query<(&PanelRefs, &PanelKind), Added<PanelRefs>>,
@@ -623,8 +674,7 @@ fn fill_panels(
                 commands.spawn((Label::secondary("No schedules yet."), ChildOf(refs.body)));
             }
             PanelKind::Preferences => {
-                let rows = commands.spawn((SettingRows, ChildOf(refs.body))).id();
-                for (pref, title, description) in [
+                let rows = [
                     (Pref::Appearance, "Appearance", "Dark or light colours"),
                     (
                         Pref::WarningsButton,
@@ -637,39 +687,55 @@ fn fill_panels(
                         "Names under the tool icons",
                     ),
                     (Pref::TextSize, "Text size", "The size of all text"),
-                ] {
-                    commands.spawn((SettingRow::new(title, description), pref, ChildOf(rows)));
-                }
+                ]
+                .into_iter()
+                .map(|(pref, title, description)| {
+                    bsn! {
+                        ~{SettingRow::new(title, description)}
+                        ~{pref}
+                    }
+                })
+                .collect::<Vec<_>>();
+                commands
+                    // Parented before the scene adds its `Node`, or it would be taken for a `UiRoot`.
+                    .spawn(ChildOf(refs.body))
+                    .apply_scene(bsn! {
+                        SettingRows
+                        Children [ {rows} ]
+                    });
             }
         }
     }
 }
 
 /// Rows with a title, a caption and a "Show" button, which would centre the map on it.
-fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&str, &str)]) {
-    for (title, caption) in rows {
-        let name = (*title).to_string();
+fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static str, &'static str)]) {
+    for &(title, caption) in rows {
+        let name = title.to_string();
         commands
-            .spawn((
+            // Parented before the scene adds its `Node`, or it would be taken for a `UiRoot`.
+            .spawn(ChildOf(parent))
+            .apply_scene(bsn! {
                 Node {
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::SpaceBetween,
-                    padding: UiRect::axes(Val::Px(10.0), Val::Px(8.0)),
-                    ..default()
-                },
-                ChildOf(parent),
-                children![
-                    (
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            ..default()
-                        },
-                        children![Label::regular(*title), Label::caption(*caption)],
-                    ),
-                    (PushButton::from_label("Show"), ButtonSize::Compact),
-                ],
-            ))
-            .observe(move |_: On<Activate>| info!("Show {name} on the map"));
+                    padding: UiRect::axes(px(10.0), px(8.0)),
+                }
+                on(move |_: On<Activate>| info!("Show {name} on the map"))
+                Children [
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                    }
+                    Children [
+                        ~{Label::regular(title)}
+                        --
+                        ~{Label::caption(caption)}
+                    ]
+                    --
+                    ~{PushButton::from_label("Show")}
+                    ~{ButtonSize::Compact}
+                ]
+            });
     }
 }
 
@@ -686,7 +752,7 @@ fn fill_setting_rows(
                 commands
                     .spawn((
                         NumericStepper {
-                            format: percent,
+                            format: as_percent,
                             name: Some("Text size".to_string()),
                             ..default()
                         },
@@ -709,7 +775,7 @@ fn fill_setting_rows(
 }
 
 /// "100%" for a value of 100.
-fn percent(value: &Value) -> String {
+fn as_percent(value: &Value) -> String {
     format!("{}%", value.as_u16().unwrap_or(100))
 }
 

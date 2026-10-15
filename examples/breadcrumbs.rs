@@ -24,7 +24,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Startup, setup)
         .run();
 }
@@ -78,49 +77,50 @@ fn setup(mut commands: Commands) {
         .id();
 
     // Root container
-    commands.spawn((
+    commands.spawn_scene(bsn! {
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            width: percent(100.0),
+            height: percent(100.0),
             justify_content: JustifyContent::Start,
             align_items: AlignItems::Start,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
-            ..default()
-        },
-        children![
-            (
-                Node {
-                    width: Val::Percent(100.0),
-                    justify_content: JustifyContent::SpaceBetween,
-                    ..default()
-                },
-                children![
-                    (BreadCrumbs, Selection::reference(selection_ref)),
-                    (PushButton::from_label("Change theme"), ThemeButton),
-                ]
-            ),
-            (
-                Node {
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    justify_content: JustifyContent::Start,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                children![Stack { selection_ref }],
-            )
-        ],
-    ));
+        }
+        Children [
+            Node {
+                width: percent(100.0),
+                justify_content: JustifyContent::SpaceBetween,
+            }
+            Children [
+                ~{BreadCrumbs} ~{Selection::reference(selection_ref)}
+                --
+                ~{PushButton::from_label("Change theme")}
+                on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+            ]
+            --
+            Node {
+                width: percent(100.0),
+                height: percent(100.0),
+                justify_content: JustifyContent::Start,
+                align_items: AlignItems::Center,
+            }
+            Children [ ~{Stack { selection_ref }} ]
+        ]
+    });
 }
 
-#[derive(Component)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
-    }
+/// The children of a stack item, from a scene: [`StackChildSpawner::spawn`] takes a bundle.
+fn scene_children(children: impl SceneList) -> impl Bundle {
+    (
+        Node::DEFAULT,
+        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
+            let target = parent.target_entity();
+            parent
+                .world_mut()
+                .entity_mut(target)
+                .queue_spawn_related_scenes::<Children>(children);
+        })),
+    )
 }
 
 fn push_to_selection(
@@ -134,6 +134,17 @@ fn push_to_selection(
     selections.update_selection_single(|selection| selection.push(item_a_ref));
 }
 
+/// An observer that pushes `target` onto the trail.
+fn go_to(
+    target: BreadCrumbsAction,
+) -> impl Fn(
+    On<Activate>,
+    SelectionParam<With<BreadCrumbsSelection>>,
+    ItemParam<String, &BreadCrumbsAction>,
+) + Clone {
+    move |_, mut selections, items| push_to_selection(target, &mut selections, items)
+}
+
 fn pop_on_pointer_release(
     _: On<Activate>,
     mut selections: SelectionParam<With<BreadCrumbsSelection>>,
@@ -144,46 +155,18 @@ fn pop_on_pointer_release(
 fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn(
         &mut commands,
-        (
-            Node::DEFAULT,
-            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-                parent.spawn(Label::header("Home"));
-
-                parent
-                    .spawn(PushButton::from_label("Go to Panel A"))
-                    .observe(
-                        |_: On<Activate>,
-                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                         items: ItemParam<String, &BreadCrumbsAction>| {
-                            push_to_selection(BreadCrumbsAction::PanelA, &mut selections, items);
-                        },
-                    );
-
-                parent
-                    .spawn(PushButton::from_label("Go to Panel A variant"))
-                    .observe(
-                        |_: On<Activate>,
-                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                         items: ItemParam<String, &BreadCrumbsAction>| {
-                            push_to_selection(
-                                BreadCrumbsAction::PanelAvariant,
-                                &mut selections,
-                                items,
-                            );
-                        },
-                    );
-
-                parent
-                    .spawn(PushButton::from_label("Go to Panel B"))
-                    .observe(
-                        |_: On<Activate>,
-                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                         items: ItemParam<String, &BreadCrumbsAction>| {
-                            push_to_selection(BreadCrumbsAction::PanelB, &mut selections, items);
-                        },
-                    );
-            })),
-        ),
+        scene_children(bsn_list! {
+            ~{Label::header("Home")}
+            --
+            ~{PushButton::from_label("Go to Panel A")}
+            on(go_to(BreadCrumbsAction::PanelA))
+            --
+            ~{PushButton::from_label("Go to Panel A variant")}
+            on(go_to(BreadCrumbsAction::PanelAvariant))
+            --
+            ~{PushButton::from_label("Go to Panel B")}
+            on(go_to(BreadCrumbsAction::PanelB))
+        }),
     );
 }
 
@@ -195,69 +178,50 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
     INITIALIZED_A.store(true, Ordering::Relaxed);
     spawner.spawn(
         &mut commands,
-        (
-            Node::DEFAULT,
-            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-                parent.spawn(Label::header("Panel A"));
-
-                parent
-                    .spawn(PushButton::from_label("Go back to home"))
-                    .observe(pop_on_pointer_release);
-
-                parent
-                    .spawn(PushButton::from_label("Go to panel A variant"))
-                    .observe(
-                        |_: On<Activate>,
-                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                         items: ItemParam<String, &BreadCrumbsAction>| {
-                            let Some(item_a_ref) = items
-                                .find_item_ref(|_, bca| **bca == BreadCrumbsAction::PanelAvariant)
-                            else {
-                                return;
-                            };
-                            selections.update_selection_single(|x| x.pop()?.push(item_a_ref));
-                        },
-                    );
-            })),
-        ),
+        scene_children(bsn_list! {
+            ~{Label::header("Panel A")}
+            --
+            ~{PushButton::from_label("Go back to home")}
+            on(pop_on_pointer_release)
+            --
+            ~{PushButton::from_label("Go to panel A variant")}
+            on(|_: On<Activate>,
+                mut selections: SelectionParam<With<BreadCrumbsSelection>>,
+                items: ItemParam<String, &BreadCrumbsAction>| {
+                let Some(item_a_ref) =
+                    items.find_item_ref(|_, bca| **bca == BreadCrumbsAction::PanelAvariant)
+                else {
+                    return;
+                };
+                selections.update_selection_single(|x| x.pop()?.push(item_a_ref));
+            })
+        }),
     );
 }
+
 fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn(
         &mut commands,
-        (
-            Node::DEFAULT,
-            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-                parent.spawn(Label::header("Panel B"));
-
-                parent
-                    .spawn(PushButton::from_label("Go back to home"))
-                    .observe(pop_on_pointer_release);
-                parent
-                    .spawn(PushButton::from_label("Go to panel B sub"))
-                    .observe(
-                        |_: On<Activate>,
-                         mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-                         items: ItemParam<String, &BreadCrumbsAction>| {
-                            push_to_selection(BreadCrumbsAction::PanelBsub, &mut selections, items);
-                        },
-                    );
-            })),
-        ),
+        scene_children(bsn_list! {
+            ~{Label::header("Panel B")}
+            --
+            ~{PushButton::from_label("Go back to home")}
+            on(pop_on_pointer_release)
+            --
+            ~{PushButton::from_label("Go to panel B sub")}
+            on(go_to(BreadCrumbsAction::PanelBsub))
+        }),
     );
 }
+
 fn create_b_sub(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn(
         &mut commands,
-        (
-            Node::DEFAULT,
-            Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
-                parent.spawn(Label::header("Panel B sub"));
-
-                parent
-                    .spawn(PushButton::from_label("Go back to panel B"))
-                    .observe(pop_on_pointer_release);
-            })),
-        ),
+        scene_children(bsn_list! {
+            ~{Label::header("Panel B sub")}
+            --
+            ~{PushButton::from_label("Go back to panel B")}
+            on(pop_on_pointer_release)
+        }),
     );
 }

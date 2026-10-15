@@ -6,15 +6,29 @@ use bevy::color::palettes::tailwind::{
     AMBER_600, BLUE_600, CYAN_600, EMERALD_600, FUCHSIA_600, GREEN_600, INDIGO_600, LIME_600,
     ORANGE_600, PINK_600, PURPLE_600, ROSE_600, SKY_600, YELLOW_600,
 };
-use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::system::Commands;
+use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::theme::Theme;
+
+/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
+///
+/// A template that inserted it at once would do so before the scene gives the entity its
+/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
+/// the scene's `Node` would overwrite what the bundle's hooks set on it.
+fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
+    let entity = context.entity.id();
+    context.entity.world_scope(|world| {
+        world.commands().entity(entity).insert(bundle);
+    });
+    EmptySceneEffect
+}
 
 fn main() {
     App::new()
@@ -27,47 +41,64 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Startup, setup)
         .run();
 }
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-    commands.spawn((
+    commands.spawn_scene(bsn! {
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            width: percent(100.0),
+            height: percent(100.0),
             justify_content: JustifyContent::Start,
             align_items: AlignItems::Start,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
-            row_gap: Val::Px(10.0),
-            column_gap: Val::Px(10.0),
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        },
-        children![
-            (
-                Node {
-                    width: Val::Px(200.0),
-                    height: Val::Px(200.0),
-                    ..default()
-                },
-                ScrollArea::bundle(create_squares(300, GridAutoFlow::Row), true, true)
-            ),
-            ScrollArea::bundle(create_squares(50, GridAutoFlow::Row), true, false),
-            // ScrollArea::new(create_squares(1000), true, false),
-            ScrollArea::bundle(create_squares(200, GridAutoFlow::Column), true, true),
-            (PushButton::from_label("Change theme"), ThemeButton),
-        ],
-    ));
+            row_gap: px(10.0),
+            column_gap: px(10.0),
+            padding: UiRect::all(px(10.0)),
+        }
+        Children [
+            Node {
+                width: px(200.0),
+                height: px(200.0),
+            }
+            @scroll_area(300, GridAutoFlow::Row, true, true)
+            --
+            @scroll_area(50, GridAutoFlow::Row, true, false)
+            --
+            @scroll_area(200, GridAutoFlow::Column, true, true)
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+        ]
+    });
 }
 
-fn create_squares(
-    num: usize,
-    grid_auto_flow: GridAutoFlow,
-) -> impl FnOnce(&mut RelatedSpawner<ChildOf>) + Send + Sync {
+/// A scroll area over a grid of `num` coloured squares.
+///
+/// `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; the squares
+/// are a scene, applied to the entity its contents spawner spawns.
+fn scroll_area(num: usize, grid_auto_flow: GridAutoFlow, v: bool, h: bool) -> impl Scene {
+    bsn! {
+        template(move |context| {
+            Ok(insert_after_scene(context, ScrollArea::bundle(
+                move |parent: &mut ChildSpawner| {
+                    let squares = squares(num, grid_auto_flow);
+                    if let Err(error) = parent.spawn_empty().apply_scene(squares) {
+                        error!("cannot spawn the squares: {error:?}");
+                    }
+                },
+                v,
+                h,
+            )))
+        })
+    }
+}
+
+/// A grid of `num` coloured squares, laid out along `grid_auto_flow`.
+fn squares(num: usize, grid_auto_flow: GridAutoFlow) -> impl Scene {
     const COLORS: [Srgba; 14] = [
         YELLOW_600,
         SKY_600,
@@ -84,57 +115,37 @@ fn create_squares(
         GREEN_600,
         AMBER_600,
     ];
-    move |parent: &mut RelatedSpawner<ChildOf>| {
-        parent
-            .spawn((
+    let squares = (0..num)
+        .map(|i| {
+            let color = COLORS
+                .get(i % COLORS.len())
+                .map_or(Color::NONE, |c| Color::Srgba(*c));
+            bsn! {
+                Node {
+                    width: px(50.0),
+                    height: px(50.0),
+                }
                 Pickable {
                     should_block_lower: false,
-                    ..default()
-                },
-                Node {
-                    display: Display::Grid,
-                    grid_template_columns: vec![RepeatedGridTrack::auto(7)],
-                    grid_template_rows: vec![RepeatedGridTrack::auto(7)],
-                    grid_auto_flow,
-                    // flex_direction: FlexDirection::Row,
-                    // flex_wrap: FlexWrap::Wrap,
-                    justify_content: JustifyContent::SpaceBetween,
-                    align_content: AlignContent::FlexStart,
-                    row_gap: Val::Px(2.0),
-                    column_gap: Val::Px(2.0),
-                    // padding: UiRect::all(Val::Px(4.0)),
-                    // overflow: Overflow::scroll(),
-                    ..default()
-                },
-            ))
-            .with_children(|parent| {
-                for i in 0..num {
-                    parent.spawn((
-                        Node {
-                            width: Val::Px(50.0),
-                            height: Val::Px(50.0),
-                            ..default()
-                        },
-                        Pickable {
-                            should_block_lower: false,
-                            ..default()
-                        },
-                        BackgroundColor(
-                            COLORS
-                                .get(i % COLORS.len())
-                                .map_or(Color::NONE, |c| Color::Srgba(*c)),
-                        ),
-                    ));
                 }
-            });
-    }
-}
-
-#[derive(Component)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
+                BackgroundColor(color)
+            }
+        })
+        .collect::<Vec<_>>();
+    bsn! {
+        Pickable {
+            should_block_lower: false,
+        }
+        Node {
+            display: Display::Grid,
+            grid_template_columns: vec![RepeatedGridTrack::auto(7)],
+            grid_template_rows: vec![RepeatedGridTrack::auto(7)],
+            grid_auto_flow,
+            justify_content: JustifyContent::SpaceBetween,
+            align_content: AlignContent::FlexStart,
+            row_gap: px(2.0),
+            column_gap: px(2.0),
+        }
+        Children [ {squares} ]
     }
 }
