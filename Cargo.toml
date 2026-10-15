@@ -24,8 +24,6 @@ strum = { version = "0.27.2", features = ["derive"] }
 [dev-dependencies]
 # The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
 bevy = { version = "0.19.1", features = ["bevy_ui_debug"] }
-bevy_egui = { version = "0.40.1", features = ["render", "serde"] }
-bevy-inspector-egui = "0.37.0"
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.

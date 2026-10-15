@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use bevy::ecs::spawn::SpawnWith;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use bevy_egui::EguiPlugin;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::label::Label;
@@ -18,8 +17,6 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
-        .add_plugins(EguiPlugin::default())
-        // .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::new())
         .insert_resource(GlobalUiDebugOptions {
             enabled: false,
             line_width: 1.0,

@@ -6,8 +6,6 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use bevy_egui::EguiPlugin;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -23,8 +21,6 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
-        .add_plugins(EguiPlugin::default())
-        .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(GlobalUiDebugOptions {
             enabled: false,
             line_width: 1.0,

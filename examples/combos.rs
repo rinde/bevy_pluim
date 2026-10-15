@@ -6,7 +6,6 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use bevy_egui::EguiPlugin;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::push_button::PushButton;
@@ -17,8 +16,6 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
-        .add_plugins(EguiPlugin::default())
-        // .add_plugins(WorldInspectorPlugin::new())
         .insert_resource(GlobalUiDebugOptions {
             enabled: false,
             line_width: 1.0,
