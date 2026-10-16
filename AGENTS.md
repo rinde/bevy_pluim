@@ -365,8 +365,10 @@ of them (`just example gallery -- --run-all stack link`).
   driven by hand with `App::update` must call `App::finish` first. A
   `ColorPushButton` with `InteractionDisabled` has its border in `text_disabled`
   (it has no hover colours to ignore). **`Activate` and `MouseEvent`:**
-  "the button was used" is `Activate`, so an action observes `Activate` (on the
-  button, or on an ancestor: it bubbles); how the button *looks* under the
+  "the button was used" is `Activate`, so an action observes `Activate` on the
+  button itself: it does not bubble (`bevy_ui_widgets`' `Activate` has no
+  `propagate`, `an_activate_does_not_bubble_to_an_observer_on_an_ancestor`), so an
+  observer on an ancestor never hears it; how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one
   thing. A disabled `PushButton` (insert
   `InteractionDisabled`) shows its text in `ThemeColors::text_disabled` and

@@ -721,7 +721,6 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
                     justify_content: JustifyContent::SpaceBetween,
                     padding: UiRect::axes(px(10.0), px(8.0)),
                 }
-                on(move |_: On<Activate>| info!("Show {name} on the map"))
                 Children [
                     Node {
                         flex_direction: FlexDirection::Column,
@@ -734,6 +733,8 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
                     --
                     ~{PushButton::from_label("Show")}
                     ~{ButtonSize::Compact}
+                    // `Activate` does not bubble, so the observer sits on the button itself.
+                    on(move |_: On<Activate>| info!("Show {name} on the map"))
                 ]
             });
     }
