@@ -228,7 +228,7 @@ impl StackChildSpawner {
                 .id();
         });
         commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
-
+    }
 
     /// Spawns `scene` as the child of the stack: the scene's root is the child.
     ///
