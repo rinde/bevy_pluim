@@ -105,13 +105,15 @@ impl Toast {
             return;
         };
         let text = this.text.clone();
+        let duration = this.duration.max(0.0);
         let mut node = AccessNode::new(Role::Status);
         node.set_label(text.as_str());
         node.set_live(Live::Polite);
-        world
-            .commands()
-            .entity(context.entity)
-            .insert((Text(text), AccessibilityNode::from(node)));
+        world.commands().entity(context.entity).insert((
+            Text(text),
+            AccessibilityNode::from(node),
+            ToastTimer(Timer::from_seconds(duration, TimerMode::Once)),
+        ));
         world
             .commands()
             .run_system_cached_with(theme_toasts, Some(context.entity));

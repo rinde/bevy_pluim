@@ -5519,3 +5519,41 @@ fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
     assert_eq!(name(&app, delft).as_deref(), Some("Delft"));
     assert!(app.world().get_entity(list).is_ok());
 }
+
+#[test]
+fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
+    use bevy::time::TimeUpdateStrategy;
+    use rin_bevy_ui::toast::Toast;
+    use std::time::Duration;
+
+    let mut app = headless_app();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        250,
+    )));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let toast = app
+        .world_mut()
+        .spawn((Toast::new("Saved").with_duration(2.0), ChildOf(root)))
+        .id();
+    for _ in 0..7 {
+        app.update();
+    }
+    // About 1.5 s of the 2 s have passed (a frame is 0.25 s, the virtual clock's largest step); re-inserting restarts the clock.
+    app.world_mut()
+        .entity_mut(toast)
+        .insert(Toast::new("Saved").with_duration(2.0));
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(toast).is_ok(),
+        "the toast went after its first timer"
+    );
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(toast).is_err(),
+        "the toast outlived its restarted timer"
+    );
+}
