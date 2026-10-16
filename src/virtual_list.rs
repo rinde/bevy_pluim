@@ -621,6 +621,9 @@ fn navigate(
 /// A system that reads [`InputFocus`] rather than an observer of `FocusGained`: Bevy sends
 /// that after the layout, so the row would be named and ringed a frame late, while the focus
 /// itself (Tab, a click) is set in `PreUpdate`, before this runs ahead of the rows.
+/// `InputFocus::is_changed` is true after any write to the focus, not only when it arrives
+/// at the list, so a list focused while it had no items gets its first item made active the
+/// next time anything writes the focus.
 fn activate_on_focus(
     focus: Res<InputFocus>,
     mut lists: Query<&mut VirtualListState>,
