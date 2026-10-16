@@ -157,7 +157,7 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
 | `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls; the list is kept 10 px inside the window's left and right edges and goes above the button when it would run off the bottom, like a palette combo's popup (`combo_keeps_list_inside_window.ron`) To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
 | `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own, `Combo` and `ColorPaletteCombo` through the crate-private `keep_in_window_x` and `below_or_above` of `float.rs` (10 px `WINDOW_MARGIN` from the window's side edges, above the button when it would run off the bottom) (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
-| `scroll_area.rs` | `ScrollArea::bundle` (for code that spawns through `Commands`) and `ScrollArea::scene(contents, vertical, horizontal)`, the same area as a scene whose contents are a `SceneList` (`@ScrollArea::scene(bsn_list! { .. }, true, false)` in a `bsn!`; it inserts the bundle after the scene is applied), `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
+| `scroll_area.rs` | `ScrollArea::bundle` (for code that spawns through `Commands`) and `ScrollArea::scene(contents, vertical, horizontal)`, the same area as a scene whose contents are a `SceneList` (`@ScrollArea::scene(bsn_list! { .. }, true, false)` in a `bsn!`; it inserts the bundle after the scene is applied), `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, themed here; each bar is also a `bevy_ui_widgets` `Scrollbar` aimed at the contents and its thumb a `ScrollbarThumb` (no `Node`), so the widget sizes and places the thumb, scrolls the contents when it is dragged and pages them on a click on the track, while `show_scroll_bars` hides a bar whose axis fits; and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`), and lets those of a focused descendant (a button in a row) past (`pass_first_presses_from_descendants`, see "Directional navigation is the app's") |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup, a `Float` child of the combo, is centred under the button when it opens, 10 px inside the window, above the button when it would run off the bottom; its palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
@@ -325,10 +325,11 @@ of them (`just example gallery -- --run-all stack link`).
   `PointerRelease`, `PointerClick`, `PointerDragEnd` and `PointerCancel`: an
   observer on `UiRoot` would never see those for a button. `PointerOver`,
   `PointerDrag` and `PointerOut` are not stopped. `MouseKind` says what the pointer did:
-  `Over`, `Pressed`, `Released`, `Click(button)` and `Drag(delta)`, plus `Out`.
+  `Over`, `Pressed`, `Released`, `Click(button)` and `Drag`, plus `Out`.
   `Click` is a press and a release on the same node, which `Released` cannot
-  say (it also ends a press that began elsewhere), and `Drag` carries the
-  movement since the previous drag event. The combo's outside-click handler
+  say (it also ends a press that began elsewhere), and `Drag` is a move with a
+  button held, which widgets ignore (the scroll thumb's drag is the
+  `bevy_ui_widgets` `Scrollbar`'s). The combo's outside-click handler
   reads `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot
   starve it.
 - **"Is the pointer on it?" is picking's `Hovered`.** A system that asks where
@@ -355,11 +356,13 @@ of them (`just example gallery -- --run-all stack link`).
 - **Buttons are `bevy::ui_widgets::Button`.** Every button
   (`PushButton`, `ColorPushButton`, `Link`, `IconButton` and the rest) is a
   headless `bevy_ui_widgets` button, and nothing uses the deprecated `bevy::ui`
-  `Button` or `Interaction`. The scroll thumb is no button: a plain node that
-  requires `Pickable::default()` so it blocks the pointer and gets `MouseEvent`s.
+  `Button` or `Interaction`. The scroll thumb is no button: a `bevy_ui_widgets`
+  `ScrollbarThumb` without a `Node` of ours, sized and placed by its `Scrollbar`,
+  that requires `Pickable::default()` so it blocks the pointer and gets the
+  `MouseEvent`s of its hover colour.
   A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
-  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin` and `TabPlugin`) in
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin`) in
   its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
   tester's `HeadlessPlugins` add all of `UiWidgetsPlugins`; adding twice panics),
   so the order of `WidgetsPlugin` and `UiWidgetsPlugins` does not matter; an app
@@ -559,10 +562,16 @@ of them (`just example gallery -- --run-all stack link`).
   A scenario reads `ScrollPosition.0.y`, the value that was set (logical
   pixels). `ComputedNode.scroll_position.y` is what the layout shows, floored,
   in physical pixels and one layout pass behind, so it doubles at a scale
-  factor of 2 and scenario files do not read it. `handle_thumb_drag` starts each drag event from the current
-  `ScrollPosition` rather than the computed one for that lag: a frame can hold
-  several drag events, and each must add to the last. Its clamp is a guard for
-  contents that shrank.
+  factor of 2 and scenario files do not read it. A thumb drag and a click on
+  the track are the `bevy_ui_widgets` `Scrollbar`'s, which clamps to the same
+  range; a click on the track beside the thumb pages by one visible length
+  towards the click (`scroll_area_track_click_pages.ron`). The wheel stays
+  ours rather than `bevy_ui_widgets`' `ScrollArea`:
+  picking sends a `PointerScroll` to every hovered entity and each bubbles up to
+  the area, and an `ItemView`, its `List` and the `ScrollContents` are all
+  hovered (`should_block_lower: false`), so one turn would scroll two or three
+  times; it also scrolls by `MouseScrollPixelsPerLine` (100 px a line, not our
+  21) and has no Ctrl axis swap.
 
 ## Conventions
 
@@ -575,7 +584,8 @@ of them (`just example gallery -- --run-all stack link`).
   `FixedNode` (a combo's popup) inside one, since scrolling the area would not
   show it. It reads the
   entity's laid-out position, so it is one layout pass behind like the wheel's
-  `ComputedNode`. The wheel is untouched
+  `ComputedNode`. The wheel is untouched, and so is the `Scrollbar`, which
+  follows the `ScrollPosition` it sets
   (`scroll_area_keyboard_scrolls_item_into_view.ron`).
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
@@ -583,7 +593,7 @@ of them (`just example gallery -- --run-all stack link`).
   friends).** The only observers of them in the library are the producer in
   `lib.rs`; do not add more. `MouseKind` says `Over`, `Pressed`, `Released`, `Click` and `Drag`,
   so a widget can tell a click (a press and a release on the same node) from a
-  release that ends a press begun elsewhere, and can follow a drag.
+  release that ends a press begun elsewhere.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for
@@ -767,6 +777,9 @@ resource, none of which need a window or GPU:
 - `ClearColor` (via `init_resource`) — normally inserted by the render
   plugins; `theme.rs`'s `update_theme` writes to it whenever `Theme`
   changes.
+- `UiScale` (via `init_resource`) — normally inserted by `UiPlugin`; the
+  `bevy_ui_widgets` `Scrollbar` of a scroll area reads it when it is pressed,
+  so without it any press panics.
 
 These are all needed unconditionally because `WidgetsPlugin` registers every
 widget's systems regardless of which widgets a given test actually spawns.

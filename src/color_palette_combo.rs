@@ -585,7 +585,7 @@ fn handle_combo_button_mouse_events(
         // A drag says nothing new about the pointer being on the button, and can arrive
         // after the pointer left it, so it does not restyle the button. A release or a
         // click on a closed combo does not either, so all three share one empty arm.
-        (MouseKind::Drag(_), _) | (MouseKind::Released | MouseKind::Click(_), State::Closed) => {}
+        (MouseKind::Drag, _) | (MouseKind::Released | MouseKind::Click(_), State::Closed) => {}
         (MouseKind::Over | MouseKind::Pressed, _) | (_, State::Open) => {
             *background_color = BackgroundColor(theme.colors.background_secondary);
             *border_color = BorderColor::all(theme.colors.border_highlight);

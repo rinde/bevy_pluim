@@ -76,7 +76,9 @@ mod hud_ui;
 /// `combo.rs`/`list.rs` need pointer input and picking resources; all
 /// normally inserted by the render/window plugins that this headless setup
 /// skips. `focus.rs` reads `InheritedVisibility`, which `VisibilityPlugin`
-/// propagates; its bounds systems need the mesh assets.
+/// propagates; its bounds systems need the mesh assets. The `bevy_ui_widgets`
+/// `Scrollbar` of `scroll_area.rs` reads `UiScale` on every press, which `UiPlugin`
+/// would insert.
 fn headless_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
@@ -88,6 +90,7 @@ fn headless_app() -> App {
     app.add_plugins(InputPlugin);
     app.add_plugins(DefaultPickingPlugins);
     app.init_resource::<ClearColor>();
+    app.init_resource::<UiScale>();
     app.add_plugins(WidgetsPlugin);
     app.finish();
     app.cleanup();
