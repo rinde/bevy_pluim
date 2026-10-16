@@ -2,6 +2,7 @@
 
 mod common;
 
+use bevy::asset::HandleTemplate;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
@@ -29,12 +30,6 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let close = common::cross_icon(&mut images);
-    let trains = Panel::new("Trains")
-        .with_subtitle("3 open")
-        .with_close_icon(close.clone());
-    let stops = Panel::new("Stops")
-        .with_close_icon(close)
-        .with_max_body_height(150.0);
     commands.spawn_scene(bsn! {
         Node {
             width: percent(100.0),
@@ -46,14 +41,14 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         }
         Children [
             // The app decides what closing means: this one despawns the panel.
-            common::inserted(trains)
+            Panel { title: "Trains", subtitle: {Some("3 open".to_string())}, close_icon: {HandleTemplate::Handle(close.clone())} }
             Lines(3)
             on(|closed: On<PanelClosed>, mut commands: Commands| {
                 commands.entity(closed.entity).despawn();
             })
             --
             // A body past 150 pixels scrolls.
-            common::inserted(stops)
+            Panel { title: "Stops", close_icon: {HandleTemplate::Handle(close)}, max_body_height: 150.0 }
             Lines(12)
             --
             ~{PushButton::from_label("Change theme")}

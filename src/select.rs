@@ -11,6 +11,7 @@ use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::scene::{EmptySceneEffect, Scene, bsn};
 use derive_more::Deref;
 use educe::Educe;
 use itertools::{Either, Itertools};
@@ -149,6 +150,35 @@ impl SelectionBuilderWithValue {
             Selection::Value(self.value),
             ItemValues::spawn(SpawnIter(items.into_iter())),
         )
+    }
+
+    /// [`build_with_items`](Self::build_with_items) as a scene, for `@{..}` in `bsn!`.
+    ///
+    /// The scene can be spawned more than once, so the items are cloned each time.
+    #[must_use]
+    pub fn scene_with_items<I, B>(self, items: I) -> impl Scene
+    where
+        B: Bundle + Clone,
+        I: IntoIterator<Item = B>,
+    {
+        let items: Vec<B> = items.into_iter().collect();
+        bsn! {
+            template(move |context| {
+                context.entity.insert(self.clone().build_with_items(items.clone()));
+                Ok(EmptySceneEffect)
+            })
+        }
+    }
+
+    /// [`build_with_items_ref`](Self::build_with_items_ref) as a scene, for `@{..}` in `bsn!`.
+    #[must_use]
+    pub fn scene_with_items_ref(self, items_ref: Entity) -> impl Scene {
+        bsn! {
+            template(move |context| {
+                context.entity.insert(self.clone().build_with_items_ref(items_ref));
+                Ok(EmptySceneEffect)
+            })
+        }
     }
 
     /// The selection choosing from the items of `items_ref`, so several selections can share one set of items.
