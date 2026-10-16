@@ -2,14 +2,17 @@
 name: review-pr
 description: Review a pull request on rinde/rin-bevy-ui against its issue and the repository's rules and make sure CI passed, running it locally where GitHub did not, then approve it or request changes with detailed inline comments. The reviewer agents the coordinator dispatches run this; run it by hand as /review-pr <number> [sonnet|opus].
 argument-hint: <pr-number> [sonnet|opus]
-allowed-tools: Read, Grep, Glob, Write, Bash(gh api:*), Bash(git fetch:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git switch:*), Bash(git status:*), Bash(git rev-parse:*), Bash(just ci:*)
+allowed-tools: Read, Grep, Glob, Write, EnterWorktree, Bash(gh api:*), Bash(git fetch:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git switch:*), Bash(git status:*), Bash(git rev-parse:*), Bash(just ci:*)
 ---
 
 # Review a pull request
 
-The arguments, or the prompt that started you, name the pull request `<pr>`
-and the reviewer variant, `sonnet` or `opus` (`sonnet` if none is named),
-which goes into the review's marker below. Review pull request `<pr>` on
+The arguments, or the prompt that started you, name the pull request `<pr>`,
+the reviewer variant, `sonnet` or `opus` (`sonnet` if none is named), which
+goes into the review's marker below, and, from the coordinator, the **slot**
+to work in: the worktree at `.claude/worktrees/slot-<n>` where the
+implementer built this pull request, so `just ci` reuses its `target/`.
+Review pull request `<pr>` on
 `rinde/rin-bevy-ui`, make sure CI passed on it, and post **one** GitHub review that
 either approves it or requests changes, with an inline comment on every point
 you raise. You only review and run checks. You never push, merge or edit the
@@ -19,19 +22,30 @@ Talk to GitHub through `gh api` and the REST endpoints below. GraphQL is
 blocked in Claude Code cloud sessions, so `gh pr view`, `gh issue view` and
 friends may fail where `gh api repos/...` works.
 
-## 1. Gather
+## 1. Enter your slot
+
+When the prompt names a slot, enter it before anything else, with the
+`EnterWorktree` tool and the slot's absolute path
+(`path: /path/to/rin-bevy-ui/.claude/worktrees/slot-<n>`); without that
+tool, `cd` into it and give every later command and file an absolute path
+under it. Confirm with `git rev-parse --show-toplevel` that you are in the
+slot, and from then on touch nothing outside it. Never delete or
+`cargo clean` the slot's `target/`: the next agent on this issue builds on
+it. When no slot was named, you were started by hand: work where you are.
+
+## 2. Gather
 
 - The pull request: `gh api repos/rinde/rin-bevy-ui/pulls/<pr>`. Note `head.sha` (the
   commit you review), `base.ref`, `draft`, `body` and `user.login`.
 - The diff: `gh api repos/rinde/rin-bevy-ui/pulls/<pr> -H "Accept: application/vnd.github.diff"`,
   and the file list with `gh api --paginate repos/rinde/rin-bevy-ui/pulls/<pr>/files`.
 - The full files, not just the hunks, from a checkout of the head. As a
-  reviewer agent you are in a worktree of your own under `.claude/worktrees/`:
-  fetch the head and check it out there,
-  `git fetch origin pull/<pr>/head:refs/remotes/origin/pr/<pr>` then
+  reviewer agent you are in the issue's slot: fetch the head and check it out
+  there, `git fetch origin pull/<pr>/head:refs/remotes/origin/pr/<pr>` then
   `git switch --detach origin/pr/<pr>`, and confirm with `git status` that the
-  worktree is clean and `HEAD` is `head.sha`. Never switch the branch of the
-  main checkout or of another agent's worktree.
+  slot is clean and `HEAD` is `head.sha`. A slot that is not clean is the
+  implementer's unfinished work: stop and report it rather than touch it.
+  Never switch the branch of the main checkout or of another slot.
 - The issue it closes: the `Closes #N` / `Fixes #N` in the body, else the
   `RINUI-<N>/` prefix of the branch. Read it with
   `gh api repos/rinde/rin-bevy-ui/issues/<N>`, its comments with
@@ -46,7 +60,7 @@ friends may fail where `gh api repos/...` works.
 - The rules: `AGENTS.md`, all of it, and a sibling of every widget the diff
   touches, so you can tell whether the change matches what is already there.
 
-## 2. Make sure CI passed
+## 3. Make sure CI passed
 
 An approval means CI passed on exactly `head.sha`, on GitHub or on your
 machine. GitHub's CI is the jobs **Format, clippy and docs**, **Tests** and
@@ -61,11 +75,12 @@ machine. GitHub's CI is the jobs **Format, clippy and docs**, **Tests** and
 - **One did not run** — missing, cancelled, skipped, or failed for billing
   reasons without a step's output (see **Agents** in `AGENTS.md`) — or is still
   queued or running → run CI yourself, in the checkout of the head:
-  `just ci`. It builds Bevy, so give the command a long timeout (up to
-  45 minutes). In a worktree, build in the worktree's own `target/`, never a shared
-  `CARGO_TARGET_DIR` (it gives stale test binaries) and never a full copy of
-  the main checkout's 19G `target/` (it fills the disk). Check `df -h .` shows
-  more than 30G free, seed with a copy-on-write clone if `./target` does not exist (macOS
+  `just ci`. It builds in the slot's own `target/`, warm from the
+  implementer's build, so give the command a long timeout (up to 45 minutes)
+  only in case it is not. Never a shared `CARGO_TARGET_DIR` (it gives stale
+  test binaries) and never a full copy of the main checkout's 19G `target/`
+  (it fills the disk). Only when the slot has no `target/` at all: check
+  `df -h .` shows more than 30G free, seed with a copy-on-write clone (macOS
   `cp -c -R "$(git rev-parse --path-format=absolute --git-common-dir)/../target" ./target`,
   which silently copies for real when it cannot clone, so compare `df -k .`
   before and after and `rm -rf ./target` if free space dropped by more than a
@@ -84,7 +99,7 @@ machine. GitHub's CI is the jobs **Format, clippy and docs**, **Tests** and
 The macOS and Windows compile checks have no local equivalent; their failure is blocking like any other, and their not running is
 not.
 
-## 3. Judge
+## 4. Judge
 
 Work through all of it, and say where in the code each finding lives:
 
@@ -121,7 +136,7 @@ Sort every finding into one of two kinds:
   the change or failing locally.
 - **Nit**: style, naming, a clearer way to write it. Optional by definition.
 
-## 4. Decide
+## 5. Decide
 
 - Any blocking finding → the verdict is `request_changes`.
 - None, and CI passed on `head.sha` on GitHub or locally → the verdict is
@@ -132,7 +147,7 @@ this work. Still review it fully and still record your verdict, but never
 submit an `APPROVE` review: submit `COMMENT` for an approve verdict, and say at
 the top of the body that a human must approve and merge it.
 
-## 5. Post one review
+## 6. Post one review
 
 Write the review as JSON to a file outside the repository, such as
 `/tmp/review-<pr>.json`:
