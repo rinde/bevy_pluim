@@ -50,7 +50,7 @@ use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, Toggl
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
+use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
@@ -5434,4 +5434,88 @@ fn a_numeric_stepper_is_a_spin_button_with_numeric_bounds_and_step() {
         .unwrap();
     assert_eq!(node.numeric_value(), Some(2.0));
     assert_eq!(node.value(), Some("2"));
+}
+
+#[test]
+fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let list = world
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder().one().build_with_items([
+                (Item::new("Delft"), ItemNote::warning("< unreachable >")),
+                (Item::new("Utrecht"), ItemNote::new("")),
+            ]),
+        ))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+
+    let row = |app: &mut App, label: &str| -> Entity {
+        let world = app.world_mut();
+        let mut views = world.query::<(Entity, &ItemView)>();
+        let mut items = Vec::new();
+        for (view, ItemView { item_ref, .. }) in views.iter(world) {
+            items.push((view, *item_ref));
+        }
+        items
+            .into_iter()
+            .find(|(_, item)| {
+                world
+                    .get::<Item<String>>(*item)
+                    .is_some_and(|i| i.data == label)
+            })
+            .map(|(view, _)| view)
+            .unwrap()
+    };
+    let name = |app: &App, view: Entity| {
+        app.world()
+            .get::<AccessibilityNode>(view)
+            .and_then(|node| node.label().map(str::to_string))
+    };
+    let texts = |app: &mut App, view: Entity| -> Vec<String> {
+        let world = app.world_mut();
+        let children: Vec<Entity> = world
+            .get::<Children>(view)
+            .map(|c| c.iter().collect())
+            .unwrap_or_default();
+        children
+            .into_iter()
+            .filter_map(|c| world.get::<Text>(c).map(|t| t.0.clone()))
+            .collect()
+    };
+
+    let delft = row(&mut app, "Delft");
+    let utrecht = row(&mut app, "Utrecht");
+    assert_eq!(texts(&mut app, delft), ["Delft", "< unreachable >"]);
+    assert_eq!(name(&app, delft).as_deref(), Some("Delft < unreachable >"));
+    assert_eq!(texts(&mut app, utrecht), ["Utrecht"]);
+    assert_eq!(name(&app, utrecht).as_deref(), Some("Utrecht"));
+
+    // Changing a note, adding one and removing one update the rows in place.
+    let item_of = |app: &App, view: Entity| app.world().get::<ItemView>(view).unwrap().item_ref;
+    let (delft_item, utrecht_item) = (item_of(&app, delft), item_of(&app, utrecht));
+    app.world_mut()
+        .entity_mut(delft_item)
+        .insert(ItemNote::new("closed"));
+    app.world_mut()
+        .entity_mut(utrecht_item)
+        .insert(ItemNote::new("4 km"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(texts(&mut app, delft), ["Delft", "closed"]);
+    assert_eq!(name(&app, delft).as_deref(), Some("Delft closed"));
+    assert_eq!(texts(&mut app, utrecht), ["Utrecht", "4 km"]);
+    app.world_mut().entity_mut(delft_item).remove::<ItemNote>();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(texts(&mut app, delft), ["Delft"]);
+    assert_eq!(name(&app, delft).as_deref(), Some("Delft"));
+    assert!(app.world().get_entity(list).is_ok());
 }

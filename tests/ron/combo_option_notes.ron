@@ -1,0 +1,30 @@
+// A combo option can carry a note shown after its label: the row is named with both
+// ("Delft < unreachable >"), the note is in the warning colour, and the closed button shows
+// the label alone.
+(
+    format_version: 3,
+    name: "a combo option with a note shows it in the list but not on the button",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        Check(Exists(Text("< unreachable >"))),
+        Check(Component(
+            target: Text("< unreachable >"),
+            path: "TextColor.0",
+            is: Eq(Srgba((red: 0.7019608, green: 0.14901961, blue: 0.11764706, alpha: 1.0))),
+        )),
+        MoveTo(Within(Name("noted combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(1),
+        Check(Visible(Within(Name("noted combo"), Role(role: ListItem, label: "Delft < unreachable >")))),
+        Check(Visible(Within(Name("noted combo"), Role(role: ListItem, label: "Utrecht 4 km")))),
+        Check(Visible(Within(Name("noted combo"), Role(role: ListItem, label: "Amsterdam")))),
+        MoveTo(Within(Name("noted combo"), Role(role: ListItem, label: "Delft < unreachable >"))),
+        Click(Left),
+        Check(App(Selected(of: Name("noted combo"), items: ["Delft"]))),
+        Check(App(Accessible(of: Within(Name("noted combo"), Component("ComboButton")), role: Some("ComboBox"), label: None, value: Some("Delft"), states: []))),
+        Check(Exists(Within(Within(Name("noted combo"), Component("ComboButton")), Text("Delft")))),
+        Check(Not(Exists(Within(Within(Name("noted combo"), Component("ComboButton")), Text("< unreachable >"))))),
+    ],
+    expect: [App(Selected(of: Name("noted combo"), items: ["Delft"]))],
+)

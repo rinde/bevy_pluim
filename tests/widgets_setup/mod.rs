@@ -40,7 +40,7 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::list::{CornerStyle, ItemNote, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
@@ -361,6 +361,26 @@ fn combos(world: &mut World) {
             Selection::builder()
                 .zero_or_one()
                 .build_with_items(countries()),
+        ));
+        // A combo whose options carry a note, out of the flow and last like the others:
+        // Delft is unreachable, Utrecht has a plain note.
+        root.spawn((
+            Combo,
+            Name::new("noted combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(260),
+                top: px(200),
+                left: px(700),
+                ..default()
+            },
+            Selection::builder().zero_or_one().build_with_items([
+                // An empty note shows nothing.
+                (Item::new("Amsterdam"), ItemNote::new("")),
+                (Item::new("Delft"), ItemNote::warning("< unreachable >")),
+                (Item::new("Utrecht"), ItemNote::new("4 km")),
+            ]),
         ));
         root.spawn((
             Combo,
