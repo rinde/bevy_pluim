@@ -93,14 +93,24 @@ fn headless_app() -> App {
     app
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct PanelA;
 
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct PanelB;
 
 fn spawn_panel_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn(&mut commands, PanelA);
+}
+
+fn spawn_panel_scene(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn_scene(
+        &mut commands,
+        bsn! {
+            PanelA
+            Children [ PanelB ]
+        },
+    );
 }
 
 fn spawn_panel_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
@@ -143,6 +153,57 @@ fn two_app_root_nodes_are_reported_instead_of_panicking() {
 
     assert!(app.world().entity(first).contains::<UiRoot>());
     assert!(app.world().entity(second).contains::<UiRoot>());
+}
+
+#[test]
+fn a_stack_child_can_be_spawned_from_a_scene() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let create = app.world_mut().register_system(spawn_panel_scene);
+
+    let selection_ref = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), StackItem::new(create))]),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stack = app
+        .world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+        .id();
+
+    for _ in 0..4 {
+        app.update();
+    }
+
+    let panel = single_entity_with::<PanelA>(&mut app);
+    let stack_children = app.world().entity(stack).get::<Children>().unwrap();
+    assert!(stack_children.contains(&panel));
+    assert_eq!(node_display(&app, panel), Display::Flex);
+    // The scene's own children are below the stack child.
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert!(
+        app.world()
+            .entity(panel)
+            .get::<Children>()
+            .unwrap()
+            .contains(&panel_b)
+    );
+    assert_eq!(ui_root_count(&mut app), 1);
 }
 
 #[test]

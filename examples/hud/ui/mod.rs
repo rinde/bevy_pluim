@@ -12,7 +12,6 @@
 
 mod icons;
 
-use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
@@ -339,18 +338,18 @@ fn spawn_dock_tools(commands: &mut Commands, icons: &Icons) -> Entity {
     let selection = commands.spawn_empty().id();
     let hint = commands.register_system(
         |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
-            spawner.spawn(&mut commands, hint_bar());
+            spawner.spawn_scene(&mut commands, hint_bar());
         },
     );
     let rail = commands.register_system(
         |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
-            spawner.spawn(&mut commands, rail_bar());
+            spawner.spawn_scene(&mut commands, rail_bar());
         },
     );
     let vehicles = icons.clone();
     let train = commands.register_system(
         move |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
-            spawner.spawn(&mut commands, vehicle_bar(&vehicles));
+            spawner.spawn_scene(&mut commands, vehicle_bar(&vehicles));
         },
     );
     let tools = [
@@ -422,18 +421,6 @@ fn dock(selection: Entity) -> impl Scene {
     }
 }
 
-/// The children of an entity, as scenes: [`StackChildSpawner::spawn`] takes a bundle, so this
-/// one spawns `scenes` as the children of the entity it is inserted on.
-fn scene_children(scenes: impl SceneList) -> impl Bundle {
-    Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-        let target = parent.target_entity();
-        parent
-            .world_mut()
-            .entity_mut(target)
-            .queue_spawn_related_scenes::<Children>(scenes);
-    }))
-}
-
 /// A `bsn!` entry that inserts `component` as it is.
 ///
 /// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a widget that holds
@@ -464,21 +451,20 @@ fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> Emp
 }
 
 /// A bar of options above the tool dock, holding `contents`.
-fn option_bar(contents: impl SceneList) -> impl Bundle {
-    (
-        Card,
+fn option_bar(contents: impl SceneList) -> impl Scene {
+    bsn! {
+        ~{Card}
         Node {
             align_items: AlignItems::Center,
             column_gap: Val::Px(14.0),
             padding: UiRect::axes(Val::Px(14.0), Val::Px(10.0)),
-            ..default()
-        },
-        scene_children(contents),
-    )
+        }
+        Children [ {contents} ]
+    }
 }
 
 /// The bar for the tools that have no options: how to get back to the Select tool.
-fn hint_bar() -> impl Bundle {
+fn hint_bar() -> impl Scene {
     option_bar(bsn_list! {
         ~{Kbd::new("Esc")}
         --
@@ -487,7 +473,7 @@ fn hint_bar() -> impl Bundle {
 }
 
 /// The Rail tool's options.
-fn rail_bar() -> impl Bundle {
+fn rail_bar() -> impl Scene {
     option_bar(bsn_list! {
         ~{Label::overline("Tracks")}
         --
@@ -543,7 +529,7 @@ fn level(value: &Value) -> String {
 }
 
 /// The Train tool's vehicles.
-fn vehicle_bar(icons: &Icons) -> impl Bundle {
+fn vehicle_bar(icons: &Icons) -> impl Scene {
     let cards = [
         ("Steam", &icons.locomotive, "Locomotives"),
         ("Diesel", &icons.locomotive, "Locomotives"),

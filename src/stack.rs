@@ -231,6 +231,23 @@ impl StackChildSpawner {
     }
 }
 
+impl StackChildSpawner {
+    /// Spawns `scene` as the child of the stack: the scene's root is the child.
+    ///
+    /// Like [`StackChildSpawner::spawn`] otherwise; a `Node` in the scene patches the child's
+    /// default one.
+    pub fn spawn_scene(self, commands: &mut Commands, scene: impl Scene) {
+        let mut child = commands.spawn((
+            Name::new("StackItem"),
+            AddNodeIfAbsent,
+            ChildOf(self.parent),
+        ));
+        let id = child.id();
+        child.queue_apply_scene(scene);
+        commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
+    }
+}
+
 fn update_stack_item(input: In<(Entity, Entity)>, mut stack_items: Query<&mut StackItem>) {
     let (stack_item_ref, new_child_ref) = *input;
     if let Ok(mut stack_item) = stack_items.get_mut(stack_item_ref) {

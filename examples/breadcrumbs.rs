@@ -2,7 +2,6 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use bevy::ecs::spawn::SpawnWith;
 use bevy::prelude::*;
 use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
@@ -111,20 +110,6 @@ fn setup(mut commands: Commands) {
     });
 }
 
-/// The children of a stack item, from a scene: [`StackChildSpawner::spawn`] takes a bundle.
-fn scene_children(children: impl SceneList) -> impl Bundle {
-    (
-        Node::DEFAULT,
-        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-            let target = parent.target_entity();
-            parent
-                .world_mut()
-                .entity_mut(target)
-                .queue_spawn_related_scenes::<Children>(children);
-        })),
-    )
-}
-
 fn push_to_selection(
     target: BreadCrumbsAction,
     selections: &mut SelectionParam<With<BreadCrumbsSelection>>,
@@ -152,9 +137,10 @@ fn pop_on_activate(_: On<Activate>, mut selections: SelectionParam<With<BreadCru
 }
 
 fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::header("Home")}
             --
             ~{PushButton::from_label("Go to Panel A")}
@@ -165,7 +151,8 @@ fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
             --
             ~{PushButton::from_label("Go to Panel B")}
             on(go_to(BreadCrumbsAction::PanelB))
-        }),
+        ]
+        },
     );
 }
 
@@ -175,9 +162,10 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
     let initialized = INITIALIZED_A.load(Ordering::Relaxed);
     assert!(!initialized);
     INITIALIZED_A.store(true, Ordering::Relaxed);
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::header("Panel A")}
             --
             ~{PushButton::from_label("Go back to home")}
@@ -194,14 +182,16 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 };
                 selections.update_selection_single(|x| x.pop()?.push(item_a_ref));
             })
-        }),
+        ]
+        },
     );
 }
 
 fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::header("Panel B")}
             --
             ~{PushButton::from_label("Go back to home")}
@@ -209,18 +199,21 @@ fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
             --
             ~{PushButton::from_label("Go to panel B sub")}
             on(go_to(BreadCrumbsAction::PanelBsub))
-        }),
+        ]
+        },
     );
 }
 
 fn create_b_sub(spawner: In<StackChildSpawner>, mut commands: Commands) {
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::header("Panel B sub")}
             --
             ~{PushButton::from_label("Go back to panel B")}
             on(pop_on_activate)
-        }),
+        ]
+        },
     );
 }

@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use bevy::ecs::spawn::{SpawnIter, SpawnWith};
+use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
 use bevy::scene::EmptySceneEffect;
@@ -115,18 +115,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
     });
 }
 
-/// The children of a stack item, as scenes: [`StackChildSpawner::spawn`] takes a bundle,
-/// so this one spawns `scenes` as the children of the entity it is inserted on.
-fn scene_children(scenes: impl SceneList) -> impl Bundle {
-    Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-        let target = parent.target_entity();
-        parent
-            .world_mut()
-            .entity_mut(target)
-            .queue_spawn_related_scenes::<Children>(scenes);
-    }))
-}
-
 /// Spawns `scene` as a child of the entity `parent` spawns for.
 fn apply(parent: &mut ChildSpawner, scene: impl Scene) {
     if let Err(error) = parent.spawn_empty().apply_scene(scene) {
@@ -146,9 +134,10 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
         )
         .id();
 
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::regular("Panel A")}
             --
             ColorPaletteCombo
@@ -195,14 +184,16 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             ]
             --
             ~{PushButton::from_label("hello")}
-        }),
+        ]
+        },
     );
 }
 
 fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::header("Panel B")}
             --
             // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; its
@@ -240,7 +231,8 @@ fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
                     Ok(EmptySceneEffect)
                 })
             ]
-        }),
+        ]
+        },
     );
 }
 
@@ -254,18 +246,17 @@ static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
 
 fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut commands: Commands) {
     let background_color = theme.colors.background_primary;
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        (
+        bsn! {
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
                 display: Display::Grid,
                 grid_auto_columns: vec![GridTrack::percent(100.0)],
                 grid_auto_flow: GridAutoFlow::Row,
-                ..default()
-            },
-            scene_children(bsn_list! {
+            }
+            Children [
                 ~{Label::header("Card demo")}
                 --
                 Node
@@ -279,8 +270,8 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                         true,
                     )))
                 })
-            }),
-        ),
+            ]
+        },
     );
 }
 
