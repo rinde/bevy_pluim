@@ -45,7 +45,7 @@ use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::picking::events::{PointerEvent, PointerTraversal};
 use bevy::prelude::*;
-use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin, TabPlugin};
+use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin, ScrollbarPlugin, TabPlugin};
 
 use crate::badge::BadgePlugin;
 use crate::breadcrumbs::BreadCrumbsPlugin;
@@ -81,11 +81,12 @@ use crate::tooltip::TooltipPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
-/// The `ButtonPlugin`, `ListBoxPlugin` and `TabPlugin` of `bevy_ui_widgets` are added in
-/// [`Plugin::finish`] when the app does not have them by then, so it does not matter
-/// whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added before or after this
-/// plugin. An app that is driven by hand with `App::update` instead of `App::run`
-/// must call `App::finish` first, or its buttons, lists and tab bars get no observers.
+/// The `ButtonPlugin`, `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin` of
+/// `bevy_ui_widgets` are added in [`Plugin::finish`] when the app does not have them by
+/// then, so it does not matter whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added
+/// before or after this plugin. An app that is driven by hand with `App::update` instead
+/// of `App::run` must call `App::finish` first, or its buttons, lists, scroll bars and tab
+/// bars get no observers.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
@@ -144,6 +145,9 @@ impl Plugin for WidgetsPlugin {
         }
         if !app.is_plugin_added::<ListBoxPlugin>() {
             app.add_plugins(ListBoxPlugin);
+        }
+        if !app.is_plugin_added::<ScrollbarPlugin>() {
+            app.add_plugins(ScrollbarPlugin);
         }
         if !app.is_plugin_added::<TabPlugin>() {
             app.add_plugins(TabPlugin);
@@ -210,9 +214,8 @@ enum MouseKind {
     Released,
     /// The pointer pressed and released on the widget without moving off it.
     Click(PointerButton),
-    /// The pointer moved while a button was held down on the widget, by this much
-    /// since the previous pointer event.
-    Drag(Vec2),
+    /// The pointer moved while a button was held down on the widget.
+    Drag,
     Out,
 }
 
@@ -254,7 +257,7 @@ impl ToMouseEvent for PointerClick {
 
 impl ToMouseEvent for PointerDrag {
     fn to_mouse_kind(&self) -> MouseKind {
-        MouseKind::Drag(self.delta)
+        MouseKind::Drag
     }
 }
 

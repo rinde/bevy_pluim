@@ -201,7 +201,7 @@ fn handle_hover(
     // press, release and out events around them set the colours. A drag in particular can
     // arrive after the pointer left the button, so it must not put it back under the pointer.
     let kind = trigger.event().kind;
-    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag(_)) {
+    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
     // The pointer is on the button for every event but `Out`, a release included.
