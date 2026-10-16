@@ -64,3 +64,51 @@ fn theme_float(
         *bs = BoxShadow::from(theme.large_shadow());
     }
 }
+
+/// The distance a popup keeps from the window's edges, in logical pixels.
+pub(crate) const WINDOW_MARGIN: f32 = 10.0;
+
+/// The `left` of a popup `width` wide that wants its left edge at `left`, moved in until it is
+/// [`WINDOW_MARGIN`] from the window's left and right edges. A popup wider than the window
+/// keeps its left edge on the margin.
+pub(crate) fn keep_in_window_x(left: f32, width: f32, window_width: f32) -> f32 {
+    left.min(window_width - WINDOW_MARGIN - width)
+        .max(WINDOW_MARGIN)
+}
+
+/// The `top` of a popup `height` high for a button spanning `button_top` to `button_bottom`:
+/// `gap` under the button, or `gap` above it when the popup would come within
+/// [`WINDOW_MARGIN`] of the window's bottom.
+pub(crate) fn below_or_above(
+    button_top: f32,
+    button_bottom: f32,
+    gap: f32,
+    height: f32,
+    window_height: f32,
+) -> f32 {
+    let below = button_bottom + gap;
+    if below + height + WINDOW_MARGIN > window_height {
+        button_top - gap - height
+    } else {
+        below
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_popup_is_kept_inside_the_window_margins() {
+        assert!((keep_in_window_x(500.0, 100.0, 1000.0) - 500.0).abs() < f32::EPSILON);
+        assert!((keep_in_window_x(950.0, 100.0, 1000.0) - 890.0).abs() < f32::EPSILON);
+        assert!((keep_in_window_x(-5.0, 100.0, 1000.0) - 10.0).abs() < f32::EPSILON);
+        assert!((keep_in_window_x(0.0, 2000.0, 1000.0) - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_popup_goes_above_its_button_when_it_would_run_off_the_bottom() {
+        assert!((below_or_above(100.0, 130.0, 3.0, 200.0, 720.0) - 133.0).abs() < f32::EPSILON);
+        assert!((below_or_above(600.0, 630.0, 3.0, 200.0, 720.0) - 397.0).abs() < f32::EPSILON);
+    }
+}

@@ -155,8 +155,8 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `select.rs` | the selection model: `Selection` (`Value` or `Ref`), `SelectionValue` (`One` / `ZeroOrOne` / `OneOrMore` / `ZeroOrMore`), the `Selection::builder()`, `Item<T>`, `ItemOf` / `ItemValues` / `ItemsRef`, `ItemsChanged`, and the `SelectionParam` / `ItemParam` system params |
 | `stack.rs` | `Stack { selection_ref }` shows the one `StackItem` child matching the selection; children are created lazily by a registered system (`StackChildSpawner`) and hidden, not despawned, when deselected |
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
-| `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls. To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
-| `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
+| `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls; the list is kept 10 px inside the window's left and right edges and goes above the button when it would run off the bottom, like a palette combo's popup (`combo_keeps_list_inside_window.ron`) To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
+| `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own, `Combo` and `ColorPaletteCombo` through the crate-private `keep_in_window_x` and `below_or_above` of `float.rs` (10 px `WINDOW_MARGIN` from the window's side edges, above the button when it would run off the bottom) (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
 | `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, which scrolls the contents when dragged, and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`, see "Directional navigation is the app's") |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
@@ -1048,7 +1048,12 @@ a file can check any `Reflect` type of the app by short type path.
   `scrolled combo` (its own selection) sits in the 100 pixel high `combo
   scroll area`, absolutely placed at the right (x 1000, y 300) and spawned last
   so nothing moves and the tab order stays; its list reaches below the area and
-  "Belgium" there is picked (`combo_in_scroll_area_popup_is_not_clipped`).
+  "Belgium" there is picked (`combo_in_scroll_area_popup_is_not_clipped`). A 1 by 400
+  pixel spacer after the combo makes the area's contents overflow, so the arrow keys
+  in the open list would scroll it were `scroll_into_view` not to stop at a `FixedNode`
+  (`combo_in_scroll_area_keyboard_does_not_scroll_the_area`). `right edge combo` (x 1200,
+  y 100, 100 wide) and `bottom edge combo` (x 500, y 660) are absolutely placed and spawned
+  last too; their lists stay inside the window (`combo_keeps_list_inside_window`).
 - **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
   `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
   is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:
@@ -1066,7 +1071,7 @@ a file can check any `Reflect` type of the app by short type path.
   The panels that were created are counted by `Count` of `PushButton`s
   (`stack_shows_only_the_selected_item`); the `Tabs` screen's number list
   keeps its selection while its panel is hidden
-  (`stack_keeps_state_of_hidden_item`). The tabs are the `Tab`s of a
+  (`stack_keeps_state_of_hidden_item`). The combos in Panel A open popups that are descendants of the panel, so hiding it hides them and takes the list out of the tab order (`stack_hidden_panel_hides_combo_popups`). The tabs are the `Tab`s of a
   `TabBar`, `Role(role: Tab, label: "Panel A")`, `Panel B` and `Card demo`;
   the bar is one tab stop, the arrows move between its tabs and Enter or
   Space picks the focused one.
