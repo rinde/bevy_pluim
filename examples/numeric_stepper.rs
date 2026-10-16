@@ -19,7 +19,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Startup, setup)
         .run();
 }
@@ -53,7 +52,8 @@ fn setup(mut commands: Commands) {
             NumericStepper { format: {level as ValueFormat}, decrease_name: "Lower the level", increase_name: "Raise the level" }
             ~{Value::new_u8(0, 0, 56, 7)}
             --
-            ~{PushButton::from_label("Change theme")} ThemeButton
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
 }
@@ -63,14 +63,5 @@ fn level(value: &Value) -> String {
     match value.as_u8() {
         Some(0) | None => "Ground".to_string(),
         Some(n) => format!("+{n}"),
-    }
-}
-
-#[derive(Component, Default, Clone)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
     }
 }

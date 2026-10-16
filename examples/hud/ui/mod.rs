@@ -562,6 +562,7 @@ fn train_row(spawner: In<ItemViewSpawner>, trains: Query<&Item<Train>>, mut comm
             ]
         });
 }
+
 /// Fills the strip, body and footer of a panel that was just made.
 fn fill_panels(
     panels: Query<(&PanelRefs, &PanelKind), Added<PanelRefs>>,
