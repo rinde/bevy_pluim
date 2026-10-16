@@ -450,6 +450,21 @@ of them (`just example gallery -- --run-all stack link`).
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
   (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+- **Directional navigation is the app's.** The library adds none: an app that wants the
+  arrow keys (or a gamepad stick) to move the focus between widgets puts Bevy's
+  `AutoDirectionalNavigation` on the widgets that take part, adds
+  `DirectionalNavigationPlugin`, and calls `AutoDirectionalNavigator::navigate` from an
+  observer of `FocusedInput<KeyboardInput>` on the primary window, which gets only the keys
+  no focused widget kept (a system reading `ButtonInput<KeyCode>` would see them all); it
+  sets `InputFocusVisible` itself, as Bevy's `directional_navigation` example does. What the
+  widgets guarantee: a widget that uses the arrows stops them from bubbling on, so they
+  never reach that observer. A focused `List` (so a palette, a tab bar and an open combo's
+  list too) keeps the arrows, Home and End (the `ListBox` stops a first press,
+  `keep_navigation_keys` in `list.rs` the repeats and releases), and a `NumericStepper`
+  keeps the arrows that reach it from its buttons, also at a limit. The focus ring follows
+  `InputFocus` whatever moved it, while `InputFocusVisible` is true. Every other widget lets
+  the arrows through. `tests/scenarios.rs` turns it on for two buttons, a list and a stepper
+  (`directional_navigation_screen`).
 - **Hidden widgets are hidden from the accessibility tree.** `sync_accessibility_hidden`
   in `focus.rs` runs next to `sync_tab_index` and marks the `AccessibilityNode` of
   anything hidden by the tab stop rule (`is_hidden`) as hidden, clearing it on show.

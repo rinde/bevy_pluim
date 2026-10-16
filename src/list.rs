@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::FocusedInput;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
@@ -51,6 +53,7 @@ impl Plugin for ListPlugin {
             )
             .add_observer(on_insert_selection)
             .add_observer(on_value_change)
+            .add_observer(keep_navigation_keys)
             .add_observer(handle_custom_view_mouse_events)
             .register_type::<ItemView>()
             .register_type::<ListLayout>()
@@ -436,6 +439,29 @@ fn on_value_change(
     selections.update_selection(source, |selection| {
         selection.toggle_selected(item_view.item_ref)
     });
+}
+
+/// Keeps the keys a focused [`List`] navigates with from bubbling past it.
+///
+/// The `ListBox` stops a first press of an arrow key, Home or End itself, but lets a held
+/// key's repeats and the release go on up to the window, where an app's directional
+/// navigation would move the focus out of the list. The list owns those keys while it has
+/// the focus, so none of them goes further.
+fn keep_navigation_keys(mut input: On<FocusedInput<KeyboardInput>>, lists: Query<(), With<List>>) {
+    if !lists.contains(input.event_target()) {
+        return;
+    }
+    if matches!(
+        input.event().input.key_code,
+        KeyCode::ArrowUp
+            | KeyCode::ArrowDown
+            | KeyCode::ArrowLeft
+            | KeyCode::ArrowRight
+            | KeyCode::Home
+            | KeyCode::End
+    ) {
+        input.propagate(false);
+    }
 }
 
 /// Puts [`Selected`] on a view, or takes it off, to match its item.

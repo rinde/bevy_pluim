@@ -530,23 +530,29 @@ fn on_activate(
 }
 
 /// Steps the value of the stepper the key reached with the arrow keys.
+///
+/// The stepper owns the arrow keys while one of its buttons has the focus, so it stops them
+/// there (pressed, repeated or released, also at a limit) and an app's directional
+/// navigation never sees them.
 fn on_key_input(
-    trigger: On<FocusedInput<KeyboardInput>>,
+    mut trigger: On<FocusedInput<KeyboardInput>>,
     steppers: Query<(), With<NumericStepper>>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
 ) {
-    let input = &trigger.event().input;
-    if input.state != ButtonState::Pressed {
+    let stepper = trigger.event_target();
+    if !steppers.contains(stepper) {
         return;
     }
+    let input = &trigger.event().input;
     let up = match input.key_code {
         KeyCode::ArrowUp | KeyCode::ArrowRight => true,
         KeyCode::ArrowDown | KeyCode::ArrowLeft => false,
         _ => return,
     };
-    let stepper = trigger.event_target();
-    if !steppers.contains(stepper) {
+    let pressed = input.state == ButtonState::Pressed;
+    trigger.propagate(false);
+    if !pressed {
         return;
     }
     let value_entity = value_refs
