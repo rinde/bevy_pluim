@@ -40,6 +40,7 @@ use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::stack::Stack;
+use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
 use rin_bevy_ui::tooltip::Tooltip;
@@ -102,6 +103,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<SettingRow>(registry);
         assert_component::<SettingRows>(registry);
         assert_component::<Segment>(registry);
+        assert_component::<TabBar>(registry);
+        assert_component::<TabBarTab>(registry);
         assert_component::<IconButton>(registry);
         assert_component::<Panel>(registry);
         assert_component::<ToggleState>(registry);

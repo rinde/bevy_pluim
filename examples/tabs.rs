@@ -1,4 +1,4 @@
-//! A `List` as tab bar driving a `Stack`, with combos, colour palettes and cards inside.
+//! A `TabBar` driving a `Stack`, with combos, colour palettes and cards inside.
 
 use std::sync::LazyLock;
 
@@ -12,11 +12,12 @@ use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::label::Label;
-use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::list::{List, ListLayout};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::select::{Item, ItemValues, Selection};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::{COLORS, TailwindColor, Variant};
 use rin_bevy_ui::theme::Theme;
 
@@ -68,7 +69,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             StackItem::new(commands.register_system(create_card_demo)),
         ),
     ];
-    // `Stack` takes the selection's entity, which a scene cannot hand it from the tab list
+    // `Stack` takes the selection's entity, which a scene cannot hand it from the tab bar
     // beside it, so the tabs' selection is an entity of its own that both refer to.
     let tabs = commands
         .spawn(Selection::builder().one().build_with_items(items))
@@ -88,9 +89,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             height: percent(100.0),
         }
         Children [
-            List
-            ~{CornerStyle::Tabs}
-            ~{ListLayout::Horizontal}
+            TabBar
             ~{Selection::reference(tabs)}
             --
             // filler

@@ -170,6 +170,7 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `link.rs` | `Link` and its immutable `LinkState`; a `Role::Link` to a screen reader (it keeps `Button`, so `Role(role: Button, ..)` still finds it; `link_accessible_role.ron`). Its accessible label is its text. |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node; a `Role::Group` without a label (`themed_card_accessible_group.ron`) |
 | `segmented_control.rs` | `SegmentedControl`: a track of text `Segment`s (`Button`s and tab stops) over a `Selection` of `Item<String>`, own or `Selection::Ref`, normally a `One`; a segment's `Activate` sets the selection to its item (`set_selection`), `Selected` and the `segmented_*` theme colours follow the selection and hover. It is its own widget, not a `List` style, so `List` is untouched. To a screen reader the control is a `Role::RadioGroup` and each segment a `Role::RadioButton`, `toggled` following `Selected` (`segmented_control_accessible_radio_group.ron`); the segments keep `Button`, so `Role(role: Button, ..)` still finds them |
+| `tab_bar.rs` | `TabBar`: Bevy's `bevy_ui_widgets` `TabList` of text `TabBarTab`s (Bevy `Tab`s) over a `Selection` of `Item<String>`, own or `Selection::Ref`, normally a `One`, styled from the `segmented_*` slots like a `SegmentedControl`. `SelectedTab` follows the `Selection`, which keeps the last word: Bevy's `tablist_self_update` is not registered, and the `ValueChange<Option<Entity>>` the tab list sends for a click, Enter or Space goes through `SelectionParam::update_selection` (`set_selection`). The tabs are not `Button`s (a `Button` stops the click before the tab list sees it) nor `TabStop`s: Bevy's `TabPlugin` (added by `WidgetsPlugin` unless the app has it) gives the selected or focused tab `TabIndex` 0 and the others -1, so the bar is one tab stop and the arrows, Home and End move the focus between its tabs. To a screen reader the bar is a `Role::TabList` and each tab a `Role::Tab` labelled with its item's text, `selected` while it is the `SelectedTab` (`tab_bar_accessible_tab_list.ron`) |
 | `setting_row.rs` | `SettingRow::new(title, description)`: a title (semibold, `font_size_body`) over a secondary description on the left and an empty control slot on the right (12 px gap and vertical padding), then a `Divider`; `SettingRowRefs { title_id, description_id, control_slot, divider_id }` names them, and the app spawns its control (a `SegmentedControl`, say) as a child of `control_slot`. Put the rows in a `SettingRows` column: a system hides the divider of the last row and shows the others'. A row is a `Role::Group` labelled with its title, its description the node's `description` (`setting_row_accessible_group.ron`) |
 | `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
 | `icon.rs` | `Icon::bundle(handle, size)` / `Icon::bundle_with_color`: an `ImageNode` from an app-provided white-on-transparent `Handle<Image>`, tinted with the `IconColor` theme role of its `Icon` (primary text by default); a widget changes the role by inserting `Icon` again |
@@ -190,7 +191,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | --- | --- |
 | `widgets` | a showcase: a scroll area, a list and combos sharing one selection via `Selection::reference`, and buttons that add more |
 | `breadcrumbs` | `BreadCrumbs` and a `Stack` sharing one selection, with reused `StackItem` creators |
-| `tabs` | a `List` as tab bar driving a `Stack`, with combos, colour palettes and cards inside |
+| `tabs` | a `TabBar` driving a `Stack`, with combos, colour palettes and cards inside |
 | `color_palette` | `ColorPalette` and `ColorPaletteCombo` over `tailwind::COLORS` |
 | `combos` | `Combo` variants |
 | `lists` | `List` layouts and corner styles |
@@ -357,7 +358,7 @@ of them (`just example gallery -- --run-all stack link`).
   requires `Pickable::default()` so it blocks the pointer and gets `MouseEvent`s.
   A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
-  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`) in
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin` and `TabPlugin`) in
   its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
   tester's `HeadlessPlugins` add all of `UiWidgetsPlugins`; adding twice panics),
   so the order of `WidgetsPlugin` and `UiWidgetsPlugins` does not matter; an app
@@ -444,12 +445,13 @@ of them (`just example gallery -- --run-all stack link`).
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
   `InputFocusVisible` is true (an `Outline` the app or a widget set on it is kept aside and put back when the ring leaves, so the ring owns only its own), except that a list's ring is on its `ActiveDescendant` row
-  (a `ListItem`) and the box has none; the `ListBox` clears the active row when the list
+  (a `ListItem`) and the box has none, and a focused `Tab` of a `TabBar` gets the ring too
+  (its `TabIndex` is Bevy's `TabPlugin`'s, not `sync_tab_index`'s); the `ListBox` clears the active row when the list
   loses focus, and the ring goes with it, and `ActiveDescendant` is registered in the type
   registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
-  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and the tab bar (`tabs_keyboard_switches_panel.ron`) with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
 - **Directional navigation is the app's.** The library adds none: an app that wants the
   arrow keys (or a gamepad stick) to move the focus between widgets puts Bevy's
   `AutoDirectionalNavigation` on the widgets that take part, adds
@@ -1046,8 +1048,10 @@ a file can check any `Reflect` type of the app by short type path.
   The panels that were created are counted by `Count` of `PushButton`s
   (`stack_shows_only_the_selected_item`); the `Tabs` screen's number list
   keeps its selection while its panel is hidden
-  (`stack_keeps_state_of_hidden_item`). The tabs are the `ListItem`s
-  `Panel A`, `Panel B` and `Card demo`.
+  (`stack_keeps_state_of_hidden_item`). The tabs are the `Tab`s of a
+  `TabBar`, `Role(role: Tab, label: "Panel A")`, `Panel B` and `Card demo`;
+  the bar is one tab stop, the arrows move between its tabs and Enter or
+  Space picks the focused one.
 - **Targets on the `ColorPalette` screen.** A row of `first palette combo`,
   `second palette combo` (the two share one selection) and `own palette combo`
   (its own, over the same colours) and "Change theme"; `one palette combo`

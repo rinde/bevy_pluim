@@ -50,6 +50,7 @@ use rin_bevy_ui::select::{
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::tooltip::Tooltip;
@@ -873,12 +874,7 @@ fn tabs(world: &mut World) {
     });
     world.entity_mut(root).with_children(|root| {
         let selection_ref = root
-            .spawn((
-                List,
-                CornerStyle::Tabs,
-                ListLayout::Horizontal,
-                Selection::builder().one().build_with_items(items),
-            ))
+            .spawn((TabBar, Selection::builder().one().build_with_items(items)))
             .id();
         root.spawn((
             BorderColor::all(border),
