@@ -23,7 +23,7 @@ use bevy::picking::input::PointerInputSettings;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator};
-use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
+use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, Selected, UiSystems};
 use bevy::ui_widgets::{ActiveDescendant, Button, Tab};
 use bevy::window::PrimaryWindow;
 use rin_bevy_ui::badge::Badge;
@@ -40,7 +40,7 @@ use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::ScrollContents;
+use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
@@ -1968,4 +1968,233 @@ fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_
         app.world().get::<ItemValues>(items).map(ItemValues::len),
         Some(10_001)
     );
+}
+
+/// Fills a `VirtualList` row with a button named after the row's item.
+fn virtual_row_with_button(
+    spawner: In<ItemViewSpawner>,
+    items: Query<&Item<String>>,
+    mut commands: Commands,
+) {
+    let Ok(item) = items.get(spawner.item) else {
+        return;
+    };
+    let label = format!("In row {}", item.data);
+    commands.entity(spawner.view).with_children(|view| {
+        view.spawn((
+            Name::new(label.clone()),
+            PushButton::from_label(label),
+            Node {
+                width: px(90),
+                ..default()
+            },
+        ));
+    });
+}
+
+/// Spawns a `creator list` of a hundred rows (`Row 1` first selected), each filled by
+/// [`virtual_row_with_button`], in a 200 pixel high scroll area.
+fn spawn_virtual_list_with_creator(world: &mut World) {
+    let create = world.register_system(virtual_row_with_button);
+    let root = spawn_camera_and_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("creator scroll area"),
+            Node {
+                width: px(240),
+                height: px(200),
+                ..default()
+            },
+            ScrollArea::bundle(
+                move |parent: &mut ChildSpawner| {
+                    parent.spawn((
+                        Name::new("creator list"),
+                        VirtualList::new(48.0),
+                        ItemViewCreator::new(create),
+                        Selection::builder()
+                            .one()
+                            .build_with_items((1..=100).map(|row| Item::new(format!("Row {row}")))),
+                    ));
+                },
+                true,
+                false,
+            ),
+        ));
+    });
+}
+
+/// For each shown row of the `VirtualList`s, in the order of their items: the item's text and
+/// the names of the row's children.
+fn shown_rows_with_children(app: &mut App) -> Vec<(String, Vec<String>)> {
+    let world = app.world_mut();
+    let mut rows: Vec<(usize, String, Vec<String>)> = world
+        .query::<(&VirtualListRow, &Node, Option<&Children>)>()
+        .iter(world)
+        .filter(|(_, node, _)| node.display != Display::None)
+        .filter_map(|(row, _, children)| {
+            let item = world.get::<Item<String>>(row.item?)?.data.clone();
+            let names = children
+                .into_iter()
+                .flatten()
+                .filter_map(|child| world.get::<Name>(*child))
+                .map(|name| name.as_str().to_owned())
+                .collect();
+            Some((row.index?, item, names))
+        })
+        .collect();
+    rows.sort_unstable();
+    rows.into_iter()
+        .map(|(_, item, names)| (item, names))
+        .collect()
+}
+
+#[test]
+fn a_virtual_list_runs_its_creator_again_for_a_row_handed_to_another_item() {
+    let mut app = widgets_app();
+    spawn_virtual_list_with_creator(app.world_mut());
+    for _ in 0..4 {
+        app.update();
+    }
+    let assert_each_row_holds_one_button_for_its_item = |app: &mut App| {
+        let rows = shown_rows_with_children(app);
+        assert!(!rows.is_empty());
+        for (item, children) in rows {
+            assert_eq!(children, [format!("In row {item}")], "row of {item}");
+        }
+    };
+    assert_each_row_holds_one_button_for_its_item(&mut app);
+    let (rows, entities) = rows_and_entities(&mut app);
+    let first = shown_rows_with_children(&mut app);
+    assert_eq!(first.first().map(|(item, _)| item.as_str()), Some("Row 1"));
+
+    // Far enough down that every row is handed on.
+    let contents = app
+        .world_mut()
+        .query_filtered::<Entity, With<ScrollContents>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(contents)
+        .insert(ScrollPosition(Vec2::new(0.0, 2_400.0)));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_each_row_holds_one_button_for_its_item(&mut app);
+    let scrolled = shown_rows_with_children(&mut app);
+    assert!(
+        scrolled.iter().all(|row| !first.contains(row)),
+        "{scrolled:?} still shows a row of {first:?}"
+    );
+    assert_eq!(rows_and_entities(&mut app), (rows, entities));
+    let world = app.world_mut();
+    let row_one_buttons = world
+        .query::<&Name>()
+        .iter(world)
+        .filter(|name| name.as_str() == "In row Row 1")
+        .count();
+    assert_eq!(row_one_buttons, 0, "the old children are gone");
+}
+
+#[test]
+fn a_click_on_a_button_in_a_virtual_list_row_leaves_the_selection_alone() {
+    let selected = |items: &[&str]| {
+        Step::check(Check::app(WidgetsCheck::Selected {
+            of: Target::name("creator list"),
+            items: items.iter().map(ToString::to_string).collect(),
+        }))
+    };
+    let scenario = Scenario::new("a click on a button in a row is the button's")
+        .setup(spawn_virtual_list_with_creator)
+        .steps([
+            Step::wait(4),
+            selected(&["Row 1"]),
+            Step::move_to(Target::name("In row Row 3")),
+            Step::click(),
+            selected(&["Row 1"]),
+            // A click on the row beside its button picks the row's item.
+            Step::move_to(Target::nth(3, Target::component::<VirtualListRow>())),
+            Step::click(),
+            selected(&["Row 4"]),
+        ]);
+    let report = play(&scenario);
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
+#[test]
+fn a_virtual_list_row_follows_its_items_text_changing_in_place() {
+    let mut app = widgets_app();
+    WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let row_one = world
+        .query::<(Entity, &Item<String>)>()
+        .iter(world)
+        .find_map(|(entity, item)| (item.data == "Row 1").then_some(entity))
+        .unwrap();
+    world.entity_mut(row_one).insert(Item::new("Changed"));
+    app.update();
+
+    assert_eq!(
+        shown_rows(&mut app).first().map(String::as_str),
+        Some("Changed")
+    );
+}
+
+#[test]
+fn a_virtual_list_over_a_selection_reference_shows_and_marks_the_referenced_selection() {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let shared = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+        )
+        .id();
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((VirtualList::new(28.0), Selection::reference(shared)));
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_eq!(shown_rows(&mut app), ["a", "b", "c"]);
+
+    let [_, b, _] = items_of(&app, shared);
+    change(&mut app, shared, move |selection| {
+        selection.set_selection([b])
+    });
+    app.update();
+
+    let world = app.world_mut();
+    let selected: Vec<Option<Entity>> = world
+        .query_filtered::<&VirtualListRow, With<Selected>>()
+        .iter(world)
+        .map(|row| row.item)
+        .collect();
+    assert_eq!(selected, [Some(b)]);
+}
+
+#[test]
+fn a_virtual_list_with_a_row_height_of_zero_shows_nothing_and_does_not_panic() {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        for row_height in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            root.spawn((
+                VirtualList::new(row_height),
+                Selection::builder()
+                    .one()
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
+            ));
+        }
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+
+    assert_eq!(rows_and_entities(&mut app).0, 0);
 }

@@ -472,7 +472,10 @@ of them (`just example gallery -- --run-all stack link`).
   `keep_navigation_keys` in `list.rs` the repeats and releases, only while the list itself
   is `InputFocus`), a focused tab of a `TabBar` keeps left, right, Home and End (Bevy's tab
   list stops a first press, `keep_navigation_keys` in `tab_bar.rs` the repeats and
-  releases) and lets up and down through, and a `NumericStepper`
+  releases) and lets up and down through, a focused `VirtualList` keeps the arrows, Home,
+  End, Enter and Space (pressed, repeated or released; `navigate` in `virtual_list.rs`,
+  only while the list itself is `InputFocus`, so the keys of a focused descendant, a button
+  in a creator's row, go on past it), and a `NumericStepper`
   keeps the arrows that reach it from its buttons, also at a limit. The focus ring follows
   `InputFocus` whatever moved it, while `InputFocusVisible` is true. Every other widget lets
   the arrows through. A focusable child of a list row (a button in a `CustomView`) is not

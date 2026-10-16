@@ -98,7 +98,8 @@ impl Plugin for VirtualListPlugin {
     },
 )]
 pub struct VirtualList {
-    /// The height of every row, in logical pixels.
+    /// The height of every row, in logical pixels. A list whose row height is not a positive,
+    /// finite number shows nothing and logs an error when it is inserted.
     pub row_height: f32,
 }
 
@@ -109,7 +110,20 @@ impl VirtualList {
         Self { row_height }
     }
 
+    /// Whether the row height is one rows can be laid out with: positive and finite.
+    const fn has_valid_row_height(self) -> bool {
+        self.row_height > 0.0 && self.row_height.is_finite()
+    }
+
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        if let Some(list) = world.get::<Self>(context.entity)
+            && !list.has_valid_row_height()
+        {
+            error!(
+                "VirtualList {} has row height {}, which is not a positive, finite number; it shows nothing",
+                context.entity, list.row_height
+            );
+        }
         world
             .commands()
             .run_system_cached_with(theme_virtual_lists, Some(context.entity));
@@ -177,14 +191,14 @@ impl View {
         let first = top
             .saturating_sub(OVERSCAN_ROWS)
             .min(count.saturating_sub(rows));
-        first..(first + rows).min(count)
+        first..first.saturating_add(rows).min(count)
     }
 
     /// How many rows it takes to fill the view and the margin beyond it, for `count` items.
     #[expect(clippy::cast_sign_loss, reason = "the value is at least 0")]
     fn rows_needed(&self, row_height: f32, count: usize) -> usize {
         let fitting = (self.height / row_height).ceil().max(0.0) as usize;
-        (fitting + 1 + 2 * OVERSCAN_ROWS).min(count)
+        fitting.saturating_add(1 + 2 * OVERSCAN_ROWS).min(count)
     }
 }
 
@@ -267,6 +281,9 @@ fn grow_pools(
     mut commands: Commands,
 ) {
     for (list, virtual_list, mut state, creator) in &mut lists {
+        if !virtual_list.has_valid_row_height() {
+            continue;
+        }
         let Some(count) = selections
             .get_item_values(list)
             .map(|(_, items)| items.len())
@@ -343,6 +360,9 @@ fn show_rows(
     mut commands: Commands,
 ) {
     for (list, virtual_list, state, active, mut list_node, creator) in &mut lists {
+        if !virtual_list.has_valid_row_height() {
+            continue;
+        }
         let Some((_, items)) = selections.get_item_values(list) else {
             continue;
         };
@@ -357,19 +377,18 @@ fn show_rows(
         let selection = selections.get(list);
 
         let pool = state.rows.len();
-        let mut shown = vec![None; pool];
-        for index in view.rows_in_view(
+        let range = view.rows_in_view(
             row_height,
             items.len(),
             view.rows_needed(row_height, items.len()).min(pool),
-        ) {
-            if let Some(slot) = shown.get_mut(index % pool.max(1)) {
-                *slot = Some(index);
-            }
-        }
+        );
 
         let mut active_row = None;
-        for (&row, index) in state.rows.iter().zip(shown) {
+        for (slot, &row) in state.rows.iter().enumerate() {
+            // The range is never longer than the pool, so at most one index in it has this
+            // slot as its remainder: item `i` is shown by row `i % pool`.
+            let index = Some(range.start + (slot + pool - range.start % pool) % pool)
+                .filter(|index| *index < range.end);
             let Ok((current, mut node, mut background, hovered, was_selected, label)) =
                 rows.get_mut(row)
             else {
@@ -479,6 +498,9 @@ fn navigate(
     let Ok((virtual_list, mut state)) = lists.get_mut(list) else {
         return;
     };
+    if !virtual_list.has_valid_row_height() {
+        return;
+    }
     let key = &input.event().input;
     let is_move = matches!(
         key.key_code,
