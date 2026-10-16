@@ -5555,13 +5555,25 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
     app.update();
     assert_eq!(radius(&app), BorderRadius::all(Val::Px(3.0)));
 
-    // A value change restyles the thumb but leaves its radius as the theme set it.
+    // A value change restyles the thumb but does not write its radius: a radius
+    // the theme would not give is still there after it.
+    let own_radius = BorderRadius::all(Val::Px(9.0));
+    app.world_mut()
+        .entity_mut(thumb)
+        .get_mut::<Node>()
+        .unwrap()
+        .border_radius = own_radius;
     app.world_mut().trigger(SetSliderValue {
         entity: slider,
         change: SliderValueChange::Absolute(7.0),
     });
     app.update();
-    assert_eq!(radius(&app), BorderRadius::all(Val::Px(3.0)));
+    // The thumb moved, so the slider was restyled.
+    assert_eq!(
+        app.world().entity(thumb).get::<Node>().unwrap().left,
+        Val::Percent(70.0)
+    );
+    assert_eq!(radius(&app), own_radius);
 }
 
 #[test]
