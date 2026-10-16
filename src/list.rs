@@ -454,7 +454,6 @@ fn keep_navigation_keys(
     lists: Query<(), With<List>>,
     focus: Res<InputFocus>,
 ) {
-    // `focused_entity` follows the event up the tree, so the focus itself is read.
     let list = input.event_target();
     if focus.get() != Some(list) || !lists.contains(list) {
         return;
