@@ -35,7 +35,7 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
-use rin_bevy_ui::list::List;
+use rin_bevy_ui::list::{ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::pill::Pill;
@@ -315,6 +315,62 @@ fn a_focused_stepper_button_keeps_the_arrow_keys_from_directional_navigation() {
         ]);
     let report = scenario.run_in(&mut directional_navigation_app());
     assert!(report.passed(), "{:#?}", report.failures());
+}
+
+/// A custom item view holding a "In row" button.
+fn row_with_button(spawner: In<ItemViewSpawner>, mut commands: Commands) {
+    commands.entity(spawner.view).with_children(|view| {
+        view.spawn((Name::new("In row"), PushButton::from_label("In row")));
+    });
+}
+
+/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
+/// app's navigation. (A first press does not, as Bevy's `ListBox` stops it; see AGENTS.md.)
+#[test]
+fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
+    let mut app = directional_navigation_app();
+    let create = app.world_mut().register_system(row_with_button);
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                List,
+                ItemViewCreator::new(create),
+                Selection::builder()
+                    .one()
+                    .build_with_items([Item::new("a")]),
+            ));
+            row.spawn((Name::new("Beside"), PushButton::from_label("Beside")));
+        });
+    });
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(window)
+        .observe(navigate_with_arrow_keys);
+    app.update();
+    app.update();
+    let in_row = named(&mut app, "In row");
+    let beside = named(&mut app, "Beside");
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(in_row, FocusCause::Navigated);
+    app.update();
+
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(beside)
+    );
 }
 
 /// Sends `key` as the window's keyboard would, pressed (perhaps as a repeat) or released.

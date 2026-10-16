@@ -6,7 +6,7 @@ use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::FocusedInput;
+use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
@@ -446,9 +446,17 @@ fn on_value_change(
 /// The `ListBox` stops a first press of an arrow key, Home or End itself, but lets a held
 /// key's repeats and the release go on up to the window, where an app's directional
 /// navigation would move the focus out of the list. The list owns those keys while it has
-/// the focus, so none of them goes further.
-fn keep_navigation_keys(mut input: On<FocusedInput<KeyboardInput>>, lists: Query<(), With<List>>) {
-    if !lists.contains(input.event_target()) {
+/// the focus, so none of them goes further. Keys that bubble up from a focused descendant
+/// (a button in a custom item view) are left alone; the `ListBox` still stops a first press
+/// of those, because the `focused_entity` it checks follows the event up the tree.
+fn keep_navigation_keys(
+    mut input: On<FocusedInput<KeyboardInput>>,
+    lists: Query<(), With<List>>,
+    focus: Res<InputFocus>,
+) {
+    // `focused_entity` follows the event up the tree, so the focus itself is read.
+    let list = input.event_target();
+    if focus.get() != Some(list) || !lists.contains(list) {
         return;
     }
     if matches!(
