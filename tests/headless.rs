@@ -1411,6 +1411,55 @@ fn spawn_combo(app: &mut App) -> (Entity, Entity) {
     (combo, button)
 }
 
+#[test]
+fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
+    let mut app = headless_app();
+    let panel = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+            ChildOf(panel),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().entity(combo).get::<ComboSubRefs>().unwrap();
+    click(&mut app, refs.button_id);
+    app.update();
+    app.update();
+    let list_index = |app: &App| {
+        app.world()
+            .entity(refs.list_id)
+            .get::<TabIndex>()
+            .unwrap()
+            .0
+    };
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Open)
+    );
+    assert_eq!(list_index(&app), 0, "an open popup is a tab stop");
+
+    // No click or focus change: only the ancestor is hidden, as a `Stack` does.
+    app.world_mut()
+        .entity_mut(panel)
+        .get_mut::<Node>()
+        .unwrap()
+        .display = Display::None;
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Open),
+        "the combo is still open, so the popup is hidden by the panel alone"
+    );
+    assert_eq!(list_index(&app), -1);
+}
+
 /// A colour palette combo over two colours in a root node, returning it and its button.
 fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
     let root = app.world_mut().spawn(Node::default()).id();
