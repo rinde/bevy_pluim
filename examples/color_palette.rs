@@ -4,7 +4,6 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -87,14 +86,7 @@ fn setup(mut commands: Commands) {
             --
             ColorPaletteCombo
             ~{ListLayout::VerticalGrid { columns: 11 }}
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(selection_ref),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
             --
             Node {
                 width: px(100.0),
@@ -145,15 +137,7 @@ fn zero_or_one_palette_scroll_area(selection_ref: Entity) -> impl Scene {
             }
             ~{ColorPalette}
             ~{ListLayout::VerticalGrid { columns: 11 }}
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(selection_ref),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
         },
         true,
         true,

@@ -1,7 +1,6 @@
 //! `Gallery`: image cards in two titled groups, in a horizontal scroll area.
 
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -66,13 +65,7 @@ fn setup(mut commands: Commands) {
 fn gallery(cards: [Item<GalleryCard>; 8]) -> impl Scene {
     bsn! {
         Gallery
-        // `Selection::builder()` gives a bundle, which `template` inserts.
-        template(move |context| {
-            context
-                .entity
-                .insert(Selection::builder().one().build_with_items(cards.clone()));
-            Ok(EmptySceneEffect)
-        })
+        @{Selection::builder().one().scene_with_items(cards)}
     }
 }
 

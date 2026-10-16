@@ -9,7 +9,7 @@
 
 use bevy::MinimalPlugins;
 use bevy::a11y::AccessibilityNode;
-use bevy::asset::AssetPlugin;
+use bevy::asset::{AssetPlugin, HandleTemplate};
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::camera::visibility::VisibilityPlugin;
@@ -5099,6 +5099,78 @@ fn the_hud_example_builds_and_runs() {
     assert_eq!(world.query::<&ItemView>().iter(world).count(), 4);
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
+}
+
+#[test]
+fn widgets_with_handles_and_scene_constructors_are_written_directly_in_a_scene() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let icon = app
+        .world_mut()
+        .get_resource_mut::<Assets<Image>>()
+        .unwrap()
+        .add(Image::default());
+    app.world_mut()
+        .spawn_scene(bsn! {
+            Node
+            Children [
+                IconButton { icon: {icon.clone()}, name: "Close", size: IconButtonSize::Large, tone: Tone::Danger }
+                --
+                Panel { title: "Trains", close_icon: {HandleTemplate::Handle(icon.clone())} }
+                --
+                NumericStepper { decrease_name: "Lower" }
+                --
+                @{Divider::vertical_scene()}
+                --
+                SegmentedControl
+                @{Selection::builder().one().scene_with_items(["Auto", "Manual"].map(Item::new))}
+            ]
+        })
+        .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    let world = app.world_mut();
+    // The panel's close button is an `IconButton` too.
+    let button = world
+        .query::<&IconButton>()
+        .iter(world)
+        .find(|button| button.tone == Tone::Danger)
+        .unwrap();
+    assert_eq!(button.icon, icon);
+    assert_eq!(button.name, "Close");
+    assert_eq!(button.size, IconButtonSize::Large);
+    let panel = world.query::<&Panel>().single(world).unwrap();
+    assert_eq!(panel.close_icon.as_ref(), Some(&icon));
+    // What is not written is as `Panel::new` has it.
+    assert!((panel.max_body_height - Panel::new("").max_body_height).abs() < f32::EPSILON);
+    let stepper = world.query::<&NumericStepper>().single(world).unwrap();
+    assert_eq!(stepper.decrease_name, "Lower");
+    assert_eq!(stepper.increase_name, "Increase");
+    // The panel has two dividers of its own; the scene's is the vertical one.
+    assert_eq!(
+        world
+            .query::<(&Divider, &Node)>()
+            .iter(world)
+            .filter(|(_, node)| node.width == Val::Px(1.0))
+            .count(),
+        1
+    );
+    let selection = world.query::<&Selection>().single(world).unwrap();
+    assert!(matches!(selection, Selection::Value(_)));
+    assert_eq!(world.query::<&Item<String>>().iter(world).count(), 2);
 }
 
 #[test]

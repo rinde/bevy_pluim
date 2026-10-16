@@ -12,10 +12,9 @@
 
 mod icons;
 
+use bevy::asset::HandleTemplate;
 use bevy::ecs::system::SystemId;
-use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
 use icons::Icons;
@@ -28,7 +27,7 @@ use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueChange};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueChange, ValueFormat};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, PushButton};
@@ -229,7 +228,7 @@ fn run_state(icons: &Icons) -> impl Scene {
             padding: UiRect::axes(px(8.0), px(6.0)),
         }
         Children [
-            inserted(IconButton::new(pause, "Pause", IconButtonSize::Regular))
+            IconButton { icon: pause, name: "Pause", size: IconButtonSize::Regular }
             ~{ToggleState(false)}
             PauseButton
             --
@@ -305,7 +304,7 @@ fn panels(bar: Entity, icons: &Icons) -> impl Scene {
                 column_gap: px(10.0),
             }
             Children [
-                inserted(IconButton::new(bell, "Warnings", IconButtonSize::Large).with_tone(Tone::Warning))
+                IconButton { icon: bell, name: "Warnings", size: IconButtonSize::Large, tone: Tone::Warning }
                 ~{ToggleState(false)}
                 ~{Badge::count(WARNINGS.len())}
                 WarningsButton
@@ -320,7 +319,7 @@ fn panels(bar: Entity, icons: &Icons) -> impl Scene {
                 ]
             ]
             --
-            inserted(panel_for(PanelKind::Warnings, close))
+            Panel { title: "Warnings", subtitle: {Some("3 open".to_string())}, close_icon: {HandleTemplate::Handle(close)} }
             ~{PanelKind::Warnings}
             WarningsPanel
             --
@@ -421,35 +420,6 @@ fn dock(selection: Entity) -> impl Scene {
     }
 }
 
-/// A `bsn!` entry that inserts `component` as it is.
-///
-/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a widget that holds
-/// one (an `IconButton`, a `Panel` with a close icon)
-/// goes in through this.
-fn inserted<C: Component + Clone>(
-    component: C,
-) -> impl Template<Output = C> + Send + Sync + 'static {
-    template(move |_| Ok(component.clone()))
-}
-
-/// A `bsn!` entry for [`Divider::vertical`], which gives a bundle rather than a component.
-fn vertical_divider() -> impl Template<Output = EmptySceneEffect> + Send + Sync + 'static {
-    template(|context| Ok(insert_after_scene(context, Divider::vertical())))
-}
-
-/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
-///
-/// A template that inserted it at once would do so before the scene gives the entity its
-/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
-/// the scene's `Node` would overwrite what the bundle's hooks set on it.
-fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
-    let entity = context.entity.id();
-    context.entity.world_scope(|world| {
-        world.commands().entity(entity).insert(bundle);
-    });
-    EmptySceneEffect
-}
-
 /// A bar of options above the tool dock, holding `contents`.
 fn option_bar(contents: impl SceneList) -> impl Scene {
     bsn! {
@@ -478,41 +448,23 @@ fn rail_bar() -> impl Scene {
         ~{Label::overline("Tracks")}
         --
         SegmentedControl
-        // `Selection::builder()` gives a bundle, which `template` inserts.
-        template(|context| {
-            context.entity.insert(
-                Selection::builder()
-                    .one()
-                    .build_with_items(["Single", "Double"].map(Item::new)),
-            );
-            Ok(EmptySceneEffect)
-        })
+        @{Selection::builder().one().scene_with_items(["Single", "Double"].map(Item::new))}
         --
-        vertical_divider()
+        @{Divider::vertical_scene()}
         --
         ~{Label::overline("Level")}
         --
-        inserted(NumericStepper {
-            format: level,
-            ..default()
-        })
+        NumericStepper { format: {level as ValueFormat} }
         ~{Value::new_u8(0, 0, 56, 7)}
         --
-        vertical_divider()
+        @{Divider::vertical_scene()}
         --
         ~{Label::overline("Signals")}
         --
         SegmentedControl
-        template(|context| {
-            context.entity.insert(
-                Selection::builder()
-                    .one()
-                    .build_with_items(["None", "Block"].map(Item::new)),
-            );
-            Ok(EmptySceneEffect)
-        })
+        @{Selection::builder().one().scene_with_items(["None", "Block"].map(Item::new))}
         --
-        vertical_divider()
+        @{Divider::vertical_scene()}
         --
         ~{Kbd::new("R")}
         --
@@ -547,13 +499,7 @@ fn vehicle_bar(icons: &Icons) -> impl Scene {
         @ScrollArea::scene(
             bsn_list! {
                 Gallery
-                // `Selection::builder()` gives a bundle, which `template` inserts.
-                template(move |context| {
-                    context
-                        .entity
-                        .insert(Selection::builder().one().build_with_items(cards.clone()));
-                    Ok(EmptySceneEffect)
-                })
+                @{Selection::builder().one().scene_with_items(cards)}
             },
             false,
             true,

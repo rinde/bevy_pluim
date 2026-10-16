@@ -4,7 +4,6 @@ use std::sync::LazyLock;
 
 use bevy::ecs::spawn::SpawnIter;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::card::Card;
@@ -71,13 +70,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         Children [
             TabBar
             #tabs
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder().one().build_with_items(items.clone()),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().one().scene_with_items(items)}
             --
             // filler
             BorderColor::all(theme_border_color)
@@ -125,15 +118,7 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             --
             ColorPaletteCombo
             ~{ListLayout::VerticalGrid { columns: 11 }}
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(colors),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(colors)}
             --
             ColorPaletteCombo
             ~{ListLayout::VerticalGrid { columns: 11 }}
@@ -150,14 +135,7 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             }
             Children [
                 ~{Combo}
-                template(|context| {
-                    context.entity.insert(
-                        Selection::builder()
-                            .zero_or_one()
-                            .build_with_items(countries()),
-                    );
-                    Ok(EmptySceneEffect)
-                })
+                @{Selection::builder().zero_or_one().scene_with_items(countries())}
                 --
                 ~{PushButton::from_label("Button on a card")}
             ]
@@ -182,14 +160,7 @@ fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
             }
             Children [
                 List
-                template(|context| {
-                    context.entity.insert(
-                        Selection::builder()
-                            .zero_or_one()
-                            .build_with_items(countries()),
-                    );
-                    Ok(EmptySceneEffect)
-                })
+                @{Selection::builder().zero_or_one().scene_with_items(countries())}
             ]
         ]
         },
@@ -327,11 +298,7 @@ fn item_scroll_area() -> impl Scene {
     ScrollArea::scene(
         bsn_list! {
             List
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(|context| {
-                context.entity.insert(Selection::builder().one().build_with_items(items()));
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().one().scene_with_items(items())}
         },
         true,
         false,

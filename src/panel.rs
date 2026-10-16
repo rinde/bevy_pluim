@@ -2,7 +2,9 @@
 //! maximum height and then scrolls.
 
 use bevy::a11y::AccessibilityNode;
+use bevy::asset::HandleTemplate;
 use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::template::{OptionTemplate, Template, TemplateContext};
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -98,6 +100,64 @@ pub struct PanelRefs {
 pub struct PanelClosed {
     /// The panel to close.
     pub entity: Entity,
+}
+
+/// What `bsn!` patches when a scene writes `Panel { .. }`: a [`Panel`] whose fields
+/// not written are those of [`Panel::new`] with an empty title, and whose close icon
+/// is a [`HandleTemplate`].
+pub struct PanelTemplate {
+    /// The title.
+    pub title: String,
+    /// The subtitle.
+    pub subtitle: Option<String>,
+    /// The icon of the close button; none, no close button.
+    pub close_icon: OptionTemplate<HandleTemplate<Image>>,
+    /// The height up to which the body grows before it scrolls.
+    pub max_body_height: f32,
+}
+
+impl core::fmt::Debug for PanelTemplate {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PanelTemplate").finish_non_exhaustive()
+    }
+}
+
+impl Default for PanelTemplate {
+    fn default() -> Self {
+        let panel = Panel::new("");
+        Self {
+            title: panel.title,
+            subtitle: panel.subtitle,
+            close_icon: OptionTemplate::None,
+            max_body_height: panel.max_body_height,
+        }
+    }
+}
+
+impl Template for PanelTemplate {
+    type Output = Panel;
+
+    fn build_template(&self, context: &mut TemplateContext) -> Result<Panel> {
+        Ok(Panel {
+            title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
+            close_icon: self.close_icon.build_template(context)?,
+            max_body_height: self.max_body_height,
+        })
+    }
+
+    fn clone_template(&self) -> Self {
+        Self {
+            title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
+            close_icon: self.close_icon.clone_template(),
+            max_body_height: self.max_body_height,
+        }
+    }
+}
+
+impl FromTemplate for Panel {
+    type Template = PanelTemplate;
 }
 
 impl Panel {

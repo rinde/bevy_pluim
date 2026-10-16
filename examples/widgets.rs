@@ -8,7 +8,6 @@ use bevy::color::palettes::tailwind::{
 };
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -62,36 +61,14 @@ fn setup(mut commands: Commands) {
             }
             @scroll_squares()
             --
-            // `Selection::builder()` gives a bundle, which `template` inserts.
             List
-            template(|context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_more()
-                        .build_with_items(countries()),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_more().scene_with_items(countries())}
             --
             ~{Combo}
-            template(|context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items(countries()),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items(countries())}
             --
             ~{Combo}
-            template(|context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_more()
-                        .build_with_items(countries()),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_more().scene_with_items(countries())}
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())

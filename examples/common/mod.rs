@@ -41,14 +41,3 @@ pub fn cross_icon(images: &mut Assets<Image>) -> Handle<Image> {
         RenderAssetUsages::default(),
     ))
 }
-
-/// A `bsn!` entry that inserts `component` as it is.
-///
-/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a widget that holds
-/// one (an `IconButton`, a `Panel` with a close icon)
-/// goes in through this.
-pub fn inserted<C: Component + Clone>(
-    component: C,
-) -> impl Template<Output = C> + Send + Sync + 'static {
-    template(move |_| Ok(component.clone()))
-}

@@ -30,7 +30,6 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let icon = common::cross_icon(&mut images);
-    let close = IconButton::new(icon, "Close", IconButtonSize::Large);
     commands.spawn_scene(bsn! {
         Node {
             width: percent(100.0),
@@ -43,7 +42,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             ~{PushButton::from_label("Hover me")}
             ~{Tooltip::new("A tip after half a second")}
             --
-            common::inserted(close)
+            IconButton { icon, name: "Close", size: IconButtonSize::Large }
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| {

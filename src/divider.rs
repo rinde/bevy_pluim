@@ -3,6 +3,7 @@
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::scene::{Scene, bsn};
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -29,7 +30,7 @@ impl Plugin for DividerPlugin {
 /// Spawn [`Divider::horizontal`] or [`Divider::vertical`]. It stretches along
 /// the other axis by default; set the `Node`'s `width` or `height` to give it a
 /// length.
-#[derive(Component, Copy, Clone, Debug, Reflect)]
+#[derive(Component, Copy, Clone, Debug, Reflect, FromTemplate)]
 #[reflect(Component)]
 #[require(Node::default(), BackgroundColor::default(), Name::new("Divider"))]
 #[component(on_insert=Self::on_insert)]
@@ -62,6 +63,32 @@ impl Divider {
                 ..default()
             },
         )
+    }
+
+    /// [`Divider::horizontal`] as a scene, for `@{Divider::horizontal_scene()}` in `bsn!`.
+    #[must_use]
+    pub fn horizontal_scene() -> impl Scene {
+        bsn! {
+            Self
+            Node {
+                height: Val::Px(1.0),
+                align_self: AlignSelf::Stretch,
+                flex_shrink: 0.0,
+            }
+        }
+    }
+
+    /// [`Divider::vertical`] as a scene, for `@{Divider::vertical_scene()}` in `bsn!`.
+    #[must_use]
+    pub fn vertical_scene() -> impl Scene {
+        bsn! {
+            Self
+            Node {
+                width: Val::Px(1.0),
+                align_self: AlignSelf::Stretch,
+                flex_shrink: 0.0,
+            }
+        }
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {

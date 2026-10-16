@@ -3,7 +3,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -88,12 +87,7 @@ fn setup(mut commands: Commands) {
                 ~{BreadCrumbs}
                 #crumbs
                 BreadCrumbsSelection
-                template(move |context| {
-                    context.entity.insert(
-                        Selection::builder().one_or_more().build_with_items(items.clone()),
-                    );
-                    Ok(EmptySceneEffect)
-                })
+                @{Selection::builder().one_or_more().scene_with_items(items)}
                 --
                 ~{PushButton::from_label("Change theme")}
                 on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
