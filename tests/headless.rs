@@ -28,7 +28,9 @@ use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
-use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
+use bevy::ui_widgets::{
+    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
+};
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
@@ -1115,6 +1117,80 @@ fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
     app.update();
     assert!(!has_focus_ring(&app, focused));
     assert!(has_focus_ring(&app, other));
+}
+
+#[test]
+fn the_focus_ring_keeps_an_outline_the_app_set_and_gives_it_back() {
+    let mut app = headless_app();
+    let own = Outline::new(Val::Px(5.0), Val::Px(3.0), Color::WHITE);
+    let with_outline = spawn_push_button(&mut app);
+    app.world_mut().entity_mut(with_outline).insert(own);
+    let without = app.world_mut().spawn(PushButton::from_label("Other")).id();
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(with_outline));
+    app.world_mut().insert_resource(InputFocusVisible(true));
+    app.update();
+    app.update();
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let ring = app.world().entity(with_outline).get::<Outline>().unwrap();
+    assert_eq!(ring.color, colors.focus_ring);
+
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(without));
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(with_outline).get::<Outline>(),
+        Some(&own)
+    );
+    assert!(has_focus_ring(&app, without));
+
+    app.world_mut().insert_resource(InputFocusVisible(false));
+    app.update();
+    app.update();
+    assert!(!has_focus_ring(&app, without));
+    assert_eq!(
+        app.world().entity(with_outline).get::<Outline>(),
+        Some(&own)
+    );
+}
+
+#[test]
+fn the_focus_ring_keeps_an_outline_on_a_lists_active_row() {
+    let mut app = headless_app();
+    let own = Outline::new(Val::Px(5.0), Val::Px(3.0), Color::WHITE);
+    let row = app.world_mut().spawn((Node::default(), ListItem, own)).id();
+    let plain = app.world_mut().spawn((Node::default(), ListItem)).id();
+    let list = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ActiveDescendant(Some(row)));
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(list));
+    app.world_mut().insert_resource(InputFocusVisible(true));
+    app.update();
+    app.update();
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(
+        app.world().entity(row).get::<Outline>().unwrap().color,
+        colors.focus_ring
+    );
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ActiveDescendant(Some(plain)));
+    app.update();
+    app.update();
+    assert_eq!(app.world().entity(row).get::<Outline>(), Some(&own));
+    assert!(has_focus_ring(&app, plain));
+
+    app.world_mut().insert_resource(InputFocusVisible(false));
+    app.update();
+    app.update();
+    assert!(!has_focus_ring(&app, plain));
+    assert_eq!(app.world().entity(row).get::<Outline>(), Some(&own));
 }
 
 #[test]

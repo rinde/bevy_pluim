@@ -443,7 +443,7 @@ of them (`just example gallery -- --run-all stack link`).
   `HeadlessPlugins` through `CameraPlugin`), or every stop counts as hidden; **no widget writes `TabIndex` by hand**. Within the group
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
-  `InputFocusVisible` is true, except that a list's ring is on its `ActiveDescendant` row
+  `InputFocusVisible` is true (an `Outline` the app or a widget set on it is kept aside and put back when the ring leaves, so the ring owns only its own), except that a list's ring is on its `ActiveDescendant` row
   (a `ListItem`) and the box has none; the `ListBox` clears the active row when the list
   loses focus, and the ring goes with it, and `ActiveDescendant` is registered in the type
   registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
