@@ -1,0 +1,26 @@
+// A click on a text field gives it the keyboard focus and typing adds to its text, one
+// `TextFieldChange` per character. `Enter` gives the focus up and commits the text once.
+(
+    format_version: 3,
+    name: "typing in a text field changes its text and Enter commits it and lets go",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Type(text: "Beta", into: Within(Name("name field"), Component("TextInput"))),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("name field"), Component("TextInput"))))),
+        Check(TextOf(Within(Name("name field"), Component("TextInput")), Exact("AlphaBeta"))),
+        Check(Resource(path: "FieldEvents.changes", is: Eq(4))),
+        Check(Resource(path: "FieldEvents.changed", is: Eq("AlphaBeta"))),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(0))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Not(App(Focused(of: Within(Name("name field"), Component("TextInput")))))),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(1))),
+        Check(Resource(path: "FieldEvents.committed", is: Eq("AlphaBeta"))),
+        Type(text: "Gamma"),
+        Wait(2),
+        Check(TextOf(Within(Name("name field"), Component("TextInput")), Exact("AlphaBeta"))),
+    ],
+    expect: [],
+)

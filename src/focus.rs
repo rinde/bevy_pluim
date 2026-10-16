@@ -206,6 +206,16 @@ fn sync_accessibility_hidden(
     }
 }
 
+/// Puts the focus ring of the entity on another one, a [`RingTarget`], and shows it
+/// whenever the entity has the focus, also after a click: a text field's input rings the
+/// field's box, so a person sees where the keys go.
+#[derive(Component, Clone, Copy, Debug)]
+pub(crate) struct RingOn(pub(crate) Entity);
+
+/// Marks an entity that carries the focus ring of a [`RingOn`] entity.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub(crate) struct RingTarget;
+
 /// Marks an [`Outline`] that `draw_focus_ring` put there, so it takes off only its own.
 #[derive(Component, Debug, Copy, Clone)]
 struct FocusRingOutline;
@@ -221,7 +231,8 @@ struct OutlineUnderRing(Outline);
 /// The ring goes on the focused [`TabStop`] or [`Tab`] (a tab bar's tabs keep their own
 /// roving [`TabIndex`], so they are no tab stops), except for a list: a `ListBox` has one tab stop
 /// and moves an [`ActiveDescendant`] over its rows, so the ring is on that row and the box
-/// itself shows none. A list that is not focused has no active descendant, so no ring.
+/// itself shows none. A list that is not focused has no active descendant, so no ring. A
+/// focused [`RingOn`] entity has its ring on its [`RingTarget`], visible focus or not.
 ///
 /// The ring owns only the outline it drew: an [`Outline`] the app or a widget set is kept
 /// aside while the ring shows and put back when it leaves.
@@ -236,15 +247,23 @@ fn draw_focus_ring(
             Has<FocusRingOutline>,
             Option<&OutlineUnderRing>,
         ),
-        Or<(With<TabStop>, With<ListItem>, With<Tab>)>,
+        Or<(With<TabStop>, With<ListItem>, With<Tab>, With<RingTarget>)>,
     >,
     active: Query<&ActiveDescendant>,
+    ring_on: Query<&RingOn>,
     mut commands: Commands,
 ) {
-    let focused = if visible.0 { focus.get() } else { None };
-    let ringed = focused.and_then(|entity| match active.get(entity) {
-        Ok(ActiveDescendant(row)) => *row,
-        Err(_) => Some(entity),
+    let ringed = focus.get().and_then(|entity| {
+        if let Ok(RingOn(target)) = ring_on.get(entity) {
+            return Some(*target);
+        }
+        if !visible.0 {
+            return None;
+        }
+        match active.get(entity) {
+            Ok(ActiveDescendant(row)) => *row,
+            Err(_) => Some(entity),
+        }
     });
     for (entity, outline, is_ring, saved) in &stops {
         if ringed == Some(entity) {

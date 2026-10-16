@@ -1,0 +1,27 @@
+// A press anywhere else takes the focus off a text field, on empty space as on another
+// widget, and commits its text.
+(
+    format_version: 3,
+    name: "a click elsewhere takes the focus off a text field and commits it",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Type(text: "1", into: Within(Name("name field"), Component("TextInput"))),
+        Wait(2),
+        MoveTo(Screen((900.0, 500.0))),
+        Click(Left),
+        Wait(2),
+        Check(Not(App(Focused(of: Within(Name("name field"), Component("TextInput")))))),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(1))),
+        Check(Resource(path: "FieldEvents.committed", is: Eq("Alpha1"))),
+        Type(text: "7", into: Within(Name("seed field"), Component("TextInput"))),
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Other")),
+        Click(Left),
+        Wait(2),
+        Check(App(Focused(of: Role(role: Button, label: "Other")))),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(2))),
+        Check(Resource(path: "FieldEvents.committed", is: Eq("7"))),
+    ],
+    expect: [],
+)

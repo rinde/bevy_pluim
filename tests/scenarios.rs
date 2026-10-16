@@ -592,6 +592,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Gallery,
         WidgetsSetup::Toolbar,
         WidgetsSetup::Tooltip,
+        WidgetsSetup::TextFields,
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
     ];

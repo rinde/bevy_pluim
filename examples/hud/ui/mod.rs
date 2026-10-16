@@ -14,9 +14,11 @@ mod icons;
 
 use bevy::asset::HandleTemplate;
 use bevy::ecs::system::SystemId;
+use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
+use bevy::ui_widgets::TextInput;
 use icons::Icons;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::card::Card;
@@ -36,6 +38,7 @@ use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{Item, ItemOf, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::text_field::{TextField, TextFieldCommit};
 use rin_bevy_ui::theme::{Theme, ThemeMode};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
 
@@ -150,6 +153,7 @@ enum Pref {
     WarningsButton,
     ToolLabels,
     TextSize,
+    CompanyName,
 }
 
 #[derive(Component, Default, Clone)]
@@ -623,6 +627,7 @@ fn fill_panels(
                         "Names under the tool icons",
                     ),
                     (Pref::TextSize, "Text size", "The size of all text"),
+                    (Pref::CompanyName, "Company name", "Painted on your trains"),
                 ]
                 .into_iter()
                 .map(|(pref, title, description)| {
@@ -699,6 +704,19 @@ fn fill_setting_rows(
                     .observe(set_text_size);
                 continue;
             }
+            Pref::CompanyName => {
+                commands
+                    .spawn((
+                        TextField::new("Rail & Co")
+                            .with_name("Company name")
+                            .with_max_width(px(180.0)),
+                        ChildOf(refs.control_slot),
+                    ))
+                    .observe(|commit: On<TextFieldCommit>| {
+                        info!("Company name: {}", commit.value);
+                    });
+                continue;
+            }
         };
         commands.spawn((
             SegmentedControl,
@@ -758,8 +776,8 @@ fn apply_preferences(
                     node.display = if shown { Display::Flex } else { Display::None };
                 }
             }
-            // A stepper, which sets the text size itself.
-            Pref::TextSize => {}
+            // A stepper and a text field, which have no selection.
+            Pref::TextSize | Pref::CompanyName => {}
             Pref::ToolLabels => {
                 for dock in &docks {
                     commands.entity(dock).insert(if shown {
@@ -848,13 +866,26 @@ fn filter_train_rows(
 }
 
 /// The keys the tool hints and the pause key show: the library draws them, the app binds them.
+///
+/// They are off while a text field has the keys, and on the frame it hands them back, since
+/// the `Enter` or `Escape` that did so is still a pressed key then.
 fn hotkeys(
     keys: Res<ButtonInput<KeyCode>>,
+    focus: Res<InputFocus>,
+    text_inputs: Query<(), With<TextInput>>,
+    mut was_typing: Local<bool>,
     dock: Res<DockTools>,
     pause: Query<(Entity, &ToggleState), With<PauseButton>>,
     mut selections: SelectionParam,
     mut commands: Commands,
 ) {
+    let typing = focus
+        .get()
+        .is_some_and(|entity| text_inputs.contains(entity));
+    let handed_back = std::mem::replace(&mut *was_typing, typing);
+    if typing || handed_back {
+        return;
+    }
     if keys.just_pressed(KeyCode::KeyP) {
         for (button, paused) in &pause {
             commands.entity(button).insert(ToggleState(!paused.0));
