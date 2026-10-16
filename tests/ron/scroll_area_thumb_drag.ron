@@ -31,7 +31,7 @@
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
             path: "ScrollPosition.0.y",
-            is: Eq(214.0),
+            is: Eq(220.0),
         )),
         Drag(
             from: Within(Name("vertical scroll area"), Name("ScrollThumb")),

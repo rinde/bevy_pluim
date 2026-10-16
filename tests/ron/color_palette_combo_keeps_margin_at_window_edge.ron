@@ -1,10 +1,10 @@
 // A palette combo in a corner of the window cannot centre its popup under its
-// button: the popup is 430 pixels wide, the button's centre is 20 pixels or so
+// button: the popup is 436 pixels wide, the button's centre is 20 pixels or so
 // from the window edge. The popup is pushed in until its edge is 10 pixels
 // (`MARGIN`) from the window edge, whatever the room beside the button, and
 // stays 3 pixels under it (centre y 183, as for the combos in the middle).
-// The window is the default 1280 by 720: the left popup's centre is 10 + 215
-// across and the right popup's 1280 - 10 - 215.
+// The window is the default 1280 by 720: the left popup's centre is 10 + 218
+// across and the right popup's 1280 - 10 - 218.
 (
     format_version: 3,
     name: "a palette combo near the window edge keeps its popup ten pixels inside it",
@@ -15,8 +15,8 @@
         MoveTo(Within(Name("left edge palette combo"), Component("ColorPushButton"))),
         Click(Left),
         Check(Component(target: Name("left edge palette combo"), path: "State", is: Eq(Open))),
-        Check(Component(target: Name("left edge palette combo popup"), path: "ComputedNode.size.x", unit: Logical, is: Eq(430.0))),
-        Check(Component(target: Name("left edge palette combo popup"), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(225.0))),
+        Check(Component(target: Name("left edge palette combo popup"), path: "ComputedNode.size.x", unit: Logical, is: Eq(436.0))),
+        Check(Component(target: Name("left edge palette combo popup"), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(228.0))),
         Check(Component(target: Name("left edge palette combo popup"), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(183.0))),
         // Clicking its button again closes it.
         Click(Left),
@@ -25,8 +25,8 @@
         MoveTo(Within(Name("right edge palette combo"), Component("ColorPushButton"))),
         Click(Left),
         Check(Component(target: Name("right edge palette combo"), path: "State", is: Eq(Open))),
-        Check(Component(target: Name("right edge palette combo popup"), path: "ComputedNode.size.x", unit: Logical, is: Eq(430.0))),
-        Check(Component(target: Name("right edge palette combo popup"), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(1055.0))),
+        Check(Component(target: Name("right edge palette combo popup"), path: "ComputedNode.size.x", unit: Logical, is: Eq(436.0))),
+        Check(Component(target: Name("right edge palette combo popup"), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(1052.0))),
         Check(Component(target: Name("right edge palette combo popup"), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(183.0))),
     ],
     expect: [],

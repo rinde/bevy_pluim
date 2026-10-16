@@ -1611,13 +1611,14 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
 #[test]
 fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
     let (short, short_overflow) = panel_body_height(2);
-    assert!((short - 100.0).abs() < 1.5, "grows to its content: {short}");
+    // The content (100) plus the scroll contents' 3 px of padding on each side, for focus rings.
+    assert!((short - 106.0).abs() < 1.5, "grows to its content: {short}");
     assert!(short_overflow < 1.0, "nothing to scroll: {short_overflow}");
 
     let (tall, tall_overflow) = panel_body_height(10);
     assert!((tall - 200.0).abs() < 1.5, "stops at the maximum: {tall}");
     assert!(
-        (tall_overflow - 300.0).abs() < 1.5,
+        (tall_overflow - 306.0).abs() < 1.5,
         "the rest scrolls: {tall_overflow}"
     );
 }

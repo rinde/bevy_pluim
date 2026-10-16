@@ -539,6 +539,7 @@ of them (`just example gallery -- --run-all stack link`).
   one; `Stack` takes the selection entity directly in `selection_ref`.
 - **Shared items.** `ItemsRef(entity)` lets several selections draw from one
   `ItemValues`.
+- **A scroll area leaves room for a focus ring.** `ScrollContents` has 3 px of padding on every side (`FOCUS_RING_REACH`: the ring's 2 px width and 1 px offset), because the area clips at its padding box and the ring of a row at the edge would be cut off (#293). `scroll_into_view` counts the same 3 px as part of the entity, so a row scrolled into view shows its ring. The maximum scroll of every area is 6 px more than the contents' overflow alone.
 - **Scroll area contents keep their natural size.** `ScrollContents` uses
   `align_items: FlexStart` instead of stretching its children. Taffy 0.10
   (Bevy 0.19) reported no overflow for a grid whose items overflow it, so a
