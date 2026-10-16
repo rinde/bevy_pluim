@@ -17,7 +17,9 @@ use bevy::ui_widgets::{
 use bevy::window::PrimaryWindow;
 use itertools::Either;
 
-use crate::focus::TabStop;
+use bevy::a11y::AccessibilityNode;
+
+use crate::focus::{AccessibilitySync, TabStop, sync_label};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
@@ -51,14 +53,18 @@ impl Plugin for ListPlugin {
                         .run_if(resource_changed::<Theme>),
                     selection_change,
                     custom_view_hover,
+                    sync_item_notes.run_if(item_notes_changed),
                 ),
             )
+            .add_systems(PostUpdate, sync_item_labels.in_set(AccessibilitySync))
             .add_observer(on_insert_selection)
             .add_observer(on_value_change)
             .add_observer(keep_navigation_keys)
             .add_observer(pass_first_presses_from_descendants)
             .add_observer(handle_custom_view_mouse_events)
             .register_type::<ItemView>()
+            .register_type::<ItemNote>()
+            .register_type::<NoteTone>()
             .register_type::<ListLayout>()
             .register_type::<CornerStyle>();
     }
@@ -222,6 +228,148 @@ pub struct ItemView {
     pub item_ref: Entity,
     /// The list this view belongs to.
     pub list_ref: Entity,
+}
+
+/// A note shown after the label of an item.
+///
+/// It goes on the item entity next to its [`Item<String>`] and shows in the default view of a
+/// [`List`] (so also in a [`Combo`](crate::combo::Combo)'s popup), in the caption size and the
+/// colour of its [`NoteTone`].
+///
+/// A [`Combo`](crate::combo::Combo)'s button shows the label of the selected item only, never
+/// the note. To a screen reader the row's name is the label followed by the note
+/// (`Delft < unreachable >`). Inserting a new note, or removing it, updates the row in place; an
+/// empty note shows nothing.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+pub struct ItemNote {
+    /// The text of the note.
+    pub text: String,
+    /// The colour the note is shown in.
+    pub tone: NoteTone,
+}
+
+impl ItemNote {
+    /// A note in the secondary text colour.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            tone: NoteTone::Secondary,
+        }
+    }
+
+    /// A note in the warning text colour.
+    pub fn warning(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            tone: NoteTone::Warning,
+        }
+    }
+}
+
+/// The colour of an [`ItemNote`], a slot of the theme.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum NoteTone {
+    /// `text_secondary`.
+    #[default]
+    Secondary,
+    /// `warning_text`.
+    Warning,
+}
+
+/// Marks the text of an [`ItemNote`] inside a default [`ItemView`].
+#[derive(Component, Debug, Clone, Copy)]
+struct ItemNoteView;
+
+/// Whether a note, or a view that may show one, changed since the last run.
+fn item_notes_changed(
+    changed: Query<(), Or<(Changed<ItemNote>, Added<ItemView>)>>,
+    removed: RemovedComponents<ItemNote>,
+    theme: Res<Theme>,
+) -> bool {
+    !changed.is_empty() || !removed.is_empty() || theme.is_changed()
+}
+
+/// Shows, updates and removes the note text in each default view to match the item's
+/// [`ItemNote`].
+fn sync_item_notes(
+    views: Query<(Entity, &ItemView, Option<&Children>), Without<CustomView>>,
+    notes: Query<&ItemNote>,
+    mut note_texts: Query<(&mut Text, &mut TextColor, &mut TextFont), With<ItemNoteView>>,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    for (view, ItemView { item_ref, .. }, children) in &views {
+        let wanted = notes
+            .get(*item_ref)
+            .ok()
+            .filter(|note| !note.text.is_empty());
+        let existing = children
+            .into_iter()
+            .flatten()
+            .copied()
+            .find(|child| note_texts.contains(*child));
+        let color = |note: &ItemNote| match note.tone {
+            NoteTone::Secondary => theme.colors.text_secondary,
+            NoteTone::Warning => theme.colors.warning_text,
+        };
+        let font = || TextFont {
+            font: theme.body_font.clone().into(),
+            font_size: Theme::font_size(theme.font_size_caption),
+            ..default()
+        };
+        match (wanted, existing) {
+            (Some(note), Some(child)) => {
+                if let Ok((mut text, mut text_color, mut text_font)) = note_texts.get_mut(child) {
+                    if text.0 != note.text {
+                        text.0.clone_from(&note.text);
+                    }
+                    text_color.set_if_neq(TextColor(color(note)));
+                    text_font.set_if_neq(font());
+                }
+            }
+            (Some(note), None) => {
+                commands.entity(view).with_children(|parent| {
+                    parent.spawn((
+                        Text(note.text.clone()),
+                        ItemNoteView,
+                        TextColor(color(note)),
+                        font(),
+                        Node {
+                            margin: UiRect::left(Val::Px(8.0)),
+                            align_self: AlignSelf::Center,
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ));
+                });
+            }
+            (None, Some(child)) => commands.entity(child).despawn(),
+            (None, None) => {}
+        }
+    }
+}
+
+/// Names each default row to assistive technology: its label, followed by its note if it has
+/// one. Bevy names a node from one of its texts, which would be the note alone.
+fn sync_item_labels(
+    mut views: Query<(&ItemView, &mut AccessibilityNode), Without<CustomView>>,
+    items: Query<&Item<String>>,
+    notes: Query<&ItemNote>,
+) {
+    for (ItemView { item_ref, .. }, mut node) in &mut views {
+        let Ok(item) = items.get(*item_ref) else {
+            continue;
+        };
+        match notes
+            .get(*item_ref)
+            .ok()
+            .filter(|note| !note.text.is_empty())
+        {
+            Some(note) => sync_label(&mut node, &format!("{} {}", item.data, note.text)),
+            None => sync_label(&mut node, &item.data),
+        }
+    }
 }
 
 #[derive(Component, Debug, Clone, Copy)]

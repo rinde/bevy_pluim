@@ -31,7 +31,7 @@ use rin_bevy_ui::icon_button::{IconButton, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{CornerStyle, ItemView, List, ListLayout};
+use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::pill::Pill;
@@ -86,6 +86,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ListLayout>(registry);
         assert_component::<CornerStyle>(registry);
         assert_component::<ItemView>(registry);
+        assert_component::<ItemNote>(registry);
         assert_component::<Link>(registry);
         assert_component::<BreadCrumbs>(registry);
         assert_component::<ColorPalette>(registry);
