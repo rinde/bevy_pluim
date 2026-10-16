@@ -558,17 +558,20 @@ fn vehicle_bar(icons: &Icons) -> impl Bundle {
         Node {
             width: px(520.0),
         }
-        // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it.
-        template(move |context| {
-            let cards = cards.clone();
-            Ok(insert_after_scene(context, ScrollArea::bundle(
-                move |spawner| {
-                    spawner.spawn((Gallery, Selection::builder().one().build_with_items(cards)));
-                },
-                false,
-                true,
-            )))
-        })
+        @ScrollArea::scene(
+            bsn_list! {
+                Gallery
+                // `Selection::builder()` gives a bundle, which `template` inserts.
+                template(move |context| {
+                    context
+                        .entity
+                        .insert(Selection::builder().one().build_with_items(cards.clone()));
+                    Ok(EmptySceneEffect)
+                })
+            },
+            false,
+            true,
+        )
     })
 }
 

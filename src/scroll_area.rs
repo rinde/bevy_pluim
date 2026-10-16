@@ -1,13 +1,17 @@
 //! `ScrollArea`: scrollable contents with vertical and/or horizontal scroll bars.
 
+use std::sync::{Arc, Mutex};
+
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::spawn::SpawnWith;
+use bevy::ecs::template::TemplateContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui::FixedNode;
 use bevy::ui_widgets::ScrollIntoView;
 use itertools::Either;
@@ -37,7 +41,8 @@ impl Plugin for ScrollAreaPlugin {
     }
 }
 
-/// A node with scroll bars. Build one with [`ScrollArea::bundle`].
+/// A node with scroll bars. Build one with [`ScrollArea::bundle`], or with [`ScrollArea::scene`]
+/// in a `bsn!` scene.
 ///
 /// To assistive technology it is a scroll view ([`Role::ScrollView`]); its scroll bars and
 /// their thumbs are not in the accessibility tree.
@@ -133,6 +138,50 @@ impl ScrollArea {
             })),
         )
     }
+
+    /// A scroll area for a `bsn!` scene, whose contents are the scene list `contents`.
+    ///
+    /// Use it as an entry of a scene (`@scroll_area(..)` of a function returning it, or by
+    /// composing it into another scene). `v_scroll` and `h_scroll` enable scrolling (and a
+    /// scroll bar) on that axis. It builds the same area as [`ScrollArea::bundle`], which stays
+    /// for code that spawns through `Commands`.
+    pub fn scene(contents: impl SceneList, v_scroll: bool, h_scroll: bool) -> impl Scene {
+        // A scene's template must be `Clone`, a scene list is not: the first build takes it.
+        let contents = Arc::new(Mutex::new(Some(contents)));
+        bsn! {
+            template(move |context| {
+                Ok(insert_after_scene(context, Self::bundle(
+                    {
+                        let contents = contents.lock().ok().and_then(|mut taken| taken.take());
+                        move |parent: &mut ChildSpawner| {
+                            let Some(contents) = contents else {
+                                error!("the contents of a scroll area scene were already spawned");
+                                return;
+                            };
+                            let target = parent.target_entity();
+                            parent
+                                .world_mut()
+                                .entity_mut(target)
+                                .queue_spawn_related_scenes::<Children>(contents);
+                        }
+                    },
+                    v_scroll,
+                    h_scroll,
+                )))
+            })
+        }
+    }
+}
+
+/// Inserts `bundle` on the entity of a scene's template once the scene has been applied, so
+/// that the scene's own `Node` does not overwrite what the area's hooks set and the area is
+/// not taken for a root before it has a parent.
+fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
+    let entity = context.entity.id();
+    context.entity.world_scope(|world| {
+        world.commands().entity(entity).insert(bundle);
+    });
+    EmptySceneEffect
 }
 
 /// A scroll bar with a thumb, along the given [`Orientation`].
