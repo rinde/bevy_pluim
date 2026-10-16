@@ -467,7 +467,11 @@ fn keep_navigation_keys(
 }
 
 /// Lets a first press of an arrow key, Home or End from a focused descendant of a [`List`]
-/// (a button in a custom item view) go on past the list, as its repeats and release do.
+/// (a button in a custom item view) go on past the list.
+///
+/// Unlike the repeats and the release of that key, which bubble through the [`List`] entity
+/// on their way up, the first press skips that one hop: an observer on the list sees a held
+/// arrow's repeats and its release, but not its first press.
 ///
 /// The `ListBox` takes any first press of those keys that reaches it as its own, because the
 /// `focused_entity` it checks is the entity the bubbling event has reached, not the focus.
@@ -493,6 +497,8 @@ fn pass_first_presses_from_descendants(
     };
     let Some(next) = list_parent
         .map(ChildOf::parent)
+        // The primary window Bevy's `dispatch_focused_input` sent the event with: it only
+        // dispatches while there is exactly one, so the first is that one.
         .or_else(|| windows.iter().next())
     else {
         return;
