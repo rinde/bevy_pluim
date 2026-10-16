@@ -224,9 +224,10 @@ pub struct ItemView {
     pub list_ref: Entity,
 }
 
+/// The text of a default item view, themed when it is inserted and when the [`Theme`] changes.
 #[derive(Component, Debug, Clone, Copy)]
 #[component(on_insert=Self::on_insert)]
-struct ItemLabel;
+pub(crate) struct ItemLabel;
 
 impl ItemLabel {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {

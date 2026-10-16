@@ -159,6 +159,7 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own, `Combo` and `ColorPaletteCombo` through the crate-private `keep_in_window_x` and `below_or_above` of `float.rs` (10 px `WINDOW_MARGIN` from the window's side edges, above the button when it would run off the bottom) (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
 | `scroll_area.rs` | `ScrollArea::bundle` (for code that spawns through `Commands`) and `ScrollArea::scene(contents, vertical, horizontal)`, the same area as a scene whose contents are a `SceneList` (`@ScrollArea::scene(bsn_list! { .. }, true, false)` in a `bsn!`; it inserts the bundle after the scene is applied), `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, themed here; each bar is also a `bevy_ui_widgets` `Scrollbar` aimed at the contents and its thumb a `ScrollbarThumb` (no `Node`), so the widget sizes and places the thumb, scrolls the contents when it is dragged and pages them on a click on the track, while `show_scroll_bars` hides a bar whose axis fits; and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. `ScrollContents` has 3 px of padding on every side (`FOCUS_RING_REACH`) so a focus ring at the edge is not clipped, and `scroll_into_view` counts it as part of the entity. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
 | `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`), and lets those of a focused descendant (a button in a row) past (`pass_first_presses_from_descendants`, see "Directional navigation is the app's") |
+| `virtual_list.rs` | `VirtualList { row_height }`: a list of rows of one height for many thousands of items (rails' 10,000 trains) that renders only those in view. Its node is as tall as all rows, so the `ScrollArea` around it (the nearest ancestor whose `overflow.y` scrolls, else the window) scrolls the whole list; under it is a pool of absolutely placed `VirtualListRow { list, index, item }`s (immutable, `ListItem`s): the rows in view, one for a part row and `OVERSCAN_ROWS` (2) beyond each edge. When `ScrollPosition` moves, `show_rows` (`PostUpdate`, before layout) hands rows on to the items now in view (item `i` goes to row `i % pool`, so a scroll by one row re-points one row); a row is never spawned or despawned for a scroll, and the pool only grows, when the view does. A row shows the text of an `Item<String>` in an `ItemLabel`, or with `List`'s `ItemViewCreator` the app fills it: the creator runs again, on the row emptied of its children, when the row is handed to another item (or the app observes the `VirtualListRow` insert). Selection is as for a `List` (`Selected` on the rows of selected items, a click toggles as far as the selection allows) but it is not a `ListBox`, whose observers would only see the pooled rows: it is one tab stop with its own keyboard observer (arrows move the active row, wrapping, Home / End, Enter / Space select; each scrolls the active row into view by setting the area's `ScrollPosition`), and `ActiveDescendant` names the row of the active item while it is in the pool, so the focus ring is on it a frame after it moves. A `Role::ListBox` without the set size of its items. `List` is untouched |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup, a `Float` child of the combo, is centred under the button when it opens, 10 px inside the window, above the button when it would run off the bottom; its palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square; its accessible name is the name of that colour (same rule as a swatch), kept by a system because Bevy clears a text-less button's label on add; a `ColorPaletteCombo`'s button is not, its colour is its value instead |
@@ -195,7 +196,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `tabs` | a `TabBar` driving a `Stack`, with combos, colour palettes and cards inside |
 | `color_palette` | `ColorPalette` and `ColorPaletteCombo` over `tailwind::COLORS` |
 | `combos` | `Combo` variants |
-| `lists` | `List` layouts and corner styles |
+| `lists` | `List` layouts and corner styles, and a `VirtualList` of 10,000 rows in a scroll area |
 | `numeric_stepper` | `NumericStepper` |
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 | `segmented_control` | `SegmentedControl`s, one with its own selection and two sharing one |
@@ -473,7 +474,10 @@ of them (`just example gallery -- --run-all stack link`).
   `keep_navigation_keys` in `list.rs` the repeats and releases, only while the list itself
   is `InputFocus`), a focused tab of a `TabBar` keeps left, right, Home and End (Bevy's tab
   list stops a first press, `keep_navigation_keys` in `tab_bar.rs` the repeats and
-  releases) and lets up and down through, and a `NumericStepper`
+  releases) and lets up and down through, a focused `VirtualList` keeps the arrows, Home,
+  End, Enter and Space (pressed, repeated or released; `navigate` in `virtual_list.rs`,
+  only while the list itself is `InputFocus`, so the keys of a focused descendant, a button
+  in a creator's row, go on past it), and a `NumericStepper`
   keeps the arrows that reach it from its buttons, also at a limit. The focus ring follows
   `InputFocus` whatever moved it, while `InputFocusVisible` is true. Every other widget lets
   the arrows through. A focusable child of a list row (a button in a `CustomView`) is not
@@ -594,6 +598,12 @@ of them (`just example gallery -- --run-all stack link`).
   `ComputedNode`. The wheel is untouched, and so is the `Scrollbar`, which
   follows the `ScrollPosition` it sets
   (`scroll_area_keyboard_scrolls_item_into_view.ron`).
+- **Nothing that runs every frame walks the whole world.** An app may hand a widget ten
+  thousand items (rails' trains), so a system that runs each frame touches what is on
+  screen, not every item: `VirtualList` looks at its pooled rows only, and finds an item by
+  index in `ItemValues`. Work over all items belongs to a change (`ItemsChanged`, a new
+  `Selection`) or a key press, not to the frame. A `List` spawns a view per item, so use a
+  `VirtualList` for long lists.
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
 - **Widgets observe `MouseEvent`, not raw pointer events (`PointerPress` and
@@ -872,7 +882,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`, `FilterChips`,
-  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -1006,6 +1016,17 @@ a file can check any `Reflect` type of the app by short type path.
   window. A list does not scroll itself: the wheel moves the `ScrollContents`
   of the area around it; read where it scrolled to as the scroll area's
   position above describes.
+- **The `VirtualList` screen.** A `virtual list` of ten thousand rows ("Row 1" to
+  "Row 10000", 28 px high, a `One` selection of its own, "Row 1" first) in the 240 by 200
+  `virtual list scroll area`, and "Change theme". Its pool is thirteen rows (eight in view,
+  one for a part row, two beyond each edge), counted with `Count(with:
+  ["VirtualListRow"], ..)`; a row is reached by the item it shows, `Within(Name("virtual
+  list"), Role(role: ListItem, label: "Row 9999"))`, and an item out of view has no row
+  (`Not(Exists(..))`). The list is the screen's first tab stop
+  (`virtual_list_scrolls_to_the_bottom`, `virtual_list_keyboard_moves_and_selects`);
+  `a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_position`
+  in `tests/scenarios.rs` checks that rows and entities stay the same at any scroll
+  position and when an item is added.
 - **Targets on the `ScrollAreas` screen.** Four 200 by 200 areas side by side
   (they and "Change theme" fit the default 1280 by 720 window, which every
   scenario runs in), each with a `Name`: `two-way scroll area`, `vertical
