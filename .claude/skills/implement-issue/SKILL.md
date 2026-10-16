@@ -30,6 +30,18 @@ the main checkout or in a sibling slot.
 
 When no slot was named, you were started by hand: work where you are.
 
+**You act only for the coordinator run that dispatched you.** The prompt
+names it (`for coordinator run <run id>`). Before every push, pull request,
+comment or label change, read the issue's comments
+(`gh api --paginate repos/rinde/rin-bevy-ui/issues/<issue>/comments`) and
+check that its oldest live claim is that run's: a comment starting
+`<!-- coordinator-claim session=<run id> -->` with no
+`<!-- coordinator-release session=<run id> -->` after it (see **Agents** in
+`AGENTS.md`). If it is not, push and post nothing more, and report that the
+claim was lost. Started by hand with no run named, check instead that no
+coordinator holds a live claim on the issue; if one does, stop and tell the
+user which run owns it.
+
 ## 2. Read and decide whether you can start
 
 - The issue, its labels and comments: `gh api repos/rinde/rin-bevy-ui/issues/<issue>`
