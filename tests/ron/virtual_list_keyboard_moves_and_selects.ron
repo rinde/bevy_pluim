@@ -1,0 +1,53 @@
+// A virtual list is one tab stop, like a list: Tab focuses it, the arrow keys, Home and End
+// move its active row, which shows the focus ring and is scrolled into view, and Enter or
+// Space selects it. End goes to the last of ten thousand rows, which was not in the pool
+// until the list scrolled there; the arrows wrap round.
+(
+    format_version: 3,
+    name: "the keyboard moves a virtual list's active row into view and selects it",
+    setup: App(VirtualList),
+    steps: [
+        Wait(3),
+        Tap(key: Tab),
+        // Bevy sends `FocusGained` after the layout, so the row a newly focused list makes
+        // active is named, and ringed, the frame after.
+        Wait(1),
+        Check(App(Focused(of: Name("virtual list")))),
+        // Until a key moves it the active row is the selected one, the first.
+        Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),
+        Tap(key: ArrowDown),
+        Wait(2),
+        Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 2"))))),
+        Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),
+        // Moving does not select.
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 1"]))),
+        Tap(key: End),
+        Wait(3),
+        Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000")))),
+        Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000"))))),
+        Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 10000"]))),
+        Check(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000")))),
+        // Down from the last row wraps round to the first, scrolled back into view.
+        Tap(key: ArrowDown),
+        Wait(3),
+        Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1")))),
+        Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
+        Tap(key: Space),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 1"]))),
+        Check(Count(with: ["VirtualListRow"], is: Eq(13))),
+        // Tab leaves the list, and the ring with it.
+        Tap(key: Tab),
+        Wait(1),
+        Check(Not(App(Focused(of: Name("virtual list"))))),
+        Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(0))),
+    ],
+    expect: [
+        App(Selected(of: Name("virtual list"), items: ["Row 1"])),
+    ],
+)

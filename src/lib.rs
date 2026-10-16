@@ -39,8 +39,10 @@ pub mod tab_bar;
 pub mod tailwind;
 pub mod text_field;
 pub mod theme;
+pub mod toast;
 pub mod toolbar;
 pub mod tooltip;
+pub mod virtual_list;
 
 use bevy::ecs::event::PropagateEntityTrigger;
 use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
@@ -82,8 +84,10 @@ use crate::stack::StackPlugin;
 use crate::tab_bar::TabBarPlugin;
 use crate::text_field::TextFieldPlugin;
 use crate::theme::{Theme, ThemePlugin};
+use crate::toast::ToastPlugin;
 use crate::toolbar::ToolbarPlugin;
 use crate::tooltip::TooltipPlugin;
+use crate::virtual_list::VirtualListPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
@@ -101,6 +105,7 @@ impl Plugin for WidgetsPlugin {
         app.init_resource::<Theme>()
             .add_plugins(FocusPlugin)
             .add_plugins(ListPlugin)
+            .add_plugins(VirtualListPlugin)
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
@@ -124,6 +129,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(FilterChipsPlugin)
             .add_plugins(ToolbarPlugin)
             .add_plugins(TooltipPlugin)
+            .add_plugins(ToastPlugin)
             .add_plugins(GalleryPlugin)
             .add_plugins(NumericStepperPlugin)
             .add_plugins(SliderPlugin)

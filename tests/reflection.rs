@@ -31,7 +31,7 @@ use rin_bevy_ui::icon_button::{IconButton, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{CornerStyle, ItemView, List, ListLayout};
+use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::pill::Pill;
@@ -44,8 +44,10 @@ use rin_bevy_ui::stack::Stack;
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
+use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
 use rin_bevy_ui::tooltip::Tooltip;
+use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 
 fn app_with_widgets() -> App {
     let mut app = App::new();
@@ -87,6 +89,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ListLayout>(registry);
         assert_component::<CornerStyle>(registry);
         assert_component::<ItemView>(registry);
+        assert_component::<ItemNote>(registry);
         assert_component::<Link>(registry);
         assert_component::<BreadCrumbs>(registry);
         assert_component::<ColorPalette>(registry);
@@ -121,7 +124,11 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Toolbar>(registry);
         assert_component::<ToolbarButton>(registry);
         assert_component::<ToolbarLabels>(registry);
+        assert_component::<VirtualList>(registry);
+        assert_component::<VirtualListRow>(registry);
         assert_component::<Tooltip>(registry);
+        assert_component::<Toast>(registry);
+        assert_component::<ToastStack>(registry);
         assert_component::<TextField>(registry);
         assert_component::<TextFieldRefs>(registry);
         assert_component::<Label>(registry);

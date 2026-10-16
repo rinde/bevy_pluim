@@ -28,6 +28,7 @@ use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
+use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
@@ -40,7 +41,7 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::list::{CornerStyle, ItemNote, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
@@ -56,8 +57,10 @@ use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
+use rin_bevy_ui::virtual_list::VirtualList;
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
 
 use crate::common::spawn_camera_and_root;
@@ -154,6 +157,9 @@ pub enum WidgetsSetup {
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
     Tooltip,
+    /// Buttons that raise toasts: "Save" ("Saved", 1 s), "Save again" (the same text),
+    /// "Delete" ("Deleted 3 pieces", 1 s) and "Change theme".
+    Toast,
     /// Two text fields, each with a `Name`: `name field` (holding "Alpha", accessible name
     /// "Name") and `seed field` (empty, placeholder "Seed", accessible name "Seed"), then
     /// "Other" and "Change theme". [`FieldEvents`] counts what the fields triggered.
@@ -168,6 +174,10 @@ pub enum WidgetsSetup {
     /// `themed button` ("Other"), a `themed card` and a `themed list` of
     /// three items (the first selected), then "Change theme".
     Themed,
+    /// A `virtual list` of ten thousand rows ("Row 1" to "Row 10000", 28
+    /// pixels high, a `One` selection of its own, "Row 1" first) in the 240
+    /// by 200 `virtual list scroll area`, and "Change theme".
+    VirtualList,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -192,9 +202,11 @@ impl AppSetup for WidgetsSetup {
             Self::Gallery => gallery(world),
             Self::Toolbar => toolbar(world),
             Self::Tooltip => tooltip(world),
+            Self::Toast => toast(world),
             Self::TextFields => text_fields(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
+            Self::VirtualList => virtual_list(world),
         }
         Ok(())
     }
@@ -377,6 +389,26 @@ fn combos(world: &mut World) {
             Selection::builder()
                 .zero_or_one()
                 .build_with_items(countries()),
+        ));
+        // A combo whose options carry a note, out of the flow and last like the others:
+        // Delft is unreachable, Utrecht has a plain note.
+        root.spawn((
+            Combo,
+            Name::new("noted combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(260),
+                top: px(200),
+                left: px(700),
+                ..default()
+            },
+            Selection::builder().zero_or_one().build_with_items([
+                // An empty note shows nothing.
+                (Item::new("Amsterdam"), ItemNote::new("")),
+                (Item::new("Delft"), ItemNote::warning("< unreachable >")),
+                (Item::new("Utrecht"), ItemNote::new("4 km")),
+            ]),
         ));
         root.spawn((
             Combo,
@@ -1520,6 +1552,26 @@ fn tooltip(world: &mut World) {
     });
 }
 
+fn toast(world: &mut World) {
+    let root = row_root(world);
+    let raise = |text: &'static str| {
+        move |_: On<Activate>, mut commands: Commands, roots: Query<Entity, With<UiRoot>>| {
+            for root in &roots {
+                commands.spawn((Toast::new(text).with_duration(1.0), ChildOf(root)));
+            }
+        }
+    };
+    world.entity_mut(root).with_children(|root| {
+        root.spawn(PushButton::from_label("Save"))
+            .observe(raise("Saved"));
+        root.spawn(PushButton::from_label("Save again"))
+            .observe(raise("Saved"));
+        root.spawn(PushButton::from_label("Delete"))
+            .observe(raise("Deleted 3 pieces"));
+        spawn_theme_button(root);
+    });
+}
+
 /// What the fields of the [`WidgetsSetup::TextFields`] screen triggered: how many
 /// `TextFieldChange`s and `TextFieldCommit`s, and the text of the last of each.
 #[derive(Resource, Default, Reflect)]
@@ -1610,6 +1662,37 @@ fn themed(world: &mut World) {
             Selection::builder()
                 .one()
                 .build_with_items(["One", "Two", "Three"].map(Item::new)),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+/// How many rows the `virtual list` of the [`WidgetsSetup::VirtualList`] screen has.
+const VIRTUAL_LIST_ROWS: usize = 10_000;
+
+fn virtual_list(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("virtual list scroll area"),
+            Node {
+                width: px(240),
+                height: px(200),
+                ..default()
+            },
+            ScrollArea::bundle(
+                |parent: &mut ChildSpawner| {
+                    parent.spawn((
+                        Name::new("virtual list"),
+                        VirtualList::new(28.0),
+                        Selection::builder().one().build_with_items(
+                            (1..=VIRTUAL_LIST_ROWS).map(|row| Item::new(format!("Row {row}"))),
+                        ),
+                    ));
+                },
+                true,
+                false,
+            ),
         ));
         spawn_theme_button(root);
     });

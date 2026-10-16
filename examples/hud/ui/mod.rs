@@ -20,6 +20,7 @@ use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
 use bevy::ui_widgets::TextInput;
 use icons::Icons;
+use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::divider::Divider;
@@ -40,6 +41,7 @@ use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::text_field::{TextField, TextFieldCommit};
 use rin_bevy_ui::theme::{Theme, ThemeMode};
+use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
 
 /// Spawns the HUD at startup and wires its widgets together.
@@ -675,7 +677,12 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
                     ~{PushButton::from_label("Show")}
                     ~{ButtonSize::Compact}
                     // `Activate` does not bubble, so the observer sits on the button itself.
-                    on(move |_: On<Activate>| info!("Show {name} on the map"))
+                    on(move |_: On<Activate>, roots: Query<Entity, With<UiRoot>>, mut commands: Commands| {
+                        info!("Show {name} on the map");
+                        if let Some(root) = roots.iter().next() {
+                            commands.spawn((Toast::new(format!("Showing {name} on the map")), ChildOf(root)));
+                        }
+                    })
                 ]
             });
     }

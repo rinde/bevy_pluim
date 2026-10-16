@@ -30,12 +30,13 @@ pub(crate) struct FocusPlugin;
 
 impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, draw_focus_ring)
+        app.add_systems(PostUpdate, draw_focus_ring.in_set(DrawFocusRing))
             .add_systems(
                 PostUpdate,
                 (sync_tab_index, sync_accessibility_hidden)
                     .after(VisibilitySystems::VisibilityPropagate),
             )
+            .configure_sets(PostUpdate, DrawFocusRing.before(UiSystems::Layout))
             .configure_sets(
                 PostUpdate,
                 AccessibilitySync
@@ -44,6 +45,13 @@ impl Plugin for FocusPlugin {
             );
     }
 }
+
+/// The system that draws the focus ring, in `PostUpdate` before the layout.
+///
+/// A widget that names its active row in `PostUpdate` (a `VirtualList`) runs before it, so
+/// the ring is on the row the frame the row is named.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct DrawFocusRing;
 
 /// The systems that set the role and states of the widgets' [`AccessibilityNode`]s.
 ///

@@ -4,7 +4,9 @@ use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusGained, FocusLost, FocusedInput, InputFocus};
+use bevy::input_focus::{
+    AcquireFocus, FocusCause, FocusGained, FocusLost, FocusedInput, InputFocus,
+};
 use bevy::prelude::*;
 use bevy::text::{EditableText, EditableTextSystems, TextCursorStyle, TextEdit, TextEditChange};
 use bevy::ui_widgets::TextInput;
@@ -63,7 +65,8 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 /// around the box, whether the focus came from a click or from Tab, so a person sees where
 /// the keys go.
 ///
-/// A click gives the field the focus (it is a tab stop as well). `Enter` gives the focus up
+/// A click anywhere on the box, its border included, gives the field the focus (it is a tab
+/// stop as well). `Enter` gives the focus up
 /// and so does `Escape`, which also puts back the text the field had when it took the focus;
 /// a press anywhere else gives it up too, as does Tab.
 ///
@@ -197,7 +200,8 @@ impl TextField {
             .id();
         commands
             .entity(field)
-            .insert(TextFieldRefs { input, placeholder });
+            .insert(TextFieldRefs { input, placeholder })
+            .observe(on_field_acquire_focus);
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -283,6 +287,22 @@ const fn placeholder_display(value: &str) -> Display {
         Display::Flex
     } else {
         Display::None
+    }
+}
+
+/// Gives the focus to the input of a field when a press lands on the box around it, its
+/// 1 px border included, rather than letting the request bubble on and clear the focus.
+fn on_field_acquire_focus(
+    mut trigger: On<AcquireFocus>,
+    fields: Query<&TextFieldRefs>,
+    mut focus: ResMut<InputFocus>,
+) {
+    let Ok(refs) = fields.get(trigger.event_target()) else {
+        return;
+    };
+    trigger.propagate(false);
+    if focus.get() != Some(refs.input) {
+        focus.set(refs.input, FocusCause::Navigated);
     }
 }
 
