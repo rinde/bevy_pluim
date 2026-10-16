@@ -1,0 +1,20 @@
+// A click on the 1 px border of a text field's box gives the field the keyboard focus,
+// as a click on its text does. The `name field` is the first widget of the screen's root,
+// whose padding is 20 pixels, so its left border is the column of pixels from x 20 to 21;
+// 12 pixels down from its top is clear of the rounded corner.
+(
+    format_version: 3,
+    name: "a click on the border of a text field gives it the focus",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Check(Not(App(Focused(of: Within(Name("name field"), Component("TextInput")))))),
+        MoveTo(Screen((20.5, 32.0))),
+        Check(Hovered(Name("name field"))),
+        Check(Not(Hovered(Within(Name("name field"), Component("TextInput"))))),
+        Click(Left),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("name field"), Component("TextInput"))))),
+    ],
+    expect: [],
+)
