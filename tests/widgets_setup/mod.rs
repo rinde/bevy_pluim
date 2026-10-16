@@ -556,10 +556,7 @@ fn push_to_selection(
 }
 
 /// Takes the last panel off the trail.
-fn pop_on_pointer_release(
-    _: On<Activate>,
-    mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-) {
+fn pop_on_activate(_: On<Activate>, mut selections: SelectionParam<With<BreadCrumbsSelection>>) {
     selections.update_selection_single(SelectionValue::pop);
 }
 
@@ -578,7 +575,7 @@ fn spawn_go_to(parent: &mut ChildSpawner, label: &'static str, target: BreadCrum
 fn spawn_go_back(parent: &mut ChildSpawner, label: &'static str) {
     parent
         .spawn(PushButton::from_label(label))
-        .observe(pop_on_pointer_release);
+        .observe(pop_on_activate);
 }
 
 fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {

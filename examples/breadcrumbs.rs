@@ -145,10 +145,7 @@ fn go_to(
     move |_, mut selections, items| push_to_selection(target, &mut selections, items)
 }
 
-fn pop_on_pointer_release(
-    _: On<Activate>,
-    mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-) {
+fn pop_on_activate(_: On<Activate>, mut selections: SelectionParam<With<BreadCrumbsSelection>>) {
     selections.update_selection_single(SelectionValue::pop);
 }
 
@@ -182,7 +179,7 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             ~{Label::header("Panel A")}
             --
             ~{PushButton::from_label("Go back to home")}
-            on(pop_on_pointer_release)
+            on(pop_on_activate)
             --
             ~{PushButton::from_label("Go to panel A variant")}
             on(|_: On<Activate>,
@@ -206,7 +203,7 @@ fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
             ~{Label::header("Panel B")}
             --
             ~{PushButton::from_label("Go back to home")}
-            on(pop_on_pointer_release)
+            on(pop_on_activate)
             --
             ~{PushButton::from_label("Go to panel B sub")}
             on(go_to(BreadCrumbsAction::PanelBsub))
@@ -221,7 +218,7 @@ fn create_b_sub(spawner: In<StackChildSpawner>, mut commands: Commands) {
             ~{Label::header("Panel B sub")}
             --
             ~{PushButton::from_label("Go back to panel B")}
-            on(pop_on_pointer_release)
+            on(pop_on_activate)
         }),
     );
 }

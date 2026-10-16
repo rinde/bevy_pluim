@@ -531,14 +531,14 @@ of them (`just example gallery -- --run-all stack link`).
 - **Scroll area contents keep their natural size.** `ScrollContents` uses
   `align_items: FlexStart` instead of stretching its children. Taffy 0.10
   (Bevy 0.19) reported no overflow for a grid whose items overflow it, so a
-  `List` or palette stretched to the area's height left nothing to scroll; the
-  taffy 0.14
-  (Bevy 0.20) was tried (#265): with `Stretch` the content still scrolls, but
-  `list_wheel_scrolls` and `scroll_area_keyboard_scrolls_item_into_view` (both
-  scale factors) fail, the maximum scroll 2 px short (296, not 298), so the
-  workaround stays. For the same reason, don't give scroll contents `height: 100%`.
-  The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
-  wheel and thumb scenarios fail.
+  `List` or palette stretched to the area's height left nothing to scroll;
+  taffy 0.14 (Bevy 0.20) was tried (#265): with `Stretch` the content still
+  scrolls, but `list_wheel_scrolls` and
+  `scroll_area_keyboard_scrolls_item_into_view` (both scale factors) fail, the
+  maximum scroll 2 px short (296, not 298), so the workaround stays. For the
+  same reason, don't give scroll contents `height: 100%`. The
+  `scroll_area_*.ron` scenarios guard this on taffy 0.10: put `Stretch` back
+  and the wheel and thumb scenarios failed there.
 - **A scroll area's scroll position is kept in range.** The wheel handler
   (`update_scroll_position` in `scroll_area.rs`) moves only an axis whose
   `Node::overflow` is `Scroll` and leaves `ScrollPosition` inside `[0, max]`
@@ -773,9 +773,9 @@ plugin, note it in the PR rather than pulling in a window.
 
 A scenario drives the widgets with scripted pointer and keyboard input through
 `rin_bevy_ui_tester` (see its README for the `Step`, `Target` and `Check`
-vocabulary) and asserts on what they did. Prefer it to hand-written
-`PointerPress` (and other pointer event) triggers whenever the claim is about what a person would see
-after using the UI.
+vocabulary) and asserts on what they did. Prefer it to hand-written pointer
+event triggers (`PointerPress` and the like) whenever the claim is about what a
+person would see after using the UI.
 
 - **Where.** Scenarios go in `tests/scenarios.rs`, a test target of its own, so
   `tests/headless.rs` stays as it is. Shared code lives in `tests/common/mod.rs`
