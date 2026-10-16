@@ -134,7 +134,7 @@ pub(crate) struct Unreachable;
 /// Whether `entity` is not shown: its [`InheritedVisibility`] is hidden, or it or an
 /// ancestor has `Display::None`, which takes a node out of the layout without touching its
 /// visibility.
-fn is_hidden(
+pub(crate) fn is_hidden(
     entity: Entity,
     shown: &Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: &Query<&ChildOf>,

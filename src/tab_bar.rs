@@ -3,15 +3,18 @@
 use std::collections::HashMap;
 
 use bevy::a11y::AccessibilityNode;
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusedInput, InputFocus};
+use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::{FocusedInput, InputFocus, InputFocusSystems};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 
-use crate::focus::{AccessibilitySync, sync_label};
+use crate::focus::{AccessibilitySync, is_hidden, sync_label};
 use crate::segmented_control::segment_colors;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
 use crate::theme::Theme;
@@ -47,7 +50,17 @@ impl Plugin for TabBarPlugin {
                 hover_change,
             ),
         )
-        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
+        .add_systems(
+            PostUpdate,
+            (
+                sync_accessibility.in_set(AccessibilitySync),
+                // After the tab list's own roving `TabIndex`, which it writes through commands
+                // before `FocusChangeEvents`, so the hidden bar's -1 is the last word.
+                sync_tab_index
+                    .after(VisibilitySystems::VisibilityPropagate)
+                    .after(InputFocusSystems::FocusChangeEvents),
+            ),
+        )
         .add_observer(on_insert_selection)
         .add_observer(on_value_change)
         .add_observer(keep_navigation_keys)
@@ -236,6 +249,49 @@ fn sync_accessibility(
     for (tab, mut node) in &mut tabs {
         if let Ok(item) = items.get(tab.item_ref) {
             sync_label(&mut node, &item.data);
+        }
+    }
+}
+
+/// Keeps the [`TabIndex`] of the tabs of every bar: while the bar is shown, the tab list's
+/// roving one (0 for the focused tab, else the selected one, else the first enabled one, -1
+/// for the others), and -1 for every tab while the bar is hidden (its [`InheritedVisibility`]
+/// is hidden, or it or an ancestor is `Display::None`, as in a hidden `Stack` panel), so Tab
+/// skips a hidden bar and reaches it again once it shows.
+///
+/// The tab list writes its roving index only when the selection, the tabs or the focus change,
+/// so it would neither hide a bar nor bring one back; this writes it every frame, and only
+/// when it differs.
+fn sync_tab_index(
+    bars: Query<(Entity, &SelectedTab, &Children), With<TabBar>>,
+    mut tabs: Query<(&mut TabIndex, Has<InteractionDisabled>), With<TabBarTab>>,
+    focus: Res<InputFocus>,
+    shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
+    parents: Query<&ChildOf>,
+) {
+    for (bar, selected_tab, children) in &bars {
+        let enabled = |tab: &Entity| tabs.get(*tab).is_ok_and(|(_, disabled)| !disabled);
+        let roving = if is_hidden(bar, &shown, &parents) {
+            None
+        } else {
+            focus
+                .get()
+                .filter(|tab| children.contains(tab) && enabled(tab))
+                .or_else(|| {
+                    selected_tab
+                        .0
+                        .filter(|tab| children.contains(tab) && enabled(tab))
+                })
+                .or_else(|| children.iter().find(|tab| enabled(tab)))
+        };
+        for &tab in children {
+            let Ok((mut index, _)) = tabs.get_mut(tab) else {
+                continue;
+            };
+            let wanted = if roving == Some(tab) { 0 } else { -1 };
+            if index.0 != wanted {
+                index.0 = wanted;
+            }
         }
     }
 }
