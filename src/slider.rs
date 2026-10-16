@@ -441,9 +441,6 @@ impl SliderStyler<'_, '_> {
         if let Ok(mut border) = self.borders.get_mut(refs.thumb) {
             border.set_all(look.ink);
         }
-        if let Ok(mut shadow) = self.shadows.get_mut(refs.thumb) {
-            *shadow = self.theme.small_shadow().into();
-        }
         let (Some(label), Some(format)) = (refs.label, slider.format) else {
             return;
         };
@@ -461,6 +458,13 @@ impl SliderStyler<'_, '_> {
                 text.0 = shown;
             }
             color.0 = look.text;
+        }
+    }
+
+    /// Gives the thumb of a slider the theme's small shadow.
+    fn set_shadow(&mut self, refs: &SliderRefs) {
+        if let Ok(mut shadow) = self.shadows.get_mut(refs.thumb) {
+            *shadow = self.theme.small_shadow().into();
         }
     }
 
@@ -500,6 +504,7 @@ fn theme_sliders(
         }
         node.height = Val::Px(HEIGHT_PX);
         styler.set_font(state.2);
+        styler.set_shadow(state.2);
         styler.style(state);
     }
 }
