@@ -847,7 +847,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`, `FilterChips`,
-  `Panel`, `SettingRows`, `Badge`, `Tooltip`, `Themed`, `IconButtons`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -930,6 +930,11 @@ a file can check any `Reflect` type of the app by short type path.
   `tooltip anchor` (tip "Anchor tip") and `help button` (an icon button, tip
   "Help"); the popup's text exists only while it shows, so `Exists(Text(..))`
   says whether it does, after `Wait(40)` frames (0.5 s at 60 per second).
+- **The `Gallery` and `Toolbar` screens.** `gallery` (Steam, Diesel and Passenger cards in
+  two groups, a `One` selection) and `filled toolbar` (Select, Build, Bulldoze, a `One`
+  selection), each with "Change theme". Their `*_text_follows_rem_size.ron` files check that a
+  label is `Rem(0.6)` text and fits inside its fixed px card (104 x 92) or button (66 x 60) at
+  `[text 1.5x]`; both pass, so those sizes stay px.
 - **The `IconButtons` screen.** Six icon buttons with the default (blank) icon image,
   each with a `Name`: `small button`, `regular button`, `large button`,
   `toggle button` (a `ToggleState` that starts off), `warning button` and
@@ -1005,11 +1010,13 @@ a file can check any `Reflect` type of the app by short type path.
   text) says `variants: ["default", "scale 2"]` with a comment saying why.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
-- **Every file is played twice.** Once by `ron_scenarios`, and once more by
-  `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in
-  `tests/scenarios.rs`, with the camera rendering to an image as in a recording,
-  so a file must pass both ways (see [Recording the
-  scenarios](#recording-the-scenarios)).
+- **Every file is played more than once.**
+  - `ron_scenarios` plays it as three variants: `name`, `[scale 2]` and `[text 1.5x]`.
+  - `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in `tests/scenarios.rs`
+    plays it again headless with the camera rendering to an image as in a recording, so
+    a file must pass both ways (see [Recording the scenarios](#recording-the-scenarios)).
+  - `every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` plays it under
+    shuffled schedules (see [Determinism](#determinism)).
 - **Targets on the `Combos` screen.** A row of `first combo`, `own combo` and
   `third combo` (`first` and `third` share one selection through
   `Selection::reference`, `own` has a selection of its own over the same

@@ -503,6 +503,8 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::SettingRows,
         WidgetsSetup::Badge,
         WidgetsSetup::IconButtons,
+        WidgetsSetup::Gallery,
+        WidgetsSetup::Toolbar,
         WidgetsSetup::Tooltip,
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,

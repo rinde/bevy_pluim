@@ -1,0 +1,19 @@
+// A gallery label is `Theme::font_size_small` text, so it follows Bevy's `RemSize`.
+// `ron_scenarios` also plays this file with the rem size at 1.5 times the
+// default (`[text 1.5x]`): the sizes stay in px, so the label must still fit
+// inside its box, and the screen still fits the window.
+(
+    format_version: 3,
+    name: "a gallery label is sized in rem and fits its box at any text size",
+    setup: App(Gallery),
+    steps: [
+        Wait(2),
+        Check(Component(target: Within(Name("gallery"), Text("Steam")), path: "TextFont.font_size", is: Eq(Rem(0.6)))),
+        Capture(name: "box", value: Component(target: Nth(0, Within(Name("gallery"), Name("GalleryCard"))), path: "ComputedNode.size.x", unit: Logical)),
+        Check(Component(target: Within(Name("gallery"), Text("Steam")), path: "TextLayoutInfo.size.x", unit: Logical, is: Le(Captured("box")))),
+        Capture(name: "box height", value: Component(target: Nth(0, Within(Name("gallery"), Name("GalleryCard"))), path: "ComputedNode.size.y", unit: Logical)),
+        Check(Component(target: Nth(0, Within(Name("gallery"), Name("GalleryCard"))), path: "ComputedNode.content_size.y", unit: Logical, is: Le(Captured("box height")))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+    ],
+    expect: [],
+)
