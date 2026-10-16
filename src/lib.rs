@@ -37,6 +37,7 @@ pub mod slider;
 pub mod stack;
 pub mod tab_bar;
 pub mod tailwind;
+pub mod text_field;
 pub mod theme;
 pub mod toolbar;
 pub mod tooltip;
@@ -79,6 +80,7 @@ use crate::setting_row::SettingRowPlugin;
 use crate::slider::SliderPlugin;
 use crate::stack::StackPlugin;
 use crate::tab_bar::TabBarPlugin;
+use crate::text_field::TextFieldPlugin;
 use crate::theme::{Theme, ThemePlugin};
 use crate::toolbar::ToolbarPlugin;
 use crate::tooltip::TooltipPlugin;
@@ -126,6 +128,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(NumericStepperPlugin)
             .add_plugins(SliderPlugin)
             .add_plugins(PanelPlugin)
+            .add_plugins(TextFieldPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)
             .add_plugins(LinkPlugin)

@@ -1,0 +1,24 @@
+// A text field is a tab stop. To a screen reader it is a text input named by its `name`,
+// its text as its value; the focus ring is on the field's box while it has the focus.
+(
+    format_version: 3,
+    name: "a text field is a tab stop and a named text input with its text as value",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("name field"), Component("TextInput")), role: Some("TextInput"), label: Some("Name"), value: Some("Alpha"), states: []))),
+        Check(App(Accessible(of: Within(Name("seed field"), Component("TextInput")), role: Some("TextInput"), label: Some("Seed"), value: Some(""), states: []))),
+        Tap(key: Tab),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("name field"), Component("TextInput"))))),
+        Check(Component(target: Name("name field"), path: "Outline.width", is: Eq(Px(2.0)))),
+        Type(text: "!"),
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("name field"), Component("TextInput")), role: None, label: None, value: Some("Alpha!"), states: []))),
+        Tap(key: Tab),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("seed field"), Component("TextInput"))))),
+        Check(Resource(path: "FieldEvents.committed", is: Eq("Alpha!"))),
+    ],
+    expect: [],
+)
