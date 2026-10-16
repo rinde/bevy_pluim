@@ -1482,7 +1482,7 @@ fn count_commit(commit: On<TextFieldCommit>, mut events: ResMut<FieldEvents>) {
 }
 
 fn text_fields(world: &mut World) {
-    world.init_resource::<FieldEvents>();
+    world.insert_resource(FieldEvents::default());
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((

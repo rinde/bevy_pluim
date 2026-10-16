@@ -385,18 +385,19 @@ fn on_text_edit(
 }
 
 /// Keeps the text of each field as the value of its accessibility node, and its name as the
-/// label.
+/// label. A node is only looked at when its text, its `TextField` or the node itself changed.
 fn sync_accessibility(
-    mut inputs: Query<(&TextFieldInput, &EditableText, &mut AccessibilityNode)>,
-    fields: Query<&TextField>,
+    mut inputs: Query<(&TextFieldInput, Ref<EditableText>, &mut AccessibilityNode)>,
+    fields: Query<Ref<TextField>>,
 ) {
     for (input, editable, mut node) in &mut inputs {
+        let field = fields.get(input.field).ok();
+        let field_changed = field.as_ref().is_some_and(DetectChanges::is_changed);
+        if !(editable.is_changed() || field_changed || node.is_changed()) {
+            continue;
+        }
         sync_value(&mut node, &editable.value().to_string());
-        match fields
-            .get(input.field)
-            .ok()
-            .and_then(|field| field.name.as_deref())
-        {
+        match field.as_ref().and_then(|field| field.name.as_deref()) {
             Some(name) => sync_label(&mut node, name),
             None => clear_label(&mut node),
         }
