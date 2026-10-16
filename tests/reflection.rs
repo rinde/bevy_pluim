@@ -39,6 +39,7 @@ use rin_bevy_ui::push_button::{ButtonSize, PushButton};
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
+use rin_bevy_ui::slider::Slider;
 use rin_bevy_ui::stack::Stack;
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
@@ -96,6 +97,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ColorPushButton>(registry);
         assert_component::<ColorSquare>(registry);
         assert_component::<NumericStepper>(registry);
+        assert_component::<Slider>(registry);
         assert_component::<ScrollArea>(registry);
         assert_component::<ScrollContents>(registry);
         assert_component::<ScrollBar>(registry);

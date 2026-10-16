@@ -1,0 +1,18 @@
+// A slider is one `Slider` node: its `name` is the label and, when it has a
+// format, the text it shows is the value, which follows the slider.
+(
+    format_version: 3,
+    name: "a slider is a slider node with a label and its shown value",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Name("formatted slider"), role: Some("Slider"), label: Some("Speed"), value: Some("25 %"), states: []))),
+        Check(App(Accessible(of: Name("stepped slider"), role: Some("Slider"), label: Some("Stepped"), value: None, states: []))),
+        Check(App(Accessible(of: Name("disabled slider"), role: Some("Slider"), label: None, value: Some("3"), states: []))),
+        MoveTo(Name("formatted slider")),
+        Click(Left),
+        Wait(1),
+        Check(App(Accessible(of: Name("formatted slider"), role: Some("Slider"), label: Some("Speed"), value: Some("50 %"), states: []))),
+    ],
+    expect: [],
+)

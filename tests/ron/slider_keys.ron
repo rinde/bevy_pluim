@@ -1,0 +1,40 @@
+// A slider is one tab stop (the disabled one is skipped) with the focus ring
+// while it has the focus; the left and right arrows step it, Home and End go
+// to its ends, each a final `ValueChange<f32>`. A continuous slider steps by a
+// hundredth of its range.
+(
+    format_version: 3,
+    name: "the arrow keys, Home and End move a focused slider",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Name("continuous slider")))),
+        Check(Count(with: ["Outline", "rin_bevy_ui::slider::Slider"], is: Eq(1))),
+        Tap(key: ArrowRight),
+        Check(Component(target: Name("continuous slider"), path: "SliderValue.0", is: Between(0.0099, 0.0101))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Name("stepped slider")))),
+        Tap(key: ArrowRight),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(1.0))),
+        Tap(key: ArrowRight),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(2.0))),
+        Tap(key: End),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(10.0))),
+        Tap(key: ArrowRight),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(10.0))),
+        Tap(key: ArrowLeft),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(9.0))),
+        Tap(key: Home),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(0.0))),
+        Check(Resource(path: "SliderChanges.finals", is: Eq(6))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Name("formatted slider")))),
+        Tap(key: ArrowRight),
+        Check(TextOf(Name("formatted slider"), Exact("30 %"))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Check(Count(with: ["Outline", "rin_bevy_ui::slider::Slider"], is: Eq(0))),
+    ],
+    expect: [],
+)

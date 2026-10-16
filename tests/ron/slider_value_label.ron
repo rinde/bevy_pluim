@@ -1,0 +1,25 @@
+// A slider with a format shows its value beside the track in a label at least
+// 54 px wide, so the track does not move when the text grows. A disabled
+// slider shows its label in the theme's disabled text colour.
+(
+    format_version: 3,
+    name: "a slider shows its formatted value beside its track",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        Check(TextOf(Name("formatted slider"), Exact("25 %"))),
+        Check(Component(target: Within(Name("formatted slider"), Name("SliderLabel")), path: "ComputedNode.size.x", unit: Logical, is: Ge(54.0))),
+        Capture(name: "track", value: Component(target: Within(Name("formatted slider"), Name("SliderTrack")), path: "ComputedNode.size.x", unit: Logical)),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: End),
+        Check(TextOf(Name("formatted slider"), Exact("100 %"))),
+        Wait(1),
+        Check(Component(target: Within(Name("formatted slider"), Name("SliderTrack")), path: "ComputedNode.size.x", unit: Logical, is: Eq(Captured("track")))),
+        Check(Not(Exists(Text("25 %")))),
+        Capture(name: "disabled", value: Resource(path: "Theme.colors.text_disabled")),
+        Check(Component(target: Text("3"), path: "TextColor.0", is: Eq(Captured("disabled")))),
+        Capture(name: "primary", value: Resource(path: "Theme.colors.text_primary")),
+        Check(Component(target: Text("100 %"), path: "TextColor.0", is: Eq(Captured("primary")))),
+    ],
+    expect: [],
+)

@@ -7,7 +7,7 @@ fixed.
 ## What this is
 
 A reusable Bevy UI widget library built on Bevy's native `Node` UI: buttons,
-lists, combos, scroll areas, tabs, breadcrumbs, colour palettes and a
+lists, combos, scroll areas, tabs, breadcrumbs, colour palettes, a slider and a
 numeric stepper, all themed from one `Theme` resource. It is used by nopjes,
 but it is a library in its own right.
 
@@ -150,7 +150,7 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | Module | Holds |
 | --- | --- |
 | `lib.rs` | `WidgetsPlugin` (add this one plugin to an app), `UiRoot`, and `MouseEvent` with the observers that produce it |
-| `theme.rs` | `Theme` resource (colours, `body_font` and `display_font` handles defaulting to Bevy's font with the application loading its own, the `font_size_*` type scale, in logical pixels at Bevy's default rem size of 20 px, which every widget turns into `FontSize::Rem` with `Theme::font_size(px)` (its own constant sizes too), so the text follows Bevy's `RemSize`: an app that raises `RemSize` scales the widgets' text, at the default nothing moves; sizes tied to text stay `px` unless a `[text 1.5x]` scenario shows them clipping (only the badge is in rem), `control_radius` for buttons, list items, steppers and scroll bars and `panel_radius` for `Card` and `Float`), `ThemeColors` (also the text, divider, accent, danger, warning, info, pill, segmented, card and chip slots of the redesign; both defaults use a dark `large_shadow` and `small_shadow`, black, so neither theme glows; both meet WCAG AA contrast (4.5:1 for their text and ink pairs, 3:1 for `focus_ring` and `selection_ring`), guarded by `the_default_themes_meet_wcag_aa_contrast`, which exempts `text_disabled`, `text_tertiary` and the decorative borders; the shadow constants set colour only, offsets stay with the widgets; `Pill` and `Badge` share `pill_background` / `pill_text`), `DEFAULT_LIGHT_THEME_COLORS` / `DEFAULT_DARK_THEME_COLORS`, `ThemeMode`, `Theme::with_colors(light, dark)` for an app's own pair, `set_mode` / `mode` / `light_dark_toggle` (switch `colors`, the set in use; do not assign `colors` by hand), the shadow constants; also keeps `ClearColor` in step with the theme |
+| `theme.rs` | `Theme` resource (colours, `body_font` and `display_font` handles defaulting to Bevy's font with the application loading its own, the `font_size_*` type scale, in logical pixels at Bevy's default rem size of 20 px, which every widget turns into `FontSize::Rem` with `Theme::font_size(px)` (its own constant sizes too), so the text follows Bevy's `RemSize`: an app that raises `RemSize` scales the widgets' text, at the default nothing moves; sizes tied to text stay `px` unless a `[text 1.5x]` scenario shows them clipping (only the badge is in rem), `control_radius` for buttons, list items, steppers and scroll bars and `panel_radius` for `Card` and `Float`), `ThemeColors` (also the text, divider, accent, danger, warning, info, pill, segmented, card and chip slots of the redesign, and `slider_track` / `slider_fill` for a `Slider`; both defaults use a dark `large_shadow` and `small_shadow`, black, so neither theme glows; both meet WCAG AA contrast (4.5:1 for their text and ink pairs, 3:1 for `focus_ring` and `selection_ring`), guarded by `the_default_themes_meet_wcag_aa_contrast`, which exempts `text_disabled`, `text_tertiary` and the decorative borders; the shadow constants set colour only, offsets stay with the widgets; `Pill` and `Badge` share `pill_background` / `pill_text`), `DEFAULT_LIGHT_THEME_COLORS` / `DEFAULT_DARK_THEME_COLORS`, `ThemeMode`, `Theme::with_colors(light, dark)` for an app's own pair, `set_mode` / `mode` / `light_dark_toggle` (switch `colors`, the set in use; do not assign `colors` by hand), the shadow constants; also keeps `ClearColor` in step with the theme |
 | `tailwind.rs` | `COLORS`, all 242 Tailwind colours as `TailwindColor { class, variant, color }`, and `color_name(color)` (Tailwind name, else hex: the accessible name of swatches and colour buttons, and what `WidgetsCheck::Selected` uses), for colour pickers; the theme itself uses `bevy::color::palettes::tailwind` directly |
 | `select.rs` | the selection model: `Selection` (`Value` or `Ref`), `SelectionValue` (`One` / `ZeroOrOne` / `OneOrMore` / `ZeroOrMore`), the `Selection::builder()`, `Item<T>`, `ItemOf` / `ItemValues` / `ItemsRef`, `ItemsChanged`, and the `SelectionParam` / `ItemParam` system params |
 | `stack.rs` | `Stack { selection_ref }` shows the one `StackItem` child matching the selection; children are created lazily by a registered system (`StackChildSpawner`, whose `spawn` takes a bundle and `spawn_scene` a scene, the stack child being the scene's root) and hidden, not despawned, when deselected |
@@ -164,6 +164,7 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup, a `Float` child of the combo, is centred under the button when it opens, 10 px inside the window, above the button when it would run off the bottom; its palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square; its accessible name is the name of that colour (same rule as a swatch), kept by a system because Bevy clears a text-less button's label on add; a `ColorPaletteCombo`'s button is not, its colour is its value instead |
 | `numeric_stepper.rs` | `NumericStepper`, its `Value`, `UIntValue<T>`, `ValueChange`; its "-" and "+" are small `IconButton`s (accessible names `decrease_name` / `increase_name`, "Decrease" / "Increase" by default; icons `decrease_icon` / `increase_icon`, a drawn minus and plus when left at the default handle) that step on `Activate`; `format` (`fn(&Value) -> String`, default `Display`) says how the value is shown, in a label of at least `label_min_width` (54 px) so the buttons do not move; fields are read when the component is inserted, and one that cannot step (at the minimum or maximum, or a step short of it) gets `InteractionDisabled`; the arrow keys step it too (up / right increase, down / left decrease) through an observer of `FocusedInput<KeyboardInput>` on the stepper, which a focused button's keys bubble up to and which stops them there (pressed, repeated or released, also at a limit), so only the buttons are tab stops and an app's directional navigation never sees them. The stepper's own node is one spin button: an `AccessibilityNode` with `Role::SpinButton`, `numeric_value` / `min_numeric_value` / `max_numeric_value` / `numeric_value_step` from the `Value` (as `f64`), `value` the text `format` shows (kept in step by `on_change`, also for mirrors through `ValueRef`) and `name: Option<String>` as its label (none by default); the value text is a plain `Text`, not a `Label`, so it has no node of its own |
+| `slider.rs` | `Slider::new(value, min, max)` with `with_step`, `with_format` (`SliderFormat`, `fn(f32) -> String`), `with_name` and `with_label_min_width`: a horizontal range control over Bevy's headless `bevy::ui_widgets::Slider` (`SliderValue`, `SliderRange`, `SliderStep`, `TrackClick::Snap`), 200 px wide unless the app gives its `Node` a width, 20 px high: a 4 px track in `slider_track`, a fill up to the value in `slider_fill` and a 16 px thumb of control radius (`card_surface` with a 2 px `slider_fill` border and the small shadow; `accent_subtle` hovered, `accent` pressed or dragged) that stays inside the slider at both ends (it moves in a `SliderTravel` node one thumb narrower, as the headless pointer maths assume). Its colours come from one function of disabled, pressed or dragged, and hovered (`look`); `InteractionDisabled` draws it in `text_disabled`, and the headless slider then ignores the pointer and keys. With a `format` its value is shown in a `SliderLabel` of at least `label_min_width` (54 px) in a right margin the slider reserves (a slider with a `format` owns its `margin.right`, set when the `Slider` is inserted; one without leaves it to the app), absolutely placed so that the track does not move as the text changes, secondary text in rem. A press on the track jumps the thumb there and a drag moves it, both through the headless slider's `ValueChange<f32>`, which a global observer snaps to the `step` (from `min`, clamped) before the app's observers on the slider see it, then inserts as the `SliderValue`. One tab stop; while focused left / right move it by `step` (a hundredth of the range without one), Home / End to its ends (Bevy's), and `keep_navigation_keys` stops those keys from bubbling on (pressed, repeated or released); up and down go through. The focus ring is the `TabStop`'s. To a screen reader it is a `Role::Slider` (Bevy's numbers: value, bounds, step; `a_slider_is_a_slider_node_with_its_value_bounds_and_step`) whose `value` is the text `format` shows (none without one) and whose label is `name` (none by default). Fields are read when the component is inserted; an app sets the value by inserting a `SliderValue`. `SliderRefs` names the parts |
 | `panel.rs` | `Panel`: a `Card` 380 px wide with a header (title `Label`, optional subtitle beside it, optional close `IconButton` that triggers the `PanelClosed` entity event on the panel), a strip, a `Divider`, a body in a `ScrollArea` that grows with its content up to `max_body_height` (620) and then scrolls, and a footer above a divider. The app spawns contents as children of the entities in `PanelRefs` (`strip`, `body`, `footer`); an empty strip or footer is `Display::None`. Insert a `Panel` again to change title, subtitle, close icon or maximum height. The body is `should_block_lower: false`, or it would cover the scroll contents and the wheel would never reach them. Grow-then-scroll needs only `max_height` on the `ScrollArea` node (`a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls`). It is a `Role::Group` (from `Card`) with no label of its own that is `labelled_by` its title `Label` (so a new `Panel` needs no relabelling); the close button keeps its own name (`panel_accessible_group.ron`) |
 | `push_button.rs` | `PushButton` with label and optional icon; **the reference widget to copy**. `ButtonSize::Compact` (insert it with the button or later) makes it 28 px high with 10 px side padding, a 6 px radius, a semibold 12 px label and no shadow (`Theme::compact_button_*`, `font_size_small`); `Regular` is the default  Its accessible label is its text, not the icon (a combo's button is a combo box and has none). `ButtonNames` is the scenario screen for button labels. |
 | `label.rs` | `Label` with `Title` (`Label::title`, also `Label::header`), `Regular`, `Secondary`, `Caption` and `Overline` (shown in upper case, no letter spacing), sized and coloured from the theme's type scale and text slots; it requires Bevy's `ui::widget::Label`, so it is a `Role::Label` accessibility node with its text as value, and the hook inserts that marker again so a new `Label` updates the value |
@@ -199,6 +200,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | `combos` | `Combo` variants, one with noted options (`ItemNote`) |
 | `lists` | `List` layouts and corner styles, and a `VirtualList` of 10,000 rows in a scroll area |
 | `numeric_stepper` | `NumericStepper` |
+| `slider` | `Slider`s: continuous, stepped, formatted, disabled, and one sharing its value with a `NumericStepper` |
 | `scrollareas` | `ScrollArea`s scrolling vertically, horizontally or both |
 | `segmented_control` | `SegmentedControl`s, one with its own selection and two sharing one |
 | `filter_chips` | `FilterChips` with counts, one row narrow so that it wraps and a second sharing the selection of the first |
@@ -367,7 +369,7 @@ of them (`just example gallery -- --run-all stack link`).
   `MouseEvent`s of its hover colour.
   A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
-  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin`) in
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`, `ScrollbarPlugin`, `SliderPlugin` and `TabPlugin`) in
   its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
   tester's `HeadlessPlugins` add all of `UiWidgetsPlugins`; adding twice panics),
   so the order of `WidgetsPlugin` and `UiWidgetsPlugins` does not matter; an app
@@ -443,7 +445,7 @@ of them (`just example gallery -- --run-all stack link`).
   `InputFocusPlugin`, `InputDispatchPlugin` and `TabNavigationPlugin` in
   `Plugin::finish` unless the app has them by then (the tester's `HeadlessPlugins` has the first two, not the third), and
   `UiRoot` requires `TabGroup::new(0)`, so the widget tree is one non-modal tab group.
-  `PushButton`, `ColorPushButton`, `Link` and `List` (so a `ColorPalette` as well)
+  `PushButton`, `ColorPushButton`, `Link`, `Slider` and `List` (so a `ColorPalette` as well)
   require the crate-private `TabStop`, which requires `TabIndex`. `sync_tab_index`
   owns the value: 0 for a stop that is not `InteractionDisabled` (a `LinkState::Disabled`
   link has it), -1 otherwise or while it has the crate-private `Unreachable` marker (the
@@ -479,7 +481,9 @@ of them (`just example gallery -- --run-all stack link`).
   releases) and lets up and down through, a focused `VirtualList` keeps the arrows, Page Up,
   Page Down, Home, End, Enter and Space (pressed, repeated or released; `navigate` in `virtual_list.rs`,
   only while the list itself is `InputFocus`, so the keys of a focused descendant, a button
-  in a creator's row, go on past it), and a `NumericStepper`
+  in a creator's row, go on past it), a focused `Slider` keeps left, right, Home and End
+  (`keep_navigation_keys` in `slider.rs`, also at a limit) and lets up and down through, and a
+  `NumericStepper`
   keeps the arrows that reach it from its buttons, also at a limit. The focus ring follows
   `InputFocus` whatever moved it, while `InputFocusVisible` is true. Every other widget lets
   the arrows through. A focusable child of a list row (a button in a `CustomView`) is not
@@ -643,8 +647,9 @@ of them (`just example gallery -- --run-all stack link`).
   registry knows them by name (Bevy's `reflect_auto_register`). A field that
   cannot be reflected gets `#[reflect(ignore)]` with a comment saying why.
   `tests/reflection.rs` fails when a derive is dropped; add a new widget there.
-  The short type paths `Label` and `ScrollArea` are also Bevy's own, so a lookup
-  by short path is ambiguous for those two; use the full path.
+  The short type paths `Label`, `ScrollArea` and `Slider` are also Bevy's own, so a
+  lookup by short path is ambiguous for those three; use the full path
+  (`rin_bevy_ui::slider::Slider`).
 - **State is an immutable component**; a transition inserts a new value
   (`ComboState`, `LinkState`, `Selection`, the palette combo's `State`).
 - **Composite widgets keep their children in a refs component**
@@ -883,7 +888,7 @@ a file can check any `Reflect` type of the app by short type path.
   `to_ron()`.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
-  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`, `FilterChips`,
+  `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Slider`, `SegmentedControls`, `FilterChips`,
   `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
@@ -972,6 +977,17 @@ a file can check any `Reflect` type of the app by short type path.
   selection), each with "Change theme". Their `*_text_follows_rem_size.ron` files check that a
   label is `Rem(0.6)` text and fits inside its fixed px card (104 x 92) or button (66 x 60) at
   `[text 1.5x]`; both pass, so those sizes stay px.
+- **The `Slider` screen.** A column of `continuous slider` (0 to 1, 320 px wide, name
+  "Continuous"), `stepped slider` (0 to 10 in steps of 1, 200 px, name "Stepped"; the
+  `SliderChanges` resource keeps the `last` value of its `ValueChange<f32>`s and counts the
+  `finals`), `formatted slider` (0 to 100 in steps of 5 from 25, shown as `25 %`, name
+  "Speed") and `disabled slider` (`InteractionDisabled`, 3, shown as `3`, no name), then
+  "Change theme". The value of a slider is `SliderValue.0`, its parts `Within(Name(..),
+  Name("SliderThumb"))` (and `SliderTrack`, `SliderLabel`); a press on the track is a
+  `Click(Left)` after `MoveTo(Name(..))` and a drag `Drag(from: <thumb>, to: Screen(..))`.
+  The label and the track let the pointer through, so a file cannot `MoveTo` the label.
+  A press on the thumb alone does not make the slider `Pressed`, only one on the track or a
+  drag does, so `slider_thumb_colours.ron` presses the track for the `accent` thumb.
 - **The `TextFields` screen.** `name field` ("Alpha", named "Name"), `seed field`
   (empty, placeholder "Seed", named "Seed"), an "Other" button and "Change theme". The
   `FieldEvents` resource counts the fields' `TextFieldChange`s and `TextFieldCommit`s and keeps

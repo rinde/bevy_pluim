@@ -1,0 +1,31 @@
+// A press on a slider's track jumps the thumb there: the middle of a slider is
+// the middle of its range, rounded to a step where it has one, and the app's
+// observer of `ValueChange<f32>` gets the value. A disabled slider ignores the
+// press (forced, as the tester will not press a disabled widget).
+(
+    format_version: 3,
+    name: "a press on a slider's track jumps its thumb there",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        MoveTo(Name("stepped slider")),
+        Click(Left),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(5.0))),
+        Check(Resource(path: "SliderChanges.last", is: Eq(5.0))),
+        Wait(1),
+        // The thumb's middle is the middle of the slider, which starts at 20.
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(119.5, 120.5))),
+        MoveTo(Name("continuous slider")),
+        Click(Left),
+        Check(Component(target: Name("continuous slider"), path: "SliderValue.0", is: Between(0.499, 0.501))),
+        MoveTo(Name("formatted slider")),
+        Click(Left),
+        Check(Component(target: Name("formatted slider"), path: "SliderValue.0", is: Eq(50.0))),
+        Check(TextOf(Name("formatted slider"), Exact("50 %"))),
+        MoveTo(Name("disabled slider")),
+        Force(Click(Left)),
+        Check(Component(target: Name("disabled slider"), path: "SliderValue.0", is: Eq(3.0))),
+        Check(TextOf(Name("disabled slider"), Exact("3"))),
+    ],
+    expect: [],
+)

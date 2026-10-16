@@ -27,7 +27,7 @@ use bevy::color::palettes::tailwind::{
 use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy::ui_widgets::Activate;
+use bevy::ui_widgets::{Activate, ValueChange};
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -51,6 +51,7 @@ use rin_bevy_ui::select::{
     Item, ItemOf, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
+use rin_bevy_ui::slider::Slider;
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
@@ -108,6 +109,14 @@ pub enum WidgetsSetup {
     /// `first mirror stepper` and `second mirror stepper` point to it), and
     /// "Change theme".
     NumericStepper,
+    /// Sliders, one per row, each with a `Name`: `continuous slider` (0 to 1,
+    /// 320 pixels wide, accessible name "Continuous"), `stepped slider` (0 to
+    /// 10 in steps of 1, at 0, "Stepped"), `formatted slider` (0 to 100 in
+    /// steps of 5, at 25, its value shown as "25 %", "Speed") and `disabled
+    /// slider` (0 to 10 at 3, shown as "3", `InteractionDisabled`), then
+    /// "Change theme". [`SliderChanges`] keeps the `ValueChange`s of `stepped
+    /// slider`.
+    Slider,
     /// Segmented controls, each with a `Name`: `own segmented control`
     /// (Auto, Manual, with a selection of its own) and `first shared
     /// segmented control` and `second shared segmented control` (Dark, Light,
@@ -183,6 +192,7 @@ impl AppSetup for WidgetsSetup {
             Self::Tabs => tabs(world),
             Self::ColorPalette => color_palette(world),
             Self::NumericStepper => numeric_stepper(world),
+            Self::Slider => slider(world),
             Self::SegmentedControls => segmented_controls(world),
             Self::FilterChips => filter_chips(world),
             Self::Panel => panel(world),
@@ -220,6 +230,18 @@ pub struct CurrentScreen(pub WidgetsSetup);
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct Clicks(pub u32);
+
+/// The `ValueChange<f32>`s the `stepped slider` of the [`WidgetsSetup::Slider`]
+/// screen sent: the value of the last one and how many were final (the end of
+/// a drag or a key).
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct SliderChanges {
+    /// The value of the last change.
+    pub last: f32,
+    /// How many changes were final.
+    pub finals: u32,
+}
 
 /// The root a screen of several widgets goes in: the camera and root of
 /// [`spawn_camera_and_root`], laid out as a wrapping row.
@@ -1184,6 +1206,48 @@ fn numeric_stepper(world: &mut World) {
             NumericStepper::default(),
             ValueRef(shared),
             Name::new("second mirror stepper"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn slider(world: &mut World) {
+    world.init_resource::<SliderChanges>();
+    let root = spawn_camera_and_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Slider::new(0.0, 0.0, 1.0).with_name("Continuous"),
+            Node {
+                width: px(320),
+                ..default()
+            },
+            Name::new("continuous slider"),
+        ));
+        root.spawn((
+            Slider::new(0.0, 0.0, 10.0)
+                .with_step(1.0)
+                .with_name("Stepped"),
+            Name::new("stepped slider"),
+        ))
+        .observe(
+            |change: On<ValueChange<f32>>, mut changes: ResMut<SliderChanges>| {
+                changes.last = change.value;
+                changes.finals += u32::from(change.is_final);
+            },
+        );
+        root.spawn((
+            Slider::new(25.0, 0.0, 100.0)
+                .with_step(5.0)
+                .with_format(|value| format!("{value:.0} %"))
+                .with_name("Speed"),
+            Name::new("formatted slider"),
+        ));
+        root.spawn((
+            Slider::new(3.0, 0.0, 10.0)
+                .with_step(1.0)
+                .with_format(|value| format!("{value:.0}")),
+            InteractionDisabled,
+            Name::new("disabled slider"),
         ));
         spawn_theme_button(root);
     });
