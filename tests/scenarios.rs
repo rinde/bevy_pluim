@@ -24,7 +24,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator};
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
-use bevy::ui_widgets::{Button, Tab};
+use bevy::ui_widgets::{ActiveDescendant, Button, Tab};
 use bevy::window::PrimaryWindow;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -318,17 +318,25 @@ fn a_focused_stepper_button_keeps_the_arrow_keys_from_directional_navigation() {
     assert!(report.passed(), "{:#?}", report.failures());
 }
 
-/// A custom item view holding a "In row" button.
-fn row_with_button(spawner: In<ItemViewSpawner>, mut commands: Commands) {
+/// A custom item view holding a button named after its item ("In row a").
+fn row_with_button(
+    spawner: In<ItemViewSpawner>,
+    items: Query<&Item<String>>,
+    mut commands: Commands,
+) {
+    let Ok(item) = items.get(spawner.item) else {
+        return;
+    };
+    let label = format!("In row {}", item.data);
     commands.entity(spawner.view).with_children(|view| {
-        view.spawn((Name::new("In row"), PushButton::from_label("In row")));
+        view.spawn((Name::new(label.clone()), PushButton::from_label(label)));
     });
 }
 
-/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
-/// app's navigation. (A first press does not, as Bevy's `ListBox` stops it; see AGENTS.md.)
-#[test]
-fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
+/// A `row list` of custom views (a, b, c), each holding a button, with a "Beside" button to
+/// its right, the app's directional navigation turned on and the focus on the button in row
+/// a. Returns the app and the list.
+fn button_in_a_list_row_app() -> (App, Entity) {
     let mut app = directional_navigation_app();
     let create = app.world_mut().register_system(row_with_button);
     let root = spawn_camera_and_root(app.world_mut());
@@ -339,11 +347,12 @@ fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
         })
         .with_children(|row| {
             row.spawn((
+                Name::new("row list"),
                 List,
                 ItemViewCreator::new(create),
                 Selection::builder()
                     .one()
-                    .build_with_items([Item::new("a")]),
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
             ));
             row.spawn((Name::new("Beside"), PushButton::from_label("Beside")));
         });
@@ -358,20 +367,62 @@ fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
         .observe(navigate_with_arrow_keys);
     app.update();
     app.update();
-    let in_row = named(&mut app, "In row");
-    let beside = named(&mut app, "Beside");
+    let in_row = named(&mut app, "In row a");
     app.world_mut()
         .get_resource_mut::<InputFocus>()
         .unwrap()
         .set(in_row, FocusCause::Navigated);
     app.update();
+    let list = named(&mut app, "row list");
+    (app, list)
+}
+
+fn active_row(app: &App, list: Entity) -> Option<Entity> {
+    app.world()
+        .get::<ActiveDescendant>(list)
+        .and_then(|active| active.0)
+}
+
+/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
+/// app's navigation.
+#[test]
+fn a_held_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
+    let (mut app, _) = button_in_a_list_row_app();
+    let beside = named(&mut app, "Beside");
 
     send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
 
-    assert_eq!(
-        app.world().get_resource::<InputFocus>().unwrap().get(),
-        Some(beside)
-    );
+    assert_eq!(focus_of(&app), Some(beside));
+}
+
+/// A first press of an arrow key on a button inside a list row is not the list's either: the
+/// `ListBox` would take it as its own, so it is passed on past the list to the app's
+/// navigation.
+#[test]
+fn a_first_arrow_press_moves_the_focus_out_of_a_button_inside_a_list_row() {
+    let (mut app, _) = button_in_a_list_row_app();
+    let beside = named(&mut app, "Beside");
+
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, false);
+
+    assert_eq!(focus_of(&app), Some(beside));
+}
+
+/// A first press of Home or End on a button inside a list row does not move the list's active
+/// row, and the focus stays on the button.
+#[test]
+fn home_and_end_on_a_button_inside_a_list_row_leave_the_active_row_alone() {
+    let (mut app, list) = button_in_a_list_row_app();
+    let in_row = named(&mut app, "In row a");
+    let active = active_row(&app, list);
+
+    send_key(&mut app, KeyCode::End, ButtonState::Pressed, false);
+    assert_eq!(active_row(&app, list), active);
+    send_key(&mut app, KeyCode::End, ButtonState::Released, false);
+    send_key(&mut app, KeyCode::Home, ButtonState::Pressed, false);
+    assert_eq!(active_row(&app, list), active);
+
+    assert_eq!(focus_of(&app), Some(in_row));
 }
 
 /// Sends `key` as the window's keyboard would, pressed (perhaps as a repeat) or released.
