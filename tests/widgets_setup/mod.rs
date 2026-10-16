@@ -53,6 +53,7 @@ use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
+use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
 use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
@@ -144,6 +145,10 @@ pub enum WidgetsSetup {
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
     Tooltip,
+    /// Two text fields, each with a `Name`: `name field` (holding "Alpha", accessible name
+    /// "Name") and `seed field` (empty, placeholder "Seed", accessible name "Seed"), then
+    /// "Other" and "Change theme". [`FieldEvents`] counts what the fields triggered.
+    TextFields,
     /// Buttons whose accessible names are checked, each with a `Name`:
     /// `plain button` (a `PushButton` "Add"), `icon push button` (a
     /// `PushButton` "Save" with the icon text "+"), `colour button` (a
@@ -177,6 +182,7 @@ impl AppSetup for WidgetsSetup {
             Self::Gallery => gallery(world),
             Self::Toolbar => toolbar(world),
             Self::Tooltip => tooltip(world),
+            Self::TextFields => text_fields(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
         }
@@ -1446,6 +1452,54 @@ fn tooltip(world: &mut World) {
             IconButtonSize::Large,
         ))
         .insert(Name::new("help button"));
+        spawn_theme_button(root);
+    });
+}
+
+/// What the fields of the [`WidgetsSetup::TextFields`] screen triggered: how many
+/// `TextFieldChange`s and `TextFieldCommit`s, and the text of the last of each.
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct FieldEvents {
+    /// The number of `TextFieldChange`s.
+    pub changes: u32,
+    /// The text of the last `TextFieldChange`.
+    pub changed: String,
+    /// The number of `TextFieldCommit`s.
+    pub commits: u32,
+    /// The text of the last `TextFieldCommit`.
+    pub committed: String,
+}
+
+fn count_change(change: On<TextFieldChange>, mut events: ResMut<FieldEvents>) {
+    events.changes += 1;
+    events.changed.clone_from(&change.value);
+}
+
+fn count_commit(commit: On<TextFieldCommit>, mut events: ResMut<FieldEvents>) {
+    events.commits += 1;
+    events.committed.clone_from(&commit.value);
+}
+
+fn text_fields(world: &mut World) {
+    world.init_resource::<FieldEvents>();
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            TextField::new("Alpha").with_name("Name"),
+            Name::new("name field"),
+        ))
+        .observe(count_change)
+        .observe(count_commit);
+        root.spawn((
+            TextField::new("")
+                .with_placeholder("Seed")
+                .with_name("Seed"),
+            Name::new("seed field"),
+        ))
+        .observe(count_change)
+        .observe(count_commit);
+        root.spawn(PushButton::from_label("Other"));
         spawn_theme_button(root);
     });
 }
