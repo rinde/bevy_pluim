@@ -3534,7 +3534,7 @@ fn a_tab_is_named_after_its_item_to_a_screen_reader() {
 }
 
 #[test]
-fn a_hidden_tab_bar_is_not_reached_by_tab_and_is_again_once_shown() {
+fn a_hidden_tab_bar_gives_its_tabs_tab_index_minus_one_until_shown() {
     let mut app = headless_app();
     let bar = spawn_tab_bar(
         &mut app,
