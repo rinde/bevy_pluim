@@ -1,8 +1,9 @@
-//! `Float`: an absolutely positioned popup layer, used by combos.
+//! `Float`: a popup layer placed in the viewport, used by combos and tooltips.
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
+use bevy::ui::FixedNode;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -26,9 +27,15 @@ impl Plugin for FloatPlugin {
 
 /// Component that modifies the position and appearance of a node to create a
 /// floating effect.
+///
+/// A `Float` is a [`FixedNode`]: it is a child of its widget, but placed by its `left` and
+/// `top` in the viewport, in logical pixels, and it takes no layout, clipping or transform
+/// from its ancestors, so a scroll area or card around the widget neither clips it nor
+/// makes room for it. It draws over the rest of the UI ([`GlobalZIndex`] 1000), and its
+/// visibility still follows its ancestors'.
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
-#[require(GlobalZIndex(1000), BoxShadow::default())]
+#[require(FixedNode, GlobalZIndex(1000), BoxShadow::default())]
 #[component(on_insert=Self::on_insert)]
 pub struct Float;
 
@@ -53,7 +60,6 @@ fn theme_float(
     };
     for (mut node, mut bs) in iter {
         node.position_type = PositionType::Absolute;
-        // node.width = Val::Percent(100.0);
         node.border_radius = BorderRadius::all(theme.panel_radius);
         *bs = BoxShadow::from(theme.large_shadow());
     }

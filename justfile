@@ -3,6 +3,11 @@
 
 set shell := ["bash", "-uc"]
 
+# Compile through sccache when it is installed, so worktrees reuse each other's
+# dependency builds without sharing a `target/`. A RUSTC_WRAPPER already set
+# wins, and an empty one turns the wrapper off.
+export RUSTC_WRAPPER := env_var_or_default("RUSTC_WRAPPER", `command -v sccache || true`)
+
 # Bevy's own linter lags Bevy releases and needs a pinned nightly; see the
 # `bevy-lint` recipe. v0.4.0 targets Bevy 0.16, so these pins are stale
 # since the move to Bevy 0.17: bump them to the release that targets it

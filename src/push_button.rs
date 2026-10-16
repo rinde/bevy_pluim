@@ -318,7 +318,7 @@ fn theme_push_button(
             });
             *text_font = TextFont {
                 font: theme.body_font.clone().into(),
-                font_size: FontSize::Px(font_size),
+                font_size: Theme::font_size(font_size),
                 weight,
                 ..default()
             };
@@ -335,7 +335,7 @@ fn theme_push_button(
             });
             *text_font = TextFont {
                 font: theme.body_font.clone().into(),
-                font_size: FontSize::Px(font_size),
+                font_size: Theme::font_size(font_size),
                 weight,
                 ..default()
             };

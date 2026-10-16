@@ -13,6 +13,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
+use bevy::ui::FixedNode;
 use bevy::ui_widgets::{ControlOrientation, ScrollIntoView, Scrollbar, ScrollbarThumb};
 use itertools::Either;
 
@@ -227,11 +228,14 @@ fn handle_hover(
 /// Answers [`ScrollIntoView`], which a `ListBox` triggers when the arrow keys
 /// move its active descendant. An axis is moved only when the contents scroll
 /// along it, and the [`ScrollPosition`] stays within `0..=max` as in
-/// `update_scroll_position`. An entity outside any scroll area is left alone.
+/// `update_scroll_position`. An entity outside any scroll area is left alone, and so is
+/// one in a [`FixedNode`] (a popup) inside a scroll area: it is not laid out in the
+/// area's contents, so scrolling them would not show it.
 fn scroll_into_view(
     mut event: On<ScrollIntoView>,
     nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
     parents: Query<&ChildOf>,
+    fixed_nodes: Query<(), With<FixedNode>>,
     mut contents: Query<(&mut ScrollPosition, &Node), With<ScrollContents>>,
 ) {
     let target = event.entity;
@@ -240,7 +244,8 @@ fn scroll_into_view(
     };
     let Some(area) = parents
         .iter_ancestors(target)
-        .find(|ancestor| contents.contains(*ancestor))
+        .find(|ancestor| contents.contains(*ancestor) || fixed_nodes.contains(*ancestor))
+        .filter(|ancestor| contents.contains(*ancestor))
     else {
         return;
     };

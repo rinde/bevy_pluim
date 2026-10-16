@@ -154,7 +154,7 @@ fn theme_labels(
         *text_color = TextColor(color);
         *text_font = TextFont {
             font: font.clone().into(),
-            font_size: FontSize::Px(font_size),
+            font_size: Theme::font_size(font_size),
             weight: if overline {
                 FontWeight::SEMIBOLD
             } else {

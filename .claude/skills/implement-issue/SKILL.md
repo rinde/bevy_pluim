@@ -6,16 +6,31 @@ argument-hint: <issue-number> [pr-number]
 
 # Implement an issue
 
-The arguments, or the prompt that started you, name the issue `<issue>` and
-perhaps its pull request `<pr>`. You own the issue on `rinde/rin-bevy-ui` until its
-pull request is ready to merge. You never merge, approve or review your own pull request, and
+The arguments, or the prompt that started you, name the issue `<issue>`,
+perhaps its pull request `<pr>`, and, from the coordinator, the **slot** to
+work in: a worktree at `.claude/worktrees/slot-<n>`. You own the issue on
+`rinde/rin-bevy-ui` until its pull request is ready to merge. You never merge, approve or review your own pull request, and
 never push to `main`.
 
 Talk to GitHub through `gh api` and the REST endpoints below. GraphQL is
 blocked in Claude Code cloud sessions, so `gh pr create`, `gh issue view` and
 friends may fail where `gh api repos/...` works.
 
-## 1. Read and decide whether you can start
+## 1. Enter your slot
+
+The coordinator keeps one worktree per issue in flight, the slot, and every
+agent on the issue works there, so that each build reuses the `target/` the
+last agent left. When the prompt names a slot, enter it before anything
+else, with the `EnterWorktree` tool and the slot's absolute path
+(`path: /path/to/rin-bevy-ui/.claude/worktrees/slot-<n>`); without that
+tool, `cd` into it and give every later command and file an absolute path
+under it. Confirm with `git rev-parse --show-toplevel` that you are in the
+slot. From then on touch nothing outside it: another agent may be working in
+the main checkout or in a sibling slot.
+
+When no slot was named, you were started by hand: work where you are.
+
+## 2. Read and decide whether you can start
 
 - The issue, its labels and comments: `gh api repos/rinde/rin-bevy-ui/issues/<issue>`
   and `.../issues/<issue>/comments`. A bare-title issue's title is the
@@ -34,24 +49,27 @@ friends may fail where `gh api repos/...` works.
   specific question and the readings you see, remove `ready-for-agent`, add
   `Needs refinement`, and stop.
 
-## 2. Start
+## 3. Start
 
 1. Add the `In progress` label:
    `gh api repos/rinde/rin-bevy-ui/issues/<issue>/labels -f "labels[]=In progress"`.
 2. Branch from a fresh `main`, named `RINUI-<issue>/<descriptive-slug>`:
    `git fetch origin main && git switch -c RINUI-<issue>/<slug> origin/main`.
-   You are usually in a worktree of your own under `.claude/worktrees/`;
-   another implementer may be working in the main checkout or a sibling
-   worktree, so touch nothing outside yours.
+   A slot starts detached on `origin/main`, so this is the only branch work
+   there; never touch the main checkout or another slot.
 3. Read `AGENTS.md` in full, then the module you are changing and a sibling
    widget; `push_button.rs` is the reference widget to copy.
 
-**Build in your worktree's own `target/`, never in a shared one.** Two
+**Build in your slot's own `target/`, never in a shared one.** Two
 worktrees on one `CARGO_TARGET_DIR` mix up same-named artifacts (a stale
 `ThemeColors`, and `tests/ron_scenarios` reads `tests/ron` through a path
 compiled into its binary, so it can play another worktree's files). Do not
 point `CARGO_TARGET_DIR` at the main checkout's `target/`, and never `cp -r` it
-(about 19G; copies filled the disk, #165). Instead:
+(about 19G; copies filled the disk, #165). The slot's `target/` outlives you:
+the reviewer and any follow-up on this issue build on what you compiled, and
+the next issue in the slot after that, so never delete it or `cargo clean`
+it. A slot that has been used before already has one, and then there is
+nothing to seed. Only in a slot with no `target/` yet:
 
 1. Check space: `df -h .` should show more than 30G free; if not, stop and
    report rather than building.
@@ -69,7 +87,7 @@ point `CARGO_TARGET_DIR` at the main checkout's `target/`, and never `cp -r` it
 3. After seeding, `touch tests/*.rs src/lib.rs` so cargo rebuilds this crate's
    own targets from your sources, whatever the seed held.
 
-## 3. Implement
+## 4. Implement
 
 Follow the rules in `AGENTS.md` without exception: no application or game
 state, one plugin per widget registered in `WidgetsPlugin`, styling from
@@ -79,7 +97,7 @@ sentences, and drive widget behaviour through a headless `App` in `tests/` as
 `AGENTS.md` describes. Keep the change to what the issue asks; note anything
 else worth doing in the pull request rather than doing it.
 
-## 4. Before you call it done
+## 5. Before you call it done
 
 1. `just fmt`
 2. `just lint`
@@ -91,7 +109,7 @@ All green, then commit with a message that says what the change does, in the
 imperative (`Close the combo on an outside click`), and push with
 `git push -u origin <branch>`.
 
-## 5. Open the pull request
+## 6. Open the pull request
 
 ```sh
 gh api repos/rinde/rin-bevy-ui/pulls -f base=main -f head=<branch> \
@@ -107,9 +125,12 @@ coordinator has it reviewed once you report it.
 
 Given a pull request, bring it to a mergeable state:
 
-1. Check out its branch in your worktree:
+1. Check out its branch in your slot:
    `git fetch origin <branch> && git switch <branch>` (or
    `git switch -c <branch> origin/<branch>`), and `git pull` to be current.
+   The slot may still hold the branch from the last implementer, or sit
+   detached on the head the reviewer checked out; either way the branch on
+   `origin` is the truth, and the `target/` is already warm.
 2. **Merge conflict** (`mergeable` is false): `git merge origin/main`, resolve,
    re-run the checks, push. Never rebase, amend or force-push a pushed branch.
 3. **Red CI**: read the failing job's log

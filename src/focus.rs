@@ -206,17 +206,37 @@ fn sync_accessibility_hidden(
     }
 }
 
+/// Marks an [`Outline`] that `draw_focus_ring` put there, so it takes off only its own.
+#[derive(Component, Debug, Copy, Clone)]
+struct FocusRingOutline;
+
+/// The [`Outline`] an entity had before the focus ring replaced it, put back when the ring
+/// leaves.
+#[derive(Component, Debug, Copy, Clone)]
+struct OutlineUnderRing(Outline);
+
 /// Draws the focus ring as an [`Outline`] while the focus is visible, and takes it off
 /// everything else.
 ///
 /// The ring goes on the focused [`TabStop`], except for a list: a `ListBox` has one tab stop
 /// and moves an [`ActiveDescendant`] over its rows, so the ring is on that row and the box
 /// itself shows none. A list that is not focused has no active descendant, so no ring.
+///
+/// The ring owns only the outline it drew: an [`Outline`] the app or a widget set is kept
+/// aside while the ring shows and put back when it leaves.
 fn draw_focus_ring(
     focus: Res<InputFocus>,
     visible: Res<InputFocusVisible>,
     theme: Res<Theme>,
-    stops: Query<(Entity, Option<&Outline>), Or<(With<TabStop>, With<ListItem>)>>,
+    stops: Query<
+        (
+            Entity,
+            Option<&Outline>,
+            Has<FocusRingOutline>,
+            Option<&OutlineUnderRing>,
+        ),
+        Or<(With<TabStop>, With<ListItem>)>,
+    >,
     active: Query<&ActiveDescendant>,
     mut commands: Commands,
 ) {
@@ -225,18 +245,30 @@ fn draw_focus_ring(
         Ok(ActiveDescendant(row)) => *row,
         Err(_) => Some(entity),
     });
-    for (entity, outline) in &stops {
+    for (entity, outline, is_ring, saved) in &stops {
         if ringed == Some(entity) {
             let ring = Outline {
                 width: Val::Px(2.0),
                 offset: Val::Px(1.0),
                 color: theme.colors.focus_ring,
             };
-            if outline != Some(&ring) {
-                commands.entity(entity).insert(ring);
+            if is_ring {
+                if outline != Some(&ring) {
+                    commands.entity(entity).insert(ring);
+                }
+            } else {
+                let mut entity_commands = commands.entity(entity);
+                if let Some(own) = outline {
+                    entity_commands.insert(OutlineUnderRing(*own));
+                }
+                entity_commands.insert((ring, FocusRingOutline));
             }
-        } else if outline.is_some() {
-            commands.entity(entity).remove::<Outline>();
+        } else if is_ring {
+            let mut entity_commands = commands.entity(entity);
+            entity_commands.remove::<(Outline, FocusRingOutline, OutlineUnderRing)>();
+            if let Some(OutlineUnderRing(own)) = saved {
+                entity_commands.insert(*own);
+            }
         }
     }
 }

@@ -1,0 +1,28 @@
+// A combo inside a scroll area 100 pixels high opens its list over the edge
+// of the area: the list is a `FixedNode`, so the area neither clips it nor
+// takes the pointer from it. "Belgium", the last item, lies below the area's
+// bottom (y 400) and is picked with a click.
+(
+    format_version: 3,
+    name: "a combo in a scroll area opens its whole list outside the area",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("scrolled combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("scrolled combo"), path: "ComboState", is: Eq(Open))),
+        Wait(1),
+        Check(Visible(Within(Name("scrolled combo"), Role(role: ListItem, label: "Belgium")))),
+        Check(Component(
+            target: Within(Name("scrolled combo"), Role(role: ListItem, label: "Belgium")),
+            path: "UiGlobalTransform.0.translation.y",
+            unit: Logical,
+            is: Between(400.0, 720.0),
+        )),
+        MoveTo(Within(Name("scrolled combo"), Role(role: ListItem, label: "Belgium"))),
+        Click(Left),
+        Check(App(Selected(of: Name("scrolled combo"), items: ["Belgium"]))),
+        Check(Component(target: Name("scrolled combo"), path: "ComboState", is: Eq(Closed))),
+    ],
+    expect: [App(Selected(of: Name("scrolled combo"), items: ["Belgium"]))],
+)

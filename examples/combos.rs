@@ -4,6 +4,7 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -40,33 +41,38 @@ fn setup(mut commands: Commands) {
             Item::new("Belgium"),
         ]))
         .id();
-
     // Root container
-    commands.spawn((
+    commands.spawn_scene(bsn! {
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            width: percent(100.0),
+            height: percent(100.0),
             justify_content: JustifyContent::SpaceEvenly,
             align_items: AlignItems::Center,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
-            ..default()
-        },
-        children![
-            (Combo, Selection::reference(selection_ref)),
-            (
-                Combo,
-                Selection::builder()
-                    .zero_or_one()
-                    .build_with_items_ref(selection_ref),
-            ),
-            (Combo, Selection::reference(selection_ref)),
-            (PushButton::from_label("Change theme"), ThemeButton),
-        ],
-    ));
+        }
+        Children [
+            ~{Combo} ~{Selection::reference(selection_ref)}
+            --
+            ~{Combo}
+            // `Selection::builder()` gives a bundle, which `template` inserts.
+            template(move |context| {
+                context.entity.insert(
+                    Selection::builder()
+                        .zero_or_one()
+                        .build_with_items_ref(selection_ref),
+                );
+                Ok(EmptySceneEffect)
+            })
+            --
+            ~{Combo} ~{Selection::reference(selection_ref)}
+            --
+            ~{PushButton::from_label("Change theme")} ThemeButton
+        ]
+    });
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct ThemeButton;
 
 fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {

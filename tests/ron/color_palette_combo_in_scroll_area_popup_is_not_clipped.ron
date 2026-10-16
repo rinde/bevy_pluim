@@ -1,0 +1,28 @@
+// A palette combo inside a scroll area 100 pixels high opens its popup over
+// the edge of the area: the popup is a `FixedNode`, so the area neither clips
+// it nor takes the pointer from it. Swatch 60 (red-500) lies below the
+// area's bottom (y 500) and is picked with a click.
+(
+    format_version: 3,
+    name: "a palette combo in a scroll area opens its whole popup outside the area",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("scrolled palette combo"), Component("ColorPushButton"))),
+        Click(Left),
+        Check(Component(target: Name("scrolled palette combo"), path: "State", is: Eq(Open))),
+        Wait(1),
+        Check(Visible(Name("scrolled palette combo popup"))),
+        Check(Component(
+            target: Nth(60, Within(Name("scrolled palette combo popup"), Component("ItemView"))),
+            path: "UiGlobalTransform.0.translation.y",
+            unit: Logical,
+            is: Between(500.0, 720.0),
+        )),
+        MoveTo(Nth(60, Within(Name("scrolled palette combo popup"), Component("ItemView")))),
+        Click(Left),
+        Check(App(Selected(of: Name("scrolled palette combo"), items: ["red-500"]))),
+        Check(Component(target: Name("scrolled palette combo"), path: "State", is: Eq(Closed))),
+    ],
+    expect: [App(Selected(of: Name("scrolled palette combo"), items: ["red-500"]))],
+)

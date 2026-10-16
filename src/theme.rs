@@ -5,6 +5,7 @@ use bevy::color::palettes::tailwind::{
     GRAY_200, GRAY_400, GRAY_500, GRAY_600, GRAY_700, GRAY_800, GRAY_900, GRAY_950,
 };
 use bevy::prelude::*;
+use bevy::text::DEFAULT_REM_SIZE_PX;
 use educe::Educe;
 
 /// Registers the systems and observers of the [`Theme`].
@@ -26,6 +27,10 @@ fn update_theme(mut clear_color: ResMut<ClearColor>, theme: Res<Theme>) {
 /// How every widget looks.
 ///
 /// Changing the resource restyles all widgets, and keeps [`ClearColor`] in step with the background.
+///
+/// The `font_size_*` fields are the type scale in logical pixels at Bevy's default rem size. The
+/// widgets turn them into rem with [`Theme::font_size`], so their text follows the
+/// [`RemSize`] resource.
 #[derive(Resource, Clone, Debug, Educe, Reflect)]
 #[reflect(Resource)]
 #[educe(Default)]
@@ -133,6 +138,17 @@ impl Theme {
         let mut s = self.shadow_style;
         s.color = self.colors.small_shadow;
         s
+    }
+
+    /// The font size of a value of the type scale (one of the `font_size_*` fields, or a widget's
+    /// own size), given in logical pixels at the default rem size.
+    ///
+    /// It is a [`FontSize::Rem`], so the text follows the [`RemSize`]
+    /// resource: at Bevy's default of [`DEFAULT_REM_SIZE_PX`] (20 px) it is `px` logical pixels,
+    /// and an application that raises `RemSize` scales every widget's text with it.
+    #[must_use]
+    pub const fn font_size(px: f32) -> FontSize {
+        FontSize::Rem(px / DEFAULT_REM_SIZE_PX)
     }
 
     /// A light-mode theme with the given pair of colour sets, everything else default.

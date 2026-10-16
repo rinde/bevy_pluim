@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
@@ -51,6 +53,7 @@ impl Plugin for ListPlugin {
             )
             .add_observer(on_insert_selection)
             .add_observer(on_value_change)
+            .add_observer(keep_navigation_keys)
             .add_observer(handle_custom_view_mouse_events)
             .register_type::<ItemView>()
             .register_type::<ListLayout>()
@@ -438,6 +441,37 @@ fn on_value_change(
     });
 }
 
+/// Keeps the keys a focused [`List`] navigates with from bubbling past it.
+///
+/// The `ListBox` stops a first press of an arrow key, Home or End itself, but lets a held
+/// key's repeats and the release go on up to the window, where an app's directional
+/// navigation would move the focus out of the list. The list owns those keys while it has
+/// the focus, so none of them goes further. Keys that bubble up from a focused descendant
+/// (a button in a custom item view) are left alone; the `ListBox` still stops a first press
+/// of those, because the `focused_entity` it checks follows the event up the tree.
+fn keep_navigation_keys(
+    mut input: On<FocusedInput<KeyboardInput>>,
+    lists: Query<(), With<List>>,
+    focus: Res<InputFocus>,
+) {
+    // `focused_entity` follows the event up the tree, so the focus itself is read.
+    let list = input.event_target();
+    if focus.get() != Some(list) || !lists.contains(list) {
+        return;
+    }
+    if matches!(
+        input.event().input.key_code,
+        KeyCode::ArrowUp
+            | KeyCode::ArrowDown
+            | KeyCode::ArrowLeft
+            | KeyCode::ArrowRight
+            | KeyCode::Home
+            | KeyCode::End
+    ) {
+        input.propagate(false);
+    }
+}
+
 /// Puts [`Selected`] on a view, or takes it off, to match its item.
 pub(crate) fn sync_selected(
     commands: &mut Commands,
@@ -731,7 +765,7 @@ fn theme_item_labels(
     for (mut text_color, mut text_font) in it {
         text_color.0 = theme.colors.text_primary;
         text_font.font = theme.body_font.clone().into();
-        text_font.font_size = FontSize::Px(theme.font_size_secondary);
+        text_font.font_size = Theme::font_size(theme.font_size_secondary);
     }
 }
 

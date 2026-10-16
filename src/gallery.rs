@@ -137,7 +137,7 @@ struct BuiltGroups(Vec<(String, Vec<Entity>)>);
 fn label_font(theme: &Theme) -> TextFont {
     TextFont {
         font: theme.body_font.clone().into(),
-        font_size: FontSize::Px(theme.font_size_small),
+        font_size: Theme::font_size(theme.font_size_small),
         weight: FontWeight::SEMIBOLD,
         ..default()
     }

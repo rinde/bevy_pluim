@@ -26,9 +26,11 @@ use bevy::picking::events::{
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
-use bevy::text::LetterSpacing;
-use bevy::ui::{InteractionDisabled, Pressed, Selected};
-use bevy::ui_widgets::{Activate, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange};
+use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
+use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
+use bevy::ui_widgets::{
+    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
+};
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
@@ -981,7 +983,7 @@ fn a_compact_push_button_is_small_and_keeps_it_after_a_theme_change() {
                 .is_empty()
         );
         let font = app.world().entity(label).get::<TextFont>().unwrap();
-        assert_eq!(font.font_size, FontSize::Px(12.0));
+        assert_eq!(font.font_size, FontSize::Rem(0.6));
         assert_eq!(font.weight, FontWeight::SEMIBOLD);
     };
     check(&app);
@@ -1115,6 +1117,80 @@ fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
     app.update();
     assert!(!has_focus_ring(&app, focused));
     assert!(has_focus_ring(&app, other));
+}
+
+#[test]
+fn the_focus_ring_keeps_an_outline_the_app_set_and_gives_it_back() {
+    let mut app = headless_app();
+    let own = Outline::new(Val::Px(5.0), Val::Px(3.0), Color::WHITE);
+    let with_outline = spawn_push_button(&mut app);
+    app.world_mut().entity_mut(with_outline).insert(own);
+    let without = app.world_mut().spawn(PushButton::from_label("Other")).id();
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(with_outline));
+    app.world_mut().insert_resource(InputFocusVisible(true));
+    app.update();
+    app.update();
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let ring = app.world().entity(with_outline).get::<Outline>().unwrap();
+    assert_eq!(ring.color, colors.focus_ring);
+
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(without));
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(with_outline).get::<Outline>(),
+        Some(&own)
+    );
+    assert!(has_focus_ring(&app, without));
+
+    app.world_mut().insert_resource(InputFocusVisible(false));
+    app.update();
+    app.update();
+    assert!(!has_focus_ring(&app, without));
+    assert_eq!(
+        app.world().entity(with_outline).get::<Outline>(),
+        Some(&own)
+    );
+}
+
+#[test]
+fn the_focus_ring_keeps_an_outline_on_a_lists_active_row() {
+    let mut app = headless_app();
+    let own = Outline::new(Val::Px(5.0), Val::Px(3.0), Color::WHITE);
+    let row = app.world_mut().spawn((Node::default(), ListItem, own)).id();
+    let plain = app.world_mut().spawn((Node::default(), ListItem)).id();
+    let list = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ActiveDescendant(Some(row)));
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(list));
+    app.world_mut().insert_resource(InputFocusVisible(true));
+    app.update();
+    app.update();
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(
+        app.world().entity(row).get::<Outline>().unwrap().color,
+        colors.focus_ring
+    );
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ActiveDescendant(Some(plain)));
+    app.update();
+    app.update();
+    assert_eq!(app.world().entity(row).get::<Outline>(), Some(&own));
+    assert!(has_focus_ring(&app, plain));
+
+    app.world_mut().insert_resource(InputFocusVisible(false));
+    app.update();
+    app.update();
+    assert!(!has_focus_ring(&app, plain));
+    assert_eq!(app.world().entity(row).get::<Outline>(), Some(&own));
 }
 
 #[test]
@@ -1452,24 +1528,26 @@ fn a_color_palette_combo_popup_is_named_after_its_combo() {
         let popups = entities_named(&mut app, popup);
         assert_eq!(popups.len(), 1, "one {popup:?}, got {popups:?}");
         assert_eq!(
-            app.world().entity(popups[0]).get::<ChildOf>().map(|c| c.0),
-            Some(root),
-            "{popup:?} stays a child of the root"
+            app.world()
+                .entity(popups[0])
+                .get::<ChildOf>()
+                .and_then(|c| app.world().get::<Name>(c.0))
+                .map(Name::as_str),
+            Some(popup.trim_end_matches(" popup")),
+            "{popup:?} is a child of its combo"
         );
     }
 }
 
 #[test]
-fn a_color_palette_combo_spawns_its_popup_under_the_topmost_ancestor_of_the_combo() {
+fn a_color_palette_combo_spawns_its_popup_as_a_fixed_child_of_the_combo() {
     let mut app = headless_app();
-    let first_root = app.world_mut().spawn(Node::default()).id();
-    let second_root = app.world_mut().spawn(Node::default()).id();
-    let panel = app
+    let root = app.world_mut().spawn(Node::default()).id();
+    let panel = app.world_mut().spawn((Node::default(), ChildOf(root))).id();
+    let combo = app
         .world_mut()
-        .spawn((Node::default(), ChildOf(second_root)))
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(panel)))
         .id();
-    app.world_mut()
-        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(panel)));
 
     app.update();
     app.update();
@@ -1478,13 +1556,13 @@ fn a_color_palette_combo_spawns_its_popup_under_the_topmost_ancestor_of_the_comb
     assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
     assert_eq!(
         app.world().entity(floats[0]).get::<ChildOf>().map(|c| c.0),
-        Some(second_root),
-        "under the combo's own root, not the first one ({first_root})"
+        Some(combo)
     );
+    assert!(app.world().entity(floats[0]).contains::<FixedNode>());
 }
 
 #[test]
-fn a_color_palette_combo_without_a_parent_gets_no_popup() {
+fn a_color_palette_combo_without_a_parent_gets_its_popup() {
     let mut app = headless_app();
     let combo = app
         .world_mut()
@@ -1494,13 +1572,11 @@ fn a_color_palette_combo_without_a_parent_gets_no_popup() {
     app.update();
     app.update();
 
-    assert!(
-        app.world()
-            .entity(combo)
-            .get::<PaletteComboState>()
-            .is_none()
+    assert_eq!(
+        app.world().entity(combo).get::<PaletteComboState>(),
+        Some(&PaletteComboState::Closed)
     );
-    assert!(palette_combo_floats(&mut app).is_empty());
+    assert_eq!(palette_combo_floats(&mut app).len(), 1);
 }
 
 /// The selection of the only [`ColorPalette`] of the app.
@@ -2633,10 +2709,10 @@ fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
         .label_id;
     assert_eq!(
         font_of(&app, button_label),
-        (body.clone().into(), FontSize::Px(20.0))
+        (body.clone().into(), FontSize::Rem(1.0))
     );
-    assert_eq!(font_of(&app, regular), (body.into(), FontSize::Px(20.0)));
-    assert_eq!(font_of(&app, header), (display.into(), FontSize::Px(30.0)));
+    assert_eq!(font_of(&app, regular), (body.into(), FontSize::Rem(1.0)));
+    assert_eq!(font_of(&app, header), (display.into(), FontSize::Rem(1.5)));
 }
 
 #[test]
@@ -2664,23 +2740,38 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
         let c = theme.colors;
         assert_eq!(
             look(app, title),
-            (c.text_primary, FontSize::Px(theme.font_size_title))
+            (
+                c.text_primary,
+                FontSize::Rem(theme.font_size_title / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, regular),
-            (c.text_primary, FontSize::Px(theme.font_size_secondary))
+            (
+                c.text_primary,
+                FontSize::Rem(theme.font_size_secondary / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, secondary),
-            (c.text_secondary, FontSize::Px(theme.font_size_secondary))
+            (
+                c.text_secondary,
+                FontSize::Rem(theme.font_size_secondary / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, caption),
-            (c.text_tertiary, FontSize::Px(theme.font_size_small))
+            (
+                c.text_tertiary,
+                FontSize::Rem(theme.font_size_small / DEFAULT_REM_SIZE_PX)
+            )
         );
         assert_eq!(
             look(app, overline),
-            (c.text_secondary, FontSize::Px(theme.font_size_overline))
+            (
+                c.text_secondary,
+                FontSize::Rem(theme.font_size_overline / DEFAULT_REM_SIZE_PX)
+            )
         );
     };
     check(&app);
@@ -4368,6 +4459,22 @@ fn a_press_hides_the_tooltip_until_the_pointer_has_left_and_returned() {
 }
 
 #[test]
+fn a_tooltip_popup_is_a_fixed_child_of_its_node() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    let world = app.world_mut();
+    let popups: Vec<(Option<Entity>, bool)> = world
+        .query_filtered::<(Option<&ChildOf>, Has<FixedNode>), With<TooltipPopup>>()
+        .iter(world)
+        .map(|(parent, fixed)| (parent.map(ChildOf::parent), fixed))
+        .collect();
+    assert_eq!(popups, [(Some(button), true)]);
+}
+
+#[test]
 fn despawning_the_icon_button_removes_its_tooltip() {
     let (mut app, button) = tooltip_app();
     app.world_mut().entity_mut(button).insert(Hovered(true));
@@ -4444,8 +4551,8 @@ fn a_badge_on_an_icon_button_appears_updates_and_disappears() {
     assert_eq!(world.get::<TextColor>(badge).unwrap().0, colors.pill_text);
     let node = world.get::<Node>(badge).unwrap();
     assert_eq!(node.position_type, PositionType::Absolute);
-    assert_eq!(node.height, Val::Px(16.0));
-    assert_eq!(node.min_width, Val::Px(16.0));
+    assert_eq!(node.height, Val::Rem(0.8));
+    assert_eq!(node.min_width, Val::Rem(0.8));
     assert_eq!(world.get::<Pickable>(badge).unwrap(), &Pickable::IGNORE);
 
     app.world_mut()
@@ -4694,6 +4801,8 @@ fn the_hud_example_builds_and_runs() {
     });
     app.add_plugins(InputPlugin);
     app.add_plugins(DefaultPickingPlugins);
+    // The HUD is spawned from scenes (`bsn!`), which need the asset and scene plugins.
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
     app.init_resource::<ClearColor>();
     app.init_resource::<Assets<Image>>();
     app.add_plugins((WidgetsPlugin, hud_ui::HudPlugin));

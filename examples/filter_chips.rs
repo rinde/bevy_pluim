@@ -52,35 +52,31 @@ fn setup(mut commands: Commands) {
             },
         ]))
         .id();
-    let root = commands
-        .spawn((
+    commands.spawn_scene(bsn! {
+        Node {
+            width: percent(100.0),
+            height: percent(100.0),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(10.0),
+            padding: UiRect::all(px(10.0)),
+        }
+        Children [
+            // Narrow, so that the chips wrap.
+            FilterChips
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(10.0),
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
-            },
-            children![
-                // Narrow, so that the chips wrap.
-                (
-                    FilterChips,
-                    Node {
-                        width: Val::Px(320.0),
-                        flex_wrap: FlexWrap::Wrap,
-                        column_gap: Val::Px(6.0),
-                        row_gap: Val::Px(6.0),
-                        ..default()
-                    },
-                    Selection::reference(chips),
-                ),
-                // The same selection in a wide row.
-                (FilterChips, Selection::reference(chips)),
-            ],
-        ))
-        .id();
-    commands
-        .spawn((PushButton::from_label("Change theme"), ChildOf(root)))
-        .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
+                width: px(320.0),
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: px(6.0),
+                row_gap: px(6.0),
+            }
+            ~{Selection::reference(chips)}
+            --
+            // The same selection in a wide row.
+            FilterChips
+            ~{Selection::reference(chips)}
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+        ]
+    });
 }

@@ -26,39 +26,52 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-    commands.spawn((
+    commands.spawn_scene(bsn! {
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            width: percent(100.0),
+            height: percent(100.0),
             justify_content: JustifyContent::Start,
             align_items: AlignItems::Start,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
-            row_gap: Val::Px(10.0),
-            column_gap: Val::Px(10.0),
-            padding: UiRect::all(Val::Px(10.0)),
-            ..default()
-        },
-        children![
-            NumericStepper::default(),
-            (NumericStepper::default(), Value::new_u16(10, 5, 15, 1)),
-            (NumericStepper::default(), Value::new_u32(10, 5, 15, 1)),
-            (
-                NumericStepper::default(),
-                Value::new_f32(10.0, 5.0, 15.0, 0.5)
-            ),
-            (
-                NumericStepper {
-                    format: level,
-                    decrease_name: "Lower the level".into(),
-                    increase_name: "Raise the level".into(),
-                    ..default()
-                },
-                Value::new_u8(0, 0, 56, 7),
-            ),
-            (PushButton::from_label("Change theme"), ThemeButton),
-        ],
-    ));
+            row_gap: px(10.0),
+            column_gap: px(10.0),
+            padding: UiRect::all(px(10.0)),
+        }
+        Children [
+            inserted(NumericStepper::default())
+            --
+            inserted(NumericStepper::default())
+            ~{Value::new_u16(10, 5, 15, 1)}
+            --
+            inserted(NumericStepper::default())
+            ~{Value::new_u32(10, 5, 15, 1)}
+            --
+            inserted(NumericStepper::default())
+            ~{Value::new_f32(10.0, 5.0, 15.0, 0.5)}
+            --
+            inserted(NumericStepper {
+                format: level,
+                decrease_name: "Lower the level".into(),
+                increase_name: "Raise the level".into(),
+                ..default()
+            })
+            ~{Value::new_u8(0, 0, 56, 7)}
+            --
+            ~{PushButton::from_label("Change theme")} ThemeButton
+        ]
+    });
+}
+
+/// A `bsn!` entry that inserts `component` as it is.
+///
+/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a `NumericStepper`, which
+/// holds the `Handle`s of its icons,
+/// goes in through this.
+fn inserted<C: Component + Clone>(
+    component: C,
+) -> impl Template<Output = C> + Send + Sync + 'static {
+    template(move |_| Ok(component.clone()))
 }
 
 /// "Ground" at 0 and "+7", "+14", ... above it.
@@ -69,7 +82,7 @@ fn level(value: &Value) -> String {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Clone)]
 struct ThemeButton;
 
 fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {

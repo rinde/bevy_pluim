@@ -18,13 +18,14 @@
         Check(Not(Visible(Within(Name("Stack"), Role(role: Button, label: "hello"))))),
         // A click on "Change theme" focuses it; Tab then goes on in tree order to the two
         // lists of Panel B, then round to the tab list and "Change theme" again. It never
-        // lands on a button of Panel A.
+        // lands on a button of Panel A. The first three lists in the stack are Panel A's:
+        // its combo's list and the palettes in its two palette combos' popups.
         MoveTo(Role(role: Button, label: "Change theme")), Click(Left),
         Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
         Tap(key: Tab),
-        Check(App(Focused(of: Nth(1, Within(Name("Stack"), Component("List")))))),
+        Check(App(Focused(of: Nth(3, Within(Name("Stack"), Component("List")))))),
         Tap(key: Tab),
-        Check(App(Focused(of: Nth(2, Within(Name("Stack"), Component("List")))))),
+        Check(App(Focused(of: Nth(4, Within(Name("Stack"), Component("List")))))),
         Tap(key: Tab), Tap(key: Tab),
         Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
 

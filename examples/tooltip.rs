@@ -30,27 +30,25 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let icon = common::cross_icon(&mut images);
-    commands.spawn((
+    let close = IconButton::new(icon, "Close", IconButtonSize::Large);
+    commands.spawn_scene(bsn! {
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            width: percent(100.0),
+            height: percent(100.0),
             align_items: AlignItems::FlexStart,
-            column_gap: Val::Px(20.0),
-            padding: UiRect::all(Val::Px(20.0)),
-            ..default()
-        },
-        children![
-            (
-                PushButton::from_label("Hover me"),
-                Tooltip::new("A tip after half a second"),
-            ),
-            IconButton::new(icon, "Close", IconButtonSize::Large),
-            (
-                PushButton::from_label("Change theme"),
-                Observer::new(|_: On<Activate>, mut theme: ResMut<Theme>| {
-                    theme.light_dark_toggle();
-                }),
-            ),
-        ],
-    ));
+            column_gap: px(20.0),
+            padding: UiRect::all(px(20.0)),
+        }
+        Children [
+            ~{PushButton::from_label("Hover me")}
+            ~{Tooltip::new("A tip after half a second")}
+            --
+            common::inserted(close)
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| {
+                theme.light_dark_toggle();
+            })
+        ]
+    });
 }

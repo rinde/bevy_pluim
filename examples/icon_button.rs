@@ -29,35 +29,40 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let icon = common::cross_icon(&mut images);
-    commands.spawn((
+    let small = IconButton::new(icon.clone(), "Small", IconButtonSize::Small);
+    let regular = IconButton::new(icon.clone(), "Regular", IconButtonSize::Regular);
+    let large = IconButton::new(icon.clone(), "Large", IconButtonSize::Large);
+    let toggle = IconButton::new(icon.clone(), "Toggle", IconButtonSize::Regular);
+    let warning =
+        IconButton::new(icon.clone(), "Warning", IconButtonSize::Large).with_tone(Tone::Warning);
+    let danger = IconButton::new(icon, "Danger", IconButtonSize::Regular).with_tone(Tone::Danger);
+    commands.spawn_scene(bsn! {
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            width: percent(100.0),
+            height: percent(100.0),
             align_items: AlignItems::FlexStart,
-            column_gap: Val::Px(20.0),
-            padding: UiRect::all(Val::Px(20.0)),
-            ..default()
-        },
-        children![
-            IconButton::new(icon.clone(), "Small", IconButtonSize::Small),
-            IconButton::new(icon.clone(), "Regular", IconButtonSize::Regular),
-            IconButton::new(icon.clone(), "Large", IconButtonSize::Large),
+            column_gap: px(20.0),
+            padding: UiRect::all(px(20.0)),
+        }
+        Children [
+            common::inserted(small)
+            --
+            common::inserted(regular)
+            --
+            common::inserted(large)
+            --
             // A toggle: an `Activate` flips its `ToggleState`.
-            (
-                IconButton::new(icon.clone(), "Toggle", IconButtonSize::Regular),
-                ToggleState(false),
-            ),
-            (
-                IconButton::new(icon.clone(), "Warning", IconButtonSize::Large)
-                    .with_tone(Tone::Warning),
-            ),
-            (IconButton::new(icon, "Danger", IconButtonSize::Regular).with_tone(Tone::Danger)),
-            (
-                PushButton::from_label("Change theme"),
-                Observer::new(|_: On<Activate>, mut theme: ResMut<Theme>| {
-                    theme.light_dark_toggle();
-                }),
-            ),
-        ],
-    ));
+            common::inserted(toggle)
+            ~{ToggleState(false)}
+            --
+            common::inserted(warning)
+            --
+            common::inserted(danger)
+            --
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| {
+                theme.light_dark_toggle();
+            })
+        ]
+    });
 }

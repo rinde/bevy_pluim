@@ -8,15 +8,24 @@ mod widgets_check;
 mod widgets_setup;
 
 use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
+use bevy::ecs::schedule::{InternedScheduleLabel, ScheduleLabel, SingleThreadedExecutor};
 use bevy::ecs::system::RunSystemOnce;
 use std::path::Path;
 
 use bevy::a11y::AccessibilityNode;
 use bevy::camera::{CameraUpdateSystems, NormalizedRenderTarget, RenderTarget};
+use bevy::input::ButtonState;
+use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
+use bevy::input_focus::directional_navigation::{AutoNavigationConfig, DirectionalNavigationMap};
+use bevy::input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusVisible};
+use bevy::math::CompassOctant;
 use bevy::picking::input::PointerInputSettings;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
+use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator};
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
+use bevy::ui_widgets::Button;
+use bevy::window::PrimaryWindow;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -26,7 +35,8 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
-use rin_bevy_ui::list::List;
+use rin_bevy_ui::list::{ItemViewCreator, ItemViewSpawner, List};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
@@ -144,6 +154,265 @@ fn a_scenario_expecting_the_wrong_focus_fails() {
     // The second Tab lands on "Other", so expecting "Last" there must fail.
     let report = play(&tab_to(2, false, "Last"));
     assert!(!report.passed());
+}
+
+/// Moves the focus with the arrow keys, as an app that turns directional navigation on
+/// does: an observer on the window, so it gets only the keys no focused widget kept.
+fn navigate_with_arrow_keys(
+    input: On<FocusedInput<KeyboardInput>>,
+    mut navigator: AutoDirectionalNavigator,
+    mut visible: ResMut<InputFocusVisible>,
+) {
+    let key = &input.event().input;
+    if key.state != ButtonState::Pressed {
+        return;
+    }
+    let direction = match key.key_code {
+        KeyCode::ArrowUp => CompassOctant::North,
+        KeyCode::ArrowDown => CompassOctant::South,
+        KeyCode::ArrowLeft => CompassOctant::West,
+        KeyCode::ArrowRight => CompassOctant::East,
+        _ => return,
+    };
+    if navigator.navigate(direction).is_ok() {
+        visible.0 = true;
+    }
+}
+
+/// An app with directional navigation turned on: the resources of Bevy's
+/// `DirectionalNavigationPlugin` (the app is finished, so it takes no plugin), and every
+/// button taking part.
+fn directional_navigation_app() -> App {
+    let mut app = widgets_app();
+    app.init_resource::<DirectionalNavigationMap>()
+        .init_resource::<AutoNavigationConfig>();
+    app.add_observer(|added: On<Add<Button>>, mut commands: Commands| {
+        commands
+            .entity(added.entity)
+            .insert(AutoDirectionalNavigation::default());
+    });
+    app
+}
+
+/// "Left" and "Right" side by side, the `nav list` (A, B, C, A selected) under them and the
+/// `nav stepper` (10, from 5 to 15) under that; the list takes part in directional
+/// navigation, and the arrow keys move the focus through [`navigate_with_arrow_keys`].
+fn directional_navigation_screen(world: &mut World) {
+    let root = spawn_camera_and_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn(PushButton::from_label("Left"));
+            row.spawn(PushButton::from_label("Right"));
+        });
+        root.spawn((
+            Name::new("nav list"),
+            List,
+            AutoDirectionalNavigation::default(),
+            Selection::builder()
+                .one()
+                .build_with_items(["A", "B", "C"].map(Item::new)),
+        ));
+        root.spawn((
+            Name::new("nav stepper"),
+            NumericStepper::default(),
+            Value::new_u16(10, 5, 15, 1),
+        ));
+    });
+    let window = world
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(world)
+        .unwrap();
+    world.entity_mut(window).observe(navigate_with_arrow_keys);
+}
+
+fn nav_row(label: &str) -> Target {
+    Target::within(
+        Target::name("nav list"),
+        Target::role(WidgetRole::ListItem, label),
+    )
+}
+
+fn increase_button() -> Target {
+    Target::within(Target::name("nav stepper"), Target::name("Increase"))
+}
+
+fn focused(of: Target) -> Step {
+    Step::check(Check::app(WidgetsCheck::Focused { of }))
+}
+
+#[test]
+fn an_arrow_key_moves_the_focus_between_buttons_and_the_ring_follows() {
+    let button = |label: &str| Target::role(WidgetRole::Button, label);
+    let scenario = Scenario::new("an arrow key moves the focus between buttons")
+        .setup(directional_navigation_screen)
+        .steps([
+            Step::wait(2),
+            Step::tap(KeyCode::Tab),
+            focused(button("Left")),
+            Step::tap(KeyCode::ArrowRight),
+            focused(button("Right")),
+            Step::wait(1),
+            Step::check(Check::component::<Outline>(button("Right"), ".width").eq(px(2))),
+            Step::tap(KeyCode::ArrowLeft),
+            focused(button("Left")),
+        ]);
+    let report = scenario.run_in(&mut directional_navigation_app());
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
+#[test]
+fn a_focused_list_keeps_the_arrow_keys_from_directional_navigation() {
+    let list = || Target::name("nav list");
+    let scenario = Scenario::new("a focused list keeps the arrow keys")
+        .setup(directional_navigation_screen)
+        .steps([
+            Step::wait(2),
+            Step::tap(KeyCode::Tab),
+            Step::tap(KeyCode::Tab),
+            Step::tap(KeyCode::Tab),
+            focused(list()),
+            Step::tap(KeyCode::ArrowDown),
+            focused(list()),
+            Step::check(Check::app(WidgetsCheck::Active {
+                of: list(),
+                is: nav_row("B"),
+            })),
+            Step::tap(KeyCode::ArrowUp),
+            Step::tap(KeyCode::ArrowUp),
+            focused(list()),
+            Step::check(Check::app(WidgetsCheck::Active {
+                of: list(),
+                is: nav_row("C"),
+            })),
+        ]);
+    let report = scenario.run_in(&mut directional_navigation_app());
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
+#[test]
+fn a_focused_stepper_button_keeps_the_arrow_keys_from_directional_navigation() {
+    let scenario = Scenario::new("a focused stepper button keeps the arrow keys")
+        .setup(directional_navigation_screen)
+        .steps([
+            Step::wait(2),
+            Step::tap(KeyCode::Tab),
+            Step::tap(KeyCode::Tab),
+            Step::tap(KeyCode::Tab),
+            Step::tap(KeyCode::Tab),
+            Step::tap(KeyCode::Tab),
+            focused(increase_button()),
+            Step::tap(KeyCode::ArrowUp),
+            Step::check(Check::shows("11")),
+            focused(increase_button()),
+            Step::tap(KeyCode::ArrowDown),
+            Step::tap(KeyCode::ArrowDown),
+            Step::check(Check::shows("9")),
+            focused(increase_button()),
+        ]);
+    let report = scenario.run_in(&mut directional_navigation_app());
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
+/// A custom item view holding a "In row" button.
+fn row_with_button(spawner: In<ItemViewSpawner>, mut commands: Commands) {
+    commands.entity(spawner.view).with_children(|view| {
+        view.spawn((Name::new("In row"), PushButton::from_label("In row")));
+    });
+}
+
+/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
+/// app's navigation. (A first press does not, as Bevy's `ListBox` stops it; see AGENTS.md.)
+#[test]
+fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
+    let mut app = directional_navigation_app();
+    let create = app.world_mut().register_system(row_with_button);
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                List,
+                ItemViewCreator::new(create),
+                Selection::builder()
+                    .one()
+                    .build_with_items([Item::new("a")]),
+            ));
+            row.spawn((Name::new("Beside"), PushButton::from_label("Beside")));
+        });
+    });
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(window)
+        .observe(navigate_with_arrow_keys);
+    app.update();
+    app.update();
+    let in_row = named(&mut app, "In row");
+    let beside = named(&mut app, "Beside");
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(in_row, FocusCause::Navigated);
+    app.update();
+
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(beside)
+    );
+}
+
+/// Sends `key` as the window's keyboard would, pressed (perhaps as a repeat) or released.
+fn send_key(app: &mut App, key_code: KeyCode, state: ButtonState, repeat: bool) {
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().write_message(KeyboardInput {
+        key_code,
+        logical_key: Key::Unidentified(NativeKey::Unidentified),
+        state,
+        text: None,
+        repeat,
+        window,
+    });
+    app.update();
+}
+
+#[test]
+fn a_held_arrow_key_does_not_move_the_focus_out_of_a_focused_list() {
+    let mut app = directional_navigation_app();
+    directional_navigation_screen(app.world_mut());
+    app.update();
+    app.update();
+    let list = named(&mut app, "nav list");
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, FocusCause::Navigated);
+    app.update();
+
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, false);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Released, false);
+
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(list)
+    );
 }
 
 #[test]
@@ -920,6 +1189,62 @@ fn every_scenario_file_passes_with_the_ui_drawn_to_an_image() {
         let report = scenario.run_in(&mut app);
         if !report.passed() {
             failed.push((path.display().to_string(), report.failures().clone()));
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+}
+
+/// Fixed seeds for shuffling a schedule: never the clock, so a failure
+/// reproduces from the seed it names.
+const SHUFFLE_SEEDS: [u64; 4] = [1, 2, 3, 0x5eed_cafe];
+
+/// The schedules this crate adds systems to, by name.
+fn shuffled_schedules() -> [(&'static str, InternedScheduleLabel); 4] {
+    [
+        ("PreUpdate", PreUpdate.intern()),
+        ("Update", Update.intern()),
+        ("PostUpdate", PostUpdate.intern()),
+        ("Last", Last.intern()),
+    ]
+}
+
+/// Has `schedule` run its systems in an order shuffled by `seed` wherever
+/// nothing orders them, on the single-threaded executor so the order is the
+/// seed's alone.
+fn shuffle(app: &mut App, schedule: InternedScheduleLabel, seed: u64) {
+    app.edit_schedule(schedule, |schedule| {
+        let mut settings = schedule.get_build_settings();
+        settings.shuffle_seed = Some(seed);
+        schedule.set_build_settings(settings);
+        schedule.set_executor(SingleThreadedExecutor::new());
+    });
+}
+
+#[test]
+fn every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed() {
+    // A system that runs at the right moment only because nothing happened to
+    // run it earlier passes under one seed and fails under another. A failure
+    // names the file, the schedule and the seed, and replays from them.
+    let registry = Registry::default();
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
+    let mut failed = Vec::new();
+    for path in ron_files(dir).unwrap() {
+        let scenario = load_ron_file(&path, &registry).unwrap();
+        for (name, schedule) in shuffled_schedules() {
+            for seed in SHUFFLE_SEEDS {
+                let mut app = widgets_app();
+                registry.install(app.world_mut());
+                shuffle(&mut app, schedule, seed);
+                let report = scenario.run_in(&mut app);
+                if !report.passed() {
+                    failed.push((
+                        path.display().to_string(),
+                        name,
+                        seed,
+                        report.failures().clone(),
+                    ));
+                }
+            }
         }
     }
     assert!(failed.is_empty(), "{failed:#?}");
