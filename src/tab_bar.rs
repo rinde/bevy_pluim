@@ -254,8 +254,8 @@ fn sync_accessibility(
 }
 
 /// Keeps the [`TabIndex`] of the tabs of every bar: while the bar is shown, the tab list's
-/// roving one (0 for the focused tab, else the selected one, else the first enabled one, -1
-/// for the others), and -1 for every tab while the bar is hidden (its [`InheritedVisibility`]
+/// roving one (Bevy's `update_tablist_derived_state`: 0 for the focused tab, else the selected
+/// one, else the first enabled one, -1 for the others), and -1 for every tab while the bar is hidden (its [`InheritedVisibility`]
 /// is hidden, or it or an ancestor is `Display::None`, as in a hidden `Stack` panel), so Tab
 /// skips a hidden bar and reaches it again once it shows.
 ///
