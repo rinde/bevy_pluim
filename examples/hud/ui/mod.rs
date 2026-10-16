@@ -18,7 +18,7 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
-use bevy::ui_widgets::TextInput;
+use bevy::ui_widgets::{TextInput, ValueChange as SliderChange};
 use icons::Icons;
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::badge::Badge;
@@ -38,6 +38,7 @@ use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{Item, ItemOf, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
+use rin_bevy_ui::slider::Slider;
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::text_field::{TextField, TextFieldCommit};
 use rin_bevy_ui::theme::{Theme, ThemeMode};
@@ -198,6 +199,7 @@ fn spawn_hud(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut them
     commands.spawn(Camera2d);
     let train_rows = commands.register_system(train_row);
     commands.insert_resource(TrainRows(train_rows));
+    commands.insert_resource(SimulationSpeed(1.0));
 
     let bar = spawn_panel_bar(&mut commands, &icons);
     let tools = spawn_dock_tools(&mut commands, &icons);
@@ -242,8 +244,40 @@ fn run_state(icons: &Icons) -> impl Scene {
             RunLabel
             --
             ~{Kbd::new("P")}
+            --
+            ~{Slider::new(0.0, SPEED_MIN_OCTAVE, SPEED_MAX_OCTAVE)
+                .with_step(1.0)
+                .with_format(speed_label)
+                .with_name("Speed")}
+            Node { width: px(120.0) }
+            on(on_speed_changed)
         ]
     }
+}
+
+/// The slowest speed, in octaves (powers of two) from normal: 0.25x.
+const SPEED_MIN_OCTAVE: f32 = -2.0;
+
+/// The fastest speed, in octaves from normal: 8x.
+const SPEED_MAX_OCTAVE: f32 = 3.0;
+
+/// The simulation speed the example's slider sets, as a multiple of normal.
+#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+struct SimulationSpeed(f32);
+
+/// The speed a slider position in octaves stands for.
+fn speed_of(octaves: f32) -> f32 {
+    octaves.exp2()
+}
+
+/// The slider's text: "0.25x", "1x", "8x".
+fn speed_label(octaves: f32) -> String {
+    format!("{}x", speed_of(octaves))
+}
+
+/// Keeps the speed the slider was moved to.
+fn on_speed_changed(change: On<SliderChange<f32>>, mut speed: ResMut<SimulationSpeed>) {
+    speed.0 = speed_of(change.value);
 }
 
 /// The items of the panel toolbar, each with the creator of its panel, and their selection.
