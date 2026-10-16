@@ -5219,6 +5219,14 @@ fn the_hud_example_builds_and_runs() {
     // and the Warnings panel is made hidden.
     assert_eq!(world.query::<&Panel>().iter(world).count(), 2);
     assert_eq!(world.query::<&ItemView>().iter(world).count(), 4);
+    // The run-state card has the simulation speed slider.
+    assert_eq!(
+        world
+            .query::<&rin_bevy_ui::slider::Slider>()
+            .iter(world)
+            .count(),
+        1
+    );
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
 }
