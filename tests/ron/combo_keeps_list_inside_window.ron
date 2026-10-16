@@ -1,6 +1,7 @@
 // A combo's list is kept 10 pixels inside the window, as a palette combo's popup is. The
 // `right edge combo` (x 1200, 100 wide) opens a list as wide as the combo's default node
-// and must not run past the right edge (1280 - 10): its centre is 1270 less half its width, where without the rule it would be 1250 or more; the `bottom edge combo` (y 660) has no
+// and must not run past the right edge (1280 - 10): its centre is 1270 less half its width,
+// where without the rule it would be 1250 or more; the `bottom edge combo` (y 660) has no
 // room under it, so its list opens above the button.
 (
     format_version: 3,
