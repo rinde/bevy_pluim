@@ -4969,6 +4969,47 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
 }
 
 #[test]
+fn a_scene_points_a_stack_at_a_selection_named_in_the_same_scene() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins((
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+        MeshPlugin,
+        VisibilityPlugin,
+    ));
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins((InputPlugin, DefaultPickingPlugins));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let items = [(Item::new("a"), StackItem::new(create_a))];
+    app.world_mut().commands().spawn_scene(bsn! {
+        Node
+        Children [
+            #sel
+            template(move |context| {
+                context
+                    .entity
+                    .insert(Selection::builder().one().build_with_items(items.clone()));
+                Ok(bevy::scene::EmptySceneEffect)
+            })
+            --
+            Stack { selection_ref: #sel }
+        ]
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+    single_entity_with::<PanelA>(&mut app);
+}
+
+#[test]
 fn the_hud_example_builds_and_runs() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);

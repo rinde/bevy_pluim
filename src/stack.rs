@@ -21,7 +21,7 @@ impl Plugin for StackPlugin {
 }
 
 /// Shows the one [`StackItem`] child that matches the selection on `selection_ref`.
-#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[derive(Component, FromTemplate, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("Stack"), Node::default())]
 pub struct Stack {

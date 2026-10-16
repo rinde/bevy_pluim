@@ -325,7 +325,7 @@ fn panels(bar: Entity, icons: &Icons) -> impl Scene {
             ~{PanelKind::Warnings}
             WarningsPanel
             --
-            ~{Stack { selection_ref: bar }}
+            Stack { selection_ref: bar }
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexEnd,
@@ -407,7 +407,7 @@ fn dock(selection: Entity) -> impl Scene {
             row_gap: px(10.0),
         }
         Children [
-            ~{Stack { selection_ref: selection }}
+            Stack { selection_ref: selection }
             --
             ~{Card}
             Node {
