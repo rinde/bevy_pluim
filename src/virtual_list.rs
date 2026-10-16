@@ -15,7 +15,7 @@ use bevy::ui_widgets::{ActiveDescendant, Button, ListItem};
 use bevy::window::PrimaryWindow;
 use itertools::Either;
 
-use crate::focus::TabStop;
+use crate::focus::{AccessibilitySync, DrawFocusRing, TabStop};
 use crate::list::{
     CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, item_background, sync_selected,
 };
@@ -36,8 +36,12 @@ impl Plugin for VirtualListPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            (grow_pools, show_rows).chain().before(UiSystems::Layout),
+            (grow_pools, show_rows)
+                .chain()
+                .before(UiSystems::Layout)
+                .before(DrawFocusRing),
         )
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
         .add_systems(
             Update,
             (|| None::<Entity>)
@@ -76,9 +80,14 @@ impl Plugin for VirtualListPlugin {
 /// Selection is that of a [`List`](crate::list::List): a row of a selected item carries
 /// [`Selected`], a click on a row toggles its item as far as the selection allows, and once
 /// the list has the focus (it is one tab stop) the arrow keys move the active row (wrapping
-/// round), Home and End go to the first and last item, all scrolling the active row into
-/// view, and Enter or Space selects its item. The focus ring is on the active row, which
-/// [`ActiveDescendant`] names while it is in the pool.
+/// round), Page Up and Page Down by as many rows as fit in the view (stopping at the first
+/// and last item), Home and End go to the first and last item, all scrolling the active row
+/// into view, and Enter or Space selects its item. The focus ring is on the active row, which
+/// [`ActiveDescendant`] names while it is in the pool, from the frame it moves.
+///
+/// To a screen reader it is a [`Role::ListBox`] whose `size_of_set` is the number of items,
+/// and each row in view a list item whose `position_in_set` is its item's place among them,
+/// counted from 1, so a row says where it is among all items, not among the pooled rows.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -192,6 +201,13 @@ impl View {
             .saturating_sub(OVERSCAN_ROWS)
             .min(count.saturating_sub(rows));
         first..first.saturating_add(rows).min(count)
+    }
+
+    /// How many whole rows of `row_height` fit in the view, one at least: how far Page Up and
+    /// Page Down move.
+    #[expect(clippy::cast_sign_loss, reason = "the value is at least 1")]
+    fn rows_per_page(&self, row_height: f32) -> usize {
+        (self.height / row_height).floor().max(1.0) as usize
     }
 
     /// How many rows it takes to fill the view and the margin beyond it, for `count` items.
@@ -480,8 +496,8 @@ fn pick_on_click(
     selections.update_selection(row.list, |selection| selection.toggle_selected(item));
 }
 
-/// Moves the active row with the arrow keys, Home and End, scrolling it into view, and
-/// selects its item on Enter or Space, while the list has the focus.
+/// Moves the active row with the arrow keys, Page Up, Page Down, Home and End, scrolling it
+/// into view, and selects its item on Enter or Space, while the list has the focus.
 fn navigate(
     mut input: On<FocusedInput<KeyboardInput>>,
     focus: Res<InputFocus>,
@@ -508,6 +524,8 @@ fn navigate(
             | KeyCode::ArrowDown
             | KeyCode::ArrowLeft
             | KeyCode::ArrowRight
+            | KeyCode::PageUp
+            | KeyCode::PageDown
             | KeyCode::Home
             | KeyCode::End
     );
@@ -518,7 +536,7 @@ fn navigate(
     // The list owns these keys while it has the focus: none goes on to the app's navigation.
     input.propagate(false);
     let key = input.event().input.clone();
-    // A held arrow keeps moving; Home, End, Enter and Space act on the first press.
+    // A held arrow or page key keeps moving; Home, End, Enter and Space act on the first press.
     let is_arrow = !matches!(
         key.key_code,
         KeyCode::Home | KeyCode::End | KeyCode::Enter | KeyCode::Space
@@ -533,7 +551,7 @@ fn navigate(
     let Some(last_index) = count.checked_sub(1) else {
         return;
     };
-    let current = state.active.or_else(|| {
+    let current = state.active.map(|index| index.min(last_index)).or_else(|| {
         let selection = selections.get(list)?;
         items.iter().position(|item| selection.is_selected(item))
     });
@@ -551,6 +569,8 @@ fn navigate(
         return;
     }
 
+    let view = views.of(list);
+    let page = view.map_or(1, |view| view.rows_per_page(virtual_list.row_height));
     let next = match key.key_code {
         KeyCode::ArrowUp | KeyCode::ArrowLeft => match current {
             Some(index) if index > 0 && index <= last_index => index - 1,
@@ -560,13 +580,15 @@ fn navigate(
             Some(index) if index < last_index => index + 1,
             _ => 0,
         },
+        KeyCode::PageUp => current.unwrap_or(0).saturating_sub(page),
+        KeyCode::PageDown => current.unwrap_or(0).saturating_add(page).min(last_index),
         KeyCode::Home => 0,
         _ => last_index,
     };
     state.active = Some(next);
     focus_visible.0 = true;
 
-    let Some(view) = views.of(list) else {
+    let Some(view) = view else {
         return;
     };
     let Some(area) = view.area else {
@@ -635,6 +657,42 @@ fn deactivate_on_focus_lost(
     }
     if let Ok(mut state) = lists.get_mut(list) {
         state.active = None;
+    }
+}
+
+/// Tells a screen reader how many items each [`VirtualList`] has and where the item of each
+/// of its rows is among them, so a row in the pool reads as item 9,000 of 10,000.
+fn sync_accessibility(
+    mut lists: Query<(Entity, &VirtualListState, &mut AccessibilityNode), With<VirtualList>>,
+    mut rows: Query<(&VirtualListRow, &mut AccessibilityNode), Without<VirtualList>>,
+    selections: SelectionParam,
+) {
+    for (list, state, mut node) in &mut lists {
+        let count = selections
+            .get_item_values(list)
+            .map_or(0, |(_, items)| items.len());
+        if node.size_of_set() != Some(count) {
+            node.set_size_of_set(count);
+        }
+        for &row in &state.rows {
+            let Ok((row, mut node)) = rows.get_mut(row) else {
+                continue;
+            };
+            let position = row.index.map(|index| index + 1);
+            match position {
+                Some(position) if node.position_in_set() != Some(position) => {
+                    node.set_position_in_set(position);
+                }
+                None if node.position_in_set().is_some() => node.clear_position_in_set(),
+                _ => {}
+            }
+            let size = position.map(|_| count);
+            match size {
+                Some(size) if node.size_of_set() != Some(size) => node.set_size_of_set(size),
+                None if node.size_of_set().is_some() => node.clear_size_of_set(),
+                _ => {}
+            }
+        }
     }
 }
 
