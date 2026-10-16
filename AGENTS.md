@@ -449,7 +449,7 @@ of them (`just example gallery -- --run-all stack link`).
   registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
-  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+  (`tests/ron/keyboard_tab_order.ron`). `keyboard_focus_ring_in_both_themes.ron` Tabs to "Change theme" and toggles the theme, to record the ring on both. The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
 - **Directional navigation is the app's.** The library adds none: an app that wants the
   arrow keys (or a gamepad stick) to move the focus between widgets puts Bevy's
   `AutoDirectionalNavigation` on the widgets that take part, adds
