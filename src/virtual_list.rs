@@ -1,0 +1,637 @@
+//! `VirtualList`: a list that renders only the items in view, for lists of many thousands.
+
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
+use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::system::SystemParam;
+use bevy::ecs::world::DeferredWorld;
+use bevy::input::ButtonState;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::{FocusGained, FocusLost, FocusedInput, InputFocus, InputFocusVisible};
+use bevy::picking::hover::Hovered;
+use bevy::prelude::*;
+use bevy::ui::{Selected, UiSystems};
+use bevy::ui_widgets::{ActiveDescendant, Button, ListItem};
+use bevy::window::PrimaryWindow;
+use itertools::Either;
+
+use crate::focus::TabStop;
+use crate::list::{
+    CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, item_background, sync_selected,
+};
+use crate::select::{Item, SelectionParam};
+use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
+
+/// Rows kept beyond each edge of the view, so a small scroll shows rows that are ready.
+const OVERSCAN_ROWS: usize = 2;
+
+/// How far a focus ring reaches beyond its row, in logical pixels: its 1 px offset and 2 px
+/// width. The keyboard scrolls the active row into view with its ring.
+const FOCUS_RING_REACH: f32 = 3.0;
+
+pub(crate) struct VirtualListPlugin;
+
+impl Plugin for VirtualListPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            PostUpdate,
+            (grow_pools, show_rows).chain().before(UiSystems::Layout),
+        )
+        .add_systems(
+            Update,
+            (|| None::<Entity>)
+                .pipe(theme_virtual_lists)
+                .run_if(resource_changed::<Theme>),
+        )
+        .add_observer(navigate)
+        .add_observer(pick_on_click)
+        .add_observer(activate_on_focus)
+        .add_observer(deactivate_on_focus_lost)
+        .register_type::<VirtualList>()
+        .register_type::<VirtualListRow>();
+    }
+}
+
+/// A list of rows of one height that renders only the items in view, so that it costs the
+/// rows on screen, not the items.
+///
+/// It shows the items of its [`Selection`](crate::select::Selection) (its own or a
+/// [`Selection::Ref`](crate::select::Selection::Ref)) as a list does, but its node is as tall
+/// as all the rows together and holds only a pool of [`VirtualListRow`]s: those in view and
+/// a few beyond. When the view moves, the rows are handed on to the items now in view; a row
+/// is never spawned or despawned for a scroll. The pool grows when the view grows and stays at
+/// that size, whatever the number of items.
+///
+/// Put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) that scrolls vertically: the
+/// view is the nearest ancestor whose [`Node::overflow`] scrolls along y, or the window when
+/// there is none. It is as wide as its parent.
+///
+/// A row shows the text of an `Item<String>`. With an [`ItemViewCreator`] (added with the
+/// list, before the first update) the app fills the rows instead: the creator runs with an
+/// [`ItemViewSpawner`] whose `view` is the row, emptied, each time the row is handed to
+/// another item. An app may also observe the insertion of [`VirtualListRow`], which happens
+/// at the same moment.
+///
+/// Selection is that of a [`List`](crate::list::List): a row of a selected item carries
+/// [`Selected`], a click on a row toggles its item as far as the selection allows, and once
+/// the list has the focus (it is one tab stop) the arrow keys move the active row (wrapping
+/// round), Home and End go to the first and last item, all scrolling the active row into
+/// view, and Enter or Space selects its item. The focus ring is on the active row, which
+/// [`ActiveDescendant`] names while it is in the pool.
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[component(on_insert = Self::on_insert)]
+#[require(
+    Name::new("VirtualList"),
+    Node = Node {
+        width: Val::Percent(100.0),
+        ..default()
+    },
+    AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::ListBox)),
+    ActiveDescendant,
+    TabStop,
+    VirtualListState,
+    Pickable {
+        should_block_lower: false,
+        ..default()
+    },
+)]
+pub struct VirtualList {
+    /// The height of every row, in logical pixels.
+    pub row_height: f32,
+}
+
+impl VirtualList {
+    /// A list whose rows are `row_height` logical pixels high.
+    #[must_use]
+    pub const fn new(row_height: f32) -> Self {
+        Self { row_height }
+    }
+
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        world
+            .commands()
+            .run_system_cached_with(theme_virtual_lists, Some(context.entity));
+    }
+}
+
+/// One row of a [`VirtualList`], showing the item at `index` of the list's items.
+///
+/// Immutable: when the row is handed to another item a new value is inserted, so an app can
+/// observe the change. A row that shows no item (the list has fewer items than rows) has
+/// `None` for both and is not displayed.
+#[derive(Component, Debug, Copy, Clone, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+#[require(
+    Name::new("VirtualListRow"),
+    Hovered,
+    ListItem,
+    Pickable {
+        should_block_lower: false,
+        ..default()
+    },
+)]
+pub struct VirtualListRow {
+    /// The list this row belongs to.
+    pub list: Entity,
+    /// Where the item it shows is in the list's items.
+    pub index: Option<usize>,
+    /// The item it shows.
+    pub item: Option<Entity>,
+}
+
+/// The rows of a [`VirtualList`] and the index of the item the keyboard is on.
+#[derive(Component, Debug, Clone, Default)]
+struct VirtualListState {
+    rows: Vec<Entity>,
+    active: Option<usize>,
+}
+
+/// The text child of a row that shows an `Item<String>`.
+#[derive(Component, Debug, Copy, Clone)]
+struct RowLabel(Entity);
+
+/// What of a [`VirtualList`] is in view, in logical pixels.
+#[derive(Debug, Copy, Clone)]
+struct View {
+    /// The node that scrolls the list, if any.
+    area: Option<Entity>,
+    /// Where the list's top is in the scrolled contents of `area`.
+    offset: f32,
+    /// How far the contents of `area` are scrolled now.
+    scroll: f32,
+    /// How far they can scroll.
+    max_scroll: f32,
+    /// The height of the view.
+    height: f32,
+}
+
+impl View {
+    /// The first and last-but-one index of the rows to show, `rows` of them at most, for
+    /// `count` items of `row_height`.
+    #[expect(clippy::cast_sign_loss, reason = "the value is at least 0")]
+    fn rows_in_view(&self, row_height: f32, count: usize, rows: usize) -> std::ops::Range<usize> {
+        let top = ((self.scroll - self.offset) / row_height).floor().max(0.0) as usize;
+        let first = top
+            .saturating_sub(OVERSCAN_ROWS)
+            .min(count.saturating_sub(rows));
+        first..(first + rows).min(count)
+    }
+
+    /// How many rows it takes to fill the view and the margin beyond it, for `count` items.
+    #[expect(clippy::cast_sign_loss, reason = "the value is at least 0")]
+    fn rows_needed(&self, row_height: f32, count: usize) -> usize {
+        let fitting = (self.height / row_height).ceil().max(0.0) as usize;
+        (fitting + 1 + 2 * OVERSCAN_ROWS).min(count)
+    }
+}
+
+/// Finds what of a [`VirtualList`] is in view.
+#[derive(SystemParam)]
+struct Views<'w, 's> {
+    parents: Query<'w, 's, &'static ChildOf>,
+    lists: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform), With<VirtualList>>,
+    areas: Query<
+        'w,
+        's,
+        (
+            &'static Node,
+            &'static ComputedNode,
+            &'static UiGlobalTransform,
+            &'static ScrollPosition,
+        ),
+        (Without<VirtualList>, Without<VirtualListRow>),
+    >,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+}
+
+impl Views<'_, '_> {
+    /// What of `list` is in view: the part of the nearest ancestor that scrolls along y, or of
+    /// the window.
+    ///
+    /// The list's place comes from the last layout, the scroll from [`ScrollPosition`] as it
+    /// is now, so a scroll shows its rows in the layout that follows it.
+    fn of(&self, list: Entity) -> Option<View> {
+        let (computed, transform) = self.lists.get(list).ok()?;
+        let scale = computed.inverse_scale_factor();
+        let list_top = computed.size().y.mul_add(-0.5, transform.translation.y) * scale;
+        let area = self.parents.iter_ancestors(list).find(|ancestor| {
+            self.areas
+                .get(*ancestor)
+                .is_ok_and(|(node, ..)| node.overflow.y == OverflowAxis::Scroll)
+        });
+        let Some((area, (_, area_computed, area_transform, scroll))) =
+            area.and_then(|area| Some((area, self.areas.get(area).ok()?)))
+        else {
+            let height = self.windows.iter().next().map_or(0.0, Window::height);
+            return Some(View {
+                area: None,
+                offset: list_top,
+                scroll: 0.0,
+                max_scroll: 0.0,
+                height,
+            });
+        };
+        let area_scale = area_computed.inverse_scale_factor();
+        let area_height = area_computed.size().y * area_scale;
+        let area_top = area_transform
+            .translation
+            .y
+            .mul_add(area_scale, -0.5 * area_height);
+        // The layout placed the list shifted by the scroll it had then.
+        let laid_out_scroll = area_computed.scroll_position.y * area_scale;
+        Some(View {
+            area: Some(area),
+            offset: list_top - area_top + laid_out_scroll,
+            scroll: scroll.y,
+            max_scroll: ((area_computed.content_size().y - area_computed.size().y) * area_scale)
+                .max(0.0),
+            height: area_height,
+        })
+    }
+}
+
+/// Spawns the rows a [`VirtualList`] lacks to fill its view, never more than it has items.
+fn grow_pools(
+    mut lists: Query<(
+        Entity,
+        &VirtualList,
+        &mut VirtualListState,
+        Option<&ItemViewCreator>,
+    )>,
+    views: Views,
+    selections: SelectionParam,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    for (list, virtual_list, mut state, creator) in &mut lists {
+        let Some(count) = selections
+            .get_item_values(list)
+            .map(|(_, items)| items.len())
+        else {
+            continue;
+        };
+        let Some(view) = views.of(list) else {
+            continue;
+        };
+        let needed = view.rows_needed(virtual_list.row_height, count);
+        while state.rows.len() < needed {
+            let mut row = commands.spawn((
+                VirtualListRow {
+                    list,
+                    index: None,
+                    item: None,
+                },
+                Node {
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    right: Val::Px(0.0),
+                    height: Val::Px(virtual_list.row_height),
+                    align_items: AlignItems::Center,
+                    overflow: Overflow::clip(),
+                    padding: theme.item_padding,
+                    ..default()
+                },
+                ChildOf(list),
+            ));
+            if creator.is_none() {
+                let label = row
+                    .commands()
+                    .spawn((Text::default(), ItemLabel, Pickable::IGNORE))
+                    .id();
+                row.add_child(label).insert(RowLabel(label));
+            }
+            state.rows.push(row.id());
+        }
+    }
+}
+
+/// Hands the rows of each [`VirtualList`] to the items in view and keeps their place,
+/// [`Selected`], colours and the [`ActiveDescendant`] in step.
+///
+/// Each frame it looks at the rows only, never at all the items: a row keeps its item while
+/// that stays in view (row `i % rows` shows item `i`), so a scroll by one row hands on one
+/// row.
+fn show_rows(
+    mut lists: Query<(
+        Entity,
+        &VirtualList,
+        &VirtualListState,
+        &ActiveDescendant,
+        &mut Node,
+        Option<&ItemViewCreator>,
+    )>,
+    mut rows: Query<
+        (
+            &VirtualListRow,
+            &mut Node,
+            &mut BackgroundColor,
+            &Hovered,
+            Has<Selected>,
+            Option<&RowLabel>,
+        ),
+        Without<VirtualList>,
+    >,
+    mut labels: Query<&mut Text>,
+    texts: Query<Ref<Item<String>>>,
+    views: Views,
+    selections: SelectionParam,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    for (list, virtual_list, state, active, mut list_node, creator) in &mut lists {
+        let Some((_, items)) = selections.get_item_values(list) else {
+            continue;
+        };
+        let Some(view) = views.of(list) else {
+            continue;
+        };
+        let row_height = virtual_list.row_height;
+        let height = Val::Px(items.len() as f32 * row_height);
+        if list_node.height != height {
+            list_node.height = height;
+        }
+        let selection = selections.get(list);
+
+        let pool = state.rows.len();
+        let mut shown = vec![None; pool];
+        for index in view.rows_in_view(
+            row_height,
+            items.len(),
+            view.rows_needed(row_height, items.len()).min(pool),
+        ) {
+            if let Some(slot) = shown.get_mut(index % pool.max(1)) {
+                *slot = Some(index);
+            }
+        }
+
+        let mut active_row = None;
+        for (&row, index) in state.rows.iter().zip(shown) {
+            let Ok((current, mut node, mut background, hovered, was_selected, label)) =
+                rows.get_mut(row)
+            else {
+                continue;
+            };
+            let item = index.and_then(|index| items.get(index).copied());
+            let wanted = VirtualListRow { list, index, item };
+            let handed_on = *current != wanted;
+            if handed_on {
+                commands.entity(row).insert(wanted);
+                if let (Some(creator), Some(item)) = (creator, item) {
+                    commands.entity(row).despawn_related::<Children>();
+                    commands.run_system_with(creator.create, ItemViewSpawner { item, view: row });
+                }
+            }
+
+            let display = if item.is_some() {
+                Display::Flex
+            } else {
+                Display::None
+            };
+            let top = Val::Px(index.unwrap_or_default() as f32 * row_height);
+            let row_height = Val::Px(row_height);
+            if node.display != display || node.top != top || node.height != row_height {
+                node.display = display;
+                node.top = top;
+                node.height = row_height;
+            }
+
+            if let (Some(RowLabel(label)), Some(text)) =
+                (label, item.and_then(|item| texts.get(item).ok()))
+                && (handed_on || text.is_changed())
+                && let Ok(mut label_text) = labels.get_mut(*label)
+            {
+                label_text.0.clone_from(&text.data);
+            }
+
+            let is_selected = item
+                .is_some_and(|item| selection.is_some_and(|selection| selection.is_selected(item)));
+            sync_selected(&mut commands, row, was_selected, is_selected);
+            background.set_if_neq(BackgroundColor(item_background(
+                &theme.colors,
+                CornerStyle::FollowLayout,
+                is_selected,
+                hovered.get(),
+            )));
+            if index.is_some() && index == state.active {
+                active_row = Some(row);
+            }
+        }
+        if active.0 != active_row {
+            commands.entity(list).insert(ActiveDescendant(active_row));
+        }
+    }
+}
+
+/// Picks the item of a clicked row, as far as the selection allows, and makes it the active
+/// row. A click inside a [`Button`] in a row is the button's.
+fn pick_on_click(
+    t: On<MouseEvent>,
+    parents: Query<&ChildOf>,
+    rows: Query<&VirtualListRow>,
+    buttons: Query<(), With<Button>>,
+    mut states: Query<&mut VirtualListState>,
+    mut selections: SelectionParam,
+) {
+    if !matches!(t.event().kind, MouseKind::Click(_)) {
+        return;
+    }
+    let mut current = t.event().event_target();
+    let row = loop {
+        if let Ok(row) = rows.get(current) {
+            break *row;
+        }
+        if buttons.contains(current) {
+            return;
+        }
+        let Ok(child_of) = parents.get(current) else {
+            return;
+        };
+        current = child_of.parent();
+    };
+    let (Some(index), Some(item)) = (row.index, row.item) else {
+        return;
+    };
+    if let Ok(mut state) = states.get_mut(row.list) {
+        state.active = Some(index);
+    }
+    selections.update_selection(row.list, |selection| selection.toggle_selected(item));
+}
+
+/// Moves the active row with the arrow keys, Home and End, scrolling it into view, and
+/// selects its item on Enter or Space, while the list has the focus.
+fn navigate(
+    mut input: On<FocusedInput<KeyboardInput>>,
+    focus: Res<InputFocus>,
+    mut focus_visible: ResMut<InputFocusVisible>,
+    mut lists: Query<(&VirtualList, &mut VirtualListState)>,
+    views: Views,
+    mut selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let list = input.event_target();
+    if focus.get() != Some(list) {
+        return;
+    }
+    let Ok((virtual_list, mut state)) = lists.get_mut(list) else {
+        return;
+    };
+    let key = &input.event().input;
+    let is_move = matches!(
+        key.key_code,
+        KeyCode::ArrowUp
+            | KeyCode::ArrowDown
+            | KeyCode::ArrowLeft
+            | KeyCode::ArrowRight
+            | KeyCode::Home
+            | KeyCode::End
+    );
+    let is_pick = matches!(key.key_code, KeyCode::Enter | KeyCode::Space);
+    if !is_move && !is_pick {
+        return;
+    }
+    // The list owns these keys while it has the focus: none goes on to the app's navigation.
+    input.propagate(false);
+    let key = input.event().input.clone();
+    // A held arrow keeps moving; Home, End, Enter and Space act on the first press.
+    let is_arrow = !matches!(
+        key.key_code,
+        KeyCode::Home | KeyCode::End | KeyCode::Enter | KeyCode::Space
+    );
+    if key.state != ButtonState::Pressed || (key.repeat && !is_arrow) {
+        return;
+    }
+    let Some((_, items)) = selections.get_item_values(list) else {
+        return;
+    };
+    let count = items.len();
+    let Some(last_index) = count.checked_sub(1) else {
+        return;
+    };
+    let current = state.active.or_else(|| {
+        let selection = selections.get(list)?;
+        items.iter().position(|item| selection.is_selected(item))
+    });
+
+    if is_pick {
+        let Some(item) = current.and_then(|index| items.get(index).copied()) else {
+            return;
+        };
+        if selections
+            .get(list)
+            .is_some_and(|selection| !selection.is_selected(item))
+        {
+            selections.update_selection(list, |selection| selection.toggle_selected(item));
+        }
+        return;
+    }
+
+    let next = match key.key_code {
+        KeyCode::ArrowUp | KeyCode::ArrowLeft => match current {
+            Some(index) if index > 0 && index <= last_index => index - 1,
+            _ => last_index,
+        },
+        KeyCode::ArrowDown | KeyCode::ArrowRight => match current {
+            Some(index) if index < last_index => index + 1,
+            _ => 0,
+        },
+        KeyCode::Home => 0,
+        _ => last_index,
+    };
+    state.active = Some(next);
+    focus_visible.0 = true;
+
+    let Some(view) = views.of(list) else {
+        return;
+    };
+    let Some(area) = view.area else {
+        return;
+    };
+    let row_top = (next as f32).mul_add(virtual_list.row_height, view.offset) - FOCUS_RING_REACH;
+    let row_bottom = 2.0f32.mul_add(FOCUS_RING_REACH, row_top + virtual_list.row_height);
+    let scroll = if row_top < view.scroll {
+        row_top
+    } else if row_bottom > view.scroll + view.height {
+        row_bottom - view.height
+    } else {
+        return;
+    };
+    // The list may have grown since the last layout measured how far the area scrolls.
+    let max_scroll = view.max_scroll.max(
+        (count as f32).mul_add(virtual_list.row_height, view.offset) + FOCUS_RING_REACH
+            - view.height,
+    );
+    let mut position = ScrollPosition(Vec2::new(0.0, scroll.clamp(0.0, max_scroll.max(0.0))));
+    if let Ok((_, _, _, current_position)) = views.areas.get(area) {
+        position.x = current_position.x;
+    }
+    commands.entity(area).insert(position);
+}
+
+/// Makes the first selected item the active row when the list gets the focus, or the first
+/// item when none is selected, as a list does.
+fn activate_on_focus(
+    focus_gained: On<FocusGained>,
+    focus: Res<InputFocus>,
+    mut lists: Query<&mut VirtualListState>,
+    selections: SelectionParam,
+) {
+    let list = focus_gained.event_target();
+    if focus.get() != Some(list) {
+        return;
+    }
+    let Ok(mut state) = lists.get_mut(list) else {
+        return;
+    };
+    if state.active.is_some() {
+        return;
+    }
+    let Some((_, items)) = selections.get_item_values(list) else {
+        return;
+    };
+    if items.is_empty() {
+        return;
+    }
+    let first_selected = selections
+        .get(list)
+        .and_then(|selection| items.iter().position(|item| selection.is_selected(item)));
+    state.active = Some(first_selected.unwrap_or(0));
+}
+
+/// Clears the active row when the list loses the focus, and the ring goes with it.
+fn deactivate_on_focus_lost(
+    focus_lost: On<FocusLost>,
+    focus: Res<InputFocus>,
+    mut lists: Query<&mut VirtualListState>,
+) {
+    let list = focus_lost.event_target();
+    if focus.get() == Some(list) {
+        return;
+    }
+    if let Ok(mut state) = lists.get_mut(list) {
+        state.active = None;
+    }
+}
+
+fn theme_virtual_lists(
+    list: In<Option<Entity>>,
+    theme: Res<Theme>,
+    mut lists: Query<(&mut BackgroundColor, &VirtualListState), With<VirtualList>>,
+    mut rows: Query<&mut Node, With<VirtualListRow>>,
+) {
+    let it = match list.0 {
+        Some(list) => Either::Left(lists.get_mut(list).into_iter()),
+        None => Either::Right(lists.iter_mut()),
+    };
+    for (mut background, state) in it {
+        background.0 = theme.colors.background_primary;
+        for &row in &state.rows {
+            if let Ok(mut node) = rows.get_mut(row) {
+                node.padding = theme.item_padding;
+            }
+        }
+    }
+}

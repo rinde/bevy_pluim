@@ -1,4 +1,4 @@
-//! `List` layouts and corner styles.
+//! `List` layouts and corner styles, and a `VirtualList` of ten thousand rows.
 
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
@@ -9,8 +9,10 @@ use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
 use rin_bevy_ui::push_button::PushButton;
+use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::select::{Item, Selection};
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::virtual_list::VirtualList;
 
 fn main() {
     App::new()
@@ -86,8 +88,26 @@ fn setup(mut commands: Commands) {
             ~{CornerStyle::Separated}
             @{Selection::builder().one().scene_with_items(countries())}
             --
+            Node {
+                width: px(240.0),
+                height: px(300.0),
+            }
+            @virtual_list_scroll_area()
+            --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
+}
+
+/// A scroll area over a `VirtualList` of ten thousand rows, which spawns only the rows in view.
+fn virtual_list_scroll_area() -> impl Scene {
+    ScrollArea::scene(
+        bsn_list! {
+            ~{VirtualList::new(28.0)}
+            @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+        },
+        true,
+        false,
+    )
 }

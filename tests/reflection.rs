@@ -44,6 +44,7 @@ use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
 use rin_bevy_ui::tooltip::Tooltip;
+use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 
 fn app_with_widgets() -> App {
     let mut app = App::new();
@@ -118,6 +119,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Toolbar>(registry);
         assert_component::<ToolbarButton>(registry);
         assert_component::<ToolbarLabels>(registry);
+        assert_component::<VirtualList>(registry);
+        assert_component::<VirtualListRow>(registry);
         assert_component::<Tooltip>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);

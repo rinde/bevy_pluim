@@ -41,10 +41,11 @@ use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
-use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
+use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
+use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 use rin_bevy_ui_tester::{
     AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
     Scenario, ScenarioReport, Step, SyntheticInput, Target, WidgetRole, WorldSnapshot,
@@ -594,6 +595,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Tooltip,
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
+        WidgetsSetup::VirtualList,
     ];
     for screen in screens {
         let scenario = Scenario::new(format!("{screen:?}"))
@@ -1879,4 +1881,91 @@ fn the_cursor_overlays_roots_get_no_ui_root() {
         .iter(app.world())
         .count();
     assert_eq!(roots, 1, "only the app's own root is a UiRoot");
+}
+
+// ---- `VirtualList` ----
+
+/// The entity of the only `VirtualList`, and of the scroll contents around it.
+fn virtual_list_and_contents(app: &mut App) -> (Entity, Entity) {
+    let world = app.world_mut();
+    let list = world
+        .query_filtered::<Entity, With<VirtualList>>()
+        .single(world)
+        .unwrap();
+    let contents = world
+        .query_filtered::<Entity, With<ScrollContents>>()
+        .single(world)
+        .unwrap();
+    (list, contents)
+}
+
+/// How many rows the `VirtualList`s have, and how many entities the world has.
+fn rows_and_entities(app: &mut App) -> (usize, usize) {
+    let world = app.world_mut();
+    let rows = world.query::<&VirtualListRow>().iter(world).count();
+    let entities = world.query::<Entity>().iter(world).count();
+    (rows, entities)
+}
+
+/// The text of the rows that are shown, in the order of their items.
+fn shown_rows(app: &mut App) -> Vec<String> {
+    let world = app.world_mut();
+    let mut rows: Vec<(usize, String)> = world
+        .query::<(&VirtualListRow, &Node, &Children)>()
+        .iter(world)
+        .filter(|(_, node, _)| node.display != Display::None)
+        .filter_map(|(row, _, children)| {
+            let text = children.iter().find_map(|child| world.get::<Text>(child))?;
+            Some((row.index?, text.0.clone()))
+        })
+        .collect();
+    rows.sort_unstable();
+    rows.into_iter().map(|(_, text)| text).collect()
+}
+
+#[test]
+fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_position() {
+    // The rails case: ten thousand trains. Scrolling, and an item added while scrolled,
+    // re-point the rows; no row or other entity is spawned for it.
+    let mut app = widgets_app();
+    WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let (list, contents) = virtual_list_and_contents(&mut app);
+    let (rows, entities) = rows_and_entities(&mut app);
+    // 200 pixels of 28 pixel rows: 8 in view, one more for a part row and two beyond each edge.
+    assert_eq!(rows, 13);
+    assert_eq!(
+        shown_rows(&mut app).first().map(String::as_str),
+        Some("Row 1")
+    );
+
+    for scroll in [1_000.0, 140_000.0, 279_000.0, 50_000.0, 1_000_000.0] {
+        app.world_mut()
+            .entity_mut(contents)
+            .insert(ScrollPosition(Vec2::new(0.0, scroll)));
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(rows_and_entities(&mut app), (rows, entities), "at {scroll}");
+    }
+    // The last scroll went past the end, which the layout stops at the bottom.
+    let shown = shown_rows(&mut app);
+    assert_eq!(shown.last().map(String::as_str), Some("Row 10000"));
+    assert_eq!(shown.len(), rows);
+
+    // A train added at the bottom: one entity more, the item, and no row.
+    // The list's selection holds its own items.
+    let items = list;
+    app.world_mut()
+        .spawn((Item::new("Row 10001"), ItemOf(items)));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(rows_and_entities(&mut app), (rows, entities + 1));
+    assert_eq!(
+        app.world().get::<ItemValues>(items).map(ItemValues::len),
+        Some(10_001)
+    );
 }
