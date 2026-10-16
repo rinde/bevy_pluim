@@ -125,6 +125,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(LinkPlugin)
             .add_systems(PostStartup, setup)
             .add_observer(add_ui_root)
+            .add_observer(drop_ui_root_when_parented)
             .add_observer(observer_transformer::<PointerOver>)
             .add_observer(observer_transformer::<PointerPress>)
             .add_observer(observer_transformer::<PointerRelease>)
@@ -172,6 +173,10 @@ fn add_ui_root(
     }
 }
 
+fn drop_ui_root_when_parented(t: On<Insert<ChildOf>>, mut commands: Commands) {
+    commands.entity(t.event().event_target()).remove::<UiRoot>();
+}
+
 fn setup(roots: Query<(), With<UiRoot>>) {
     let count = roots.iter().count();
     if count != 1 {
@@ -188,7 +193,9 @@ fn setup(roots: Query<(), With<UiRoot>>) {
 /// [`UiTargetCamera`], when the node is added. Root nodes aimed at another camera
 /// (a second window's UI, an overlay) belong to someone else and are left alone.
 /// A [`UiTargetCamera`] inserted after the [`Node`] is not seen, so insert it in
-/// the same bundle. It is the one non-modal [`TabGroup`],
+/// the same bundle. A node that gets its parent after its [`Node`] (a scene
+/// writes `ChildOf` last) loses the marker again when the [`ChildOf`] is
+/// inserted. It is the one non-modal [`TabGroup`],
 /// so Tab moves through the widgets below it. If the app does not end up with exactly one such root at
 /// startup, an error is logged.
 #[derive(Component, Debug, Copy, Clone)]

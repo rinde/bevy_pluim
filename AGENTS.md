@@ -305,11 +305,13 @@ of them (`just example gallery -- --run-all stack link`).
   without a parent and without a `UiTargetCamera`, so root nodes aimed at
   another camera (a second window's UI, an overlay) are not the app's and are
   left alone. The camera is read when the `Node` is added, so a
-  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
-  `PostStartup` system logs an `error!` (it does not panic) unless there is
-  exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`,
-  so a widget must not take `Single<.., With<UiRoot>>`; a popup is a `Float`
-  child of its widget instead, which needs no root at all.
+  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. An
+  observer of `Insert, ChildOf` removes `UiRoot` again from a node parented
+  after its `Node` was added (a scene writes `ChildOf` last), so the marker
+  follows the hierarchy. A `PostStartup` system logs an `error!` (it does not
+  panic) unless there is exactly one `UiRoot`; an app should spawn one. Two
+  roots both get `UiRoot`, so a widget must not take `Single<.., With<UiRoot>>`;
+  a popup is a `Float` child of its widget instead, which needs no root at all.
   The tester's cursor overlay spawns its roots with a `UiTargetCamera`, so they
   get no `UiRoot` (`the_cursor_overlays_roots_get_no_ui_root` in
   `tests/scenarios.rs`).
