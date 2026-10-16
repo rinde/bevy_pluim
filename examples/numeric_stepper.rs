@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueFormat};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::theme::Theme;
 
@@ -39,39 +39,23 @@ fn setup(mut commands: Commands) {
             padding: UiRect::all(px(10.0)),
         }
         Children [
-            inserted(NumericStepper::default())
+            NumericStepper
             --
-            inserted(NumericStepper::default())
+            NumericStepper
             ~{Value::new_u16(10, 5, 15, 1)}
             --
-            inserted(NumericStepper::default())
+            NumericStepper
             ~{Value::new_u32(10, 5, 15, 1)}
             --
-            inserted(NumericStepper::default())
+            NumericStepper
             ~{Value::new_f32(10.0, 5.0, 15.0, 0.5)}
             --
-            inserted(NumericStepper {
-                format: level,
-                decrease_name: "Lower the level".into(),
-                increase_name: "Raise the level".into(),
-                ..default()
-            })
+            NumericStepper { format: {level as ValueFormat}, decrease_name: "Lower the level", increase_name: "Raise the level" }
             ~{Value::new_u8(0, 0, 56, 7)}
             --
             ~{PushButton::from_label("Change theme")} ThemeButton
         ]
     });
-}
-
-/// A `bsn!` entry that inserts `component` as it is.
-///
-/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a `NumericStepper`, which
-/// holds the `Handle`s of its icons,
-/// goes in through this.
-fn inserted<C: Component + Clone>(
-    component: C,
-) -> impl Template<Output = C> + Send + Sync + 'static {
-    template(move |_| Ok(component.clone()))
 }
 
 /// "Ground" at 0 and "+7", "+14", ... above it.

@@ -34,9 +34,6 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let icon = common::cross_icon(&mut images);
-    let trains = IconButton::new(icon.clone(), "Trains", IconButtonSize::Large);
-    let warnings = IconButton::new(icon.clone(), "Warnings", IconButtonSize::Large);
-    let stops = IconButton::new(icon, "Stops", IconButtonSize::Large);
     commands.spawn_scene(bsn! {
         Node {
             width: percent(100.0),
@@ -46,14 +43,14 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             padding: UiRect::all(px(20.0)),
         }
         Children [
-            common::inserted(trains)
+            IconButton { icon: {icon.clone()}, name: "Trains", size: IconButtonSize::Large }
             ~{Badge::count(3)}
             Counted
             --
-            common::inserted(warnings)
+            IconButton { icon: {icon.clone()}, name: "Warnings", size: IconButtonSize::Large }
             ~{Badge::count(12).with_tone(BadgeTone::Warning)}
             --
-            common::inserted(stops)
+            IconButton { icon, name: "Stops", size: IconButtonSize::Large }
             --
             ~{PushButton::from_label("Add one")}
             on(add_one)

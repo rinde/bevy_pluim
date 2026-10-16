@@ -4,7 +4,6 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -55,15 +54,7 @@ fn setup(mut commands: Commands) {
             ~{Combo} ~{Selection::reference(selection_ref)}
             --
             ~{Combo}
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(selection_ref),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
             --
             ~{Combo} ~{Selection::reference(selection_ref)}
             --

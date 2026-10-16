@@ -210,7 +210,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 
 `icon_button`, `panel`, `badge` and `tooltip` draw their icon with
 `examples/common/mod.rs` (`mod common;`; a directory without a `main.rs` is not
-an example), which also has their `inserted` helper (see below).
+an example).
 
 **The examples build their trees with `bsn!`.** Every example but `gallery`
 spawns its nodes as scenes (`bsn!` / `bsn_list!` and `spawn_scene`), with
@@ -220,27 +220,30 @@ the `tests/widgets_setup` screens. **Never change a library component for
 patch it. Insert a prepared value instead: `~{PushButton::from_label("Add")}`
 or `~{value}` from a variable. A template's output must be a component, which
 the scene inserts together with the entity's `ChildOf` and its other
-components. A bundle without a `Node` (the selection builder's) may be inserted
-by the template itself, `template(|context| { context.entity.insert(bundle);
-Ok(EmptySceneEffect) })`. A bundle with a `Node` must not: the template runs
-before the scene gives the entity its parent, so `add_ui_root` would take it
-for a `UiRoot`, and the scene's own `Node` would overwrite what the bundle's
-hooks set (a `ScrollArea`'s grid). Such a bundle goes in through a local
-`insert_after_scene(context, bundle)`, which queues the insert for after the
-scene is applied. For the same reason a scene spawned under a parent outside a
+components. For the same reason a scene spawned under a parent outside a
 parent scene is `commands.spawn(ChildOf(parent)).apply_scene(..)`, never
-`spawn_scene(..)` followed by an insert of `ChildOf`. The examples work around
-what does not fit yet:
+`spawn_scene(..)` followed by an insert of `ChildOf`. What does not fit `~{..}`
+has a way of its own:
 
 - `~{..}` takes only an `Unpin` value, and a `Handle` is not one, so a widget
-  holding one (`IconButton`, `NumericStepper`, a `Panel` with a close icon)
-  goes in through a local `inserted(value)` helper, a template whose output is
-  that value.
-- `Selection::builder()` returns a bundle, so it goes in a `template(..)`;
-  `Divider::vertical()` too, through `insert_after_scene`.
+  holding one has a `FromTemplate` and is written as a struct in the scene, a
+  handle as `icon: {icon.clone()}` (a field value that is a method call or a cast
+  goes in braces):
+  `IconButton { icon: {icon.clone()}, name: "Pause", size: IconButtonSize::Regular }`
+  (derived), `Panel { title: "Trains", close_icon: {HandleTemplate::Handle(close.clone())} }`
+  and `NumericStepper { decrease_name: "Lower" }`, written by hand as
+  `PanelTemplate` and `NumericStepperTemplate`: their defaults are those of
+  `Panel::new("")` and `NumericStepper::default()`, which a derive would not give
+  (a `format` function is `{level as ValueFormat}`). A new widget holding a handle
+  gets one too.
+- `Selection::builder()` and `Divider` have scene constructors, written with
+  `@{..}`: `@{Selection::builder().one().scene_with_items(items)}` (the items are
+  cloned for each spawn), `scene_with_items_ref(entity)`,
+  `@{Divider::vertical_scene()}` and `horizontal_scene()`. The bundle forms stay
+  for code that spawns with `Commands`.
 - `Stack` derives `FromTemplate`, so a scene writes `Stack { selection_ref: #tabs }`
   with a `#name` of an entity in the same scene (the `tabs` and `breadcrumbs`
-  examples put the selection on the `TabBar` / `BreadCrumbs` through a `template`);
+  examples put the selection on the `TabBar` / `BreadCrumbs` through `@{Selection::builder()..scene_with_items(..)}`);
   a selection the application also keeps (the `hud`'s resources) is spawned
   first and passed as `Stack { selection_ref: bar }`.
 

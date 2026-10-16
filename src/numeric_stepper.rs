@@ -2,10 +2,12 @@
 
 use accesskit::{Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
+use bevy::asset::HandleTemplate;
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnWith;
+use bevy::ecs::template::{SpecializeFromTemplate, Template, TemplateContext};
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
@@ -112,6 +114,88 @@ impl Default for NumericStepper {
             name: None,
         }
     }
+}
+
+/// What `bsn!` patches when a scene writes `NumericStepper { .. }`: the fields not
+/// written are those of [`NumericStepper::default`], and the icons are
+/// [`HandleTemplate`]s.
+pub struct NumericStepperTemplate {
+    /// See [`NumericStepper::format`].
+    pub format: ValueFormat,
+    /// See [`NumericStepper::decrease_icon`].
+    pub decrease_icon: HandleTemplate<Image>,
+    /// See [`NumericStepper::increase_icon`].
+    pub increase_icon: HandleTemplate<Image>,
+    /// See [`NumericStepper::decrease_name`].
+    pub decrease_name: String,
+    /// See [`NumericStepper::increase_name`].
+    pub increase_name: String,
+    /// See [`NumericStepper::label_min_width`].
+    pub label_min_width: f32,
+    /// See [`NumericStepper::name`].
+    pub name: Option<String>,
+}
+
+impl core::fmt::Debug for NumericStepperTemplate {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("NumericStepperTemplate")
+            .finish_non_exhaustive()
+    }
+}
+
+impl Default for NumericStepperTemplate {
+    fn default() -> Self {
+        let stepper = NumericStepper::default();
+        Self {
+            format: stepper.format,
+            decrease_icon: HandleTemplate::Handle(stepper.decrease_icon),
+            increase_icon: HandleTemplate::Handle(stepper.increase_icon),
+            decrease_name: stepper.decrease_name,
+            increase_name: stepper.increase_name,
+            label_min_width: stepper.label_min_width,
+            name: stepper.name,
+        }
+    }
+}
+
+impl Template for NumericStepperTemplate {
+    type Output = NumericStepper;
+
+    fn build_template(&self, context: &mut TemplateContext) -> Result<NumericStepper> {
+        Ok(NumericStepper {
+            format: self.format,
+            decrease_icon: self.decrease_icon.build_template(context)?,
+            increase_icon: self.increase_icon.build_template(context)?,
+            decrease_name: self.decrease_name.clone(),
+            increase_name: self.increase_name.clone(),
+            label_min_width: self.label_min_width,
+            name: self.name.clone(),
+        })
+    }
+
+    fn clone_template(&self) -> Self {
+        Self {
+            format: self.format,
+            decrease_icon: self.decrease_icon.clone_template(),
+            increase_icon: self.increase_icon.clone_template(),
+            decrease_name: self.decrease_name.clone(),
+            increase_name: self.increase_name.clone(),
+            label_min_width: self.label_min_width,
+            name: self.name.clone(),
+        }
+    }
+}
+
+// `NumericStepper` is `Default` and `Clone`, so without this `Unpin` impl (what `#[derive(FromTemplate)]`
+// writes) bevy's blanket `FromTemplate` for such types would conflict with the one below.
+#[expect(
+    unused_lifetimes,
+    reason = "the higher-ranked bound is what keeps this impl from applying generally"
+)]
+impl Unpin for NumericStepper where for<'a> [()]: SpecializeFromTemplate {}
+
+impl FromTemplate for NumericStepper {
+    type Template = NumericStepperTemplate;
 }
 
 /// A white-on-transparent 16 px minus or plus.
