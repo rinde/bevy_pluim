@@ -1,0 +1,24 @@
+// The open list of a combo in a scroll area is a `FixedNode`, so the arrow keys moving its
+// active row must not scroll the area (`scroll_into_view` stops at a `FixedNode`). The area's
+// contents overflow it, so it could scroll, and the list reaches below the area.
+(
+    format_version: 3,
+    name: "arrowing down a combo list in a scroll area does not scroll the area",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("scrolled combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("scrolled combo"), path: "ComboState", is: Eq(Open))),
+        Check(App(Focused(of: Within(Name("scrolled combo"), Component("ComboList"))))),
+        Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown),
+        Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("combo scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(0.0),
+        )),
+    ],
+    expect: [],
+)

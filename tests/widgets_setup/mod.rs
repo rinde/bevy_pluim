@@ -311,10 +311,49 @@ fn combos(world: &mut World) {
                             .zero_or_one()
                             .build_with_items(countries()),
                     ));
+                    // Makes the contents overflow the area, so it can scroll.
+                    contents.spawn(Node {
+                        width: px(1),
+                        height: px(400),
+                        flex_shrink: 0.0,
+                        ..default()
+                    });
                 },
                 true,
                 false,
             ),
+        ));
+        // Combos at the right and bottom window edges, out of the flow and spawned last
+        // for the same reason: their lists are kept inside the window.
+        root.spawn((
+            Combo,
+            Name::new("right edge combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                top: px(100),
+                left: px(1200),
+                width: px(100),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(countries()),
+        ));
+        root.spawn((
+            Combo,
+            Name::new("bottom edge combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(200),
+                top: px(660),
+                left: px(500),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(countries()),
         ));
     });
 }

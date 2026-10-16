@@ -13,9 +13,10 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiSystems};
 use bevy::ui_widgets::Activate;
+use bevy::window::PrimaryWindow;
 use itertools::Itertools;
 
-use crate::float::Float;
+use crate::float::{Float, below_or_above, keep_in_window_x};
 use crate::focus::{
     AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
     sync_role, sync_value,
@@ -254,19 +255,23 @@ fn close_on_focus_lost(
 
 /// Puts the list of each open combo right under its button, its left edge on the button's.
 ///
+/// The list is moved in until it is 10 pixels from the window's left and right edges, and goes
+/// above the button when it would run off the bottom, as a palette combo's popup does.
+///
 /// The list is a [`Float`], placed in the viewport, so it is moved here from the button's
 /// last laid-out position, in logical pixels, and follows the button while open (a scroll area
 /// around the combo scrolling, say).
 fn place_open_lists(
+    window: Single<&Window, With<PrimaryWindow>>,
     combos: Query<(&ComboState, &ComboSubRefs)>,
     buttons: Query<(&ComputedNode, &UiGlobalTransform), With<ComboButton>>,
-    mut lists: Query<&mut Node, With<ComboList>>,
+    mut lists: Query<(&mut Node, &ComputedNode), With<ComboList>>,
 ) {
     for (state, sub_refs) in &combos {
         if *state != ComboState::Open {
             continue;
         }
-        let (Ok((button_computed, button_transform)), Ok(mut node)) = (
+        let (Ok((button_computed, button_transform)), Ok((mut node, list_computed))) = (
             buttons.get(sub_refs.button_id),
             lists.get_mut(sub_refs.list_id),
         ) else {
@@ -276,8 +281,19 @@ fn place_open_lists(
         let button_size = button_computed.size() * scale;
         // `UiGlobalTransform` holds the centre of the node.
         let button_center = button_transform.translation * scale;
-        let left = Val::Px(button_center.x - button_size.x / 2.0);
-        let top = Val::Px(button_center.y + button_size.y / 2.0);
+        let list_size = list_computed.size() * list_computed.inverse_scale_factor();
+        let left = Val::Px(keep_in_window_x(
+            button_center.x - button_size.x / 2.0,
+            list_size.x,
+            window.width(),
+        ));
+        let top = Val::Px(below_or_above(
+            button_center.y - button_size.y / 2.0,
+            button_center.y + button_size.y / 2.0,
+            0.0,
+            list_size.y,
+            window.height(),
+        ));
         if node.left != left || node.top != top {
             node.left = left;
             node.top = top;
