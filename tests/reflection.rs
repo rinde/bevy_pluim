@@ -41,6 +41,7 @@ use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::stack::Stack;
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
+use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
 use rin_bevy_ui::tooltip::Tooltip;
@@ -122,6 +123,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<VirtualList>(registry);
         assert_component::<VirtualListRow>(registry);
         assert_component::<Tooltip>(registry);
+        assert_component::<TextField>(registry);
+        assert_component::<TextFieldRefs>(registry);
         assert_component::<Label>(registry);
         assert_component::<Float>(registry);
     });

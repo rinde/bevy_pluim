@@ -1,0 +1,21 @@
+// A text field's text is body text, 0.75 rem, so it follows Bevy's `RemSize`.
+// `ron_scenarios` also plays this file with the rem size at 1.5 times the default
+// (`[text 1.5x]`): the box grows with its text, which still fits inside it, and the
+// box keeps its width.
+(
+    format_version: 3,
+    name: "a text field sizes its text in rem and its text fits its box at any text size",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Check(Component(target: Within(Name("name field"), Component("TextInput")), path: "TextFont.font_size", is: Eq(Rem(0.75)))),
+        Check(Component(target: Name("name field"), path: "ComputedNode.size.x", unit: Logical, is: Eq(160.0))),
+        Capture(name: "field height", value: Component(target: Name("name field"), path: "ComputedNode.size.y", unit: Logical)),
+        Check(Component(target: Within(Name("name field"), Component("TextInput")), path: "ComputedNode.size.y", unit: Logical, is: Le(Captured("field height")))),
+        Type(text: "a much longer name than fits", into: Within(Name("name field"), Component("TextInput"))),
+        Wait(2),
+        Check(Component(target: Name("name field"), path: "ComputedNode.size.x", unit: Logical, is: Eq(160.0))),
+        Check(Component(target: Name("name field"), path: "ComputedNode.size.y", unit: Logical, is: Eq(Captured("field height")))),
+    ],
+    expect: [],
+)

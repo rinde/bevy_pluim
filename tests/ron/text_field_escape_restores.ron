@@ -1,0 +1,23 @@
+// `Escape` puts back the text a field had when it took the focus and gives the focus up,
+// without a commit. The placeholder shows while the field is empty.
+(
+    format_version: 3,
+    name: "Escape puts back the text of a text field and lets go without committing",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Check(Visible(Within(Name("seed field"), Text("Seed")))),
+        Type(text: "42", into: Within(Name("seed field"), Component("TextInput"))),
+        Wait(2),
+        Check(TextOf(Within(Name("seed field"), Component("TextInput")), Exact("42"))),
+        Check(Not(Visible(Within(Name("seed field"), Text("Seed"))))),
+        Tap(key: Escape),
+        Wait(2),
+        Check(TextOf(Within(Name("seed field"), Component("TextInput")), Exact(""))),
+        Check(Visible(Within(Name("seed field"), Text("Seed")))),
+        Check(Not(App(Focused(of: Within(Name("seed field"), Component("TextInput")))))),
+        Check(Resource(path: "FieldEvents.changed", is: Eq(""))),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(0))),
+    ],
+    expect: [],
+)

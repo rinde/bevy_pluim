@@ -75,6 +75,7 @@ const GROUPS: [(&str, &str); 24] = [
     ("badge", "Badge"),
     ("icon_button", "IconButton"),
     ("tooltip", "Tooltip"),
+    ("text_field", "TextField"),
     ("theme", "Theme"),
     ("accessibility", "Accessibility"),
     ("accessible", "Accessibility"),
