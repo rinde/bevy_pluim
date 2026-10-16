@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use bevy::ecs::spawn::SpawnWith;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -28,7 +29,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component, Copy, Clone, Debug)]
+#[derive(Component, Copy, Clone, Debug, Default)]
 struct BreadCrumbsSelection;
 
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
@@ -69,13 +70,6 @@ fn setup(mut commands: Commands) {
             StackItem::new(commands.register_system(create_b_sub)),
         ),
     ];
-    let selection_ref = commands
-        .spawn((
-            BreadCrumbsSelection,
-            Selection::builder().one_or_more().build_with_items(items),
-        ))
-        .id();
-
     // Root container
     commands.spawn_scene(bsn! {
         Node {
@@ -92,7 +86,15 @@ fn setup(mut commands: Commands) {
                 justify_content: JustifyContent::SpaceBetween,
             }
             Children [
-                ~{BreadCrumbs} ~{Selection::reference(selection_ref)}
+                ~{BreadCrumbs}
+                #crumbs
+                BreadCrumbsSelection
+                template(move |context| {
+                    context.entity.insert(
+                        Selection::builder().one_or_more().build_with_items(items.clone()),
+                    );
+                    Ok(EmptySceneEffect)
+                })
                 --
                 ~{PushButton::from_label("Change theme")}
                 on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
@@ -104,7 +106,7 @@ fn setup(mut commands: Commands) {
                 justify_content: JustifyContent::Start,
                 align_items: AlignItems::Center,
             }
-            Children [ ~{Stack { selection_ref }} ]
+            Children [ Stack { selection_ref: #crumbs } ]
         ]
     });
 }

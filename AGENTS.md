@@ -244,9 +244,11 @@ what does not fit yet:
 - `StackChildSpawner::spawn` takes a bundle, so a stack item's scenes are
   queued from that bundle by a local `scene_children` helper
   (`queue_spawn_related_scenes::<Children>`).
-- `Stack` takes the selection's entity and cannot take a `#name` of an entity
-  in the same scene, so the selection a `Stack` and its tabs share is spawned
-  first, as an entity of its own.
+- `Stack` derives `FromTemplate`, so a scene writes `Stack { selection_ref: #tabs }`
+  with a `#name` of an entity in the same scene (the `tabs` and `breadcrumbs`
+  examples put the selection on the `TabBar` / `BreadCrumbs` through a `template`);
+  a selection the application also keeps (the `hud`'s resources) is spawned
+  first and passed as `Stack { selection_ref: bar }`.
 
 `the_hud_example_builds_and_runs` in `tests/headless.rs` adds `AssetPlugin` and
 Bevy's `ScenePlugin`, which spawning a scene needs.

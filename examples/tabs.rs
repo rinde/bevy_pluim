@@ -69,12 +69,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             StackItem::new(commands.register_system(create_card_demo)),
         ),
     ];
-    // `Stack` takes the selection's entity, which a scene cannot hand it from the tab bar
-    // beside it, so the tabs' selection is an entity of its own that both refer to.
-    let tabs = commands
-        .spawn(Selection::builder().one().build_with_items(items))
-        .id();
-
     // Root container
     commands.spawn_scene(bsn! {
         Node {
@@ -90,7 +84,14 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
         }
         Children [
             TabBar
-            ~{Selection::reference(tabs)}
+            #tabs
+            // `Selection::builder()` gives a bundle, which `template` inserts.
+            template(move |context| {
+                context.entity.insert(
+                    Selection::builder().one().build_with_items(items.clone()),
+                );
+                Ok(EmptySceneEffect)
+            })
             --
             // filler
             BorderColor::all(theme_border_color)
@@ -109,7 +110,7 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 width: percent(100.0),
                 height: percent(100.0),
             }
-            ~{Stack { selection_ref: tabs }}
+            Stack { selection_ref: #tabs }
         ]
     });
 }
