@@ -3402,6 +3402,55 @@ fn a_tab_is_named_after_its_item_to_a_screen_reader() {
     assert_eq!(node.label(), Some("Audio"));
 }
 
+#[test]
+fn a_hidden_tab_bar_is_not_reached_by_tab_and_is_again_once_shown() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+    let panel = app.world().entity(bar).get::<ChildOf>().unwrap().parent();
+    let indices = |app: &App| -> Vec<i32> {
+        tabs.iter()
+            .map(|t| app.world().entity(*t).get::<TabIndex>().unwrap().0)
+            .collect()
+    };
+    let set_display = |app: &mut App, display: Display| {
+        app.world_mut()
+            .entity_mut(panel)
+            .get_mut::<Node>()
+            .unwrap()
+            .display = display;
+        app.update();
+        app.update();
+    };
+    assert_eq!(indices(&app), [0, -1, -1]);
+
+    // Its panel hidden by `Display::None`, as a `Stack` hides its panels.
+    set_display(&mut app, Display::None);
+    assert_eq!(indices(&app), [-1, -1, -1]);
+    // A selection made while hidden is the tab Tab reaches once it shows.
+    request_tab(&mut app, bar, tabs[1]);
+    assert_eq!(indices(&app), [-1, -1, -1]);
+    set_display(&mut app, Display::Flex);
+    assert_eq!(indices(&app), [-1, 0, -1]);
+
+    // The bar itself hidden by its visibility.
+    app.world_mut().entity_mut(bar).insert(Visibility::Hidden);
+    app.update();
+    app.update();
+    assert_eq!(indices(&app), [-1, -1, -1]);
+    app.world_mut()
+        .entity_mut(bar)
+        .insert(Visibility::Inherited);
+    app.update();
+    app.update();
+    assert_eq!(indices(&app), [-1, 0, -1]);
+}
+
 // ---- Separated lists ----
 
 /// A `CornerStyle::Separated` list over a `One` selection of `labels`.

@@ -157,6 +157,41 @@ fn a_scenario_expecting_the_wrong_focus_fails() {
     assert!(!report.passed());
 }
 
+#[test]
+fn tab_skips_a_tab_bar_in_a_hidden_stack_panel() {
+    // A `Stack` hides a panel with `Display::None`; the bar in it must not take the focus.
+    let button = |label: &str| Target::role(WidgetRole::Button, label);
+    let scenario = Scenario::new("Tab skips a tab bar in a hidden panel")
+        .setup(|world| {
+            let root = spawn_camera_and_root(world);
+            world.entity_mut(root).with_children(|root| {
+                root.spawn(PushButton::from_label("Before"));
+                root.spawn(Node {
+                    display: Display::None,
+                    ..default()
+                })
+                .with_children(|panel| {
+                    panel.spawn((
+                        TabBar,
+                        Selection::builder()
+                            .one()
+                            .build_with_items(["A", "B"].map(Item::new)),
+                    ));
+                });
+                root.spawn(PushButton::from_label("After"));
+            });
+        })
+        .steps([
+            Step::wait(2),
+            Step::tap(KeyCode::Tab),
+            focused(button("Before")),
+            Step::tap(KeyCode::Tab),
+            focused(button("After")),
+        ]);
+    let report = play(&scenario);
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
 /// Moves the focus with the arrow keys, as an app that turns directional navigation on
 /// does: an observer on the window, so it gets only the keys no focused widget kept.
 fn navigate_with_arrow_keys(
