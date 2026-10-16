@@ -29,8 +29,8 @@ use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{
-    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab, Tab,
-    TabList, ValueChange,
+    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab,
+    SetSliderValue, SliderValueChange, Tab, TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
@@ -61,6 +61,7 @@ use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
+use rin_bevy_ui::slider::Slider;
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
@@ -5434,6 +5435,91 @@ fn a_numeric_stepper_is_a_spin_button_with_numeric_bounds_and_step() {
         .unwrap();
     assert_eq!(node.numeric_value(), Some(2.0));
     assert_eq!(node.value(), Some("2"));
+}
+
+#[test]
+fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let stepped = world
+        .spawn(
+            Slider::new(2.0, 0.0, 10.0)
+                .with_step(1.0)
+                .with_format(|value| format!("{value:.0} km"))
+                .with_name("Distance"),
+        )
+        .id();
+    let continuous = world.spawn(Slider::new(25.0, 0.0, 100.0)).id();
+    app.update();
+    app.update();
+
+    let node = |app: &App, entity: Entity| -> AccessibilityNode {
+        app.world()
+            .entity(entity)
+            .get::<AccessibilityNode>()
+            .unwrap()
+            .clone()
+    };
+    let stepped_node = node(&app, stepped);
+    assert_eq!(stepped_node.role(), accesskit::Role::Slider);
+    assert_eq!(stepped_node.numeric_value(), Some(2.0));
+    assert_eq!(stepped_node.min_numeric_value(), Some(0.0));
+    assert_eq!(stepped_node.max_numeric_value(), Some(10.0));
+    assert_eq!(stepped_node.numeric_value_step(), Some(1.0));
+    assert_eq!(stepped_node.value(), Some("2 km"));
+    assert_eq!(stepped_node.label(), Some("Distance"));
+
+    // A continuous slider steps by a hundredth of its range.
+    let continuous_node = node(&app, continuous);
+    assert_eq!(continuous_node.role(), accesskit::Role::Slider);
+    assert_eq!(continuous_node.numeric_value(), Some(25.0));
+    assert_eq!(continuous_node.min_numeric_value(), Some(0.0));
+    assert_eq!(continuous_node.max_numeric_value(), Some(100.0));
+    assert_eq!(continuous_node.numeric_value_step(), Some(1.0));
+    assert_eq!(continuous_node.value(), None);
+    assert_eq!(continuous_node.label(), None);
+
+    app.world_mut().trigger(SetSliderValue {
+        entity: stepped,
+        change: SliderValueChange::Absolute(7.0),
+    });
+    app.update();
+    let stepped_node = node(&app, stepped);
+    assert_eq!(stepped_node.numeric_value(), Some(7.0));
+    assert_eq!(stepped_node.value(), Some("7 km"));
+
+    // Inserted again without a format, it has no value text left.
+    app.world_mut()
+        .entity_mut(stepped)
+        .insert(Slider::new(7.0, 0.0, 10.0).with_step(1.0));
+    app.update();
+    assert_eq!(node(&app, stepped).value(), None);
+}
+
+#[test]
+fn a_slider_without_a_label_leaves_the_apps_right_margin_alone() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let margin = UiRect::all(Val::Px(8.0));
+    let slider = world
+        .spawn((
+            Slider::new(0.0, 0.0, 1.0),
+            Node {
+                margin,
+                ..default()
+            },
+        ))
+        .id();
+    app.update();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    app.update();
+    let node = app.world().entity(slider).get::<Node>().unwrap();
+    assert_eq!(node.margin, margin);
 }
 
 #[test]

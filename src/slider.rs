@@ -16,7 +16,9 @@ use bevy::ui_widgets::{
 };
 use itertools::Either;
 
-use crate::focus::{AccessibilitySync, TabStop, clear_label, sync_label, sync_role, sync_value};
+use crate::focus::{
+    AccessibilitySync, TabStop, clear_label, clear_value, sync_label, sync_role, sync_value,
+};
 use crate::theme::{Theme, ThemeColors};
 
 /// Registers the systems and observers of [`Slider`].
@@ -76,7 +78,8 @@ const LABEL_GAP_PX: f32 = 12.0;
 ///
 /// It is 200 px wide unless the app gives its `Node` a width; the thumb stays
 /// inside it at both ends. The value label lies to the right of it, in a margin
-/// of `label_min_width` plus a gap that the slider reserves.
+/// of `label_min_width` plus a gap that the slider reserves: a slider with a
+/// `format` owns its `Node`'s `margin.right`, one without leaves it to the app.
 ///
 /// To a screen reader it is a `Role::Slider` with the value, bounds and step as
 /// numbers, the text `format` shows as its value and `name` as its label. The
@@ -180,6 +183,15 @@ impl Slider {
             return;
         };
         let old_parts = world.entity(entity).get::<SliderRefs>().copied();
+        // Reserve the label's margin, or give it back when the label went away.
+        let margin = match (slider.format, old_parts.and_then(|old| old.label)) {
+            (Some(_), _) => Some(Val::Px(slider.label_min_width + LABEL_GAP_PX)),
+            (None, Some(_)) => Some(Val::Px(0.0)),
+            (None, None) => None,
+        };
+        if let (Some(margin), Some(mut node)) = (margin, world.get_mut::<Node>(entity)) {
+            node.margin.right = margin;
+        }
         let mut commands = world.commands();
         if let Some(old) = old_parts {
             for part in [Some(old.track), Some(old.fill), Some(old.travel), old.label]
@@ -443,12 +455,25 @@ impl SliderStyler<'_, '_> {
         else {
             return;
         };
-        if let Ok((mut text, mut color, mut font)) = self.texts.get_mut(text_entity) {
+        if let Ok((mut text, mut color, _)) = self.texts.get_mut(text_entity) {
             let shown = format(value.0);
             if text.0 != shown {
                 text.0 = shown;
             }
             color.0 = look.text;
+        }
+    }
+
+    /// Gives the value label of a slider the theme's font.
+    fn set_font(&mut self, refs: &SliderRefs) {
+        let Some(text_entity) = refs
+            .label
+            .and_then(|label| self.children.get(label).ok())
+            .and_then(|children| children.first().copied())
+        else {
+            return;
+        };
+        if let Ok((_, _, mut font)) = self.texts.get_mut(text_entity) {
             *font = TextFont {
                 font: self.theme.body_font.clone().into(),
                 font_size: Theme::font_size(self.theme.font_size_secondary),
@@ -474,9 +499,7 @@ fn theme_sliders(
             node.width = Val::Px(DEFAULT_WIDTH_PX);
         }
         node.height = Val::Px(HEIGHT_PX);
-        node.margin.right = state.1.format.map_or(Val::Px(0.0), |_| {
-            Val::Px(state.1.label_min_width + LABEL_GAP_PX)
-        });
+        styler.set_font(state.2);
         styler.style(state);
     }
 }
@@ -560,8 +583,9 @@ fn sync_accessibility(
             Some(name) => sync_label(&mut node, name),
             None => clear_label(&mut node),
         }
-        if let Some(format) = slider.format {
-            sync_value(&mut node, &format(value.0));
+        match slider.format {
+            Some(format) => sync_value(&mut node, &format(value.0)),
+            None => clear_value(&mut node),
         }
     }
 }

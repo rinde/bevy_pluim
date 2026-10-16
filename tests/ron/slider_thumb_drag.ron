@@ -12,6 +12,8 @@
         Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(5.0))),
         Check(Resource(path: "SliderChanges.finals", is: Eq(1))),
         Drag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((140.0, 70.0)), frames: 5),
+        // The pointer lands on 6.09; the app's observer sees the value on the step.
+        Check(Resource(path: "SliderChanges.last", is: Eq(6.0))),
         Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(6.0))),
         Drag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((600.0, 70.0)), frames: 5),
         Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(10.0))),

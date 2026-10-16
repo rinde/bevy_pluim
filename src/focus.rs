@@ -94,6 +94,13 @@ pub(crate) fn sync_value(node: &mut Mut<AccessibilityNode>, value: &str) {
     }
 }
 
+/// Clears the value of `node`, writing it only when it has one.
+pub(crate) fn clear_value(node: &mut Mut<AccessibilityNode>) {
+    if node.value().is_some() {
+        node.clear_value();
+    }
+}
+
 /// Clears the label of `node`, writing it only when it has one.
 pub(crate) fn clear_label(node: &mut Mut<AccessibilityNode>) {
     if node.label().is_some() {
