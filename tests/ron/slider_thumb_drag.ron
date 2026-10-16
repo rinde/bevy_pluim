@@ -1,0 +1,27 @@
+// Dragging a slider's thumb moves it with the pointer, in steps where the
+// slider has them, and stops at the ends however far the pointer goes. Each
+// drag ends with a final `ValueChange<f32>`, which the screen counts.
+(
+    format_version: 3,
+    name: "dragging a slider's thumb moves its value",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        // The thumb starts at the left end; its middle travels from 28 to 212.
+        Drag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((120.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(5.0))),
+        Check(Resource(path: "SliderChanges.finals", is: Eq(1))),
+        Drag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((140.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(6.0))),
+        Drag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((600.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(10.0))),
+        Wait(1),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(211.5, 212.5))),
+        Drag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((0.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(0.0))),
+        Check(Resource(path: "SliderChanges.finals", is: Eq(4))),
+        Drag(from: Within(Name("formatted slider"), Name("SliderThumb")), to: Screen((166.0, 110.0)), frames: 5),
+        Check(TextOf(Name("formatted slider"), Exact("75 %"))),
+    ],
+    expect: [],
+)

@@ -290,6 +290,10 @@ pub struct ThemeColors {
     pub chip_on: Color,
     /// The text on [`chip_on`](Self::chip_on).
     pub chip_on_ink: Color,
+    /// The track of a slider, the part beyond its thumb.
+    pub slider_track: Color,
+    /// The fill of a slider's track up to its thumb, and the thumb's border.
+    pub slider_fill: Color,
 }
 
 impl Default for ThemeColors {
@@ -350,6 +354,8 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     chip_border: Color::srgb_u8(0xD3, 0xCE, 0xC2),
     chip_on: Color::srgb_u8(0xD5, 0xE5, 0xF5),
     chip_on_ink: Color::srgb_u8(0x1E, 0x3F, 0x62),
+    slider_track: Color::srgb_u8(0xD3, 0xCE, 0xC2),
+    slider_fill: Color::srgb_u8(0xAE, 0x6E, 0x14),
 };
 /// The default colours of the dark theme.
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
@@ -403,6 +409,8 @@ pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     chip_border: Color::srgb_u8(0x3A, 0x40, 0x48),
     chip_on: Color::srgb_u8(0xE8, 0xE6, 0xE1),
     chip_on_ink: Color::srgb_u8(0x14, 0x17, 0x1C),
+    slider_track: Color::srgb_u8(0x3A, 0x40, 0x48),
+    slider_fill: Color::srgb_u8(0xF2, 0xA9, 0x3B),
 };
 
 /// A small shadow.
@@ -492,6 +500,8 @@ mod tests {
             ("chip_border", l.chip_border, d.chip_border),
             ("chip_on", l.chip_on, d.chip_on),
             ("chip_on_ink", l.chip_on_ink, d.chip_on_ink),
+            ("slider_track", l.slider_track, d.slider_track),
+            ("slider_fill", l.slider_fill, d.slider_fill),
         ];
         for (name, light, dark) in pairs {
             assert_ne!(light, dark, "{name} is the same in both themes");
@@ -581,8 +591,9 @@ mod tests {
     /// Exempt from the checks below, by WCAG 1.4.3: `text_disabled` (inactive
     /// components are exempt) and `text_tertiary` (placeholder and caption
     /// text the redesign allows to be quieter). Decorative colours (`border`,
-    /// `divider`, `chip_border`, `warning_border`, the `accent_subtle_bar`)
-    /// are not read as information and are exempt as well.
+    /// `divider`, `chip_border`, `warning_border`, the `accent_subtle_bar`,
+    /// `slider_track`, beside which the `slider_fill` shows the value) are not
+    /// read as information and are exempt as well.
     #[test]
     fn the_default_themes_meet_wcag_aa_contrast() {
         let mut failures = Vec::new();
@@ -700,6 +711,12 @@ mod tests {
                     c.selection_ring,
                     c.background_primary,
                 ),
+                (
+                    "slider_fill on background_primary",
+                    c.slider_fill,
+                    c.background_primary,
+                ),
+                ("slider_fill on card_surface", c.slider_fill, c.card_surface),
             ];
             for (name, fg, bg) in non_text {
                 let ratio = contrast_ratio(fg, bg);

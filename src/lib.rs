@@ -1,6 +1,6 @@
 //! A reusable Bevy UI widget library built on Bevy's native `Node` UI: buttons, lists,
-//! combos, scroll areas, tabs, breadcrumbs, colour palettes and a numeric stepper,
-//! all themed from one [`Theme`] resource.
+//! combos, scroll areas, tabs, breadcrumbs, colour palettes, a numeric stepper and a
+//! slider, all themed from one [`Theme`] resource.
 //!
 //! Add [`WidgetsPlugin`] to an app and spawn exactly one root [`Node`] for the app's UI.
 //!
@@ -33,6 +33,7 @@ pub mod scroll_area;
 pub mod segmented_control;
 pub mod select;
 pub mod setting_row;
+pub mod slider;
 pub mod stack;
 pub mod tab_bar;
 pub mod tailwind;
@@ -45,7 +46,9 @@ use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::picking::events::{PointerEvent, PointerTraversal};
 use bevy::prelude::*;
-use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin, ScrollbarPlugin, TabPlugin};
+use bevy::ui_widgets::{
+    ButtonPlugin, ListBoxPlugin, ScrollbarPlugin, SliderPlugin as HeadlessSliderPlugin, TabPlugin,
+};
 
 use crate::badge::BadgePlugin;
 use crate::breadcrumbs::BreadCrumbsPlugin;
@@ -73,6 +76,7 @@ use crate::scroll_area::ScrollAreaPlugin;
 use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::setting_row::SettingRowPlugin;
+use crate::slider::SliderPlugin;
 use crate::stack::StackPlugin;
 use crate::tab_bar::TabBarPlugin;
 use crate::theme::{Theme, ThemePlugin};
@@ -81,12 +85,12 @@ use crate::tooltip::TooltipPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
-/// The `ButtonPlugin`, `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin` of
+/// The `ButtonPlugin`, `ListBoxPlugin`, `ScrollbarPlugin`, `SliderPlugin` and `TabPlugin` of
 /// `bevy_ui_widgets` are added in [`Plugin::finish`] when the app does not have them by
 /// then, so it does not matter whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added
 /// before or after this plugin. An app that is driven by hand with `App::update` instead
-/// of `App::run` must call `App::finish` first, or its buttons, lists, scroll bars and tab
-/// bars get no observers.
+/// of `App::run` must call `App::finish` first, or its buttons, lists, scroll bars,
+/// sliders and tab bars get no observers.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
@@ -120,6 +124,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(TooltipPlugin)
             .add_plugins(GalleryPlugin)
             .add_plugins(NumericStepperPlugin)
+            .add_plugins(SliderPlugin)
             .add_plugins(PanelPlugin)
             .add_plugins(ThemePlugin)
             .add_plugins(BreadCrumbsPlugin)
@@ -148,6 +153,9 @@ impl Plugin for WidgetsPlugin {
         }
         if !app.is_plugin_added::<ScrollbarPlugin>() {
             app.add_plugins(ScrollbarPlugin);
+        }
+        if !app.is_plugin_added::<HeadlessSliderPlugin>() {
+            app.add_plugins(HeadlessSliderPlugin);
         }
         if !app.is_plugin_added::<TabPlugin>() {
             app.add_plugins(TabPlugin);
