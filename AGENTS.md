@@ -58,7 +58,7 @@ runs on GitHub's side; the coordinator starts every agent, in its own session.
 
 | Agent | Model | Does |
 | --- | --- | --- |
-| `coordinator` | Sonnet | Decides what is ready, keeps the slots, dispatches implementers and reviewers into them, checks on GitHub that each did its job, merges, and turns what is left undone (review nits, questions on an issue, anything a pull request left open) into issues it refines and labels `ready-for-agent`, or `require-human-review` where a human must decide first. Writes no code. |
+| `coordinator` | Sonnet | Decides what is ready, claims each issue it starts so that no other run touches it, keeps the slots, dispatches implementers and reviewers into them, checks on GitHub that each did its job, merges, and turns what is left undone (review nits, questions on an issue, anything a pull request left open) into issues it refines and labels `ready-for-agent`, or `require-human-review` where a human must decide first. Writes no code. |
 | `implementer-sonnet`, `implementer-opus` | Sonnet, Opus | Implements one issue in the issue's slot on a branch `RINUI-<number>/<slug>`, opens a pull request that `Closes #N`, and follows it up on review, red CI or a merge conflict. Runs the `implement-issue` skill. |
 | `reviewer-sonnet`, `reviewer-opus` | Sonnet, Opus | Reviews one pull request in the issue's slot, makes sure CI passed on its head, and posts one review that approves or requests changes, with inline comments. Runs the `review-pr` skill. |
 
@@ -67,10 +67,10 @@ also run by hand: `/implement-issue 24`, `/review-pr 25 opus`.
 
 | Label | Meaning |
 | --- | --- |
-| `ready-for-agent` | The coordinator may start the issue. Agents leave every other issue alone. On a pull request, a coordinator run that wound down left it there, and a later run may pick the pull request up; without it, an open pull request may be someone else's. |
+| `ready-for-agent` | A coordinator may claim and start the issue. Agents leave every other issue alone. It means nothing on a pull request: who may act on one is its issue's claim. |
 | `opus` | The Opus implementer, and an Opus approval. Without it, Sonnet. |
 | `require-human-review` | A human approves and merges; no agent approves or merges it. On a follow-up the coordinator filed without `ready-for-agent`, a human must decide something before an agent can take it. |
-| `In progress` | Someone is working on it; set on dispatch. |
+| `In progress` | Someone is working on it; set when a coordinator claims the issue, and kept after a release while its pull request is open. The claim says who. |
 | `Needs refinement` | Not ready. An implementer that finds the issue ambiguous asks on it, sets this and removes `ready-for-agent`. |
 
 An issue starts only when everything it depends on is **closed as completed**:
@@ -100,16 +100,53 @@ Everything else agents leave behind (a pull request's "anything left open",
 untaken nits, flakes) becomes an issue once the pull request merges, labelled
 `ready-for-agent`, or `require-human-review` alone when a human must decide
 something first. When a run winds down with a pull request of its own still
-waiting for CI or a slot, it labels that pull request `ready-for-agent` so
-the next run may pick it up; that is the only time a pull request gets the
-label.
+waiting for CI or a slot, it releases its claim (below) so the next run may
+claim the issue and pick the pull request up; no pull request gets
+`ready-for-agent`.
+
+**Claims.** Several coordinator runs may work at once (two machines, two
+cloud sessions, twice in one session), all as the same GitHub account, so an
+issue is owned through a comment rather than a label. Each run makes a run id
+at its start (the Claude Code session id, the time and a random number, since
+two runs in one session share the session id).
+
+- **Claim.** Before a run binds a slot or dispatches anything for an issue,
+  it posts a comment starting `<!-- coordinator-claim session=<run id> -->`,
+  naming the slot and the machine, and adds `In progress`. It then waits
+  about 30 seconds and reads the comments again. A claim is live until a
+  `<!-- coordinator-release session=<run id> -->` of the same run follows it
+  or its comment is deleted, and the issue's owner is the run of the oldest
+  live claim. A run that finds an older live claim than its own deletes its
+  comment and skips the issue. So two runs that pick the same issue at the
+  same moment both post, both wait, both see the same oldest claim, and only
+  its run goes on.
+- **Ownership decides every action.** Only the owner binds or resets the
+  issue's slot, dispatches, merges, labels, files its follow-ups or answers
+  its questions, and it reads the claim again right before each dispatch and
+  each merge. It also notes the pull request's head after each agent of its
+  own; a head that moved without one of its agents stops it. The agents it
+  dispatches carry its run id (`for coordinator run <run id>`) and act only
+  while that run owns the issue; run by hand, they stop when a coordinator
+  holds a live claim.
+- **Release.** A run that lets go of an open issue (it winds down with the
+  pull request waiting, the loop did not converge, the issue went to
+  `Needs refinement`) posts the release comment, keeping `In progress` while
+  a pull request is open. An issue whose last coordinator marker is a
+  release, labelled `ready-for-agent`, is free for the next run to claim. A
+  merged, closed issue needs no release.
+- **Stale.** A claim of another run whose issue and pull request have shown
+  no activity for 6 hours is stale. A coordinator reports it and never
+  deletes or takes it over; a human releases it, by deleting the claim or
+  posting a release with its `session`.
+- An issue with `In progress` and no claim is someone else's (a human, an
+  agent run by hand): coordinators report it and leave it alone.
 
 | How | What |
 | --- | --- |
 | `/coordinate` | Passes until nothing is left to do, then a report. One slot, so one issue in flight at a time, in a cloud session (`CLAUDE_CODE_REMOTE=true`), two on a local machine. |
 | `/coordinate #24 #25` | Only those issues and their pull requests. |
 | `/coordinate max 5` | Five slots, so five issues in flight at once, instead of the default. |
-| `/coordinate dry-run` | Report what it would do and change nothing. |
+| `/coordinate dry-run` | Report what it would do and change nothing, claims included. |
 | `/loop 30m /coordinate` | Keep coordinating every half hour. |
 | `claude --agent coordinator` | The coordinator as the session's main agent. |
 
@@ -125,7 +162,11 @@ issue's work is done, usually the merge: the implementer, the reviewer, the
 follow-up and the reviewer again all run in that one slot, one at a time,
 each building on the `target/` the last one left, and no other issue uses
 it meanwhile. The binding is `.claude/worktrees/slot-<n>.issue`, next to
-the worktree, so it survives between runs. When the issue is done the
+the worktree, so it survives between runs; it holds the issue's number and
+the run id of the claim it was bound under (`290 <run id>`), and a run never
+rebinds or resets a slot whose binding names another run's live claim. A
+binding under a released claim is taken over by the run that claims the
+issue next, or reset by any run once the slot is clean. When the issue is done the
 coordinator resets the slot to `origin/main` and frees it; the `target/`
 stays, so the next issue starts warm. Agents enter their slot with Claude
 Code's `EnterWorktree` tool, given the slot's path. Slots are never removed;

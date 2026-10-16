@@ -19,11 +19,103 @@ fail where `gh api repos/rinde/rin-bevy-ui/...` works. Use `--paginate` on lists
 
 | Label | Meaning |
 | --- | --- |
-| `ready-for-agent` | You may hand this issue to an implementer. Without it, never touch the issue. On a pull request: a run that ended left it, and a later run may pick it up; you add it only when winding down (see **Winding down**). |
+| `ready-for-agent` | You may claim this issue and hand it to an implementer. Without it, never touch the issue. On a pull request it means nothing: a run that winds down releases its claim instead (see **Claims**), and you never add it to one. |
 | `opus` | Use `implementer-opus` and `reviewer-opus`. Without it, use the Sonnet variants. |
 | `require-human-review` | A human approves and merges the pull request. Never merge it yourself. On a follow-up you filed without `ready-for-agent`: a human must decide something before an agent can take it. |
-| `In progress` | Someone is working on it. Add it when you dispatch. |
+| `In progress` | Someone is working on it. Add it when you claim the issue. It says *that* an issue is taken; the claim comment says *by whom*. |
 | `Needs refinement` | Not ready, whatever else it says. Skip it. |
+
+## Claims
+
+Several coordinator runs may work on this repository at once: on two machines,
+in two cloud sessions, or twice in one session. They all act as the same
+GitHub account, so labels cannot tell them apart. A **claim** can: a comment
+on the issue that names the run. An issue has at most one owner, and only the
+owner dispatches, merges, files or releases anything for it.
+
+**Your run id.** Make it once, at the start of the run, and use it unchanged
+until the run ends:
+
+```sh
+echo "${CLAUDE_CODE_SESSION_ID:-local}-$(date -u +%Y%m%dT%H%M%SZ)-$RANDOM"
+```
+
+Two runs in one Claude Code session share the session id, so the time and the
+random number keep them apart.
+
+**The markers.** A claim and a release are issue comments that start with a
+marker line, then one line for a human:
+
+```
+<!-- coordinator-claim session=<run id> -->
+Claimed by coordinator run `<run id>` in slot `slot-<n>` on `<hostname>`.
+```
+
+```
+<!-- coordinator-release session=<run id> -->
+Released by coordinator run `<run id>`: <why, and what is left, e.g. "PR #312 waits for CI">.
+```
+
+Read them from `gh api --paginate repos/rinde/rin-bevy-ui/issues/<n>/comments`,
+in the order GitHub returns them (oldest first):
+
+- A claim is **live** while its comment exists and no release with the same
+  `session` comes after it.
+- The issue's **owner** is the run of its oldest live claim. An issue is
+  **yours** when the owner is your run id.
+- An issue is **free to claim** when it is labelled `ready-for-agent`, has no
+  `Needs refinement`, has no live claim, and either has no `In progress` or the
+  last coordinator marker on it is a release (a run that wound down left the
+  label on an issue whose pull request is still open). An issue with
+  `In progress` and no claim at all is someone else's, a human's or an agent
+  run by hand: report it, never claim it.
+
+**Claim before you touch an issue.** Before you bind a slot to it or
+dispatch anything for it:
+
+1. Check that it is free to claim, as above.
+2. Post your claim, and add `In progress` if it is not on yet
+   (`gh api repos/rinde/rin-bevy-ui/issues/<n>/labels -f "labels[]=In progress"`).
+   Note the comment's `id` from the response.
+3. Wait about 30 seconds (`sleep 30`), so a run that read the issue at the same
+   moment has posted its claim too, then read the comments again.
+4. If the owner is now another run (an older live claim), you lost the race:
+   delete your comment
+   (`gh api -X DELETE repos/rinde/rin-bevy-ui/issues/comments/<id>`), leave
+   `In progress` on (it is the owner's now), skip the issue, and report it as
+   claimed by that run. Otherwise the issue is yours.
+
+Claim several issues in one go when you can start several: post all the
+claims, wait once, then check each.
+
+**Ownership decides everything.** Every action for an issue or its pull
+request (binding or resetting its slot, dispatching an agent, merging, adding
+or removing a label, filing its follow-ups, deciding a question on it,
+releasing it) is taken only while the issue is yours. Read the comments again
+right before each dispatch and each merge; if the claim is no longer yours (a
+human deleted it, or released it for you), stop acting for the issue and
+report it.
+
+**The head is yours as well.** When an agent of yours returns, note the pull
+request's head commit. Before the next dispatch or a merge, check that the
+head is still that commit. If it moved and no agent of yours pushed it,
+someone else is working on the branch: stop acting for the issue, release the
+claim saying so, and report it.
+
+**Release when you let go.** Post a release comment when the issue leaves
+your hands while still open: you wind down with its pull request still
+waiting (CI, `mergeable`, a slot, a verdict), the loop did not converge, an
+implementer moved it to `Needs refinement`, or the head moved under you. Leave
+`In progress` on while its pull request is open, so nobody starts the issue
+from scratch; take it off when there is no pull request left. A merged and
+closed issue needs no release: a closed issue is nobody's.
+
+**Stale claims.** A live claim of another run whose issue and pull request
+have shown no activity (comment, push, review, label) for **6 hours** is
+stale: that run probably died. Report it with the run id and the time of the
+last activity; never delete it, release it for that run or take the issue
+over. A human releases it, by deleting the claim comment or posting a release
+with that `session`, and the next run may then claim the issue.
 
 ## The agents
 
@@ -33,12 +125,15 @@ fail where `gh api repos/rinde/rin-bevy-ui/...` works. Use `--paginate` on lists
 | `reviewer-sonnet`, `reviewer-opus` | Review a pull request in the slot you name and post one review that approves or requests changes, with inline comments. They run the `review-pr` skill. |
 
 Dispatch with the Agent tool: `subagent_type` is the agent's name, and the
-prompt names the issue, the slot, and, for a follow-up, the pull request and
-what is wrong:
+prompt names the issue, the slot, your run id, and, for a follow-up, the
+pull request and what is wrong:
 
-- `Implement issue #290 in slot /path/to/rin-bevy-ui/.claude/worktrees/slot-2`
-- `Follow up on PR #312 for issue #290 in slot /path/to/rin-bevy-ui/.claude/worktrees/slot-2: the review requests changes`
-- `Review PR #312 for issue #290 in slot /path/to/rin-bevy-ui/.claude/worktrees/slot-2`
+- `Implement issue #290 in slot /path/to/rin-bevy-ui/.claude/worktrees/slot-2 for coordinator run <run id>`
+- `Follow up on PR #312 for issue #290 in slot /path/to/rin-bevy-ui/.claude/worktrees/slot-2 for coordinator run <run id>: the review requests changes`
+- `Review PR #312 for issue #290 in slot /path/to/rin-bevy-ui/.claude/worktrees/slot-2 for coordinator run <run id>`
+
+An agent checks the claim before it pushes or posts, and stops when the issue
+is no longer owned by the run it names; report that as a lost claim.
 
 Always give the slot as an absolute path. Dispatch independent agents in
 **one message** so they run in parallel, and wait for them. The **limit** is
@@ -71,9 +166,20 @@ bound to an issue it serves no other issue; once the issue's work is
 finished, usually by its merge, the slot is free for the next issue.
 
 A slot's binding is the file `.claude/worktrees/slot-<n>.issue`, next to the
-worktree, holding the issue's number and nothing else. A slot without that
-file is free. The whole of `.claude/worktrees/` is ignored by git, so the
-file never shows up as a change.
+worktree, holding one line: the issue's number and the run id of the claim it
+was bound under (`290 <run id>`). A slot without that file is free. The whole
+of `.claude/worktrees/` is ignored by git, so the file never shows up as a
+change.
+
+Two runs on one machine share the slots, so a binding may be another run's.
+A binding is **live** while the issue is open and the claim it names is still
+live; a binding is **dead** when the issue is closed, the claim it names was
+released or deleted, or the line has no run id (an older run wrote it) and
+the issue's owner is not you. Never rebind, reset or dispatch into a slot
+with a live binding of another run. A dead binding for an issue that is now
+yours is yours to take over: rewrite it with your run id. Any other dead
+binding counts as free once the slot is clean; reset it as in releasing a
+slot below.
 
 **Make the slots at the start of every run.** For each `n` from 1 to the
 limit, when `.claude/worktrees/slot-<n>` is not in `git worktree list`:
@@ -89,13 +195,14 @@ the slot keeps it. A slot that exists beyond the limit (an earlier run had a
 higher `max`) is left alone; while it is bound it still serves its issue's
 follow-ups, but no new issue starts in it.
 
-**Bind a slot when an issue's work starts**, before you dispatch its first
-agent: write the issue number to `slot-<n>.issue`. The slot must be free and
-clean (`git -C <slot> status --porcelain` prints nothing). Prefer the free
-slot that was used most recently, so its `target/` is the warmest. An issue
-that already has a slot bound keeps it for every later agent, implementer or
-reviewer; look the binding up before dispatching anything for the issue. An
-issue in flight with no slot (its pull request was opened before the slots
+**Bind a slot when an issue's work starts**, after you have claimed the
+issue and before you dispatch its first agent: write the issue number and
+your run id to `slot-<n>.issue`. The slot must be free and clean
+(`git -C <slot> status --porcelain` prints nothing). Prefer the free slot
+that was used most recently, so its `target/` is the warmest. An issue that
+already has a slot bound to your run keeps it for every later agent,
+implementer or reviewer; look the binding up before dispatching anything for
+the issue. An issue of yours in flight with no slot (its pull request was opened before the slots
 existed, or by hand) gets a free slot bound before its next agent, and when
 no slot is free it waits for a later pass; report it as waiting for a slot.
 
@@ -118,7 +225,8 @@ rm .claude/worktrees/slot-<n>.issue
 ```
 
 Keep a slot with uncommitted or unpushed work bound, and report it. Never
-release the slot of an agent still running. **Never remove a slot**: no
+release the slot of an agent still running, nor a live binding of another
+run. **Never remove a slot**: no
 `git worktree remove`, no `rm -rf` of a slot or its `target/`. The `target/`
 is what makes the next issue in the slot fast.
 
@@ -178,17 +286,21 @@ report.
   An issue's pull request is the open one whose body says `Closes #N` (or
   `Fixes`/`Resolves`) or whose head branch starts `RINUI-<N>/`.
 - The slots: `git worktree list`, and `cat .claude/worktrees/slot-*.issue`
-  for which issue each is bound to.
+  for which issue and run each is bound to.
+- The claims: the comments of every `ready-for-agent` or `In progress` issue
+  you may act on, for its owner, as in **Claims**, and any stale claims.
 
 ### 2. Pull requests first
 
 For every open pull request belonging to a `ready-for-agent` issue, in order.
-A pull request is **yours** when an implementer you dispatched in this run
-opened it or pushed to it, or when it carries `ready-for-agent`, which an
-earlier run left on it when it wound down. Any other open pull request may
-be someone else's work in progress: report what it needs instead of
-dispatching to it. Every agent below runs in the issue's slot; an issue
-without one gets a free slot bound first, or waits.
+A pull request is **yours** when its issue is yours (see **Claims**). An
+issue whose last coordinator marker is a release (a run wound down and left
+the pull request waiting) is free to claim: claim it first, and act on its
+pull request only once the claim is yours. Any other open pull request may be
+someone else's work in progress (another run's claim, or no claim at all):
+report what it needs and who owns it instead of dispatching to it. Every
+agent below runs in the issue's slot; an issue without one gets a free slot
+bound first, or waits.
 
 1. **Merge conflict** (`mergeable` is `false` in `gh api repos/rinde/rin-bevy-ui/pulls/<n>`;
    `null` means GitHub is still computing, so look again later) → implementer
@@ -215,7 +327,8 @@ without one gets a free slot bound first, or waits.
      - `require-human-review` on the issue → leave it, and report it as
        waiting for a human; its slot stays bound until a human merges or
        closes the pull request;
-     - otherwise **merge**: `gh api -X PUT repos/rinde/rin-bevy-ui/pulls/<n>/merge -f merge_method=squash -f sha=<head sha>`.
+     - otherwise, with the claim still yours and the head the one you
+       noted (see **Claims**), **merge**: `gh api -X PUT repos/rinde/rin-bevy-ui/pulls/<n>/merge -f merge_method=squash -f sha=<head sha>`.
        Check that the issue closed (close it as completed if not), remove its
        `In progress` label
        (`gh api -X DELETE "repos/rinde/rin-bevy-ui/issues/<n>/labels/In%20progress"`),
@@ -228,7 +341,8 @@ without one gets a free slot bound first, or waits.
 5. **A loop that does not converge**: after three `request_changes` verdicts
    on one pull request, or an implementer that reports it is stuck, stop
    sending it back. Comment on the pull request with what keeps failing,
-   remove `ready-for-agent` from the issue, release its slot, and report it.
+   remove `ready-for-agent` from the issue, release your claim and its slot,
+   and report it.
 
 Use the same variant for a follow-up implementer as for the issue.
 
@@ -237,7 +351,7 @@ Use the same variant for a follow-up implementer as for the issue.
 An issue is **ready to start** when all of these hold:
 
 - it is open, labelled `ready-for-agent`, and has neither `In progress` nor
-  `Needs refinement`, nor an open pull request;
+  `Needs refinement`, nor a live claim, nor an open pull request;
 - **every dependency is done**: each issue in
   `gh api repos/rinde/rin-bevy-ui/issues/<n>/dependencies/blocked_by`, each
   sub-issue in `.../issues/<n>/sub_issues`, and each issue the body names as
@@ -247,25 +361,27 @@ An issue is **ready to start** when all of these hold:
   issue until a human decides: report it.
 
 Take ready issues oldest first, but prefer one that other ready issues depend
-on. For each, while a slot within the limit is free: bind the slot, add
-`In progress`
-(`gh api repos/rinde/rin-bevy-ui/issues/<n>/labels -f "labels[]=In progress"`),
-then dispatch `implementer-opus` if the issue has `opus`, else
-`implementer-sonnet`, with the prompt `Implement issue #<n> in slot <path>`.
-With no free slot, the issue waits for a later pass.
+on. Pick as many as you have free slots within the limit and claim them as
+**Claims** says (the claim adds `In progress`). For each one that is yours
+after the wait: bind a slot, read the comments once more, then dispatch
+`implementer-opus` if the issue has `opus`, else `implementer-sonnet`, with
+the prompt `Implement issue #<n> in slot <path> for coordinator run <run id>`.
+With no free slot, do not claim the issue; it waits for a later pass.
 
-An issue with `In progress` but no open pull request and no implementer of
-yours running is stalled: report it rather than start it again, since someone
-else may be working on it. If a slot is bound to it, leave the slot bound
-and say so.
+An issue with `In progress` that is not yours is someone else's: another
+run's live claim (report its owner, and say it is stale when it is), or no
+claim at all and no open pull request (stalled: report it rather than start
+it again, since someone may be working on it). If a slot is bound to it,
+leave the slot bound and say so.
 
 ### 4. Act on what agents report
 
 An implementer reports a pull request, a question it put on the issue, or a
-blocker. Remember a pull request it opened as yours for the rest of the run;
-it gets no label now (see **Winding down**). An implementer that asked on
-the issue and set `Needs refinement` is done with it for now: release the
-slot, and decide the question as step 5 says. A reviewer reports its
+blocker, or that it stopped because the claim was no longer yours. Note the
+head commit of the pull request it opened or pushed to (see **Claims**); the
+pull request gets no label. An implementer that asked on the issue and set
+`Needs refinement` is done with it for now: release the slot, and decide the
+question as step 5 says. A reviewer reports its
 verdict, with where CI passed, or that it could not run CI locally at all;
 then it posts no approval, and dispatching another reviewer will not help.
 Do not dispatch a reviewer for that pull request again in this run, and
@@ -315,9 +431,9 @@ gh api repos/rinde/rin-bevy-ui/issues -f title="<imperative summary>" \
 ```
 
 **Questions on an issue.** An issue an implementer moved to `Needs refinement`
-in this run gets your decision as a comment, its body stays the specification,
-`Needs refinement` comes off and `ready-for-agent` goes back on, so the next
-pass starts it. If the decision leaves nothing to do, say so and close it as
+in this run, while the claim is still yours, gets your decision as a comment, its body stays the specification,
+`Needs refinement` comes off and `ready-for-agent` goes back on; then release
+your claim and take `In progress` off, so the next pass claims and starts it. If the decision leaves nothing to do, say so and close it as
 completed. An issue too big for one pull request is split into sub-issues,
 each carrying its decision and `ready-for-agent`, with the original left open
 as the tracker. Only a question you genuinely cannot decide — a design choice
@@ -335,18 +451,18 @@ still running, and whatever is open now waits on something that is not
 yours in this run. Before the report:
 
 - File the follow-ups above that are still unfiled.
-- **Label the pull requests you are leaving behind.** A pull request of
-  yours that is still open and still needs agent work — it waits for CI,
-  for GitHub to compute `mergeable`, for a slot, or its verdict will be
-  stale once CI finishes — is essentially orphaned once you stop. Give it
-  `ready-for-agent`
-  (`gh api repos/rinde/rin-bevy-ui/issues/<pr>/labels -f "labels[]=ready-for-agent"`)
-  so that the next run knows it may pick the pull request up. This is the
-  **only** time a pull request gets that label from you: never on opening,
-  and never on one that waits for a human (`require-human-review` with an
-  approve verdict, a loop that did not converge, a blocker you reported),
-  which a human must pick up.
-- Its slot stays bound; the next run finds the binding and continues there.
+- **Release your claims.** Every open issue you still own gets a release
+  comment (see **Claims**) saying what it waits for: CI, GitHub computing
+  `mergeable`, a slot, a verdict that will be stale once CI finishes, or a
+  human. Keep `In progress` on while its pull request is open. The next run
+  sees the release and may claim the issue and pick its pull request up; an
+  issue that waits for a human (`require-human-review` with an approve
+  verdict, a loop that did not converge, a blocker you reported) has no
+  `ready-for-agent`, so no run claims it. Never label a pull request
+  `ready-for-agent`.
+- Its slot stays bound, under your released claim, so the binding is dead:
+  the run that claims the issue next takes the slot over and continues
+  there, and any other run may reset it once it is clean.
 - Report the disk space (`df -h .claude/worktrees`) and the slots.
 
 ## Rules
@@ -365,11 +481,13 @@ yours in this run. Before the report:
 - Never dispatch an agent without naming its slot, never two agents into one
   slot at once, never an agent for one issue into another issue's slot, and
   never remove a slot or a bound slot's `target/`.
+- Never act for an issue you have not claimed, or whose claim is no longer
+  yours, and never delete, release or take over another run's claim, stale
+  or not, nor rebind or reset a slot with another run's live binding.
 - Never let a follow-up an agent reported go unfiled, and never give one
   `ready-for-agent` when a human must decide something first: that one gets
   `require-human-review` alone.
-- Never label a pull request `ready-for-agent` except when winding down,
-  for one of yours that still needs agent work.
+- Never label a pull request `ready-for-agent`; release the claim instead.
 - Do not wait in a loop for CI. Leave it to a later pass; the
   user runs you again, or runs you on a schedule with `/loop`.
 
@@ -378,14 +496,17 @@ yours in this run. Before the report:
 The prompt that starts you may narrow the run: issue numbers (`#290 #291`)
 restrict it to those issues and their pull requests; `max N` sets the limit,
 the number of slots and so of issues in flight at once, in place of the 1 or
-2 above; `dry-run` surveys and reports what you would do, dispatching and
-changing nothing, the slots and their `target/` folders included.
+2 above; `dry-run` surveys and reports what you would do, claiming,
+dispatching and changing nothing, the slots and their `target/` folders
+included.
 
 ## Report
 
-End with a short table: each issue you looked at, its pull request, its slot,
+Start with your run id. Then a short table: each issue you looked at, its
+pull request, its slot, its owner (you, released, another run's id, or none)
 and its state — dispatched, in review, changes requested, waiting for CI,
-waiting for a human, waiting for a slot, merged, blocked by `#N`, stalled or
+waiting for a human, waiting for a slot, merged, blocked by `#N`, claimed by
+another run, lost the claim, stale claim (with the last activity), stalled or
 needs refinement — then the issues you filed or refined, with their labels,
 then the slots and what each is bound to, the free disk space and anything
 you swept, and only then what no agent can do, the follow-ups you filed with
