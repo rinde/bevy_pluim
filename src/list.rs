@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
@@ -16,8 +17,6 @@ use bevy::ui_widgets::{
 };
 use bevy::window::PrimaryWindow;
 use itertools::Either;
-
-use bevy::a11y::AccessibilityNode;
 
 use crate::focus::{AccessibilitySync, TabStop, sync_label};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
@@ -372,9 +371,10 @@ fn sync_item_labels(
     }
 }
 
+/// The text of a default item view, themed when it is inserted and when the [`Theme`] changes.
 #[derive(Component, Debug, Clone, Copy)]
 #[component(on_insert=Self::on_insert)]
-struct ItemLabel;
+pub(crate) struct ItemLabel;
 
 impl ItemLabel {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {

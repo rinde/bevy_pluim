@@ -1,0 +1,38 @@
+// A virtual list renders only the rows in view: the `virtual list` of ten thousand rows in
+// its 200 pixel high scroll area keeps thirteen `VirtualListRow`s (eight fit, one more for
+// a part row, two beyond each edge) wherever it is scrolled. The wheel scrolls the area to
+// the bottom, where the rows show the last items, and a click there picks one; back at the
+// top the same rows show the first items again.
+(
+    format_version: 3,
+    name: "a virtual list keeps its rows when scrolled to the bottom",
+    setup: App(VirtualList),
+    steps: [
+        Wait(3),
+        Check(Count(with: ["VirtualListRow"], is: Eq(13))),
+        Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1")))),
+        Check(Not(Exists(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000"))))),
+        MoveTo(Within(Name("virtual list"), Role(role: ListItem, label: "Row 2"))),
+        // Down, however far the wheel turns: the area stops at the last row.
+        Wheel(x: 0.0, y: -1000000.0),
+        Wait(3),
+        Check(Count(with: ["VirtualListRow"], is: Eq(13))),
+        Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000")))),
+        Check(Not(Exists(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
+        MoveTo(Within(Name("virtual list"), Role(role: ListItem, label: "Row 9999"))),
+        Click(Left),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 9999"]))),
+        Check(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 9999")))),
+        Check(Not(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000"))))),
+        // Back up to the top: the same rows show the first items, none of them selected.
+        Wheel(x: 0.0, y: 1000000.0),
+        Wait(3),
+        Check(Count(with: ["VirtualListRow"], is: Eq(13))),
+        Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1")))),
+        Check(Not(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
+    ],
+    expect: [
+        App(Selected(of: Name("virtual list"), items: ["Row 9999"])),
+    ],
+)

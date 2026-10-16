@@ -57,6 +57,7 @@ use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
 use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
+use rin_bevy_ui::virtual_list::VirtualList;
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
 
 use crate::common::spawn_camera_and_root;
@@ -159,6 +160,10 @@ pub enum WidgetsSetup {
     /// `themed button` ("Other"), a `themed card` and a `themed list` of
     /// three items (the first selected), then "Change theme".
     Themed,
+    /// A `virtual list` of ten thousand rows ("Row 1" to "Row 10000", 28
+    /// pixels high, a `One` selection of its own, "Row 1" first) in the 240
+    /// by 200 `virtual list scroll area`, and "Change theme".
+    VirtualList,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -185,6 +190,7 @@ impl AppSetup for WidgetsSetup {
             Self::TextFields => text_fields(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
+            Self::VirtualList => virtual_list(world),
         }
         Ok(())
     }
@@ -1566,6 +1572,37 @@ fn themed(world: &mut World) {
             Selection::builder()
                 .one()
                 .build_with_items(["One", "Two", "Three"].map(Item::new)),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+/// How many rows the `virtual list` of the [`WidgetsSetup::VirtualList`] screen has.
+const VIRTUAL_LIST_ROWS: usize = 10_000;
+
+fn virtual_list(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("virtual list scroll area"),
+            Node {
+                width: px(240),
+                height: px(200),
+                ..default()
+            },
+            ScrollArea::bundle(
+                |parent: &mut ChildSpawner| {
+                    parent.spawn((
+                        Name::new("virtual list"),
+                        VirtualList::new(28.0),
+                        Selection::builder().one().build_with_items(
+                            (1..=VIRTUAL_LIST_ROWS).map(|row| Item::new(format!("Row {row}"))),
+                        ),
+                    ));
+                },
+                true,
+                false,
+            ),
         ));
         spawn_theme_button(root);
     });
