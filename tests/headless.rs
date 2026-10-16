@@ -29,7 +29,8 @@ use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{
-    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
+    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab, Tab,
+    TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
@@ -60,6 +61,7 @@ use rin_bevy_ui::select::{
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
@@ -3223,6 +3225,151 @@ fn adding_and_removing_items_adds_and_removes_segments() {
     );
     activate(&mut app, segments[2]);
     assert_eq!(selected_segments(&app, control), ["New"]);
+}
+
+// ---- Tab bars ----
+
+/// The tabs of a bar, in order.
+fn tabs_of(app: &App, bar: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(bar)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<TabBarTab>())
+        .collect()
+}
+
+/// The text of the tabs that carry `Selected`.
+fn selected_tabs(app: &App, bar: Entity) -> Vec<String> {
+    tabs_of(app, bar)
+        .into_iter()
+        .filter(|t| app.world().entity(*t).contains::<Selected>())
+        .map(|t| segment_text(app, t))
+        .collect()
+}
+
+/// The tab the bar's `SelectedTab` names.
+fn selected_tab(app: &App, bar: Entity) -> Option<Entity> {
+    app.world().entity(bar).get::<SelectedTab>().unwrap().0
+}
+
+/// Asks the bar's tab list for `tab`, as a click or Enter on it does.
+fn request_tab(app: &mut App, bar: Entity, tab: Entity) {
+    app.world_mut().trigger(ValueChange::<Option<Entity>> {
+        source: bar,
+        value: Some(tab),
+        is_final: true,
+    });
+    app.update();
+    app.update();
+}
+
+fn spawn_tab_bar(app: &mut App, selection: impl Bundle) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let bar = app
+        .world_mut()
+        .spawn((TabBar, selection, ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    bar
+}
+
+#[test]
+fn a_tab_bar_shows_a_tab_per_item_with_the_first_selected() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+
+    let tabs = tabs_of(&app, bar);
+    let texts: Vec<_> = tabs.iter().map(|t| segment_text(&app, *t)).collect();
+    assert_eq!(texts, ["General", "Audio", "Input"]);
+    assert!(app.world().entity(bar).contains::<TabList>());
+    assert!(
+        tabs.iter()
+            .all(|t| app.world().entity(*t).contains::<Tab>())
+    );
+    assert_eq!(selected_tab(&app, bar), Some(tabs[0]));
+    assert_eq!(selected_tabs(&app, bar), ["General"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, bar), colors.segmented_track);
+    assert_eq!(background(&app, tabs[0]), colors.segmented_selected);
+    assert_eq!(background(&app, tabs[1]), colors.segmented_track);
+}
+
+#[test]
+fn a_tab_the_tab_list_asks_for_becomes_the_selection() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+
+    request_tab(&mut app, bar, tabs[2]);
+
+    assert_eq!(selection_labels(&app, bar), ["Input"]);
+    assert_eq!(selected_tab(&app, bar), Some(tabs[2]));
+    assert_eq!(selected_tabs(&app, bar), ["Input"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, tabs[0]), colors.segmented_track);
+    assert_eq!(background(&app, tabs[2]), colors.segmented_selected);
+}
+
+#[test]
+fn a_tab_bar_follows_a_selection_it_refers_to() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    let bar = spawn_tab_bar(&mut app, Selection::reference(selection));
+    let tabs = tabs_of(&app, bar);
+    assert_eq!(selected_tabs(&app, bar), ["Dark"]);
+
+    // A tab asked for writes to the referenced selection ...
+    request_tab(&mut app, bar, tabs[1]);
+    assert_eq!(selection_labels(&app, selection), ["Light"]);
+    assert_eq!(selected_tabs(&app, bar), ["Light"]);
+
+    // ... and a change made to it from elsewhere moves the selected tab.
+    select_by_text(&mut app, selection, "Dark");
+    assert_eq!(selected_tab(&app, bar), Some(tabs[0]));
+    assert_eq!(selected_tabs(&app, bar), ["Dark"]);
+}
+
+#[test]
+fn a_tab_is_named_after_its_item_to_a_screen_reader() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+
+    let bar_node = app.world().entity(bar).get::<AccessibilityNode>().unwrap();
+    assert_eq!(bar_node.role(), accesskit::Role::TabList);
+    let node = app
+        .world()
+        .entity(tabs[1])
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.role(), accesskit::Role::Tab);
+    assert_eq!(node.label(), Some("Audio"));
 }
 
 // ---- Separated lists ----

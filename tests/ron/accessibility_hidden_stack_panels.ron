@@ -9,11 +9,11 @@
     steps: [
         Wait(2),
         Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Component("ColorPushButton"))), role: None, label: None, value: None, states: [Shown]))),
-        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel B")), Click(Left),
         Wait(2),
         Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Component("ColorPushButton"))), role: None, label: None, value: None, states: [Hidden]))),
         Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Role(role: ListItem, label: "1"))), role: None, label: None, value: None, states: [Shown]))),
-        MoveTo(Role(role: ListItem, label: "Panel A")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel A")), Click(Left),
         Wait(2),
         Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Component("ColorPushButton"))), role: None, label: None, value: None, states: [Shown]))),
         Check(App(Accessible(of: Nth(0, Within(Name("Stack"), Role(role: ListItem, label: "1"))), role: None, label: None, value: None, states: [Hidden]))),

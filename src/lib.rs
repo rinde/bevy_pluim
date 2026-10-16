@@ -34,6 +34,7 @@ pub mod segmented_control;
 pub mod select;
 pub mod setting_row;
 pub mod stack;
+pub mod tab_bar;
 pub mod tailwind;
 pub mod theme;
 pub mod toolbar;
@@ -44,7 +45,7 @@ use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::picking::events::{PointerEvent, PointerTraversal};
 use bevy::prelude::*;
-use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin};
+use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin, TabPlugin};
 
 use crate::badge::BadgePlugin;
 use crate::breadcrumbs::BreadCrumbsPlugin;
@@ -73,17 +74,18 @@ use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::setting_row::SettingRowPlugin;
 use crate::stack::StackPlugin;
+use crate::tab_bar::TabBarPlugin;
 use crate::theme::{Theme, ThemePlugin};
 use crate::toolbar::ToolbarPlugin;
 use crate::tooltip::TooltipPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
-/// The `ButtonPlugin` and `ListBoxPlugin` of `bevy_ui_widgets` are added in
+/// The `ButtonPlugin`, `ListBoxPlugin` and `TabPlugin` of `bevy_ui_widgets` are added in
 /// [`Plugin::finish`] when the app does not have them by then, so it does not matter
 /// whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added before or after this
 /// plugin. An app that is driven by hand with `App::update` instead of `App::run`
-/// must call `App::finish` first, or its buttons and lists get no observers.
+/// must call `App::finish` first, or its buttons, lists and tab bars get no observers.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
@@ -98,6 +100,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(SegmentedControlPlugin)
             .add_plugins(SettingRowPlugin)
+            .add_plugins(TabBarPlugin)
             .add_plugins(StackPlugin)
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)
@@ -140,6 +143,9 @@ impl Plugin for WidgetsPlugin {
         }
         if !app.is_plugin_added::<ListBoxPlugin>() {
             app.add_plugins(ListBoxPlugin);
+        }
+        if !app.is_plugin_added::<TabPlugin>() {
+            app.add_plugins(TabPlugin);
         }
         // The same for keyboard focus: the tester's `HeadlessPlugins` has the first two but
         // not tab navigation.

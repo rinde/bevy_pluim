@@ -53,7 +53,7 @@ const RECORDINGS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/recordings");
 
 /// The group of a scenario file, by the start of its name. The first prefix
 /// that matches wins, so a longer one comes before the shorter it starts with.
-const GROUPS: [(&str, &str); 22] = [
+const GROUPS: [(&str, &str); 23] = [
     ("push_button", "PushButton"),
     ("link", "Link"),
     ("list", "List"),
@@ -68,6 +68,7 @@ const GROUPS: [(&str, &str); 22] = [
     ("breadcrumbs", "BreadCrumbs"),
     ("stack", "Stack"),
     ("tabs", "Stack"),
+    ("tab_bar", "TabBar"),
     ("panel", "Panel"),
     ("setting_row", "SettingRow"),
     ("badge", "Badge"),
