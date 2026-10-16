@@ -44,6 +44,7 @@ use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
+use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 use rin_bevy_ui_tester::{
@@ -593,6 +594,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Gallery,
         WidgetsSetup::Toolbar,
         WidgetsSetup::Tooltip,
+        WidgetsSetup::Toast,
         WidgetsSetup::TextFields,
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
@@ -1680,6 +1682,34 @@ fn a_pill_is_a_status_named_by_its_text_as_given() {
     let node = accessibility_node(&mut app, "pill");
     assert_eq!(format!("{:?}", node.role()), "Status");
     assert_eq!(node.label(), Some("Running"));
+}
+
+#[test]
+fn a_toast_is_a_live_status_that_ignores_the_pointer_and_stacks_newest_last() {
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    world.spawn((Toast::new("First"), Name::new("first"), ChildOf(root)));
+    world.spawn((Toast::new("Second"), Name::new("second"), ChildOf(root)));
+    for _ in 0..4 {
+        app.update();
+    }
+    let node = accessibility_node(&mut app, "first");
+    assert_eq!(format!("{:?}", node.role()), "Status");
+    assert_eq!(node.label(), Some("First"));
+    assert_eq!(format!("{:?}", node.live()), "Some(Polite)");
+
+    let first = named(&mut app, "first");
+    let second = named(&mut app, "second");
+    let stack = app
+        .world_mut()
+        .query_filtered::<Entity, With<ToastStack>>()
+        .single(app.world())
+        .unwrap();
+    let children: Vec<Entity> = app.world().get::<Children>(stack).unwrap().to_vec();
+    assert_eq!(children, [first, second]);
+    let pickable = app.world().get::<Pickable>(first).unwrap();
+    assert!(!pickable.should_block_lower && !pickable.is_hoverable);
 }
 
 #[test]

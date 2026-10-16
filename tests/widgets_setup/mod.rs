@@ -28,6 +28,7 @@ use bevy::ecs::spawn::{SpawnIter, SpawnWith};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
+use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
@@ -55,6 +56,7 @@ use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
 use rin_bevy_ui::virtual_list::VirtualList;
@@ -146,6 +148,9 @@ pub enum WidgetsSetup {
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
     Tooltip,
+    /// Buttons that raise toasts: "Save" ("Saved", 1 s), "Save again" (the same text),
+    /// "Delete" ("Deleted 3 pieces", 1 s) and "Change theme".
+    Toast,
     /// Two text fields, each with a `Name`: `name field` (holding "Alpha", accessible name
     /// "Name") and `seed field` (empty, placeholder "Seed", accessible name "Seed"), then
     /// "Other" and "Change theme". [`FieldEvents`] counts what the fields triggered.
@@ -187,6 +192,7 @@ impl AppSetup for WidgetsSetup {
             Self::Gallery => gallery(world),
             Self::Toolbar => toolbar(world),
             Self::Tooltip => tooltip(world),
+            Self::Toast => toast(world),
             Self::TextFields => text_fields(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
@@ -1458,6 +1464,26 @@ fn tooltip(world: &mut World) {
             IconButtonSize::Large,
         ))
         .insert(Name::new("help button"));
+        spawn_theme_button(root);
+    });
+}
+
+fn toast(world: &mut World) {
+    let root = row_root(world);
+    let raise = |text: &'static str| {
+        move |_: On<Activate>, mut commands: Commands, roots: Query<Entity, With<UiRoot>>| {
+            for root in &roots {
+                commands.spawn((Toast::new(text).with_duration(1.0), ChildOf(root)));
+            }
+        }
+    };
+    world.entity_mut(root).with_children(|root| {
+        root.spawn(PushButton::from_label("Save"))
+            .observe(raise("Saved"));
+        root.spawn(PushButton::from_label("Save again"))
+            .observe(raise("Saved"));
+        root.spawn(PushButton::from_label("Delete"))
+            .observe(raise("Deleted 3 pieces"));
         spawn_theme_button(root);
     });
 }

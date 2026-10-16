@@ -1,0 +1,35 @@
+// A toast shows its text, stacks with others, does not repeat a text that is showing, and is
+// gone after its duration (1 s, 60 frames, for the screen's toasts).
+(
+    format_version: 3,
+    name: "a toast shows, stacks, restarts on the same text and goes after its duration",
+    setup: App(Toast),
+    steps: [
+        Wait(2),
+        Check(Not(Exists(Text("Saved")))),
+        MoveTo(Role(role: Button, label: "Save")),
+        Click(Left),
+        Wait(2),
+        Check(Visible(Text("Saved"))),
+        MoveTo(Role(role: Button, label: "Delete")),
+        Click(Left),
+        Wait(2),
+        Check(Visible(Text("Saved"))),
+        Check(Visible(Text("Deleted 3 pieces"))),
+        Check(Count(with: ["Toast"], is: Eq(2))),
+        // The same text does not stack, it restarts the timer.
+        Wait(30),
+        MoveTo(Role(role: Button, label: "Save again")),
+        Click(Left),
+        Wait(2),
+        Check(Count(with: ["Toast"], is: Eq(2))),
+        // 40 frames on, "Deleted" (raised 34 frames ago) has 26 left of its 60 and "Saved" 60.
+        Wait(40),
+        Check(Not(Exists(Text("Deleted 3 pieces")))),
+        Check(Visible(Text("Saved"))),
+        Wait(40),
+        Check(Not(Exists(Text("Saved")))),
+        Check(Count(with: ["Toast"], is: Eq(0))),
+    ],
+    expect: [],
+)
