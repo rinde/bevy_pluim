@@ -24,7 +24,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator};
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
-use bevy::ui_widgets::Button;
+use bevy::ui_widgets::{Button, Tab};
 use bevy::window::PrimaryWindow;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -42,6 +42,7 @@ use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
+use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui_tester::{
@@ -413,6 +414,74 @@ fn a_held_arrow_key_does_not_move_the_focus_out_of_a_focused_list() {
         app.world().get_resource::<InputFocus>().unwrap().get(),
         Some(list)
     );
+}
+
+/// Spawns a tab bar (A, B) with a "Beside" button to its right, its tabs taking part in the
+/// app's directional navigation, and returns its tabs.
+fn tab_bar_beside_a_button(app: &mut App) -> [Entity; 2] {
+    app.add_observer(|added: On<Add<Tab>>, mut commands: Commands| {
+        commands
+            .entity(added.entity)
+            .insert(AutoDirectionalNavigation::default());
+    });
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Name::new("nav tab bar"),
+                TabBar,
+                Selection::builder()
+                    .one()
+                    .build_with_items(["A", "B"].map(Item::new)),
+            ));
+            row.spawn((Name::new("Beside"), PushButton::from_label("Beside")));
+        });
+    });
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(window)
+        .observe(navigate_with_arrow_keys);
+    app.update();
+    app.update();
+    let bar = named(app, "nav tab bar");
+    app.world()
+        .entity(bar)
+        .get::<Children>()
+        .unwrap()
+        .to_vec()
+        .try_into()
+        .unwrap()
+}
+
+fn focus_of(app: &App) -> Option<Entity> {
+    app.world().get_resource::<InputFocus>().unwrap().get()
+}
+
+#[test]
+fn a_held_arrow_key_does_not_move_the_focus_out_of_a_tab_bar() {
+    let mut app = directional_navigation_app();
+    let [a, b] = tab_bar_beside_a_button(&mut app);
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(b, FocusCause::Navigated);
+    app.update();
+
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, false);
+    assert_eq!(focus_of(&app), Some(a), "the first press wraps round");
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Released, false);
+
+    assert_eq!(focus_of(&app), Some(a));
 }
 
 #[test]

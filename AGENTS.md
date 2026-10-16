@@ -451,7 +451,7 @@ of them (`just example gallery -- --run-all stack link`).
   registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
-  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and the tab bar (`tabs_keyboard_switches_panel.ron`) with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+  (`tests/ron/keyboard_tab_order.ron`). `keyboard_focus_ring_in_both_themes.ron` Tabs to "Change theme" and toggles the theme, to record the ring on both. The `*_keyboard_*.ron` files drive lists, palettes and the tab bar (`tabs_keyboard_switches_panel.ron`) with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
 - **Directional navigation is the app's.** The library adds none: an app that wants the
   arrow keys (or a gamepad stick) to move the focus between widgets puts Bevy's
   `AutoDirectionalNavigation` on the widgets that take part, adds
@@ -460,17 +460,20 @@ of them (`just example gallery -- --run-all stack link`).
   no focused widget kept (a system reading `ButtonInput<KeyCode>` would see them all); it
   sets `InputFocusVisible` itself, as Bevy's `directional_navigation` example does. What the
   widgets guarantee: a widget that uses the arrows stops them from bubbling on, so they
-  never reach that observer. A focused `List` (so a palette, a tab bar and an open combo's
+  never reach that observer. A focused `List` (so a palette and an open combo's
   list too) keeps the arrows, Home and End (the `ListBox` stops a first press,
   `keep_navigation_keys` in `list.rs` the repeats and releases, only while the list itself
-  is `InputFocus`), and a `NumericStepper`
+  is `InputFocus`), a focused tab of a `TabBar` keeps left, right, Home and End (Bevy's tab
+  list stops a first press, `keep_navigation_keys` in `tab_bar.rs` the repeats and
+  releases) and lets up and down through, and a `NumericStepper`
   keeps the arrows that reach it from its buttons, also at a limit. The focus ring follows
   `InputFocus` whatever moved it, while `InputFocusVisible` is true. Every other widget lets
   the arrows through. One gap is Bevy's: a focusable child of a list row (a button in a
   `CustomView`) gets its repeats and releases through, but the `ListBox` stops a first press
   of an arrow, Home or End from it, because the `focused_entity` it checks is the hop the
   event has reached, not the focus. `tests/scenarios.rs` turns it on for two buttons, a list
-  and a stepper (`directional_navigation_screen`).
+  and a stepper (`directional_navigation_screen`), and for a tab bar
+  (`a_held_arrow_key_does_not_move_the_focus_out_of_a_tab_bar`).
 - **Hidden widgets are hidden from the accessibility tree.** `sync_accessibility_hidden`
   in `focus.rs` runs next to `sync_tab_index` and marks the `AccessibilityNode` of
   anything hidden by the tab stop rule (`is_hidden`) as hidden, clearing it on show.
@@ -534,7 +537,11 @@ of them (`just example gallery -- --run-all stack link`).
   `align_items: FlexStart` instead of stretching its children. Taffy 0.10
   (Bevy 0.19) reported no overflow for a grid whose items overflow it, so a
   `List` or palette stretched to the area's height left nothing to scroll; the
-  workaround is kept on taffy 0.14 (Bevy 0.20) until `Stretch` is retried. For the same reason, don't give scroll contents `height: 100%`.
+  taffy 0.14
+  (Bevy 0.20) was tried (#265): with `Stretch` the content still scrolls, but
+  `list_wheel_scrolls` and `scroll_area_keyboard_scrolls_item_into_view` (both
+  scale factors) fail, the maximum scroll 2 px short (296, not 298), so the
+  workaround stays. For the same reason, don't give scroll contents `height: 100%`.
   The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
   wheel and thumb scenarios fail.
 - **A scroll area's scroll position is kept in range.** The wheel handler

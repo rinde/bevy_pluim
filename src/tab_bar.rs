@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
@@ -48,6 +50,7 @@ impl Plugin for TabBarPlugin {
         .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
         .add_observer(on_insert_selection)
         .add_observer(on_value_change)
+        .add_observer(keep_navigation_keys)
         .register_type::<TabBar>()
         .register_type::<TabBarTab>();
     }
@@ -125,6 +128,28 @@ pub struct TabBarTab {
 /// Marks the text of a [`TabBarTab`].
 #[derive(Component, Debug, Copy, Clone)]
 struct TabBarTabLabel;
+
+/// Keeps the keys a focused tab moves the focus with (left, right, Home, End) from
+/// bubbling on to an app's directional navigation: the tab list stops a first press only,
+/// so this stops the repeats and releases as well. Up and down go on, as a row of tabs
+/// does not use them.
+fn keep_navigation_keys(
+    mut input: On<FocusedInput<KeyboardInput>>,
+    tabs: Query<(), With<TabBarTab>>,
+    focus: Res<InputFocus>,
+) {
+    // `focused_entity` follows the event up the tree, so the focus itself is read.
+    let tab = input.event_target();
+    if focus.get() != Some(tab) || !tabs.contains(tab) {
+        return;
+    }
+    if matches!(
+        input.event().input.key_code,
+        KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::Home | KeyCode::End
+    ) {
+        input.propagate(false);
+    }
+}
 
 /// Selects the item of the tab the tab list asks for.
 fn on_value_change(

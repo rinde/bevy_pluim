@@ -114,8 +114,8 @@ impl ScrollArea {
                             grid_column: GridPlacement::start(1),
                             // Keep children at their natural size: a child stretched to
                             // this node's height reported no overflow when it is a grid
-                            // (taffy 0.10, Bevy 0.19), which left nothing to scroll; kept
-                            // on taffy 0.14 until `Stretch` is retried.
+                            // (taffy 0.10, Bevy 0.19), which left nothing to scroll; still
+                            // needed on taffy 0.14: `Stretch` leaves the maximum scroll 2 px short (#265).
                             align_items: AlignItems::FlexStart,
                             ..default()
                         },
