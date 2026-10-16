@@ -767,6 +767,36 @@ fn spawn_push_button(app: &mut App) -> Entity {
     button
 }
 
+/// `Activate` is a single-hop entity event: an observer on a button hears it, one on an ancestor
+/// of the button does not. An action therefore observes `Activate` on the button itself.
+#[test]
+fn an_activate_does_not_bubble_to_an_observer_on_an_ancestor() {
+    let mut app = headless_app();
+    app.init_resource::<Activations>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("Go"), ChildOf(root)))
+        .id();
+    app.world_mut()
+        .entity_mut(root)
+        .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 100);
+    app.world_mut()
+        .entity_mut(button)
+        .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 1);
+    app.update();
+    app.update();
+
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+
+    assert_eq!(
+        app.world().get_resource::<Activations>().unwrap().0,
+        1,
+        "only the button's own observer hears Activate"
+    );
+}
+
 const fn pointer_location() -> Location {
     Location {
         target: NormalizedRenderTarget::None {
