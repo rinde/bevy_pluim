@@ -1,7 +1,8 @@
 // A slider's thumb rests at `card_surface`, is `accent_subtle` with the pointer
 // on the slider and `accent` while its track is pressed, and rests at `card_surface` again
 // once the pointer leaves. After a theme change it rests at the new theme's
-// `card_surface`.
+// `card_surface`. Its shadow is the theme's small shadow throughout, set by the
+// theme and kept through hover and press.
 (
     format_version: 3,
     name: "a slider's thumb shows hover and press colours and follows the theme",
@@ -11,6 +12,8 @@
         Capture(name: "light surface", value: Resource(path: "Theme.colors.card_surface")),
         Capture(name: "hover", value: Resource(path: "Theme.colors.accent_subtle")),
         Capture(name: "pressed", value: Resource(path: "Theme.colors.accent")),
+        Capture(name: "shadow", value: Resource(path: "Theme.colors.small_shadow")),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BoxShadow.0[0].color", is: Eq(Captured("shadow")))),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("light surface")))),
         MoveTo(Within(Name("stepped slider"), Name("SliderThumb"))),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("hover")))),
@@ -18,6 +21,7 @@
         MoveTo(Name("stepped slider")),
         Press(Left),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("pressed")))),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BoxShadow.0[0].color", is: Eq(Captured("shadow")))),
         Release(Left),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("hover")))),
         MoveTo(Screen((900.0, 500.0))),
@@ -29,6 +33,8 @@
         Capture(name: "dark surface", value: Resource(path: "Theme.colors.card_surface")),
         Check(Not(Resource(path: "Theme.colors.card_surface", is: Eq(Captured("light surface"))))),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("dark surface")))),
+        Capture(name: "dark shadow", value: Resource(path: "Theme.colors.small_shadow")),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BoxShadow.0[0].color", is: Eq(Captured("dark shadow")))),
     ],
     expect: [],
 )
