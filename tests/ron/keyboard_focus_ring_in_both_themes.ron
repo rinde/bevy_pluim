@@ -1,0 +1,23 @@
+// Tab to "Change theme" and press Enter, so the focus ring can be looked at in
+// the recording on the light theme before and the dark theme after. The checks
+// are on the focus and the theme only; the ring itself is judged by eye.
+(
+    format_version: 3,
+    name: "the focus ring stays on the focused button across a theme change",
+    setup: App(Themed),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Wait(2),
+        Tap(key: Tab),
+        Wait(2),
+        Tap(key: Tab),
+        Wait(2),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Check(Resource(path: "Theme.colors.hovered_item", is: Eq(Srgba((red:0.11764706,green:0.22745098,blue:0.5411765,alpha:1.0))))),
+    ],
+    expect: [],
+)
