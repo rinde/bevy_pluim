@@ -2001,6 +2001,57 @@ fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_
     );
 }
 
+/// For each shown row of the `VirtualList`s, in the order of their items: the item's index
+/// and the `position_in_set` and `size_of_set` of the row's accessibility node.
+fn shown_row_positions(app: &mut App) -> Vec<(usize, Option<usize>, Option<usize>)> {
+    let world = app.world_mut();
+    let mut rows: Vec<_> = world
+        .query::<(&VirtualListRow, &Node, &AccessibilityNode)>()
+        .iter(world)
+        .filter(|(_, node, _)| node.display != Display::None)
+        .filter_map(|(row, _, node)| Some((row.index?, node.position_in_set(), node.size_of_set())))
+        .collect();
+    rows.sort_unstable();
+    rows
+}
+
+#[test]
+fn a_virtual_list_tells_a_screen_reader_where_each_row_is_among_all_its_items() {
+    // A screen reader reads a pooled row as item 5,001 of 10,000, not as one of 13 rows.
+    let mut app = widgets_app();
+    WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let (list, contents) = virtual_list_and_contents(&mut app);
+    assert_eq!(
+        app.world()
+            .get::<AccessibilityNode>(list)
+            .and_then(|node| node.size_of_set()),
+        Some(10_000)
+    );
+    let first = shown_row_positions(&mut app);
+    assert_eq!(first.first(), Some(&(0, Some(1), Some(10_000))));
+
+    // Row 5001 at the top of the view.
+    app.world_mut()
+        .entity_mut(contents)
+        .insert(ScrollPosition(Vec2::new(0.0, 5_000.0 * 28.0)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let shown = shown_row_positions(&mut app);
+    assert_eq!(shown.len(), 13);
+    assert!(shown.iter().any(|(index, ..)| *index == 5_000));
+    for (index, position, size) in shown {
+        assert_eq!(
+            (position, size),
+            (Some(index + 1), Some(10_000)),
+            "row of item {index}"
+        );
+    }
+}
+
 /// Fills a `VirtualList` row with a button named after the row's item.
 fn virtual_row_with_button(
     spawner: In<ItemViewSpawner>,
