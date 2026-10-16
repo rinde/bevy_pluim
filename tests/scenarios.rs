@@ -1041,14 +1041,14 @@ fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
     let scroll_y = |app: &App| app.world().get::<ScrollPosition>(contents).unwrap().0.y;
     let before = scroll_y(&app);
 
-    // The thumb moves along a track of `visible * (1 - visible / contents)`
-    // and the contents by `overflow / track` times as much.
+    // The `bevy_ui_widgets` `Scrollbar` moves the contents by `contents / bar`
+    // times the distance the pointer dragged, `bar` being the length of the
+    // scroll bar, which runs the full height of the contents here.
     let node = app.world().get::<ComputedNode>(contents).unwrap();
     let scale = node.inverse_scale_factor();
-    let visible = node.size().y * scale;
+    let bar = node.size().y * scale;
     let total = node.content_size().y * scale;
-    let track = visible * (1.0 - visible / total);
-    let per_pixel = (total - visible) / track;
+    let per_pixel = total / bar;
 
     // Three moves in one frame, as a high-rate mouse delivers them. Each
     // must count, not only the last.

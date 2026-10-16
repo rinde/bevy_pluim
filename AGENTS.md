@@ -356,8 +356,10 @@ of them (`just example gallery -- --run-all stack link`).
 - **Buttons are `bevy::ui_widgets::Button`.** Every button
   (`PushButton`, `ColorPushButton`, `Link`, `IconButton` and the rest) is a
   headless `bevy_ui_widgets` button, and nothing uses the deprecated `bevy::ui`
-  `Button` or `Interaction`. The scroll thumb is no button: a plain node that
-  requires `Pickable::default()` so it blocks the pointer and gets `MouseEvent`s.
+  `Button` or `Interaction`. The scroll thumb is no button: a `bevy_ui_widgets`
+  `ScrollbarThumb` without a `Node` of ours, sized and placed by its `Scrollbar`,
+  that requires `Pickable::default()` so it blocks the pointer and gets the
+  `MouseEvent`s of its hover colour.
   A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
   `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin`) in
@@ -562,7 +564,9 @@ of them (`just example gallery -- --run-all stack link`).
   in physical pixels and one layout pass behind, so it doubles at a scale
   factor of 2 and scenario files do not read it. A thumb drag and a click on
   the track are the `bevy_ui_widgets` `Scrollbar`'s, which clamps to the same
-  range. The wheel stays ours rather than `bevy_ui_widgets`' `ScrollArea`:
+  range; a click on the track beside the thumb pages by one visible length
+  towards the click (`scroll_area_track_click_pages.ron`). The wheel stays
+  ours rather than `bevy_ui_widgets`' `ScrollArea`:
   picking sends a `PointerScroll` to every hovered entity and each bubbles up to
   the area, and an `ItemView`, its `List` and the `ScrollContents` are all
   hovered (`should_block_lower: false`), so one turn would scroll two or three
@@ -773,6 +777,9 @@ resource, none of which need a window or GPU:
 - `ClearColor` (via `init_resource`) — normally inserted by the render
   plugins; `theme.rs`'s `update_theme` writes to it whenever `Theme`
   changes.
+- `UiScale` (via `init_resource`) — normally inserted by `UiPlugin`; the
+  `bevy_ui_widgets` `Scrollbar` of a scroll area reads it when it is pressed,
+  so without it any press panics.
 
 These are all needed unconditionally because `WidgetsPlugin` registers every
 widget's systems regardless of which widgets a given test actually spawns.

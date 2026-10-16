@@ -411,6 +411,9 @@ fn show_scroll_bars(
                 contents.content_size().y,
             ),
         ];
+        // Bevy's `Scrollbar` takes the visible length as `size() - scrollbar_size`; plain
+        // `size()` agrees with it because `ScrollContents` sets no `scrollbar_width` (the
+        // bars are nodes of their own beside it), so its `scrollbar_size` is zero.
         for (bar, visible_length, contents_length) in bars {
             let Some(mut visibility) = bar.and_then(|bar| scroll_bars.get_mut(bar).ok()) else {
                 continue;

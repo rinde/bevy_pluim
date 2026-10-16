@@ -1,0 +1,48 @@
+// A click on the vertical scroll area's bar, beside the thumb rather than on it,
+// pages the contents by one visible length (200) towards the click, kept inside
+// what overflows (220): below the thumb it pages down, below it again it stops at
+// the end, and above it it pages back up. The area spans 240..440 by 20..220
+// logical pixels with its bar along the right edge, at x 436; the thumb starts at
+// the top of the bar, and at the end it covers 115..210, so a click at y 215 is
+// still below it. The scroll position that counts is the value that was set
+// (ScrollPosition.0, logical pixels).
+(
+    format_version: 3,
+    name: "a click on the scroll bar beside the thumb pages the contents",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(0.0),
+        )),
+        MoveTo(Screen((436.0, 200.0))),
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(200.0),
+        )),
+        // Another page down would pass the end, so it stops there.
+        MoveTo(Screen((436.0, 215.0))),
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(220.0),
+        )),
+        // Above the thumb pages back up by one visible length.
+        MoveTo(Screen((436.0, 30.0))),
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0.y",
+            is: Eq(20.0),
+        )),
+    ],
+    expect: [],
+)
