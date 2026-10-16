@@ -65,6 +65,9 @@ impl ScrollArea {
     }
 }
 
+/// How far a focus ring reaches beyond its node, in logical pixels: its 1 px offset and 2 px width.
+const FOCUS_RING_REACH: f32 = 3.0;
+
 /// Marks the node holding the scrolled contents of a [`ScrollArea`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
@@ -117,6 +120,10 @@ impl ScrollArea {
                             // (taffy 0.10, Bevy 0.19), which left nothing to scroll; still
                             // needed on taffy 0.14: `Stretch` leaves the maximum scroll 2 px short (#265).
                             align_items: AlignItems::FlexStart,
+                            // The area clips at its padding box, so the focus ring of
+                            // a child at the edge (2 px wide, 1 px offset) needs room
+                            // inside it (#293).
+                            padding: UiRect::all(Val::Px(FOCUS_RING_REACH)),
                             ..default()
                         },
                     ))
@@ -255,7 +262,7 @@ fn handle_thumb_drag(
         (start + delta[index] * max_scroll_offset / track_length).clamp(0.0, max_scroll_offset);
 }
 
-/// Scrolls the [`ScrollContents`] around an entity just far enough to show it.
+/// Scrolls the [`ScrollContents`] around an entity just far enough to show it and its focus ring.
 ///
 /// Answers [`ScrollIntoView`], which a `ListBox` triggers when the arrow keys
 /// move its active descendant. An axis is moved only when the contents scroll
@@ -297,8 +304,10 @@ fn scroll_into_view(
     // target's already shifted by the scroll position it had then).
     let target_top_left = target_transform.translation * target_scale - target_size * 0.5;
     let area_top_left = area_transform.translation * area_scale - area_size * 0.5;
-    let local_top_left = target_top_left - area_top_left + scroll_position.0;
-    let local_bottom_right = local_top_left + target_size;
+    // The target's focus ring is shown with it, so its reach counts as part of the target.
+    let ring = Vec2::splat(FOCUS_RING_REACH);
+    let local_top_left = target_top_left - area_top_left + scroll_position.0 - ring;
+    let local_bottom_right = local_top_left + target_size + ring * 2.0;
     let max = ((area_computed.content_size() - area_computed.size()) * area_scale).max(Vec2::ZERO);
 
     if node.overflow.x == OverflowAxis::Scroll {

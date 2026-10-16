@@ -25,13 +25,13 @@
         Tap(key: ArrowDown), Tap(key: ArrowDown), Tap(key: ArrowDown),
         Wait(2),
         Check(App(Active(of: Name("scrolling list"), is: Within(Name("scrolling list"), Role(role: ListItem, label: "Row 12"))))),
-        // The last row is in view: the contents scrolled to the row's bottom edge (the wheel's end is 298).
+        // The last row is in view: the contents scrolled to the row's bottom edge plus its focus ring's 3 px, so the ring is not clipped (the wheel's end is 304).
         Check(Component(
             target: Within(Name("list scroll area"), Component("ScrollContents")),
             path: "ScrollPosition.0.y",
-            is: Eq(297.0),
+            is: Eq(303.0),
         )),
-        // Back to the top: the first row starts one pixel below the contents' top edge.
+        // Back to the top: the first row starts four pixels below the contents' top edge, the ring's 3 px above it.
         Tap(key: Home),
         Wait(2),
         Check(Component(
