@@ -223,8 +223,7 @@ the scene inserts together with the entity's `ChildOf` and its other
 components. A bundle without a `Node` (the selection builder's) may be inserted
 by the template itself, `template(|context| { context.entity.insert(bundle);
 Ok(EmptySceneEffect) })`. A bundle with a `Node` must not: the template runs
-before the scene gives the entity its parent, so `add_ui_root` would take it
-for a `UiRoot`, and the scene's own `Node` would overwrite what the bundle's
+before the scene gives the entity its parent, and the scene's own `Node` would overwrite what the bundle's
 hooks set (a `ScrollArea`'s grid). Such a bundle goes in through a local
 `insert_after_scene(context, bundle)`, which queues the insert for after the
 scene is applied. For the same reason a scene spawned under a parent outside a
@@ -302,7 +301,10 @@ of them (`just example gallery -- --run-all stack link`).
   without a parent and without a `UiTargetCamera`, so root nodes aimed at
   another camera (a second window's UI, an overlay) are not the app's and are
   left alone. The camera is read when the `Node` is added, so a
-  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
+  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. An
+  observer of `Insert, ChildOf` removes `UiRoot` again from a node parented
+  after its `Node` was added (a scene writes `ChildOf` last), so the marker
+  follows the hierarchy. A
   `PostStartup` system logs an `error!` (it does not panic) unless there is
   exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`,
   so a widget must not take `Single<.., With<UiRoot>>`; a popup is a `Float`

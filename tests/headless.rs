@@ -129,6 +129,26 @@ fn add_ui_root_inserts_ui_root_on_the_single_root_node() {
 }
 
 #[test]
+fn a_node_parented_after_its_node_was_added_is_not_a_ui_root() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let child = app.world_mut().spawn(Node::default()).id();
+    assert!(app.world().entity(child).contains::<UiRoot>());
+
+    app.world_mut().entity_mut(child).insert(ChildOf(root));
+    app.update();
+
+    assert!(!app.world().entity(child).contains::<UiRoot>());
+    assert!(app.world().entity(root).contains::<UiRoot>());
+    let roots = app
+        .world_mut()
+        .query_filtered::<(), With<UiRoot>>()
+        .iter(app.world())
+        .count();
+    assert_eq!(roots, 1);
+}
+
+#[test]
 fn a_root_node_aimed_at_another_camera_is_not_the_ui_root() {
     let mut app = headless_app();
     let camera = app.world_mut().spawn_empty().id();
