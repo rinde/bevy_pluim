@@ -1,0 +1,31 @@
+// A combo and a palette combo in Panel A open their popups as `Float` children of the combo,
+// so the popup is a descendant of the panel: when the `Stack` hides the panel (`Display::None`)
+// the popup is not shown and its list is not a tab stop. (Choosing another tab also closes an
+// open combo, as any click or focus change outside it does; the guard is that no popup is
+// left visible or reachable, whichever way it went.)
+(
+    format_version: 3,
+    name: "hiding a stack panel hides the popups of the combos in it",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        MoveTo(Nth(0, Within(Name("Stack"), Component("ComboButton")))),
+        Click(Left),
+        Wait(1),
+        Check(Visible(Nth(0, Within(Name("Stack"), Component("ComboList"))))),
+        MoveTo(Role(role: Tab, label: "Card demo")), Click(Left),
+        Wait(2),
+        Check(Not(Visible(Nth(0, Within(Name("Stack"), Component("ComboList")))))),
+        Check(Component(target: Nth(0, Within(Name("Stack"), Component("ComboList"))), path: "TabIndex.0", is: Eq(-1))),
+        MoveTo(Role(role: Tab, label: "Panel A")), Click(Left),
+        Wait(2),
+        MoveTo(Nth(0, Within(Name("Stack"), Component("ColorPushButton")))),
+        Click(Left),
+        Wait(1),
+        Check(Visible(Nth(0, Within(Name("Stack"), Name("ColorPaletteCombo popup"))))),
+        MoveTo(Role(role: Tab, label: "Card demo")), Click(Left),
+        Wait(2),
+        Check(Not(Visible(Nth(0, Within(Name("Stack"), Name("ColorPaletteCombo popup")))))),
+    ],
+    expect: [],
+)

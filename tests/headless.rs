@@ -55,6 +55,7 @@ use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, PushButton, PushButtonRefs};
+use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
@@ -5098,6 +5099,66 @@ fn the_hud_example_builds_and_runs() {
     assert_eq!(world.query::<&ItemView>().iter(world).count(), 4);
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
+}
+
+#[test]
+fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    app.world_mut().spawn(Camera2d);
+    app.world_mut()
+        .spawn_scene(bsn! {
+            Node
+            Children [
+                @ScrollArea::scene(
+                    bsn_list! {
+                        Node
+                        --
+                        Node
+                        --
+                        Node
+                    },
+                    true,
+                    true,
+                )
+            ]
+        })
+        .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let (area, node) = world
+        .query_filtered::<(Entity, &Node), With<ScrollArea>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(node.display, Display::Grid);
+    assert!(world.get::<ChildOf>(area).is_some());
+    let contents = world
+        .query_filtered::<&Children, With<ScrollContents>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(contents.len(), 3);
+    assert_eq!(world.query::<&ScrollBar>().iter(world).count(), 2);
+    assert_eq!(ui_root_count_world(world), 1);
+}
+
+fn ui_root_count_world(world: &mut World) -> usize {
+    world
+        .query_filtered::<(), With<UiRoot>>()
+        .iter(world)
+        .count()
 }
 
 fn ui_root_count(app: &mut App) -> usize {

@@ -3,7 +3,6 @@
 use std::sync::LazyLock;
 
 use bevy::ecs::spawn::SpawnIter;
-use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
 use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
@@ -20,19 +19,6 @@ use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::{COLORS, TailwindColor, Variant};
 use rin_bevy_ui::theme::Theme;
-
-/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
-///
-/// A template that inserted it at once would do so before the scene gives the entity its
-/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
-/// the scene's `Node` would overwrite what the bundle's hooks set on it.
-fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
-    let entity = context.entity.id();
-    context.entity.world_scope(|world| {
-        world.commands().entity(entity).insert(bundle);
-    });
-    EmptySceneEffect
-}
 
 fn main() {
     App::new()
@@ -115,13 +101,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
     });
 }
 
-/// Spawns `scene` as a child of the entity `parent` spawns for.
-fn apply(parent: &mut ChildSpawner, scene: impl Scene) {
-    if let Err(error) = parent.spawn_empty().apply_scene(scene) {
-        error!("cannot spawn a scroll area's contents: {error:?}");
-    }
-}
-
 fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
     let colors = commands
         .spawn(ItemValues::spawn(SpawnIter(color_palette().into_iter())))
@@ -196,26 +175,7 @@ fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
         Children [
             ~{Label::header("Panel B")}
             --
-            // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; its
-            // contents are a scene, applied to the entity its contents spawner spawns.
-            template(|context| {
-                Ok(insert_after_scene(context, ScrollArea::bundle(
-                    |parent: &mut ChildSpawner| {
-                        let list = bsn! {
-                            List
-                            template(|context| {
-                                context.entity.insert(
-                                    Selection::builder().one().build_with_items(items()),
-                                );
-                                Ok(EmptySceneEffect)
-                            })
-                        };
-                        apply(parent, list);
-                    },
-                    true,
-                    false,
-                )))
-            })
+            @item_scroll_area()
             --
             Node {
                 align_self: AlignSelf::Start,
@@ -263,13 +223,7 @@ fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut comma
                 Pickable {
                     should_block_lower: false,
                 }
-                template(move |context| {
-                    Ok(insert_after_scene(context, ScrollArea::bundle(
-                        move |parent: &mut ChildSpawner| apply(parent, cards(background_color)),
-                        true,
-                        true,
-                    )))
-                })
+                @card_scroll_area(background_color)
             ]
         },
     );
@@ -366,4 +320,25 @@ fn update_theme(
     for mut card_background_color in &mut card_background {
         card_background_color.0 = theme.colors.background_primary;
     }
+}
+
+/// A vertical scroll area over a list of the items.
+fn item_scroll_area() -> impl Scene {
+    ScrollArea::scene(
+        bsn_list! {
+            List
+            // `Selection::builder()` gives a bundle, which `template` inserts.
+            template(|context| {
+                context.entity.insert(Selection::builder().one().build_with_items(items()));
+                Ok(EmptySceneEffect)
+            })
+        },
+        true,
+        false,
+    )
+}
+
+/// A scroll area over the cards.
+fn card_scroll_area(background_color: Color) -> impl Scene {
+    ScrollArea::scene(bsn_list! { @cards(background_color) }, true, true)
 }

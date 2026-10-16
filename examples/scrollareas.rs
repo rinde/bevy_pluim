@@ -7,28 +7,13 @@ use bevy::color::palettes::tailwind::{
     ORANGE_600, PINK_600, PURPLE_600, ROSE_600, SKY_600, YELLOW_600,
 };
 use bevy::ecs::system::Commands;
-use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::theme::Theme;
-
-/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
-///
-/// A template that inserted it at once would do so before the scene gives the entity its
-/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
-/// the scene's `Node` would overwrite what the bundle's hooks set on it.
-fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
-    let entity = context.entity.id();
-    context.entity.world_scope(|world| {
-        world.commands().entity(entity).insert(bundle);
-    });
-    EmptySceneEffect
-}
 
 fn main() {
     App::new()
@@ -78,23 +63,8 @@ fn setup(mut commands: Commands) {
 
 /// A scroll area over a grid of `num` coloured squares.
 ///
-/// `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; the squares
-/// are a scene, applied to the entity its contents spawner spawns.
 fn scroll_area(num: usize, grid_auto_flow: GridAutoFlow, v: bool, h: bool) -> impl Scene {
-    bsn! {
-        template(move |context| {
-            Ok(insert_after_scene(context, ScrollArea::bundle(
-                move |parent: &mut ChildSpawner| {
-                    let squares = squares(num, grid_auto_flow);
-                    if let Err(error) = parent.spawn_empty().apply_scene(squares) {
-                        error!("cannot spawn the squares: {error:?}");
-                    }
-                },
-                v,
-                h,
-            )))
-        })
-    }
+    ScrollArea::scene(bsn_list! { @squares(num, grid_auto_flow) }, v, h)
 }
 
 /// A grid of `num` coloured squares, laid out along `grid_auto_flow`.
