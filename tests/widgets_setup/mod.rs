@@ -36,6 +36,7 @@ use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::filter_chips::{Chip, FilterChips};
+use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::Link;
@@ -53,6 +54,7 @@ use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
 
@@ -132,6 +134,12 @@ pub enum WidgetsSetup {
     /// `warning button` and `danger button`, and "Change theme". `Clicks`
     /// counts the `Activate`s of `regular button`.
     IconButtons,
+    /// A `gallery` of three cards (Steam, Diesel in "Locomotives", Passenger in
+    /// "Wagons"), a `One` selection of its own, and "Change theme".
+    Gallery,
+    /// A `filled toolbar` of three tools (Select, Build, Bulldoze) with a selection of its
+    /// own, and "Change theme".
+    Toolbar,
     /// A `tooltip anchor` push button with the tooltip "Anchor tip", an icon
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
@@ -166,6 +174,8 @@ impl AppSetup for WidgetsSetup {
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
             Self::IconButtons => icon_buttons(world),
+            Self::Gallery => gallery(world),
+            Self::Toolbar => toolbar(world),
             Self::Tooltip => tooltip(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
@@ -1174,6 +1184,41 @@ fn filter_chips(world: &mut World) {
                     data: Chip::new(label),
                 })),
             Name::new("narrow chips"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn gallery(world: &mut World) {
+    let root = row_root(world);
+    let cards = [
+        ("Steam", "Locomotives"),
+        ("Diesel", "Locomotives"),
+        ("Passenger", "Wagons"),
+    ]
+    .map(|(label, group)| Item {
+        data: GalleryCard::new(Handle::default(), label, group),
+    });
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Gallery,
+            Selection::builder().one().build_with_items(cards),
+            Name::new("gallery"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn toolbar(world: &mut World) {
+    let root = row_root(world);
+    let tools = ["Select", "Build", "Bulldoze"].map(|label| Item {
+        data: Tool::new(Handle::default(), label),
+    });
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::builder().one().build_with_items(tools),
+            Name::new("filled toolbar"),
         ));
         spawn_theme_button(root);
     });
