@@ -8,9 +8,7 @@
     steps: [
         Wait(3),
         Tap(key: Tab),
-        // Bevy sends `FocusGained` after the layout, so the row a newly focused list makes
-        // active is named the frame after.
-        Wait(1),
+        // The row a newly focused list makes active is named and ringed the same frame.
         Check(App(Focused(of: Name("virtual list")))),
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
         Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),

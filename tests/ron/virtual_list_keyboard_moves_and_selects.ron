@@ -9,9 +9,7 @@
     steps: [
         Wait(3),
         Tap(key: Tab),
-        // Bevy sends `FocusGained` after the layout, so the row a newly focused list makes
-        // active is named, and ringed, the frame after.
-        Wait(1),
+        // The row a newly focused list makes active is named and ringed the same frame.
         Check(App(Focused(of: Name("virtual list")))),
         // Until a key moves it the active row is the selected one, the first.
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),

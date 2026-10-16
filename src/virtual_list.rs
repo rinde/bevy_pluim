@@ -7,7 +7,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusGained, FocusLost, FocusedInput, InputFocus, InputFocusVisible};
+use bevy::input_focus::{FocusLost, FocusedInput, InputFocus, InputFocusVisible};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Selected, UiSystems};
@@ -36,7 +36,7 @@ impl Plugin for VirtualListPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            (grow_pools, show_rows)
+            (activate_on_focus, grow_pools, show_rows)
                 .chain()
                 .before(UiSystems::Layout)
                 .before(DrawFocusRing),
@@ -50,7 +50,6 @@ impl Plugin for VirtualListPlugin {
         )
         .add_observer(navigate)
         .add_observer(pick_on_click)
-        .add_observer(activate_on_focus)
         .add_observer(deactivate_on_focus_lost)
         .register_type::<VirtualList>()
         .register_type::<VirtualListRow>();
@@ -537,11 +536,11 @@ fn navigate(
     input.propagate(false);
     let key = input.event().input.clone();
     // A held arrow or page key keeps moving; Home, End, Enter and Space act on the first press.
-    let is_arrow = !matches!(
+    let repeats = !matches!(
         key.key_code,
         KeyCode::Home | KeyCode::End | KeyCode::Enter | KeyCode::Space
     );
-    if key.state != ButtonState::Pressed || (key.repeat && !is_arrow) {
+    if key.state != ButtonState::Pressed || (key.repeat && !repeats) {
         return;
     }
     let Some((_, items)) = selections.get_item_values(list) else {
@@ -581,7 +580,8 @@ fn navigate(
             _ => 0,
         },
         KeyCode::PageUp => current.unwrap_or(0).saturating_sub(page),
-        KeyCode::PageDown => current.unwrap_or(0).saturating_add(page).min(last_index),
+        // With no active row Page Down starts where Arrow Down does, on the first item.
+        KeyCode::PageDown => current.map_or(0, |index| index.saturating_add(page).min(last_index)),
         KeyCode::Home => 0,
         _ => last_index,
     };
@@ -617,16 +617,21 @@ fn navigate(
 
 /// Makes the first selected item the active row when the list gets the focus, or the first
 /// item when none is selected, as a list does.
+///
+/// A system that reads [`InputFocus`] rather than an observer of `FocusGained`: Bevy sends
+/// that after the layout, so the row would be named and ringed a frame late, while the focus
+/// itself (Tab, a click) is set in `PreUpdate`, before this runs ahead of the rows.
 fn activate_on_focus(
-    focus_gained: On<FocusGained>,
     focus: Res<InputFocus>,
     mut lists: Query<&mut VirtualListState>,
     selections: SelectionParam,
 ) {
-    let list = focus_gained.event_target();
-    if focus.get() != Some(list) {
+    if !focus.is_changed() {
         return;
     }
+    let Some(list) = focus.get() else {
+        return;
+    };
     let Ok(mut state) = lists.get_mut(list) else {
         return;
     };

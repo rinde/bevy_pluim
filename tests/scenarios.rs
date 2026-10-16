@@ -2052,6 +2052,104 @@ fn a_virtual_list_tells_a_screen_reader_where_each_row_is_among_all_its_items() 
     }
 }
 
+#[test]
+fn a_virtual_list_row_that_shows_no_item_has_no_position_among_the_items() {
+    // Scrolled to the bottom, then all but three items removed: most of the pool's rows
+    // show nothing, and a screen reader must not read them as item 9,999 of 3.
+    let mut app = widgets_app();
+    WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let (list, contents) = virtual_list_and_contents(&mut app);
+    app.world_mut()
+        .entity_mut(contents)
+        .insert(ScrollPosition(Vec2::new(0.0, 1_000_000.0)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let items: Vec<Entity> = world
+        .query::<(Entity, &ItemOf)>()
+        .iter(world)
+        .filter(|(_, item_of)| item_of.0 == list)
+        .map(|(item, _)| item)
+        .collect();
+    assert_eq!(items.len(), 10_000);
+    for &item in items.iter().skip(3) {
+        world.despawn(item);
+    }
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let world = app.world_mut();
+    let rows: Vec<_> = world
+        .query::<(&VirtualListRow, &AccessibilityNode)>()
+        .iter(world)
+        .map(|(row, node)| (row.index, node.position_in_set(), node.size_of_set()))
+        .collect();
+    assert_eq!(rows.len(), 13);
+    let empty = rows.iter().filter(|(index, ..)| index.is_none()).count();
+    assert_eq!(empty, 10, "rows showing no item: {rows:?}");
+    for (index, position, size) in rows {
+        match index {
+            Some(index) => assert_eq!((position, size), (Some(index + 1), Some(3)), "{index}"),
+            None => assert_eq!((position, size), (None, None), "a row showing no item"),
+        }
+    }
+}
+
+#[test]
+fn a_first_page_down_on_a_virtual_list_without_an_active_row_lands_on_the_first_item() {
+    // Focused while it has no items, the list has no active row and nothing selected when
+    // its items arrive; Page Down then starts where Arrow Down does, on the first item.
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let mut list = Entity::PLACEHOLDER;
+    app.world_mut().entity_mut(root).with_children(|root| {
+        list = root
+            .spawn((
+                VirtualList::new(28.0),
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(Vec::<Item<String>>::new()),
+            ))
+            .id();
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, FocusCause::Navigated);
+    app.update();
+    let first = app
+        .world_mut()
+        .spawn((Item::new("Row 1".to_string()), ItemOf(list)))
+        .id();
+    for index in 2..=100 {
+        app.world_mut()
+            .spawn((Item::new(format!("Row {index}")), ItemOf(list)));
+    }
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(active_row(&app, list), None);
+
+    send_key(&mut app, KeyCode::PageDown, ButtonState::Pressed, false);
+    app.update();
+
+    let row = active_row(&app, list).unwrap();
+    assert_eq!(
+        app.world()
+            .get::<VirtualListRow>(row)
+            .and_then(|row| row.item),
+        Some(first)
+    );
+}
+
 /// Fills a `VirtualList` row with a button named after the row's item.
 fn virtual_row_with_button(
     spawner: In<ItemViewSpawner>,
