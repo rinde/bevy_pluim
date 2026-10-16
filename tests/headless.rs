@@ -61,7 +61,7 @@ use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
-use rin_bevy_ui::slider::Slider;
+use rin_bevy_ui::slider::{Slider, SliderRefs};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
@@ -5522,6 +5522,46 @@ fn a_slider_without_a_label_leaves_the_apps_right_margin_alone() {
     app.update();
     let node = app.world().entity(slider).get::<Node>().unwrap();
     assert_eq!(node.margin, margin);
+}
+
+#[test]
+fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world.spawn(Slider::new(2.0, 0.0, 10.0)).id();
+    app.update();
+    app.update();
+    let thumb = app
+        .world()
+        .entity(slider)
+        .get::<SliderRefs>()
+        .unwrap()
+        .thumb;
+    let radius = |app: &App| {
+        app.world()
+            .entity(thumb)
+            .get::<Node>()
+            .unwrap()
+            .border_radius
+    };
+    let control_radius = app.world().get_resource::<Theme>().unwrap().control_radius;
+    assert_eq!(radius(&app), BorderRadius::all(control_radius));
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .control_radius = Val::Px(3.0);
+    app.update();
+    assert_eq!(radius(&app), BorderRadius::all(Val::Px(3.0)));
+
+    // A value change restyles the thumb but leaves its radius as the theme set it.
+    app.world_mut().trigger(SetSliderValue {
+        entity: slider,
+        change: SliderValueChange::Absolute(7.0),
+    });
+    app.update();
+    assert_eq!(radius(&app), BorderRadius::all(Val::Px(3.0)));
 }
 
 #[test]

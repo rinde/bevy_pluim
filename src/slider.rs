@@ -424,7 +424,6 @@ impl SliderStyler<'_, '_> {
         let position = range.thumb_position(value.0) * 100.0;
         if let Ok(mut node) = self.nodes.get_mut(refs.thumb) {
             node.left = Val::Percent(position);
-            node.border_radius = BorderRadius::all(self.theme.control_radius);
         }
         if let Ok(mut node) = self.nodes.get_mut(refs.fill) {
             node.width = Val::Percent(position);
@@ -458,6 +457,13 @@ impl SliderStyler<'_, '_> {
                 text.0 = shown;
             }
             color.0 = look.text;
+        }
+    }
+
+    /// Gives the thumb of a slider the theme's control radius.
+    fn set_radius(&mut self, refs: &SliderRefs) {
+        if let Ok(mut node) = self.nodes.get_mut(refs.thumb) {
+            node.border_radius = BorderRadius::all(self.theme.control_radius);
         }
     }
 
@@ -505,6 +511,7 @@ fn theme_sliders(
         node.height = Val::Px(HEIGHT_PX);
         styler.set_font(state.2);
         styler.set_shadow(state.2);
+        styler.set_radius(state.2);
         styler.style(state);
     }
 }
