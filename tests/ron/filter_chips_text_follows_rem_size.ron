@@ -1,8 +1,8 @@
 // A chip's text is `Theme::font_size_chip` (13 px at the default rem size of
 // 20 px), 0.65 rem, so it follows Bevy's `RemSize`. `ron_scenarios` also plays
 // this file with the rem size at 1.5 times the default (`[text 1.5x]`): the
-// chip grows with its text, which stays inside the chip's border, and the
-// chips still fit the window.
+// chip stays a fixed 30 px high while its text gets larger inside it, the text
+// stays within the chip's border, and the chips still fit the window.
 (
     format_version: 3,
     name: "a chip sizes its text in rem and holds it at any text size",

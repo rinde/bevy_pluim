@@ -1,0 +1,26 @@
+// A combo's list is kept 10 pixels inside the window, as a palette combo's popup is. The
+// `right edge combo` (x 1200, 100 wide) opens a list as wide as the combo's default node
+// and must not run past the right edge (1280 - 10): its centre is 1270 less half its width,
+// where without the rule it would be 1250 or more; the `bottom edge combo` (y 660) has no
+// room under it, so its list opens above the button.
+(
+    format_version: 3,
+    name: "a combo near the window edge keeps its list inside the window",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("right edge combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("right edge combo"), path: "ComboState", is: Eq(Open))),
+        Wait(2),
+        Check(Component(target: Within(Name("right edge combo"), Component("ComboList")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(1180.0, 1215.0))),
+        Click(Left),
+        Check(Component(target: Name("right edge combo"), path: "ComboState", is: Eq(Closed))),
+        MoveTo(Within(Name("bottom edge combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("bottom edge combo"), path: "ComboState", is: Eq(Open))),
+        Wait(2),
+        Check(Component(target: Within(Name("bottom edge combo"), Component("ComboList")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Between(300.0, 650.0))),
+    ],
+    expect: [],
+)

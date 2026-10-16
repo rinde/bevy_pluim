@@ -29,13 +29,6 @@ fn main() {
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     let icon = common::cross_icon(&mut images);
-    let small = IconButton::new(icon.clone(), "Small", IconButtonSize::Small);
-    let regular = IconButton::new(icon.clone(), "Regular", IconButtonSize::Regular);
-    let large = IconButton::new(icon.clone(), "Large", IconButtonSize::Large);
-    let toggle = IconButton::new(icon.clone(), "Toggle", IconButtonSize::Regular);
-    let warning =
-        IconButton::new(icon.clone(), "Warning", IconButtonSize::Large).with_tone(Tone::Warning);
-    let danger = IconButton::new(icon, "Danger", IconButtonSize::Regular).with_tone(Tone::Danger);
     commands.spawn_scene(bsn! {
         Node {
             width: percent(100.0),
@@ -45,19 +38,19 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             padding: UiRect::all(px(20.0)),
         }
         Children [
-            common::inserted(small)
+            IconButton { icon: {icon.clone()}, name: "Small", size: IconButtonSize::Small }
             --
-            common::inserted(regular)
+            IconButton { icon: {icon.clone()}, name: "Regular", size: IconButtonSize::Regular }
             --
-            common::inserted(large)
+            IconButton { icon: {icon.clone()}, name: "Large", size: IconButtonSize::Large }
             --
             // A toggle: an `Activate` flips its `ToggleState`.
-            common::inserted(toggle)
+            IconButton { icon: {icon.clone()}, name: "Toggle", size: IconButtonSize::Regular }
             ~{ToggleState(false)}
             --
-            common::inserted(warning)
+            IconButton { icon: {icon.clone()}, name: "Warning", size: IconButtonSize::Large, tone: Tone::Warning }
             --
-            common::inserted(danger)
+            IconButton { icon, name: "Danger", size: IconButtonSize::Regular, tone: Tone::Danger }
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| {

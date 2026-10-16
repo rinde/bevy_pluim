@@ -34,6 +34,7 @@ pub mod segmented_control;
 pub mod select;
 pub mod setting_row;
 pub mod stack;
+pub mod tab_bar;
 pub mod tailwind;
 pub mod theme;
 pub mod toolbar;
@@ -44,7 +45,7 @@ use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::picking::events::{PointerEvent, PointerTraversal};
 use bevy::prelude::*;
-use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin, ScrollbarPlugin};
+use bevy::ui_widgets::{ButtonPlugin, ListBoxPlugin, ScrollbarPlugin, TabPlugin};
 
 use crate::badge::BadgePlugin;
 use crate::breadcrumbs::BreadCrumbsPlugin;
@@ -73,17 +74,19 @@ use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::setting_row::SettingRowPlugin;
 use crate::stack::StackPlugin;
+use crate::tab_bar::TabBarPlugin;
 use crate::theme::{Theme, ThemePlugin};
 use crate::toolbar::ToolbarPlugin;
 use crate::tooltip::TooltipPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
-/// The `ButtonPlugin`, `ListBoxPlugin` and `ScrollbarPlugin` of `bevy_ui_widgets` are
-/// added in [`Plugin::finish`] when the app does not have them by then, so it does not
-/// matter whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added before or after this
-/// plugin. An app that is driven by hand with `App::update` instead of `App::run`
-/// must call `App::finish` first, or its buttons, lists and scroll bars get no observers.
+/// The `ButtonPlugin`, `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin` of
+/// `bevy_ui_widgets` are added in [`Plugin::finish`] when the app does not have them by
+/// then, so it does not matter whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added
+/// before or after this plugin. An app that is driven by hand with `App::update` instead
+/// of `App::run` must call `App::finish` first, or its buttons, lists, scroll bars and tab
+/// bars get no observers.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
@@ -98,6 +101,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(SegmentedControlPlugin)
             .add_plugins(SettingRowPlugin)
+            .add_plugins(TabBarPlugin)
             .add_plugins(StackPlugin)
             .add_plugins(ColorPalettePlugin)
             .add_plugins(ColorPaletteComboPlugin)
@@ -122,6 +126,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(LinkPlugin)
             .add_systems(PostStartup, setup)
             .add_observer(add_ui_root)
+            .add_observer(drop_ui_root_when_parented)
             .add_observer(observer_transformer::<PointerOver>)
             .add_observer(observer_transformer::<PointerPress>)
             .add_observer(observer_transformer::<PointerRelease>)
@@ -143,6 +148,9 @@ impl Plugin for WidgetsPlugin {
         }
         if !app.is_plugin_added::<ScrollbarPlugin>() {
             app.add_plugins(ScrollbarPlugin);
+        }
+        if !app.is_plugin_added::<TabPlugin>() {
+            app.add_plugins(TabPlugin);
         }
         // The same for keyboard focus: the tester's `HeadlessPlugins` has the first two but
         // not tab navigation.
@@ -169,6 +177,10 @@ fn add_ui_root(
     }
 }
 
+fn drop_ui_root_when_parented(t: On<Insert<ChildOf>>, mut commands: Commands) {
+    commands.entity(t.event().event_target()).remove::<UiRoot>();
+}
+
 fn setup(roots: Query<(), With<UiRoot>>) {
     let count = roots.iter().count();
     if count != 1 {
@@ -185,7 +197,9 @@ fn setup(roots: Query<(), With<UiRoot>>) {
 /// [`UiTargetCamera`], when the node is added. Root nodes aimed at another camera
 /// (a second window's UI, an overlay) belong to someone else and are left alone.
 /// A [`UiTargetCamera`] inserted after the [`Node`] is not seen, so insert it in
-/// the same bundle. It is the one non-modal [`TabGroup`],
+/// the same bundle. A node that gets its parent after its [`Node`] (a scene
+/// writes `ChildOf` last) loses the marker again when the [`ChildOf`] is
+/// inserted. It is the one non-modal [`TabGroup`],
 /// so Tab moves through the widgets below it. If the app does not end up with exactly one such root at
 /// startup, an error is logged.
 #[derive(Component, Debug, Copy, Clone)]
@@ -267,9 +281,9 @@ where
     // only the first hop re-triggers, so one event is one `MouseEvent`.
     //
     // This is a global observer rather than one on `UiRoot` because Bevy's
-    // `Button` stops `PointerPress`, `PointerRelease`, `PointerClick` and
-    // `PointerDragEnd` from bubbling,
-    // which would keep them from ever reaching the root.
+    // `Button` stops `PointerPress`, `PointerRelease`, `PointerClick`,
+    // `PointerDragEnd` and `PointerCancel` from bubbling, which would keep
+    // them from ever reaching the root.
     let original = trigger.original_event_target();
     if trigger.event_target() == original {
         commands.trigger(MouseEvent {

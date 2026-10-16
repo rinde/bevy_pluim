@@ -4,7 +4,6 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -24,7 +23,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Startup, setup)
         .run();
 }
@@ -42,8 +40,7 @@ fn setup(mut commands: Commands) {
         ]))
         .id();
 
-    // A list with a selection of its own gets the bundle of `Selection::builder()` through
-    // `template`, which inserts any bundle.
+    // A list with a selection of its own gets the scene of `Selection::builder()`.
     let countries = || {
         [
             Item::new("Netherlands"),
@@ -67,71 +64,30 @@ fn setup(mut commands: Commands) {
             --
             List
             ~{ListLayout::Horizontal}
-            template(|context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .one()
-                        .build_with_items(["NL", "CA", "ID", "PT", "BE"].map(Item::new)),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().one().scene_with_items(["NL", "CA", "ID", "PT", "BE"].map(Item::new))}
             --
             List ~{ListLayout::VerticalGrid { columns: 3 }} ~{Selection::reference(selection_ref)}
             --
             List
             ~{CornerStyle::Tabs}
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(selection_ref),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
             --
             List
             ~{ListLayout::Horizontal}
             ~{CornerStyle::Tabs}
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_more()
-                        .build_with_items_ref(selection_ref),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_more().scene_with_items_ref(selection_ref)}
             --
             List
             ~{ListLayout::VerticalGrid { columns: 3 }}
             ~{CornerStyle::Tabs}
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_more()
-                        .build_with_items(countries()),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_more().scene_with_items(countries())}
             --
             List
             ~{CornerStyle::Separated}
-            template(move |context| {
-                context
-                    .entity
-                    .insert(Selection::builder().one().build_with_items(countries()));
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().one().scene_with_items(countries())}
             --
-            ~{PushButton::from_label("Change theme")} ThemeButton
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
-}
-
-#[derive(Component, Default, Clone)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
-    }
 }

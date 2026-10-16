@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
+use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
@@ -13,6 +14,7 @@ use bevy::ui::Selected;
 use bevy::ui_widgets::{
     ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
 };
+use bevy::window::PrimaryWindow;
 use itertools::Either;
 
 use crate::focus::TabStop;
@@ -54,6 +56,7 @@ impl Plugin for ListPlugin {
             .add_observer(on_insert_selection)
             .add_observer(on_value_change)
             .add_observer(keep_navigation_keys)
+            .add_observer(pass_first_presses_from_descendants)
             .add_observer(handle_custom_view_mouse_events)
             .register_type::<ItemView>()
             .register_type::<ListLayout>()
@@ -447,29 +450,76 @@ fn on_value_change(
 /// key's repeats and the release go on up to the window, where an app's directional
 /// navigation would move the focus out of the list. The list owns those keys while it has
 /// the focus, so none of them goes further. Keys that bubble up from a focused descendant
-/// (a button in a custom item view) are left alone; the `ListBox` still stops a first press
-/// of those, because the `focused_entity` it checks follows the event up the tree.
+/// (a button in a custom item view) are not the list's: those go on past it, see
+/// [`pass_first_presses_from_descendants`].
 fn keep_navigation_keys(
     mut input: On<FocusedInput<KeyboardInput>>,
     lists: Query<(), With<List>>,
     focus: Res<InputFocus>,
 ) {
-    // `focused_entity` follows the event up the tree, so the focus itself is read.
     let list = input.event_target();
     if focus.get() != Some(list) || !lists.contains(list) {
         return;
     }
-    if matches!(
-        input.event().input.key_code,
+    if is_navigation_key(input.event().input.key_code) {
+        input.propagate(false);
+    }
+}
+
+/// Lets a first press of an arrow key, Home or End from a focused descendant of a [`List`]
+/// (a button in a custom item view) go on past the list.
+///
+/// Unlike the repeats and the release of that key, which bubble through the [`List`] entity
+/// on their way up, the first press skips that one hop: an observer on the list sees a held
+/// arrow's repeats and its release, but not its first press.
+///
+/// The `ListBox` takes any first press of those keys that reaches it as its own, because the
+/// `focused_entity` it checks is the entity the bubbling event has reached, not the focus.
+/// So on the child of the list that the event comes through, the press is stopped before
+/// it reaches the list and sent on from the list's parent (the window, for a list without
+/// one): the active row stays where it is and an app's directional navigation gets the key.
+fn pass_first_presses_from_descendants(
+    mut input: On<FocusedInput<KeyboardInput>>,
+    parents: Query<&ChildOf>,
+    lists: Query<Option<&ChildOf>, With<List>>,
+    windows: Query<Entity, With<PrimaryWindow>>,
+    mut commands: Commands,
+) {
+    let key = &input.event().input;
+    if key.state != ButtonState::Pressed || key.repeat || !is_navigation_key(key.key_code) {
+        return;
+    }
+    let Ok(child_of) = parents.get(input.event_target()) else {
+        return;
+    };
+    let Ok(list_parent) = lists.get(child_of.parent()) else {
+        return;
+    };
+    let Some(next) = list_parent
+        .map(ChildOf::parent)
+        // The primary window Bevy's `dispatch_focused_input` sent the event with: it only
+        // dispatches while there is exactly one, so the first is that one.
+        .or_else(|| windows.iter().next())
+    else {
+        return;
+    };
+    input.propagate(false);
+    let mut passed = input.event().clone();
+    passed.focused_entity = next;
+    commands.trigger(passed);
+}
+
+/// Whether `key_code` is one a `ListBox` moves its active row with on a first press.
+const fn is_navigation_key(key_code: KeyCode) -> bool {
+    matches!(
+        key_code,
         KeyCode::ArrowUp
             | KeyCode::ArrowDown
             | KeyCode::ArrowLeft
             | KeyCode::ArrowRight
             | KeyCode::Home
             | KeyCode::End
-    ) {
-        input.propagate(false);
-    }
+    )
 }
 
 /// Puts [`Selected`] on a view, or takes it off, to match its item.

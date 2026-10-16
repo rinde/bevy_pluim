@@ -17,7 +17,7 @@ use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, UiSystems};
-use bevy::ui_widgets::{ActiveDescendant, ListItem};
+use bevy::ui_widgets::{ActiveDescendant, ListItem, Tab};
 
 use crate::select::SelectionValue;
 use crate::theme::Theme;
@@ -134,7 +134,7 @@ pub(crate) struct Unreachable;
 /// Whether `entity` is not shown: its [`InheritedVisibility`] is hidden, or it or an
 /// ancestor has `Display::None`, which takes a node out of the layout without touching its
 /// visibility.
-fn is_hidden(
+pub(crate) fn is_hidden(
     entity: Entity,
     shown: &Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: &Query<&ChildOf>,
@@ -218,7 +218,8 @@ struct OutlineUnderRing(Outline);
 /// Draws the focus ring as an [`Outline`] while the focus is visible, and takes it off
 /// everything else.
 ///
-/// The ring goes on the focused [`TabStop`], except for a list: a `ListBox` has one tab stop
+/// The ring goes on the focused [`TabStop`] or [`Tab`] (a tab bar's tabs keep their own
+/// roving [`TabIndex`], so they are no tab stops), except for a list: a `ListBox` has one tab stop
 /// and moves an [`ActiveDescendant`] over its rows, so the ring is on that row and the box
 /// itself shows none. A list that is not focused has no active descendant, so no ring.
 ///
@@ -235,7 +236,7 @@ fn draw_focus_ring(
             Has<FocusRingOutline>,
             Option<&OutlineUnderRing>,
         ),
-        Or<(With<TabStop>, With<ListItem>)>,
+        Or<(With<TabStop>, With<ListItem>, With<Tab>)>,
     >,
     active: Query<&ActiveDescendant>,
     mut commands: Commands,

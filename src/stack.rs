@@ -21,7 +21,7 @@ impl Plugin for StackPlugin {
 }
 
 /// Shows the one [`StackItem`] child that matches the selection on `selection_ref`.
-#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[derive(Component, FromTemplate, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("Stack"), Node::default())]
 pub struct Stack {
@@ -227,6 +227,21 @@ impl StackChildSpawner {
                 .spawn((Name::new("StackItem"), AddNodeIfAbsent, child))
                 .id();
         });
+        commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
+    }
+
+    /// Spawns `scene` as the child of the stack: the scene's root is the child.
+    ///
+    /// Like [`StackChildSpawner::spawn`] otherwise; a `Node` in the scene patches the child's
+    /// default one.
+    pub fn spawn_scene(self, commands: &mut Commands, scene: impl Scene) {
+        let mut child = commands.spawn((
+            Name::new("StackItem"),
+            AddNodeIfAbsent,
+            ChildOf(self.parent),
+        ));
+        let id = child.id();
+        child.queue_apply_scene(scene);
         commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
     }
 }

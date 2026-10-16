@@ -5,14 +5,18 @@
 //! on the track. This module keeps the layout, the look, the wheel and scrolling a
 //! focused row into view.
 
+use std::sync::{Arc, Mutex};
+
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::spawn::SpawnWith;
+use bevy::ecs::template::TemplateContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
+use bevy::scene::EmptySceneEffect;
 use bevy::ui::FixedNode;
 use bevy::ui_widgets::{ControlOrientation, ScrollIntoView, Scrollbar, ScrollbarThumb};
 use itertools::Either;
@@ -42,7 +46,8 @@ impl Plugin for ScrollAreaPlugin {
     }
 }
 
-/// A node with scroll bars. Build one with [`ScrollArea::bundle`].
+/// A node with scroll bars. Build one with [`ScrollArea::bundle`], or with [`ScrollArea::scene`]
+/// in a `bsn!` scene.
 ///
 /// To assistive technology it is a scroll view ([`Role::ScrollView`]); its scroll bars and
 /// their thumbs are not in the accessibility tree.
@@ -69,6 +74,9 @@ impl ScrollArea {
         node.grid_template_rows = vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)];
     }
 }
+
+/// How far a focus ring reaches beyond its node, in logical pixels: its 1 px offset and 2 px width.
+const FOCUS_RING_REACH: f32 = 3.0;
 
 /// Marks the node holding the scrolled contents of a [`ScrollArea`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]
@@ -119,9 +127,13 @@ impl ScrollArea {
                             grid_column: GridPlacement::start(1),
                             // Keep children at their natural size: a child stretched to
                             // this node's height reported no overflow when it is a grid
-                            // (taffy 0.10, Bevy 0.19), which left nothing to scroll; kept
-                            // on taffy 0.14 until `Stretch` is retried.
+                            // (taffy 0.10, Bevy 0.19), which left nothing to scroll; still
+                            // needed on taffy 0.14: `Stretch` leaves the maximum scroll 2 px short (#265).
                             align_items: AlignItems::FlexStart,
+                            // The area clips at its padding box, so the focus ring of
+                            // a child at the edge (2 px wide, 1 px offset) needs room
+                            // inside it (#293).
+                            padding: UiRect::all(Val::Px(FOCUS_RING_REACH)),
                             ..default()
                         },
                     ))
@@ -145,6 +157,50 @@ impl ScrollArea {
             })),
         )
     }
+
+    /// A scroll area for a `bsn!` scene, whose contents are the scene list `contents`.
+    ///
+    /// Use it as an entry of a scene (`@scroll_area(..)` of a function returning it, or by
+    /// composing it into another scene). `v_scroll` and `h_scroll` enable scrolling (and a
+    /// scroll bar) on that axis. It builds the same area as [`ScrollArea::bundle`], which stays
+    /// for code that spawns through `Commands`.
+    pub fn scene(contents: impl SceneList, v_scroll: bool, h_scroll: bool) -> impl Scene {
+        // A scene's template must be `Clone`, a scene list is not: the first build takes it.
+        let contents = Arc::new(Mutex::new(Some(contents)));
+        bsn! {
+            template(move |context| {
+                Ok(insert_after_scene(context, Self::bundle(
+                    {
+                        let contents = contents.lock().ok().and_then(|mut taken| taken.take());
+                        move |parent: &mut ChildSpawner| {
+                            let Some(contents) = contents else {
+                                error!("the contents of a scroll area scene were already spawned");
+                                return;
+                            };
+                            let target = parent.target_entity();
+                            parent
+                                .world_mut()
+                                .entity_mut(target)
+                                .queue_spawn_related_scenes::<Children>(contents);
+                        }
+                    },
+                    v_scroll,
+                    h_scroll,
+                )))
+            })
+        }
+    }
+}
+
+/// Inserts `bundle` on the entity of a scene's template once the scene has been applied, so
+/// that the scene's own `Node` does not overwrite what the area's hooks set and the area is
+/// not taken for a root before it has a parent.
+fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
+    let entity = context.entity.id();
+    context.entity.world_scope(|world| {
+        world.commands().entity(entity).insert(bundle);
+    });
+    EmptySceneEffect
 }
 
 /// A scroll bar with a thumb, along the given [`Orientation`].
@@ -223,7 +279,7 @@ fn handle_hover(
     }
 }
 
-/// Scrolls the [`ScrollContents`] around an entity just far enough to show it.
+/// Scrolls the [`ScrollContents`] around an entity just far enough to show it and its focus ring.
 ///
 /// Answers [`ScrollIntoView`], which a `ListBox` triggers when the arrow keys
 /// move its active descendant. An axis is moved only when the contents scroll
@@ -265,8 +321,10 @@ fn scroll_into_view(
     // target's already shifted by the scroll position it had then).
     let target_top_left = target_transform.translation * target_scale - target_size * 0.5;
     let area_top_left = area_transform.translation * area_scale - area_size * 0.5;
-    let local_top_left = target_top_left - area_top_left + scroll_position.0;
-    let local_bottom_right = local_top_left + target_size;
+    // The target's focus ring is shown with it, so its reach counts as part of the target.
+    let ring = Vec2::splat(FOCUS_RING_REACH);
+    let local_top_left = target_top_left - area_top_left + scroll_position.0 - ring;
+    let local_bottom_right = local_top_left + target_size + ring * 2.0;
     let max = ((area_computed.content_size() - area_computed.size()) * area_scale).max(Vec2::ZERO);
 
     if node.overflow.x == OverflowAxis::Scroll {

@@ -134,7 +134,11 @@ pub struct Segment {
 struct SegmentLabel;
 
 /// The background and text colour of a segment from its state.
-const fn segment_colors(colors: &ThemeColors, selected: bool, hovered: bool) -> (Color, Color) {
+pub(crate) const fn segment_colors(
+    colors: &ThemeColors,
+    selected: bool,
+    hovered: bool,
+) -> (Color, Color) {
     if selected {
         (colors.segmented_selected, colors.segmented_selected_text)
     } else if hovered {

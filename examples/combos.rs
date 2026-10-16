@@ -4,7 +4,6 @@ use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
 use bevy::ecs::system::Commands;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -24,7 +23,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Startup, setup)
         .run();
 }
@@ -55,28 +53,12 @@ fn setup(mut commands: Commands) {
             ~{Combo} ~{Selection::reference(selection_ref)}
             --
             ~{Combo}
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(selection_ref),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
             --
             ~{Combo} ~{Selection::reference(selection_ref)}
             --
-            ~{PushButton::from_label("Change theme")} ThemeButton
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
-}
-
-#[derive(Component, Default, Clone)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
-    }
 }

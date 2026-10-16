@@ -7,17 +7,17 @@
     steps: [
         Wait(2),
         // Panel A shows: Tab reaches "hello" somewhere in the cycle.
-        // Seven stops: the tab list, "Change theme", two palette combos, the combo,
+        // Seven stops: the tab bar (one stop, its selected tab), "Change theme", two palette combos, the combo,
         // "Button on a card" and "hello".
         Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
         Tap(key: Tab),
         Check(App(Focused(of: Within(Name("Stack"), Role(role: Button, label: "hello"))))),
 
-        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel B")), Click(Left),
         Wait(2),
         Check(Not(Visible(Within(Name("Stack"), Role(role: Button, label: "hello"))))),
         // A click on "Change theme" focuses it; Tab then goes on in tree order to the two
-        // lists of Panel B, then round to the tab list and "Change theme" again. It never
+        // lists of Panel B, then round to the tab bar and "Change theme" again. It never
         // lands on a button of Panel A. The first three lists in the stack are Panel A's:
         // its combo's list and the palettes in its two palette combos' popups.
         MoveTo(Role(role: Button, label: "Change theme")), Click(Left),
@@ -31,7 +31,7 @@
 
         // Shown again, it is back in the order: from "Change theme" the stops are the two
         // palette combos, the combo, "Button on a card" and "hello".
-        MoveTo(Role(role: ListItem, label: "Panel A")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel A")), Click(Left),
         Wait(2),
         Check(Visible(Within(Name("Stack"), Role(role: Button, label: "hello")))),
         MoveTo(Role(role: Button, label: "Change theme")), Click(Left),

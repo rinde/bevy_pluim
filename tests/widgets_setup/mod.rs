@@ -36,6 +36,7 @@ use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::filter_chips::{Chip, FilterChips};
+use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::Link;
@@ -50,8 +51,10 @@ use rin_bevy_ui::select::{
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
 
@@ -131,6 +134,12 @@ pub enum WidgetsSetup {
     /// `warning button` and `danger button`, and "Change theme". `Clicks`
     /// counts the `Activate`s of `regular button`.
     IconButtons,
+    /// A `gallery` of three cards (Steam, Diesel in "Locomotives", Passenger in
+    /// "Wagons"), a `One` selection of its own, and "Change theme".
+    Gallery,
+    /// A `filled toolbar` of three tools (Select, Build, Bulldoze) with a selection of its
+    /// own, and "Change theme".
+    Toolbar,
     /// A `tooltip anchor` push button with the tooltip "Anchor tip", an icon
     /// button named "Help" (which has a tooltip of its own, "Help") and
     /// "Change theme".
@@ -165,6 +174,8 @@ impl AppSetup for WidgetsSetup {
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
             Self::IconButtons => icon_buttons(world),
+            Self::Gallery => gallery(world),
+            Self::Toolbar => toolbar(world),
             Self::Tooltip => tooltip(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
@@ -310,10 +321,49 @@ fn combos(world: &mut World) {
                             .zero_or_one()
                             .build_with_items(countries()),
                     ));
+                    // Makes the contents overflow the area, so it can scroll.
+                    contents.spawn(Node {
+                        width: px(1),
+                        height: px(400),
+                        flex_shrink: 0.0,
+                        ..default()
+                    });
                 },
                 true,
                 false,
             ),
+        ));
+        // Combos at the right and bottom window edges, out of the flow and spawned last
+        // for the same reason: their lists are kept inside the window.
+        root.spawn((
+            Combo,
+            Name::new("right edge combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                top: px(100),
+                left: px(1200),
+                width: px(100),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(countries()),
+        ));
+        root.spawn((
+            Combo,
+            Name::new("bottom edge combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(200),
+                top: px(660),
+                left: px(500),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(countries()),
         ));
     });
 }
@@ -556,10 +606,7 @@ fn push_to_selection(
 }
 
 /// Takes the last panel off the trail.
-fn pop_on_pointer_release(
-    _: On<Activate>,
-    mut selections: SelectionParam<With<BreadCrumbsSelection>>,
-) {
+fn pop_on_activate(_: On<Activate>, mut selections: SelectionParam<With<BreadCrumbsSelection>>) {
     selections.update_selection_single(SelectionValue::pop);
 }
 
@@ -578,7 +625,7 @@ fn spawn_go_to(parent: &mut ChildSpawner, label: &'static str, target: BreadCrum
 fn spawn_go_back(parent: &mut ChildSpawner, label: &'static str) {
     parent
         .spawn(PushButton::from_label(label))
-        .observe(pop_on_pointer_release);
+        .observe(pop_on_activate);
 }
 
 fn create_home(spawner: In<StackChildSpawner>, mut commands: Commands) {
@@ -873,12 +920,7 @@ fn tabs(world: &mut World) {
     });
     world.entity_mut(root).with_children(|root| {
         let selection_ref = root
-            .spawn((
-                List,
-                CornerStyle::Tabs,
-                ListLayout::Horizontal,
-                Selection::builder().one().build_with_items(items),
-            ))
+            .spawn((TabBar, Selection::builder().one().build_with_items(items)))
             .id();
         root.spawn((
             BorderColor::all(border),
@@ -1181,6 +1223,41 @@ fn filter_chips(world: &mut World) {
                     data: Chip::new(label),
                 })),
             Name::new("narrow chips"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn gallery(world: &mut World) {
+    let root = row_root(world);
+    let cards = [
+        ("Steam", "Locomotives"),
+        ("Diesel", "Locomotives"),
+        ("Passenger", "Wagons"),
+    ]
+    .map(|(label, group)| Item {
+        data: GalleryCard::new(Handle::default(), label, group),
+    });
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Gallery,
+            Selection::builder().one().build_with_items(cards),
+            Name::new("gallery"),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+fn toolbar(world: &mut World) {
+    let root = row_root(world);
+    let tools = ["Select", "Build", "Bulldoze"].map(|label| Item {
+        data: Tool::new(Handle::default(), label),
+    });
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::builder().one().build_with_items(tools),
+            Name::new("filled toolbar"),
         ));
         spawn_theme_button(root);
     });

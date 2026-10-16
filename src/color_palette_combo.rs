@@ -12,7 +12,7 @@ use itertools::Either;
 
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
-use crate::float::Float;
+use crate::float::{Float, below_or_above, keep_in_window_x};
 use crate::focus::{
     AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
     sync_role, sync_value,
@@ -346,7 +346,6 @@ fn position_float(
         ),
     >,
 ) {
-    const MARGIN: f32 = 10.0;
     const BUTTON_FLOAT_DIST: f32 = 3.0;
 
     let (Ok((mut node, float_computed_node)), Ok((button_computed_node, button_transform))) = (
@@ -361,18 +360,16 @@ fn position_float(
     // `UiGlobalTransform` holds the centre of the node.
     let button_center = button_transform.translation * button_computed_node.inverse_scale_factor();
 
-    // Centred under the button, then pushed back inside the window. A popup wider than the
-    // window keeps its left edge on the margin.
+    // Centred under the button, then pushed back inside the window.
     let centered_x = button_center.x - float_size.x / 2.0;
-    let max_x = window.width() - MARGIN - float_size.x;
-    node.left = Val::Px(centered_x.min(max_x).max(MARGIN));
-
-    let below_y = button_center.y + button_size.y / 2.0 + BUTTON_FLOAT_DIST;
-    node.top = Val::Px(if below_y + float_size.y + MARGIN > window.height() {
-        button_center.y - button_size.y / 2.0 - BUTTON_FLOAT_DIST - float_size.y
-    } else {
-        below_y
-    });
+    node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, window.width()));
+    node.top = Val::Px(below_or_above(
+        button_center.y - button_size.y / 2.0,
+        button_center.y + button_size.y / 2.0,
+        BUTTON_FLOAT_DIST,
+        float_size.y,
+        window.height(),
+    ));
 }
 
 /// Keeps the popup's palette and the button's colour square in step with the combo's

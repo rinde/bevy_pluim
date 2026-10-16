@@ -9,7 +9,7 @@
 
 use bevy::MinimalPlugins;
 use bevy::a11y::AccessibilityNode;
-use bevy::asset::AssetPlugin;
+use bevy::asset::{AssetPlugin, HandleTemplate};
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::camera::visibility::VisibilityPlugin;
@@ -29,7 +29,8 @@ use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
 use bevy::ui_widgets::{
-    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
+    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab, Tab,
+    TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, WindowPlugin};
 use rin_bevy_ui::UiRoot;
@@ -54,12 +55,14 @@ use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, PushButton, PushButtonRefs};
+use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
@@ -94,14 +97,24 @@ fn headless_app() -> App {
     app
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct PanelA;
 
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct PanelB;
 
 fn spawn_panel_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn(&mut commands, PanelA);
+}
+
+fn spawn_panel_scene(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn_scene(
+        &mut commands,
+        bsn! {
+            PanelA
+            Children [ PanelB ]
+        },
+    );
 }
 
 fn spawn_panel_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
@@ -116,6 +129,26 @@ fn add_ui_root_inserts_ui_root_on_the_single_root_node() {
     app.update();
 
     assert!(app.world().entity(root).contains::<UiRoot>());
+}
+
+#[test]
+fn a_node_parented_after_its_node_was_added_is_not_a_ui_root() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let child = app.world_mut().spawn(Node::default()).id();
+    assert!(app.world().entity(child).contains::<UiRoot>());
+
+    app.world_mut().entity_mut(child).insert(ChildOf(root));
+    app.update();
+
+    assert!(!app.world().entity(child).contains::<UiRoot>());
+    assert!(app.world().entity(root).contains::<UiRoot>());
+    let roots = app
+        .world_mut()
+        .query_filtered::<(), With<UiRoot>>()
+        .iter(app.world())
+        .count();
+    assert_eq!(roots, 1);
 }
 
 #[test]
@@ -144,6 +177,57 @@ fn two_app_root_nodes_are_reported_instead_of_panicking() {
 
     assert!(app.world().entity(first).contains::<UiRoot>());
     assert!(app.world().entity(second).contains::<UiRoot>());
+}
+
+#[test]
+fn a_stack_child_can_be_spawned_from_a_scene() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let create = app.world_mut().register_system(spawn_panel_scene);
+
+    let selection_ref = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), StackItem::new(create))]),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stack = app
+        .world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+        .id();
+
+    for _ in 0..4 {
+        app.update();
+    }
+
+    let panel = single_entity_with::<PanelA>(&mut app);
+    let stack_children = app.world().entity(stack).get::<Children>().unwrap();
+    assert!(stack_children.contains(&panel));
+    assert_eq!(node_display(&app, panel), Display::Flex);
+    // The scene's own children are below the stack child.
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert!(
+        app.world()
+            .entity(panel)
+            .get::<Children>()
+            .unwrap()
+            .contains(&panel_b)
+    );
+    assert_eq!(ui_root_count(&mut app), 1);
 }
 
 #[test]
@@ -768,6 +852,36 @@ fn spawn_push_button(app: &mut App) -> Entity {
     button
 }
 
+/// `Activate` is a single-hop entity event: an observer on a button hears it, one on an ancestor
+/// of the button does not. An action therefore observes `Activate` on the button itself.
+#[test]
+fn an_activate_does_not_bubble_to_an_observer_on_an_ancestor() {
+    let mut app = headless_app();
+    app.init_resource::<Activations>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("Go"), ChildOf(root)))
+        .id();
+    app.world_mut()
+        .entity_mut(root)
+        .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 100);
+    app.world_mut()
+        .entity_mut(button)
+        .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 1);
+    app.update();
+    app.update();
+
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+
+    assert_eq!(
+        app.world().get_resource::<Activations>().unwrap().0,
+        1,
+        "only the button's own observer hears Activate"
+    );
+}
+
 const fn pointer_location() -> Location {
     Location {
         target: NormalizedRenderTarget::None {
@@ -1298,6 +1412,55 @@ fn spawn_combo(app: &mut App) -> (Entity, Entity) {
         .unwrap()
         .button_id;
     (combo, button)
+}
+
+#[test]
+fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
+    let mut app = headless_app();
+    let panel = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+            ChildOf(panel),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().entity(combo).get::<ComboSubRefs>().unwrap();
+    click(&mut app, refs.button_id);
+    app.update();
+    app.update();
+    let list_index = |app: &App| {
+        app.world()
+            .entity(refs.list_id)
+            .get::<TabIndex>()
+            .unwrap()
+            .0
+    };
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Open)
+    );
+    assert_eq!(list_index(&app), 0, "an open popup is a tab stop");
+
+    // No click or focus change: only the ancestor is hidden, as a `Stack` does.
+    app.world_mut()
+        .entity_mut(panel)
+        .get_mut::<Node>()
+        .unwrap()
+        .display = Display::None;
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Open),
+        "the combo is still open, so the popup is hidden by the panel alone"
+    );
+    assert_eq!(list_index(&app), -1);
 }
 
 /// A colour palette combo over two colours in a root node, returning it and its button.
@@ -3228,6 +3391,200 @@ fn adding_and_removing_items_adds_and_removes_segments() {
     assert_eq!(selected_segments(&app, control), ["New"]);
 }
 
+// ---- Tab bars ----
+
+/// The tabs of a bar, in order.
+fn tabs_of(app: &App, bar: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(bar)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<TabBarTab>())
+        .collect()
+}
+
+/// The text of the tabs that carry `Selected`.
+fn selected_tabs(app: &App, bar: Entity) -> Vec<String> {
+    tabs_of(app, bar)
+        .into_iter()
+        .filter(|t| app.world().entity(*t).contains::<Selected>())
+        .map(|t| segment_text(app, t))
+        .collect()
+}
+
+/// The tab the bar's `SelectedTab` names.
+fn selected_tab(app: &App, bar: Entity) -> Option<Entity> {
+    app.world().entity(bar).get::<SelectedTab>().unwrap().0
+}
+
+/// Asks the bar's tab list for `tab`, as a click or Enter on it does.
+fn request_tab(app: &mut App, bar: Entity, tab: Entity) {
+    app.world_mut().trigger(ValueChange::<Option<Entity>> {
+        source: bar,
+        value: Some(tab),
+        is_final: true,
+    });
+    app.update();
+    app.update();
+}
+
+fn spawn_tab_bar(app: &mut App, selection: impl Bundle) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let bar = app
+        .world_mut()
+        .spawn((TabBar, selection, ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    bar
+}
+
+#[test]
+fn a_tab_bar_shows_a_tab_per_item_with_the_first_selected() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+
+    let tabs = tabs_of(&app, bar);
+    let texts: Vec<_> = tabs.iter().map(|t| segment_text(&app, *t)).collect();
+    assert_eq!(texts, ["General", "Audio", "Input"]);
+    assert!(app.world().entity(bar).contains::<TabList>());
+    assert!(
+        tabs.iter()
+            .all(|t| app.world().entity(*t).contains::<Tab>())
+    );
+    assert_eq!(selected_tab(&app, bar), Some(tabs[0]));
+    assert_eq!(selected_tabs(&app, bar), ["General"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, bar), colors.segmented_track);
+    assert_eq!(background(&app, tabs[0]), colors.segmented_selected);
+    assert_eq!(background(&app, tabs[1]), colors.segmented_track);
+}
+
+#[test]
+fn a_tab_the_tab_list_asks_for_becomes_the_selection() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+
+    request_tab(&mut app, bar, tabs[2]);
+
+    assert_eq!(selection_labels(&app, bar), ["Input"]);
+    assert_eq!(selected_tab(&app, bar), Some(tabs[2]));
+    assert_eq!(selected_tabs(&app, bar), ["Input"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, tabs[0]), colors.segmented_track);
+    assert_eq!(background(&app, tabs[2]), colors.segmented_selected);
+}
+
+#[test]
+fn a_tab_bar_follows_a_selection_it_refers_to() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    let bar = spawn_tab_bar(&mut app, Selection::reference(selection));
+    let tabs = tabs_of(&app, bar);
+    assert_eq!(selected_tabs(&app, bar), ["Dark"]);
+
+    // A tab asked for writes to the referenced selection ...
+    request_tab(&mut app, bar, tabs[1]);
+    assert_eq!(selection_labels(&app, selection), ["Light"]);
+    assert_eq!(selected_tabs(&app, bar), ["Light"]);
+
+    // ... and a change made to it from elsewhere moves the selected tab.
+    select_by_text(&mut app, selection, "Dark");
+    assert_eq!(selected_tab(&app, bar), Some(tabs[0]));
+    assert_eq!(selected_tabs(&app, bar), ["Dark"]);
+}
+
+#[test]
+fn a_tab_is_named_after_its_item_to_a_screen_reader() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+
+    let bar_node = app.world().entity(bar).get::<AccessibilityNode>().unwrap();
+    assert_eq!(bar_node.role(), accesskit::Role::TabList);
+    let node = app
+        .world()
+        .entity(tabs[1])
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.role(), accesskit::Role::Tab);
+    assert_eq!(node.label(), Some("Audio"));
+}
+
+#[test]
+fn a_hidden_tab_bar_is_not_reached_by_tab_and_is_again_once_shown() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+    let panel = app.world().entity(bar).get::<ChildOf>().unwrap().parent();
+    let indices = |app: &App| -> Vec<i32> {
+        tabs.iter()
+            .map(|t| app.world().entity(*t).get::<TabIndex>().unwrap().0)
+            .collect()
+    };
+    let set_display = |app: &mut App, display: Display| {
+        app.world_mut()
+            .entity_mut(panel)
+            .get_mut::<Node>()
+            .unwrap()
+            .display = display;
+        app.update();
+        app.update();
+    };
+    assert_eq!(indices(&app), [0, -1, -1]);
+
+    // Its panel hidden by `Display::None`, as a `Stack` hides its panels.
+    set_display(&mut app, Display::None);
+    assert_eq!(indices(&app), [-1, -1, -1]);
+    // A selection made while hidden is the tab Tab reaches once it shows.
+    request_tab(&mut app, bar, tabs[1]);
+    assert_eq!(indices(&app), [-1, -1, -1]);
+    set_display(&mut app, Display::Flex);
+    assert_eq!(indices(&app), [-1, 0, -1]);
+
+    // The bar itself hidden by its visibility.
+    app.world_mut().entity_mut(bar).insert(Visibility::Hidden);
+    app.update();
+    app.update();
+    assert_eq!(indices(&app), [-1, -1, -1]);
+    app.world_mut()
+        .entity_mut(bar)
+        .insert(Visibility::Inherited);
+    app.update();
+    app.update();
+    assert_eq!(indices(&app), [-1, 0, -1]);
+}
+
 // ---- Separated lists ----
 
 /// A `CornerStyle::Separated` list over a `One` selection of `labels`.
@@ -4795,6 +5152,47 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
 }
 
 #[test]
+fn a_scene_points_a_stack_at_a_selection_named_in_the_same_scene() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins((
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+        MeshPlugin,
+        VisibilityPlugin,
+    ));
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins((InputPlugin, DefaultPickingPlugins));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let items = [(Item::new("a"), StackItem::new(create_a))];
+    app.world_mut().commands().spawn_scene(bsn! {
+        Node
+        Children [
+            #sel
+            template(move |context| {
+                context
+                    .entity
+                    .insert(Selection::builder().one().build_with_items(items.clone()));
+                Ok(bevy::scene::EmptySceneEffect)
+            })
+            --
+            Stack { selection_ref: #sel }
+        ]
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+    single_entity_with::<PanelA>(&mut app);
+}
+
+#[test]
 fn the_hud_example_builds_and_runs() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
@@ -4822,6 +5220,138 @@ fn the_hud_example_builds_and_runs() {
     assert_eq!(world.query::<&ItemView>().iter(world).count(), 4);
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
+}
+
+#[test]
+fn widgets_with_handles_and_scene_constructors_are_written_directly_in_a_scene() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let icon = app
+        .world_mut()
+        .get_resource_mut::<Assets<Image>>()
+        .unwrap()
+        .add(Image::default());
+    app.world_mut()
+        .spawn_scene(bsn! {
+            Node
+            Children [
+                IconButton { icon: {icon.clone()}, name: "Close", size: IconButtonSize::Large, tone: Tone::Danger }
+                --
+                Panel { title: "Trains", close_icon: {HandleTemplate::Handle(icon.clone())} }
+                --
+                NumericStepper { decrease_name: "Lower" }
+                --
+                @{Divider::vertical_scene()}
+                --
+                SegmentedControl
+                @{Selection::builder().one().scene_with_items(["Auto", "Manual"].map(Item::new))}
+            ]
+        })
+        .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    let world = app.world_mut();
+    // The panel's close button is an `IconButton` too.
+    let button = world
+        .query::<&IconButton>()
+        .iter(world)
+        .find(|button| button.tone == Tone::Danger)
+        .unwrap();
+    assert_eq!(button.icon, icon);
+    assert_eq!(button.name, "Close");
+    assert_eq!(button.size, IconButtonSize::Large);
+    let panel = world.query::<&Panel>().single(world).unwrap();
+    assert_eq!(panel.close_icon.as_ref(), Some(&icon));
+    // What is not written is as `Panel::new` has it.
+    assert!((panel.max_body_height - Panel::new("").max_body_height).abs() < f32::EPSILON);
+    let stepper = world.query::<&NumericStepper>().single(world).unwrap();
+    assert_eq!(stepper.decrease_name, "Lower");
+    assert_eq!(stepper.increase_name, "Increase");
+    // The panel has two dividers of its own; the scene's is the vertical one.
+    assert_eq!(
+        world
+            .query::<(&Divider, &Node)>()
+            .iter(world)
+            .filter(|(_, node)| node.width == Val::Px(1.0))
+            .count(),
+        1
+    );
+    let selection = world.query::<&Selection>().single(world).unwrap();
+    assert!(matches!(selection, Selection::Value(_)));
+    assert_eq!(world.query::<&Item<String>>().iter(world).count(), 2);
+}
+
+#[test]
+fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    app.world_mut().spawn(Camera2d);
+    app.world_mut()
+        .spawn_scene(bsn! {
+            Node
+            Children [
+                @ScrollArea::scene(
+                    bsn_list! {
+                        Node
+                        --
+                        Node
+                        --
+                        Node
+                    },
+                    true,
+                    true,
+                )
+            ]
+        })
+        .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let (area, node) = world
+        .query_filtered::<(Entity, &Node), With<ScrollArea>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(node.display, Display::Grid);
+    assert!(world.get::<ChildOf>(area).is_some());
+    let contents = world
+        .query_filtered::<&Children, With<ScrollContents>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(contents.len(), 3);
+    assert_eq!(world.query::<&ScrollBar>().iter(world).count(), 2);
+    assert_eq!(ui_root_count_world(world), 1);
+}
+
+fn ui_root_count_world(world: &mut World) -> usize {
+    world
+        .query_filtered::<(), With<UiRoot>>()
+        .iter(world)
+        .count()
 }
 
 fn ui_root_count(app: &mut App) -> usize {

@@ -24,7 +24,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator};
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, UiSystems};
-use bevy::ui_widgets::Button;
+use bevy::ui_widgets::{ActiveDescendant, Button, Tab};
 use bevy::window::PrimaryWindow;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -42,6 +42,7 @@ use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollContents;
 use rin_bevy_ui::select::{Item, ItemValues, Selection, SelectionParam, SelectionValue};
+use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui_tester::{
@@ -154,6 +155,41 @@ fn a_scenario_expecting_the_wrong_focus_fails() {
     // The second Tab lands on "Other", so expecting "Last" there must fail.
     let report = play(&tab_to(2, false, "Last"));
     assert!(!report.passed());
+}
+
+#[test]
+fn tab_skips_a_tab_bar_in_a_hidden_stack_panel() {
+    // A `Stack` hides a panel with `Display::None`; the bar in it must not take the focus.
+    let button = |label: &str| Target::role(WidgetRole::Button, label);
+    let scenario = Scenario::new("Tab skips a tab bar in a hidden panel")
+        .setup(|world| {
+            let root = spawn_camera_and_root(world);
+            world.entity_mut(root).with_children(|root| {
+                root.spawn(PushButton::from_label("Before"));
+                root.spawn(Node {
+                    display: Display::None,
+                    ..default()
+                })
+                .with_children(|panel| {
+                    panel.spawn((
+                        TabBar,
+                        Selection::builder()
+                            .one()
+                            .build_with_items(["A", "B"].map(Item::new)),
+                    ));
+                });
+                root.spawn(PushButton::from_label("After"));
+            });
+        })
+        .steps([
+            Step::wait(2),
+            Step::tap(KeyCode::Tab),
+            focused(button("Before")),
+            Step::tap(KeyCode::Tab),
+            focused(button("After")),
+        ]);
+    let report = play(&scenario);
+    assert!(report.passed(), "{:#?}", report.failures());
 }
 
 /// Moves the focus with the arrow keys, as an app that turns directional navigation on
@@ -317,17 +353,25 @@ fn a_focused_stepper_button_keeps_the_arrow_keys_from_directional_navigation() {
     assert!(report.passed(), "{:#?}", report.failures());
 }
 
-/// A custom item view holding a "In row" button.
-fn row_with_button(spawner: In<ItemViewSpawner>, mut commands: Commands) {
+/// A custom item view holding a button named after its item ("In row a").
+fn row_with_button(
+    spawner: In<ItemViewSpawner>,
+    items: Query<&Item<String>>,
+    mut commands: Commands,
+) {
+    let Ok(item) = items.get(spawner.item) else {
+        return;
+    };
+    let label = format!("In row {}", item.data);
     commands.entity(spawner.view).with_children(|view| {
-        view.spawn((Name::new("In row"), PushButton::from_label("In row")));
+        view.spawn((Name::new(label.clone()), PushButton::from_label(label)));
     });
 }
 
-/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
-/// app's navigation. (A first press does not, as Bevy's `ListBox` stops it; see AGENTS.md.)
-#[test]
-fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
+/// A `row list` of custom views (a, b, c), each holding a button, with a "Beside" button to
+/// its right, the app's directional navigation turned on and the focus on the button in row
+/// a. Returns the app and the list.
+fn button_in_a_list_row_app() -> (App, Entity) {
     let mut app = directional_navigation_app();
     let create = app.world_mut().register_system(row_with_button);
     let root = spawn_camera_and_root(app.world_mut());
@@ -338,11 +382,12 @@ fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
         })
         .with_children(|row| {
             row.spawn((
+                Name::new("row list"),
                 List,
                 ItemViewCreator::new(create),
                 Selection::builder()
                     .one()
-                    .build_with_items([Item::new("a")]),
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
             ));
             row.spawn((Name::new("Beside"), PushButton::from_label("Beside")));
         });
@@ -357,20 +402,62 @@ fn an_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
         .observe(navigate_with_arrow_keys);
     app.update();
     app.update();
-    let in_row = named(&mut app, "In row");
-    let beside = named(&mut app, "Beside");
+    let in_row = named(&mut app, "In row a");
     app.world_mut()
         .get_resource_mut::<InputFocus>()
         .unwrap()
         .set(in_row, FocusCause::Navigated);
     app.update();
+    let list = named(&mut app, "row list");
+    (app, list)
+}
+
+fn active_row(app: &App, list: Entity) -> Option<Entity> {
+    app.world()
+        .get::<ActiveDescendant>(list)
+        .and_then(|active| active.0)
+}
+
+/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
+/// app's navigation.
+#[test]
+fn a_held_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
+    let (mut app, _) = button_in_a_list_row_app();
+    let beside = named(&mut app, "Beside");
 
     send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
 
-    assert_eq!(
-        app.world().get_resource::<InputFocus>().unwrap().get(),
-        Some(beside)
-    );
+    assert_eq!(focus_of(&app), Some(beside));
+}
+
+/// A first press of an arrow key on a button inside a list row is not the list's either: the
+/// `ListBox` would take it as its own, so it is passed on past the list to the app's
+/// navigation.
+#[test]
+fn a_first_arrow_press_moves_the_focus_out_of_a_button_inside_a_list_row() {
+    let (mut app, _) = button_in_a_list_row_app();
+    let beside = named(&mut app, "Beside");
+
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, false);
+
+    assert_eq!(focus_of(&app), Some(beside));
+}
+
+/// A first press of Home or End on a button inside a list row does not move the list's active
+/// row, and the focus stays on the button.
+#[test]
+fn home_and_end_on_a_button_inside_a_list_row_leave_the_active_row_alone() {
+    let (mut app, list) = button_in_a_list_row_app();
+    let in_row = named(&mut app, "In row a");
+    let active = active_row(&app, list);
+
+    send_key(&mut app, KeyCode::End, ButtonState::Pressed, false);
+    assert_eq!(active_row(&app, list), active);
+    send_key(&mut app, KeyCode::End, ButtonState::Released, false);
+    send_key(&mut app, KeyCode::Home, ButtonState::Pressed, false);
+    assert_eq!(active_row(&app, list), active);
+
+    assert_eq!(focus_of(&app), Some(in_row));
 }
 
 /// Sends `key` as the window's keyboard would, pressed (perhaps as a repeat) or released.
@@ -415,6 +502,74 @@ fn a_held_arrow_key_does_not_move_the_focus_out_of_a_focused_list() {
     );
 }
 
+/// Spawns a tab bar (A, B) with a "Beside" button to its right, its tabs taking part in the
+/// app's directional navigation, and returns its tabs.
+fn tab_bar_beside_a_button(app: &mut App) -> [Entity; 2] {
+    app.add_observer(|added: On<Add<Tab>>, mut commands: Commands| {
+        commands
+            .entity(added.entity)
+            .insert(AutoDirectionalNavigation::default());
+    });
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Name::new("nav tab bar"),
+                TabBar,
+                Selection::builder()
+                    .one()
+                    .build_with_items(["A", "B"].map(Item::new)),
+            ));
+            row.spawn((Name::new("Beside"), PushButton::from_label("Beside")));
+        });
+    });
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(window)
+        .observe(navigate_with_arrow_keys);
+    app.update();
+    app.update();
+    let bar = named(app, "nav tab bar");
+    app.world()
+        .entity(bar)
+        .get::<Children>()
+        .unwrap()
+        .to_vec()
+        .try_into()
+        .unwrap()
+}
+
+fn focus_of(app: &App) -> Option<Entity> {
+    app.world().get_resource::<InputFocus>().unwrap().get()
+}
+
+#[test]
+fn a_held_arrow_key_does_not_move_the_focus_out_of_a_tab_bar() {
+    let mut app = directional_navigation_app();
+    let [a, b] = tab_bar_beside_a_button(&mut app);
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(b, FocusCause::Navigated);
+    app.update();
+
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, false);
+    assert_eq!(focus_of(&app), Some(a), "the first press wraps round");
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Released, false);
+
+    assert_eq!(focus_of(&app), Some(a));
+}
+
 #[test]
 fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
     // The screens the scenario files start from must build without a window
@@ -434,6 +589,8 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::SettingRows,
         WidgetsSetup::Badge,
         WidgetsSetup::IconButtons,
+        WidgetsSetup::Gallery,
+        WidgetsSetup::Toolbar,
         WidgetsSetup::Tooltip,
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
@@ -1454,13 +1611,14 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
 #[test]
 fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
     let (short, short_overflow) = panel_body_height(2);
-    assert!((short - 100.0).abs() < 1.5, "grows to its content: {short}");
+    // The content (100) plus the scroll contents' 3 px of padding on each side, for focus rings.
+    assert!((short - 106.0).abs() < 1.5, "grows to its content: {short}");
     assert!(short_overflow < 1.0, "nothing to scroll: {short_overflow}");
 
     let (tall, tall_overflow) = panel_body_height(10);
     assert!((tall - 200.0).abs() < 1.5, "stops at the maximum: {tall}");
     assert!(
-        (tall_overflow - 300.0).abs() < 1.5,
+        (tall_overflow - 306.0).abs() < 1.5,
         "the rest scrolls: {tall_overflow}"
     );
 }

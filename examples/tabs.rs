@@ -1,37 +1,23 @@
-//! A `List` as tab bar driving a `Stack`, with combos, colour palettes and cards inside.
+//! A `TabBar` driving a `Stack`, with combos, colour palettes and cards inside.
 
 use std::sync::LazyLock;
 
-use bevy::ecs::spawn::{SpawnIter, SpawnWith};
-use bevy::ecs::template::TemplateContext;
+use bevy::ecs::spawn::SpawnIter;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::label::Label;
-use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::list::{List, ListLayout};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::select::{Item, ItemValues, Selection};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
+use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::{COLORS, TailwindColor, Variant};
 use rin_bevy_ui::theme::Theme;
-
-/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
-///
-/// A template that inserted it at once would do so before the scene gives the entity its
-/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
-/// the scene's `Node` would overwrite what the bundle's hooks set on it.
-fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
-    let entity = context.entity.id();
-    context.entity.world_scope(|world| {
-        world.commands().entity(entity).insert(bundle);
-    });
-    EmptySceneEffect
-}
 
 fn main() {
     App::new()
@@ -68,12 +54,6 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             StackItem::new(commands.register_system(create_card_demo)),
         ),
     ];
-    // `Stack` takes the selection's entity, which a scene cannot hand it from the tab list
-    // beside it, so the tabs' selection is an entity of its own that both refer to.
-    let tabs = commands
-        .spawn(Selection::builder().one().build_with_items(items))
-        .id();
-
     // Root container
     commands.spawn_scene(bsn! {
         Node {
@@ -88,10 +68,9 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
             height: percent(100.0),
         }
         Children [
-            List
-            ~{CornerStyle::Tabs}
-            ~{ListLayout::Horizontal}
-            ~{Selection::reference(tabs)}
+            TabBar
+            #tabs
+            @{Selection::builder().one().scene_with_items(items)}
             --
             // filler
             BorderColor::all(theme_border_color)
@@ -110,28 +89,9 @@ fn setup(mut commands: Commands, theme: Res<Theme>) {
                 width: percent(100.0),
                 height: percent(100.0),
             }
-            ~{Stack { selection_ref: tabs }}
+            Stack { selection_ref: #tabs }
         ]
     });
-}
-
-/// The children of a stack item, as scenes: [`StackChildSpawner::spawn`] takes a bundle,
-/// so this one spawns `scenes` as the children of the entity it is inserted on.
-fn scene_children(scenes: impl SceneList) -> impl Bundle {
-    Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-        let target = parent.target_entity();
-        parent
-            .world_mut()
-            .entity_mut(target)
-            .queue_spawn_related_scenes::<Children>(scenes);
-    }))
-}
-
-/// Spawns `scene` as a child of the entity `parent` spawns for.
-fn apply(parent: &mut ChildSpawner, scene: impl Scene) {
-    if let Err(error) = parent.spawn_empty().apply_scene(scene) {
-        error!("cannot spawn a scroll area's contents: {error:?}");
-    }
 }
 
 fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
@@ -146,9 +106,10 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
         )
         .id();
 
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::regular("Panel A")}
             --
             ColorPaletteCombo
@@ -157,15 +118,7 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             --
             ColorPaletteCombo
             ~{ListLayout::VerticalGrid { columns: 11 }}
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(move |context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .zero_or_one()
-                        .build_with_items_ref(colors),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().zero_or_one().scene_with_items_ref(colors)}
             --
             ColorPaletteCombo
             ~{ListLayout::VerticalGrid { columns: 11 }}
@@ -182,65 +135,35 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             }
             Children [
                 ~{Combo}
-                template(|context| {
-                    context.entity.insert(
-                        Selection::builder()
-                            .zero_or_one()
-                            .build_with_items(countries()),
-                    );
-                    Ok(EmptySceneEffect)
-                })
+                @{Selection::builder().zero_or_one().scene_with_items(countries())}
                 --
                 ~{PushButton::from_label("Button on a card")}
             ]
             --
             ~{PushButton::from_label("hello")}
-        }),
+        ]
+        },
     );
 }
 
 fn create_b(spawner: In<StackChildSpawner>, mut commands: Commands) {
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        scene_children(bsn_list! {
+        bsn! {
+        Children [
             ~{Label::header("Panel B")}
             --
-            // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it; its
-            // contents are a scene, applied to the entity its contents spawner spawns.
-            template(|context| {
-                Ok(insert_after_scene(context, ScrollArea::bundle(
-                    |parent: &mut ChildSpawner| {
-                        let list = bsn! {
-                            List
-                            template(|context| {
-                                context.entity.insert(
-                                    Selection::builder().one().build_with_items(items()),
-                                );
-                                Ok(EmptySceneEffect)
-                            })
-                        };
-                        apply(parent, list);
-                    },
-                    true,
-                    false,
-                )))
-            })
+            @item_scroll_area()
             --
             Node {
                 align_self: AlignSelf::Start,
             }
             Children [
                 List
-                template(|context| {
-                    context.entity.insert(
-                        Selection::builder()
-                            .zero_or_one()
-                            .build_with_items(countries()),
-                    );
-                    Ok(EmptySceneEffect)
-                })
+                @{Selection::builder().zero_or_one().scene_with_items(countries())}
             ]
-        }),
+        ]
+        },
     );
 }
 
@@ -254,33 +177,26 @@ static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
 
 fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut commands: Commands) {
     let background_color = theme.colors.background_primary;
-    spawner.spawn(
+    spawner.spawn_scene(
         &mut commands,
-        (
+        bsn! {
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
                 display: Display::Grid,
                 grid_auto_columns: vec![GridTrack::percent(100.0)],
                 grid_auto_flow: GridAutoFlow::Row,
-                ..default()
-            },
-            scene_children(bsn_list! {
+            }
+            Children [
                 ~{Label::header("Card demo")}
                 --
                 Node
                 Pickable {
                     should_block_lower: false,
                 }
-                template(move |context| {
-                    Ok(insert_after_scene(context, ScrollArea::bundle(
-                        move |parent: &mut ChildSpawner| apply(parent, cards(background_color)),
-                        true,
-                        true,
-                    )))
-                })
-            }),
-        ),
+                @card_scroll_area(background_color)
+            ]
+        },
     );
 }
 
@@ -375,4 +291,21 @@ fn update_theme(
     for mut card_background_color in &mut card_background {
         card_background_color.0 = theme.colors.background_primary;
     }
+}
+
+/// A vertical scroll area over a list of the items.
+fn item_scroll_area() -> impl Scene {
+    ScrollArea::scene(
+        bsn_list! {
+            List
+            @{Selection::builder().one().scene_with_items(items())}
+        },
+        true,
+        false,
+    )
+}
+
+/// A scroll area over the cards.
+fn card_scroll_area(background_color: Color) -> impl Scene {
+    ScrollArea::scene(bsn_list! { @cards(background_color) }, true, true)
 }

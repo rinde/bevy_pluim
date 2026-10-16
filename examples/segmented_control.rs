@@ -1,7 +1,6 @@
 //! `SegmentedControl`: one with its own selection, and two that share one.
 
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
@@ -44,15 +43,7 @@ fn setup(mut commands: Commands) {
         }
         Children [
             SegmentedControl
-            // `Selection::builder()` gives a bundle, which `template` inserts.
-            template(|context| {
-                context.entity.insert(
-                    Selection::builder()
-                        .one()
-                        .build_with_items(["Auto", "Manual"].map(Item::new)),
-                );
-                Ok(EmptySceneEffect)
-            })
+            @{Selection::builder().one().scene_with_items(["Auto", "Manual"].map(Item::new))}
             --
             SegmentedControl ~{Selection::reference(shared)}
             --

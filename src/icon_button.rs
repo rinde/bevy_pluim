@@ -103,7 +103,7 @@ impl IconButtonSize {
 ///
 /// Insert an `IconButton` again to change the icon (play and pause) or the name
 /// of a live button.
-#[derive(Component, Clone, Debug, PartialEq, Eq, Reflect)]
+#[derive(Component, Clone, Debug, PartialEq, Eq, Reflect, FromTemplate)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
 #[require(

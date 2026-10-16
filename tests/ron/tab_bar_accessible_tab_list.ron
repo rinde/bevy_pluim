@@ -1,0 +1,18 @@
+// To a screen reader a `TabBar` is a tab list and each of its tabs a tab named after its
+// item, selected while its item is, whether picked by a click or by the keyboard.
+(
+    format_version: 3,
+    name: "a tab bar is a tab list of named tabs, the selected one selected",
+    setup: App(Tabs),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Component("TabBar"), role: Some("TabList"), label: None, value: None, states: []))),
+        Check(App(Accessible(of: Role(role: Tab, label: "Panel A"), role: Some("Tab"), label: Some("Panel A"), value: None, states: [Selected]))),
+        Check(App(Accessible(of: Role(role: Tab, label: "Panel B"), role: Some("Tab"), label: Some("Panel B"), value: None, states: [NotSelected]))),
+        MoveTo(Role(role: Tab, label: "Panel B")), Click(Left),
+        Wait(2),
+        Check(App(Accessible(of: Role(role: Tab, label: "Panel A"), role: Some("Tab"), label: Some("Panel A"), value: None, states: [NotSelected]))),
+        Check(App(Accessible(of: Role(role: Tab, label: "Panel B"), role: Some("Tab"), label: Some("Panel B"), value: None, states: [Selected]))),
+    ],
+    expect: [],
+)

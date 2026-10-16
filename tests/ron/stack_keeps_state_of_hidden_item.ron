@@ -12,19 +12,19 @@
     setup: App(Tabs),
     steps: [
         Wait(2),
-        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel B")), Click(Left),
         Wait(2),
         Check(App(Selected(of: Within(Name("Stack"), Role(role: ListItem, label: "3")), items: ["1"]))),
         MoveTo(Within(Name("Stack"), Role(role: ListItem, label: "3"))), Click(Left),
         Check(App(Selected(of: Within(Name("Stack"), Role(role: ListItem, label: "3")), items: ["3"]))),
 
         // Away to the cards, and to Panel A, and back.
-        MoveTo(Role(role: ListItem, label: "Card demo")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Card demo")), Click(Left),
         Wait(2),
         Check(Not(Visible(Within(Name("Stack"), Role(role: ListItem, label: "3"))))),
-        MoveTo(Role(role: ListItem, label: "Panel A")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel A")), Click(Left),
         Wait(2),
-        MoveTo(Role(role: ListItem, label: "Panel B")), Click(Left),
+        MoveTo(Role(role: Tab, label: "Panel B")), Click(Left),
         Wait(2),
         Check(Visible(Within(Name("Stack"), Role(role: ListItem, label: "3")))),
         Check(App(Selected(of: Within(Name("Stack"), Role(role: ListItem, label: "3")), items: ["3"]))),

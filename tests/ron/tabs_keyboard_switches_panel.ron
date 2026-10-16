@@ -1,6 +1,6 @@
-// The tab bar is a list, one tab stop that is first on the `Tabs` screen: Tab focuses it,
-// the arrow keys move the active tab (the ring) without switching, and Enter switches the
-// shown `Stack` panel to it.
+// The tab bar is one tab stop, its selected tab, and the first on the `Tabs` screen: Tab
+// focuses that tab, the arrow keys move the focus (and the ring) over the tabs without
+// switching, and Enter or Space switches the shown `Stack` panel to the focused tab.
 (
     format_version: 3,
     name: "arrow keys move over the tabs and Enter shows the panel",
@@ -9,26 +9,29 @@
         Wait(2),
         Tap(key: Tab),
         Wait(1),
-        Check(App(Focused(of: Nth(0, Component("List"))))),
-        Check(App(Active(of: Nth(0, Component("List")), is: Role(role: ListItem, label: "Panel A")))),
-        // The ring is on a tab, not on the bar.
+        Check(App(Focused(of: Role(role: Tab, label: "Panel A")))),
+        // The ring is on the tab, not on the bar.
         Check(Count(with: ["Outline"], is: Eq(1))),
+        Check(Count(with: ["Outline", "TabBarTab"], is: Eq(1))),
         Tap(key: ArrowRight),
         Wait(1),
-        Check(App(Active(of: Nth(0, Component("List")), is: Role(role: ListItem, label: "Panel B")))),
+        Check(App(Focused(of: Role(role: Tab, label: "Panel B")))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
         // Moving shows nothing yet.
-        Check(App(Selected(of: Nth(0, Component("List")), items: ["Panel A"]))),
+        Check(App(Selected(of: Component("TabBar"), items: ["Panel A"]))),
+        Check(Selected(Role(role: Tab, label: "Panel A"))),
         Check(Visible(Within(Name("Stack"), Text("Panel A")))),
         Check(Not(Exists(Within(Name("Stack"), Text("Panel B"))))),
         Tap(key: Enter),
         Wait(2),
-        Check(App(Selected(of: Nth(0, Component("List")), items: ["Panel B"]))),
+        Check(App(Selected(of: Component("TabBar"), items: ["Panel B"]))),
+        Check(Selected(Role(role: Tab, label: "Panel B"))),
         Check(Visible(Within(Name("Stack"), Text("Panel B")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
         Tap(key: ArrowRight),
         Tap(key: Space),
         Wait(2),
-        Check(App(Selected(of: Nth(0, Component("List")), items: ["Card demo"]))),
+        Check(App(Selected(of: Component("TabBar"), items: ["Card demo"]))),
         Check(Visible(Within(Name("Stack"), Text("Card demo")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
         // Past the last tab it wraps round to the first.
@@ -37,8 +40,15 @@
         Wait(2),
         Check(Visible(Within(Name("Stack"), Text("Panel A")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
+        // Home and End go to the first and last tab.
+        Tap(key: End),
+        Wait(1),
+        Check(App(Focused(of: Role(role: Tab, label: "Card demo")))),
+        Tap(key: Home),
+        Wait(1),
+        Check(App(Focused(of: Role(role: Tab, label: "Panel A")))),
     ],
     expect: [
-        App(Selected(of: Nth(0, Component("List")), items: ["Panel A"])),
+        App(Selected(of: Component("TabBar"), items: ["Panel A"])),
     ],
 )

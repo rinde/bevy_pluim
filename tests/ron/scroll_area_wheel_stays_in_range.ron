@@ -1,5 +1,5 @@
 // The wheel keeps the vertical scroll area's ScrollPosition inside what
-// overflows: turned far past the end, the component stops at the end (214, not
+// overflows: turned far past the end, the component stops at the end (220, not
 // 1000), so one step back already moves the contents, and past the top it
 // stops at 0. A positive wheel y is "up".
 (
@@ -22,7 +22,7 @@
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
             path: "ScrollPosition.0.y",
-            is: Eq(214.0),
+            is: Eq(220.0),
         )),
         // One step back moves what is shown at once.
         Wheel(x: 0.0, y: 100.0),
@@ -30,7 +30,7 @@
         Check(Component(
             target: Within(Name("vertical scroll area"), Component("ScrollContents")),
             path: "ScrollPosition.0.y",
-            is: Lt(214.0),
+            is: Lt(220.0),
         )),
         // Far past the top stops at the top.
         Wheel(x: 0.0, y: 5000.0),

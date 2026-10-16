@@ -12,11 +12,9 @@
 
 mod icons;
 
-use bevy::ecs::spawn::SpawnWith;
+use bevy::asset::HandleTemplate;
 use bevy::ecs::system::SystemId;
-use bevy::ecs::template::TemplateContext;
 use bevy::prelude::*;
-use bevy::scene::EmptySceneEffect;
 use bevy::text::{DEFAULT_REM_SIZE_PX, RemSize};
 use bevy::ui_widgets::Activate;
 use icons::Icons;
@@ -29,7 +27,7 @@ use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::list::{CornerStyle, ItemView, ItemViewCreator, ItemViewSpawner, List};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueChange};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueChange, ValueFormat};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, PushButton};
@@ -230,7 +228,7 @@ fn run_state(icons: &Icons) -> impl Scene {
             padding: UiRect::axes(px(8.0), px(6.0)),
         }
         Children [
-            inserted(IconButton::new(pause, "Pause", IconButtonSize::Regular))
+            IconButton { icon: pause, name: "Pause", size: IconButtonSize::Regular }
             ~{ToggleState(false)}
             PauseButton
             --
@@ -306,7 +304,7 @@ fn panels(bar: Entity, icons: &Icons) -> impl Scene {
                 column_gap: px(10.0),
             }
             Children [
-                inserted(IconButton::new(bell, "Warnings", IconButtonSize::Large).with_tone(Tone::Warning))
+                IconButton { icon: bell, name: "Warnings", size: IconButtonSize::Large, tone: Tone::Warning }
                 ~{ToggleState(false)}
                 ~{Badge::count(WARNINGS.len())}
                 WarningsButton
@@ -321,11 +319,11 @@ fn panels(bar: Entity, icons: &Icons) -> impl Scene {
                 ]
             ]
             --
-            inserted(panel_for(PanelKind::Warnings, close))
+            Panel { title: "Warnings", subtitle: {Some("3 open".to_string())}, close_icon: {HandleTemplate::Handle(close)} }
             ~{PanelKind::Warnings}
             WarningsPanel
             --
-            ~{Stack { selection_ref: bar }}
+            Stack { selection_ref: bar }
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexEnd,
@@ -339,18 +337,18 @@ fn spawn_dock_tools(commands: &mut Commands, icons: &Icons) -> Entity {
     let selection = commands.spawn_empty().id();
     let hint = commands.register_system(
         |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
-            spawner.spawn(&mut commands, hint_bar());
+            spawner.spawn_scene(&mut commands, hint_bar());
         },
     );
     let rail = commands.register_system(
         |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
-            spawner.spawn(&mut commands, rail_bar());
+            spawner.spawn_scene(&mut commands, rail_bar());
         },
     );
     let vehicles = icons.clone();
     let train = commands.register_system(
         move |In(spawner): In<StackChildSpawner>, mut commands: Commands| {
-            spawner.spawn(&mut commands, vehicle_bar(&vehicles));
+            spawner.spawn_scene(&mut commands, vehicle_bar(&vehicles));
         },
     );
     let tools = [
@@ -407,7 +405,7 @@ fn dock(selection: Entity) -> impl Scene {
             row_gap: px(10.0),
         }
         Children [
-            ~{Stack { selection_ref: selection }}
+            Stack { selection_ref: selection }
             --
             ~{Card}
             Node {
@@ -422,63 +420,21 @@ fn dock(selection: Entity) -> impl Scene {
     }
 }
 
-/// The children of an entity, as scenes: [`StackChildSpawner::spawn`] takes a bundle, so this
-/// one spawns `scenes` as the children of the entity it is inserted on.
-fn scene_children(scenes: impl SceneList) -> impl Bundle {
-    Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-        let target = parent.target_entity();
-        parent
-            .world_mut()
-            .entity_mut(target)
-            .queue_spawn_related_scenes::<Children>(scenes);
-    }))
-}
-
-/// A `bsn!` entry that inserts `component` as it is.
-///
-/// `~{value}` takes only a value that is `Unpin`, which a `Handle` is not, so a widget that holds
-/// one (an `IconButton`, a `Panel` with a close icon)
-/// goes in through this.
-fn inserted<C: Component + Clone>(
-    component: C,
-) -> impl Template<Output = C> + Send + Sync + 'static {
-    template(move |_| Ok(component.clone()))
-}
-
-/// A `bsn!` entry for [`Divider::vertical`], which gives a bundle rather than a component.
-fn vertical_divider() -> impl Template<Output = EmptySceneEffect> + Send + Sync + 'static {
-    template(|context| Ok(insert_after_scene(context, Divider::vertical())))
-}
-
-/// Inserts `bundle` on the entity of a `bsn!` template once the scene has been applied.
-///
-/// A template that inserted it at once would do so before the scene gives the entity its
-/// parent and its own components: a `Node` without a parent makes the entity a `UiRoot`, and
-/// the scene's `Node` would overwrite what the bundle's hooks set on it.
-fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
-    let entity = context.entity.id();
-    context.entity.world_scope(|world| {
-        world.commands().entity(entity).insert(bundle);
-    });
-    EmptySceneEffect
-}
-
 /// A bar of options above the tool dock, holding `contents`.
-fn option_bar(contents: impl SceneList) -> impl Bundle {
-    (
-        Card,
+fn option_bar(contents: impl SceneList) -> impl Scene {
+    bsn! {
+        ~{Card}
         Node {
             align_items: AlignItems::Center,
             column_gap: Val::Px(14.0),
             padding: UiRect::axes(Val::Px(14.0), Val::Px(10.0)),
-            ..default()
-        },
-        scene_children(contents),
-    )
+        }
+        Children [ {contents} ]
+    }
 }
 
 /// The bar for the tools that have no options: how to get back to the Select tool.
-fn hint_bar() -> impl Bundle {
+fn hint_bar() -> impl Scene {
     option_bar(bsn_list! {
         ~{Kbd::new("Esc")}
         --
@@ -487,46 +443,28 @@ fn hint_bar() -> impl Bundle {
 }
 
 /// The Rail tool's options.
-fn rail_bar() -> impl Bundle {
+fn rail_bar() -> impl Scene {
     option_bar(bsn_list! {
         ~{Label::overline("Tracks")}
         --
         SegmentedControl
-        // `Selection::builder()` gives a bundle, which `template` inserts.
-        template(|context| {
-            context.entity.insert(
-                Selection::builder()
-                    .one()
-                    .build_with_items(["Single", "Double"].map(Item::new)),
-            );
-            Ok(EmptySceneEffect)
-        })
+        @{Selection::builder().one().scene_with_items(["Single", "Double"].map(Item::new))}
         --
-        vertical_divider()
+        @{Divider::vertical_scene()}
         --
         ~{Label::overline("Level")}
         --
-        inserted(NumericStepper {
-            format: level,
-            ..default()
-        })
+        NumericStepper { format: {level as ValueFormat} }
         ~{Value::new_u8(0, 0, 56, 7)}
         --
-        vertical_divider()
+        @{Divider::vertical_scene()}
         --
         ~{Label::overline("Signals")}
         --
         SegmentedControl
-        template(|context| {
-            context.entity.insert(
-                Selection::builder()
-                    .one()
-                    .build_with_items(["None", "Block"].map(Item::new)),
-            );
-            Ok(EmptySceneEffect)
-        })
+        @{Selection::builder().one().scene_with_items(["None", "Block"].map(Item::new))}
         --
-        vertical_divider()
+        @{Divider::vertical_scene()}
         --
         ~{Kbd::new("R")}
         --
@@ -543,7 +481,7 @@ fn level(value: &Value) -> String {
 }
 
 /// The Train tool's vehicles.
-fn vehicle_bar(icons: &Icons) -> impl Bundle {
+fn vehicle_bar(icons: &Icons) -> impl Scene {
     let cards = [
         ("Steam", &icons.locomotive, "Locomotives"),
         ("Diesel", &icons.locomotive, "Locomotives"),
@@ -558,17 +496,14 @@ fn vehicle_bar(icons: &Icons) -> impl Bundle {
         Node {
             width: px(520.0),
         }
-        // `ScrollArea::bundle` is a bundle, not a scene, so `template` inserts it.
-        template(move |context| {
-            let cards = cards.clone();
-            Ok(insert_after_scene(context, ScrollArea::bundle(
-                move |spawner| {
-                    spawner.spawn((Gallery, Selection::builder().one().build_with_items(cards)));
-                },
-                false,
-                true,
-            )))
-        })
+        @ScrollArea::scene(
+            bsn_list! {
+                Gallery
+                @{Selection::builder().one().scene_with_items(cards)}
+            },
+            false,
+            true,
+        )
     })
 }
 
@@ -627,6 +562,7 @@ fn train_row(spawner: In<ItemViewSpawner>, trains: Query<&Item<Train>>, mut comm
             ]
         });
 }
+
 /// Fills the strip, body and footer of a panel that was just made.
 fn fill_panels(
     panels: Query<(&PanelRefs, &PanelKind), Added<PanelRefs>>,
@@ -721,7 +657,6 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
                     justify_content: JustifyContent::SpaceBetween,
                     padding: UiRect::axes(px(10.0), px(8.0)),
                 }
-                on(move |_: On<Activate>| info!("Show {name} on the map"))
                 Children [
                     Node {
                         flex_direction: FlexDirection::Column,
@@ -734,6 +669,8 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
                     --
                     ~{PushButton::from_label("Show")}
                     ~{ButtonSize::Compact}
+                    // `Activate` does not bubble, so the observer sits on the button itself.
+                    on(move |_: On<Activate>| info!("Show {name} on the map"))
                 ]
             });
     }

@@ -153,12 +153,12 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `theme.rs` | `Theme` resource (colours, `body_font` and `display_font` handles defaulting to Bevy's font with the application loading its own, the `font_size_*` type scale, in logical pixels at Bevy's default rem size of 20 px, which every widget turns into `FontSize::Rem` with `Theme::font_size(px)` (its own constant sizes too), so the text follows Bevy's `RemSize`: an app that raises `RemSize` scales the widgets' text, at the default nothing moves; sizes tied to text stay `px` unless a `[text 1.5x]` scenario shows them clipping (only the badge is in rem), `control_radius` for buttons, list items, steppers and scroll bars and `panel_radius` for `Card` and `Float`), `ThemeColors` (also the text, divider, accent, danger, warning, info, pill, segmented, card and chip slots of the redesign; both defaults use a dark `large_shadow` and `small_shadow`, black, so neither theme glows; both meet WCAG AA contrast (4.5:1 for their text and ink pairs, 3:1 for `focus_ring` and `selection_ring`), guarded by `the_default_themes_meet_wcag_aa_contrast`, which exempts `text_disabled`, `text_tertiary` and the decorative borders; the shadow constants set colour only, offsets stay with the widgets; `Pill` and `Badge` share `pill_background` / `pill_text`), `DEFAULT_LIGHT_THEME_COLORS` / `DEFAULT_DARK_THEME_COLORS`, `ThemeMode`, `Theme::with_colors(light, dark)` for an app's own pair, `set_mode` / `mode` / `light_dark_toggle` (switch `colors`, the set in use; do not assign `colors` by hand), the shadow constants; also keeps `ClearColor` in step with the theme |
 | `tailwind.rs` | `COLORS`, all 242 Tailwind colours as `TailwindColor { class, variant, color }`, and `color_name(color)` (Tailwind name, else hex: the accessible name of swatches and colour buttons, and what `WidgetsCheck::Selected` uses), for colour pickers; the theme itself uses `bevy::color::palettes::tailwind` directly |
 | `select.rs` | the selection model: `Selection` (`Value` or `Ref`), `SelectionValue` (`One` / `ZeroOrOne` / `OneOrMore` / `ZeroOrMore`), the `Selection::builder()`, `Item<T>`, `ItemOf` / `ItemValues` / `ItemsRef`, `ItemsChanged`, and the `SelectionParam` / `ItemParam` system params |
-| `stack.rs` | `Stack { selection_ref }` shows the one `StackItem` child matching the selection; children are created lazily by a registered system (`StackChildSpawner`) and hidden, not despawned, when deselected |
+| `stack.rs` | `Stack { selection_ref }` shows the one `StackItem` child matching the selection; children are created lazily by a registered system (`StackChildSpawner`, whose `spawn` takes a bundle and `spawn_scene` a scene, the stack child being the scene's root) and hidden, not despawned, when deselected |
 | `breadcrumbs.rs` | `BreadCrumbs`: a `Link` trail for a `OneOrMore` selection; clicking a crumb trims the selection back to it |
-| `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls. To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
-| `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
-| `scroll_area.rs` | `ScrollArea::bundle`, `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, themed here; each bar is also a `bevy_ui_widgets` `Scrollbar` aimed at the contents and its thumb a `ScrollbarThumb` (no `Node`), so the widget sizes and places the thumb, scrolls the contents when it is dragged and pages them on a click on the track, while `show_scroll_bars` hides a bar whose axis fits; and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
-| `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`, see "Directional navigation is the app's") |
+| `combo.rs` | `Combo`: a button that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls; the list is kept 10 px inside the window's left and right edges and goes above the button when it would run off the bottom, like a palette combo's popup (`combo_keeps_list_inside_window.ron`) To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
+| `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own, `Combo` and `ColorPaletteCombo` through the crate-private `keep_in_window_x` and `below_or_above` of `float.rs` (10 px `WINDOW_MARGIN` from the window's side edges, above the button when it would run off the bottom) (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
+| `scroll_area.rs` | `ScrollArea::bundle` (for code that spawns through `Commands`) and `ScrollArea::scene(contents, vertical, horizontal)`, the same area as a scene whose contents are a `SceneList` (`@ScrollArea::scene(bsn_list! { .. }, true, false)` in a `bsn!`; it inserts the bundle after the scene is applied), `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, themed here; each bar is also a `bevy_ui_widgets` `Scrollbar` aimed at the contents and its thumb a `ScrollbarThumb` (no `Node`), so the widget sizes and places the thumb, scrolls the contents when it is dragged and pages them on a click on the track, while `show_scroll_bars` hides a bar whose axis fits; and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel. Put a `List` or palette in one to scroll it. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
+| `list.rs` | `List` with `ListLayout` and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`), and lets those of a focused descendant (a button in a row) past (`pass_first_presses_from_descendants`, see "Directional navigation is the app's") |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup, a `Float` child of the combo, is centred under the button when it opens, 10 px inside the window, above the button when it would run off the bottom; its palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
 | `color_push_button.rs` | `ColorPushButton`: a button showing a colour square; its accessible name is the name of that colour (same rule as a swatch), kept by a system because Bevy clears a text-less button's label on add; a `ColorPaletteCombo`'s button is not, its colour is its value instead |
@@ -170,6 +170,7 @@ not a `target/`: the `justfile` compiles through sccache when it is installed
 | `link.rs` | `Link` and its immutable `LinkState`; a `Role::Link` to a screen reader (it keeps `Button`, so `Role(role: Button, ..)` still finds it; `link_accessible_role.ron`). Its accessible label is its text. |
 | `card.rs` | `Card`: a themed background, border, radius and shadow on a node; a `Role::Group` without a label (`themed_card_accessible_group.ron`) |
 | `segmented_control.rs` | `SegmentedControl`: a track of text `Segment`s (`Button`s and tab stops) over a `Selection` of `Item<String>`, own or `Selection::Ref`, normally a `One`; a segment's `Activate` sets the selection to its item (`set_selection`), `Selected` and the `segmented_*` theme colours follow the selection and hover. It is its own widget, not a `List` style, so `List` is untouched. To a screen reader the control is a `Role::RadioGroup` and each segment a `Role::RadioButton`, `toggled` following `Selected` (`segmented_control_accessible_radio_group.ron`); the segments keep `Button`, so `Role(role: Button, ..)` still finds them |
+| `tab_bar.rs` | `TabBar`: Bevy's `bevy_ui_widgets` `TabList` of text `TabBarTab`s (Bevy `Tab`s) over a `Selection` of `Item<String>`, own or `Selection::Ref`, normally a `One`, styled from the `segmented_*` slots like a `SegmentedControl`. `SelectedTab` follows the `Selection`, which keeps the last word: Bevy's `tablist_self_update` is not registered, and the `ValueChange<Option<Entity>>` the tab list sends for a click, Enter or Space goes through `SelectionParam::update_selection` (`set_selection`). The tabs are not `Button`s (a `Button` stops the click before the tab list sees it) nor `TabStop`s: Bevy's `TabPlugin` (added by `WidgetsPlugin` unless the app has it) gives the selected or focused tab `TabIndex` 0 and the others -1, so the bar is one tab stop and the arrows, Home and End move the focus between its tabs. A hidden bar (itself or an ancestor `Display::None`, as in a hidden `Stack` panel, or hidden visibility) gives all its tabs -1, so Tab skips it, and the roving 0 comes back when it is shown: `sync_tab_index` in `tab_bar.rs` runs after Bevy's and after visibility propagation and keeps both, with `focus.rs`'s `is_hidden` (`a_hidden_tab_bar_is_not_reached_by_tab_and_is_again_once_shown`, `tab_skips_a_tab_bar_in_a_hidden_stack_panel`). To a screen reader the bar is a `Role::TabList` and each tab a `Role::Tab` labelled with its item's text, `selected` while it is the `SelectedTab` (`tab_bar_accessible_tab_list.ron`) |
 | `setting_row.rs` | `SettingRow::new(title, description)`: a title (semibold, `font_size_body`) over a secondary description on the left and an empty control slot on the right (12 px gap and vertical padding), then a `Divider`; `SettingRowRefs { title_id, description_id, control_slot, divider_id }` names them, and the app spawns its control (a `SegmentedControl`, say) as a child of `control_slot`. Put the rows in a `SettingRows` column: a system hides the divider of the last row and shows the others'. A row is a `Role::Group` labelled with its title, its description the node's `description` (`setting_row_accessible_group.ron`) |
 | `divider.rs` | `Divider::horizontal()` / `Divider::vertical()`: a 1 px rule in `ThemeColors::divider`, stretching along the other axis unless the caller sets a length |
 | `icon.rs` | `Icon::bundle(handle, size)` / `Icon::bundle_with_color`: an `ImageNode` from an app-provided white-on-transparent `Handle<Image>`, tinted with the `IconColor` theme role of its `Icon` (primary text by default); a widget changes the role by inserting `Icon` again |
@@ -190,7 +191,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 | --- | --- |
 | `widgets` | a showcase: a scroll area, a list and combos sharing one selection via `Selection::reference`, and buttons that add more |
 | `breadcrumbs` | `BreadCrumbs` and a `Stack` sharing one selection, with reused `StackItem` creators |
-| `tabs` | a `List` as tab bar driving a `Stack`, with combos, colour palettes and cards inside |
+| `tabs` | a `TabBar` driving a `Stack`, with combos, colour palettes and cards inside |
 | `color_palette` | `ColorPalette` and `ColorPaletteCombo` over `tailwind::COLORS` |
 | `combos` | `Combo` variants |
 | `lists` | `List` layouts and corner styles |
@@ -209,7 +210,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 
 `icon_button`, `panel`, `badge` and `tooltip` draw their icon with
 `examples/common/mod.rs` (`mod common;`; a directory without a `main.rs` is not
-an example), which also has their `inserted` helper (see below).
+an example).
 
 **The examples build their trees with `bsn!`.** Every example but `gallery`
 spawns its nodes as scenes (`bsn!` / `bsn_list!` and `spawn_scene`), with
@@ -219,33 +220,32 @@ the `tests/widgets_setup` screens. **Never change a library component for
 patch it. Insert a prepared value instead: `~{PushButton::from_label("Add")}`
 or `~{value}` from a variable. A template's output must be a component, which
 the scene inserts together with the entity's `ChildOf` and its other
-components. A bundle without a `Node` (the selection builder's) may be inserted
-by the template itself, `template(|context| { context.entity.insert(bundle);
-Ok(EmptySceneEffect) })`. A bundle with a `Node` must not: the template runs
-before the scene gives the entity its parent, so `add_ui_root` would take it
-for a `UiRoot`, and the scene's own `Node` would overwrite what the bundle's
-hooks set (a `ScrollArea`'s grid). Such a bundle goes in through a local
-`insert_after_scene(context, bundle)`, which queues the insert for after the
-scene is applied. For the same reason a scene spawned under a parent outside a
+components. For the same reason a scene spawned under a parent outside a
 parent scene is `commands.spawn(ChildOf(parent)).apply_scene(..)`, never
-`spawn_scene(..)` followed by an insert of `ChildOf`. The examples work around
-what does not fit yet:
+`spawn_scene(..)` followed by an insert of `ChildOf`. What does not fit `~{..}`
+has a way of its own:
 
 - `~{..}` takes only an `Unpin` value, and a `Handle` is not one, so a widget
-  holding one (`IconButton`, `NumericStepper`, a `Panel` with a close icon)
-  goes in through a local `inserted(value)` helper, a template whose output is
-  that value.
-- `Selection::builder()` returns a bundle, so it goes in a `template(..)`;
-  `Divider::vertical()` too, through `insert_after_scene`.
-- `ScrollArea::bundle` takes a closure that spawns the contents, so it goes in
-  through `insert_after_scene` and the closure applies a scene with
-  `spawn_empty().apply_scene(..)`.
-- `StackChildSpawner::spawn` takes a bundle, so a stack item's scenes are
-  queued from that bundle by a local `scene_children` helper
-  (`queue_spawn_related_scenes::<Children>`).
-- `Stack` takes the selection's entity and cannot take a `#name` of an entity
-  in the same scene, so the selection a `Stack` and its tabs share is spawned
-  first, as an entity of its own.
+  holding one has a `FromTemplate` and is written as a struct in the scene, a
+  handle as `icon: {icon.clone()}` (a field value that is a method call or a cast
+  goes in braces):
+  `IconButton { icon: {icon.clone()}, name: "Pause", size: IconButtonSize::Regular }`
+  (derived), `Panel { title: "Trains", close_icon: {HandleTemplate::Handle(close.clone())} }`
+  and `NumericStepper { decrease_name: "Lower" }`, written by hand as
+  `PanelTemplate` and `NumericStepperTemplate`: their defaults are those of
+  `Panel::new("")` and `NumericStepper::default()`, which a derive would not give
+  (a `format` function is `{level as ValueFormat}`). A new widget holding a handle
+  gets one too.
+- `Selection::builder()` and `Divider` have scene constructors, written with
+  `@{..}`: `@{Selection::builder().one().scene_with_items(items)}` (the items are
+  cloned for each spawn), `scene_with_items_ref(entity)`,
+  `@{Divider::vertical_scene()}` and `horizontal_scene()`. The bundle forms stay
+  for code that spawns with `Commands`.
+- `Stack` derives `FromTemplate`, so a scene writes `Stack { selection_ref: #tabs }`
+  with a `#name` of an entity in the same scene (the `tabs` and `breadcrumbs`
+  examples put the selection on the `TabBar` / `BreadCrumbs` through `@{Selection::builder()..scene_with_items(..)}`);
+  a selection the application also keeps (the `hud`'s resources) is spawned
+  first and passed as `Stack { selection_ref: bar }`.
 
 `the_hud_example_builds_and_runs` in `tests/headless.rs` adds `AssetPlugin` and
 Bevy's `ScenePlugin`, which spawning a scene needs.
@@ -305,11 +305,13 @@ of them (`just example gallery -- --run-all stack link`).
   without a parent and without a `UiTargetCamera`, so root nodes aimed at
   another camera (a second window's UI, an overlay) are not the app's and are
   left alone. The camera is read when the `Node` is added, so a
-  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. A
-  `PostStartup` system logs an `error!` (it does not panic) unless there is
-  exactly one `UiRoot`; an app should spawn one. Two roots both get `UiRoot`,
-  so a widget must not take `Single<.., With<UiRoot>>`; a popup is a `Float`
-  child of its widget instead, which needs no root at all.
+  `UiTargetCamera` inserted later is not seen: spawn it in the same bundle. An
+  observer of `Insert, ChildOf` removes `UiRoot` again from a node parented
+  after its `Node` was added (a scene writes `ChildOf` last), so the marker
+  follows the hierarchy. A `PostStartup` system logs an `error!` (it does not
+  panic) unless there is exactly one `UiRoot`; an app should spawn one. Two
+  roots both get `UiRoot`, so a widget must not take `Single<.., With<UiRoot>>`;
+  a popup is a `Float` child of its widget instead, which needs no root at all.
   The tester's cursor overlay spawns its roots with a `UiTargetCamera`, so they
   get no `UiRoot` (`the_cursor_overlays_roots_get_no_ui_root` in
   `tests/scenarios.rs`).
@@ -358,15 +360,17 @@ of them (`just example gallery -- --run-all stack link`).
   requires `Pickable::default()` so it blocks the pointer and gets `MouseEvent`s.
   A button: `Pressed` while held, `Activate`
   on release over the button and on Enter / Space for a focused one, never while
-  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin` and `ScrollbarPlugin`) in
+  `InteractionDisabled`. `WidgetsPlugin` adds `ButtonPlugin` (and `ListBoxPlugin`, `ScrollbarPlugin` and `TabPlugin`) in
   its `Plugin::finish`, unless the app has it by then (`DefaultPlugins` and the
   tester's `HeadlessPlugins` add all of `UiWidgetsPlugins`; adding twice panics),
   so the order of `WidgetsPlugin` and `UiWidgetsPlugins` does not matter; an app
   driven by hand with `App::update` must call `App::finish` first. A
   `ColorPushButton` with `InteractionDisabled` has its border in `text_disabled`
   (it has no hover colours to ignore). **`Activate` and `MouseEvent`:**
-  "the button was used" is `Activate`, so an action observes `Activate` (on the
-  button, or on an ancestor: it bubbles); how the button *looks* under the
+  "the button was used" is `Activate`, so an action observes `Activate` on the
+  button itself: it does not bubble (`bevy_ui_widgets`' `Activate` has no
+  `propagate`, `an_activate_does_not_bubble_to_an_observer_on_an_ancestor`), so an
+  observer on an ancestor never hears it; how the button *looks* under the
   pointer (hover and press colours) is `MouseEvent`. Never do both for one
   thing. A disabled `PushButton` (insert
   `InteractionDisabled`) shows its text in `ThemeColors::text_disabled` and
@@ -445,12 +449,13 @@ of them (`just example gallery -- --run-all stack link`).
   the order is `TabIndex`, then tree order, which is spawn order. The focused `TabStop`
   gets an `Outline` (2 px wide, 1 px offset, `ThemeColors::focus_ring`) while
   `InputFocusVisible` is true (an `Outline` the app or a widget set on it is kept aside and put back when the ring leaves, so the ring owns only its own), except that a list's ring is on its `ActiveDescendant` row
-  (a `ListItem`) and the box has none; the `ListBox` clears the active row when the list
+  (a `ListItem`) and the box has none, and a focused `Tab` of a `TabBar` gets the ring too
+  (its `TabIndex` is Bevy's `TabPlugin`'s, kept at -1 while the bar is hidden by `tab_bar.rs`, not `focus.rs`'s `sync_tab_index`); the `ListBox` clears the active row when the list
   loses focus, and the ring goes with it, and `ActiveDescendant` is registered in the type
   registry for checks (`App(Active(of: .., is: ..))`, `WidgetsCheck::Active`); a click focuses without showing it (Bevy's
   `TabNavigationPlugin`), Tab shows it. Scenarios check the focus with
   `App(Focused(of: ..))` (`WidgetsCheck::Focused`) and press Tab with `Tap(key: Tab)`
-  (`tests/ron/keyboard_tab_order.ron`). The `*_keyboard_*.ron` files drive lists, palettes and tabs with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
+  (`tests/ron/keyboard_tab_order.ron`). `keyboard_focus_ring_in_both_themes.ron` Tabs to "Change theme" and toggles the theme, to record the ring on both. The `*_keyboard_*.ron` files drive lists, palettes and the tab bar (`tabs_keyboard_switches_panel.ron`) with the arrow keys. The lists of closed combos are skipped by Tab, so the palette scenario Tabs 8 times.
 - **Directional navigation is the app's.** The library adds none: an app that wants the
   arrow keys (or a gamepad stick) to move the focus between widgets puts Bevy's
   `AutoDirectionalNavigation` on the widgets that take part, adds
@@ -459,17 +464,23 @@ of them (`just example gallery -- --run-all stack link`).
   no focused widget kept (a system reading `ButtonInput<KeyCode>` would see them all); it
   sets `InputFocusVisible` itself, as Bevy's `directional_navigation` example does. What the
   widgets guarantee: a widget that uses the arrows stops them from bubbling on, so they
-  never reach that observer. A focused `List` (so a palette, a tab bar and an open combo's
+  never reach that observer. A focused `List` (so a palette and an open combo's
   list too) keeps the arrows, Home and End (the `ListBox` stops a first press,
   `keep_navigation_keys` in `list.rs` the repeats and releases, only while the list itself
-  is `InputFocus`), and a `NumericStepper`
+  is `InputFocus`), a focused tab of a `TabBar` keeps left, right, Home and End (Bevy's tab
+  list stops a first press, `keep_navigation_keys` in `tab_bar.rs` the repeats and
+  releases) and lets up and down through, and a `NumericStepper`
   keeps the arrows that reach it from its buttons, also at a limit. The focus ring follows
   `InputFocus` whatever moved it, while `InputFocusVisible` is true. Every other widget lets
-  the arrows through. One gap is Bevy's: a focusable child of a list row (a button in a
-  `CustomView`) gets its repeats and releases through, but the `ListBox` stops a first press
-  of an arrow, Home or End from it, because the `focused_entity` it checks is the hop the
-  event has reached, not the focus. `tests/scenarios.rs` turns it on for two buttons, a list
-  and a stepper (`directional_navigation_screen`).
+  the arrows through. A focusable child of a list row (a button in a `CustomView`) is not
+  the list: its arrows, Home and End all go on past the list. Bevy's `ListBox` would take a
+  first press of one as its own, because the `focused_entity` it checks is the hop the event
+  has reached, not the focus, so `pass_first_presses_from_descendants` in `list.rs` stops
+  that press on the list's child it comes through and triggers it again from the list's
+  parent (the window, for a list without one); the active row stays. `tests/scenarios.rs`
+  turns it on for two buttons, a list and a stepper (`directional_navigation_screen`), for
+  buttons in list rows (`button_in_a_list_row_app`), and for a tab bar
+  (`a_held_arrow_key_does_not_move_the_focus_out_of_a_tab_bar`).
 - **Hidden widgets are hidden from the accessibility tree.** `sync_accessibility_hidden`
   in `focus.rs` runs next to `sync_tab_index` and marks the `AccessibilityNode` of
   anything hidden by the tab stop rule (`is_hidden`) as hidden, clearing it on show.
@@ -529,13 +540,18 @@ of them (`just example gallery -- --run-all stack link`).
   one; `Stack` takes the selection entity directly in `selection_ref`.
 - **Shared items.** `ItemsRef(entity)` lets several selections draw from one
   `ItemValues`.
+- **A scroll area leaves room for a focus ring.** `ScrollContents` has 3 px of padding on every side (`FOCUS_RING_REACH`: the ring's 2 px width and 1 px offset), because the area clips at its padding box and the ring of a row at the edge would be cut off (#293). `scroll_into_view` counts the same 3 px as part of the entity, so a row scrolled into view shows its ring. The maximum scroll of every area is 6 px more than the contents' overflow alone.
 - **Scroll area contents keep their natural size.** `ScrollContents` uses
   `align_items: FlexStart` instead of stretching its children. Taffy 0.10
   (Bevy 0.19) reported no overflow for a grid whose items overflow it, so a
-  `List` or palette stretched to the area's height left nothing to scroll; the
-  workaround is kept on taffy 0.14 (Bevy 0.20) until `Stretch` is retried. For the same reason, don't give scroll contents `height: 100%`.
-  The `scroll_area_*.ron` scenarios guard this: put `Stretch` back and the
-  wheel and thumb scenarios fail.
+  `List` or palette stretched to the area's height left nothing to scroll;
+  taffy 0.14 (Bevy 0.20) was tried (#265): with `Stretch` the content still
+  scrolls, but `list_wheel_scrolls` and
+  `scroll_area_keyboard_scrolls_item_into_view` (both scale factors) fail, the
+  maximum scroll 2 px short (296, not 298), so the workaround stays. For the
+  same reason, don't give scroll contents `height: 100%`. The
+  `scroll_area_*.ron` scenarios guard this on taffy 0.10: put `Stretch` back
+  and the wheel and thumb scenarios failed there.
 - **A scroll area's scroll position is kept in range.** The wheel handler
   (`update_scroll_position` in `scroll_area.rs`) moves only an axis whose
   `Node::overflow` is `Scroll` and leaves `ScrollPosition` inside `[0, max]`
@@ -544,10 +560,14 @@ of them (`just example gallery -- --run-all stack link`).
   A scenario reads `ScrollPosition.0.y`, the value that was set (logical
   pixels). `ComputedNode.scroll_position.y` is what the layout shows, floored,
   in physical pixels and one layout pass behind, so it doubles at a scale
-  factor of 2 and scenario files do not read it. `handle_thumb_drag` starts each drag event from the current
-  `ScrollPosition` rather than the computed one for that lag: a frame can hold
-  several drag events, and each must add to the last. Its clamp is a guard for
-  contents that shrank.
+  factor of 2 and scenario files do not read it. A thumb drag and a click on
+  the track are the `bevy_ui_widgets` `Scrollbar`'s, which clamps to the same
+  range. The wheel stays ours rather than `bevy_ui_widgets`' `ScrollArea`:
+  picking sends a `PointerScroll` to every hovered entity and each bubbles up to
+  the area, and an `ItemView`, its `List` and the `ScrollContents` are all
+  hovered (`should_block_lower: false`), so one turn would scroll two or three
+  times; it also scrolls by `MouseScrollPixelsPerLine` (100 px a line, not our
+  21) and has no Ctrl axis swap.
 
 ## Conventions
 
@@ -560,7 +580,8 @@ of them (`just example gallery -- --run-all stack link`).
   `FixedNode` (a combo's popup) inside one, since scrolling the area would not
   show it. It reads the
   entity's laid-out position, so it is one layout pass behind like the wheel's
-  `ComputedNode`. The wheel is untouched
+  `ComputedNode`. The wheel is untouched, and so is the `Scrollbar`, which
+  follows the `ScrollPosition` it sets
   (`scroll_area_keyboard_scrolls_item_into_view.ron`).
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
@@ -568,7 +589,7 @@ of them (`just example gallery -- --run-all stack link`).
   friends).** The only observers of them in the library are the producer in
   `lib.rs`; do not add more. `MouseKind` says `Over`, `Pressed`, `Released`, `Click` and `Drag`,
   so a widget can tell a click (a press and a release on the same node) from a
-  release that ends a press begun elsewhere, and can follow a drag.
+  release that ends a press begun elsewhere.
 - **Styling comes from `Res<Theme>`.** Each widget has a `theme_*` system
   taking `In<Option<Entity>>`: its hook runs it for the one new entity with
   `run_system_cached_with(theme_x, Some(entity))`, and its plugin runs it for
@@ -770,9 +791,9 @@ plugin, note it in the PR rather than pulling in a window.
 
 A scenario drives the widgets with scripted pointer and keyboard input through
 `rin_bevy_ui_tester` (see its README for the `Step`, `Target` and `Check`
-vocabulary) and asserts on what they did. Prefer it to hand-written
-`PointerPress` (and other pointer event) triggers whenever the claim is about what a person would see
-after using the UI.
+vocabulary) and asserts on what they did. Prefer it to hand-written pointer
+event triggers (`PointerPress` and the like) whenever the claim is about what a
+person would see after using the UI.
 
 - **Where.** Scenarios go in `tests/scenarios.rs`, a test target of its own, so
   `tests/headless.rs` stays as it is. Shared code lives in `tests/common/mod.rs`
@@ -837,7 +858,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `SegmentedControls`, `FilterChips`,
-  `Panel`, `SettingRows`, `Badge`, `Tooltip`, `Themed`, `IconButtons`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -920,6 +941,11 @@ a file can check any `Reflect` type of the app by short type path.
   `tooltip anchor` (tip "Anchor tip") and `help button` (an icon button, tip
   "Help"); the popup's text exists only while it shows, so `Exists(Text(..))`
   says whether it does, after `Wait(40)` frames (0.5 s at 60 per second).
+- **The `Gallery` and `Toolbar` screens.** `gallery` (Steam, Diesel and Passenger cards in
+  two groups, a `One` selection) and `filled toolbar` (Select, Build, Bulldoze, a `One`
+  selection), each with "Change theme". Their `*_text_follows_rem_size.ron` files check that a
+  label is `Rem(0.6)` text and fits inside its fixed px card (104 x 92) or button (66 x 60) at
+  `[text 1.5x]`; both pass, so those sizes stay px.
 - **The `IconButtons` screen.** Six icon buttons with the default (blank) icon image,
   each with a `Name`: `small button`, `regular button`, `large button`,
   `toggle button` (a `ToggleState` that starts off), `warning button` and
@@ -995,11 +1021,13 @@ a file can check any `Reflect` type of the app by short type path.
   text) says `variants: ["default", "scale 2"]` with a comment saying why.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
-- **Every file is played twice.** Once by `ron_scenarios`, and once more by
-  `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in
-  `tests/scenarios.rs`, with the camera rendering to an image as in a recording,
-  so a file must pass both ways (see [Recording the
-  scenarios](#recording-the-scenarios)).
+- **Every file is played more than once.**
+  - `ron_scenarios` plays it as three variants: `name`, `[scale 2]` and `[text 1.5x]`.
+  - `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in `tests/scenarios.rs`
+    plays it again headless with the camera rendering to an image as in a recording, so
+    a file must pass both ways (see [Recording the scenarios](#recording-the-scenarios)).
+  - `every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` plays it under
+    shuffled schedules (see [Determinism](#determinism)).
 - **Targets on the `Combos` screen.** A row of `first combo`, `own combo` and
   `third combo` (`first` and `third` share one selection through
   `Selection::reference`, `own` has a selection of its own over the same
@@ -1029,7 +1057,12 @@ a file can check any `Reflect` type of the app by short type path.
   `scrolled combo` (its own selection) sits in the 100 pixel high `combo
   scroll area`, absolutely placed at the right (x 1000, y 300) and spawned last
   so nothing moves and the tab order stays; its list reaches below the area and
-  "Belgium" there is picked (`combo_in_scroll_area_popup_is_not_clipped`).
+  "Belgium" there is picked (`combo_in_scroll_area_popup_is_not_clipped`). A 1 by 400
+  pixel spacer after the combo makes the area's contents overflow, so the arrow keys
+  in the open list would scroll it were `scroll_into_view` not to stop at a `FixedNode`
+  (`combo_in_scroll_area_keyboard_does_not_scroll_the_area`). `right edge combo` (x 1200,
+  y 100, 100 wide) and `bottom edge combo` (x 500, y 660) are absolutely placed and spawned
+  last too; their lists stay inside the window (`combo_keeps_list_inside_window`).
 - **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
   `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
   is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:
@@ -1047,8 +1080,10 @@ a file can check any `Reflect` type of the app by short type path.
   The panels that were created are counted by `Count` of `PushButton`s
   (`stack_shows_only_the_selected_item`); the `Tabs` screen's number list
   keeps its selection while its panel is hidden
-  (`stack_keeps_state_of_hidden_item`). The tabs are the `ListItem`s
-  `Panel A`, `Panel B` and `Card demo`.
+  (`stack_keeps_state_of_hidden_item`). The combos in Panel A open popups that are descendants of the panel, so hiding it hides them and takes the list out of the tab order (`stack_hidden_panel_hides_combo_popups`). The tabs are the `Tab`s of a
+  `TabBar`, `Role(role: Tab, label: "Panel A")`, `Panel B` and `Card demo`;
+  the bar is one tab stop, the arrows move between its tabs and Enter or
+  Space picks the focused one.
 - **Targets on the `ColorPalette` screen.** A row of `first palette combo`,
   `second palette combo` (the two share one selection) and `own palette combo`
   (its own, over the same colours) and "Change theme"; `one palette combo`
