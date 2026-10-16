@@ -265,9 +265,9 @@ where
     // only the first hop re-triggers, so one event is one `MouseEvent`.
     //
     // This is a global observer rather than one on `UiRoot` because Bevy's
-    // `Button` stops `PointerPress`, `PointerRelease`, `PointerClick` and
-    // `PointerDragEnd` from bubbling,
-    // which would keep them from ever reaching the root.
+    // `Button` stops `PointerPress`, `PointerRelease`, `PointerClick`,
+    // `PointerDragEnd` and `PointerCancel` from bubbling, which would keep
+    // them from ever reaching the root.
     let original = trigger.original_event_target();
     if trigger.event_target() == original {
         commands.trigger(MouseEvent {
