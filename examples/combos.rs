@@ -23,7 +23,6 @@ fn main() {
             show_clipped: false,
             ..default()
         })
-        .add_observer(on_press)
         .add_systems(Startup, setup)
         .run();
 }
@@ -58,16 +57,8 @@ fn setup(mut commands: Commands) {
             --
             ~{Combo} ~{Selection::reference(selection_ref)}
             --
-            ~{PushButton::from_label("Change theme")} ThemeButton
+            ~{PushButton::from_label("Change theme")}
+            on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
-}
-
-#[derive(Component, Default, Clone)]
-struct ThemeButton;
-
-fn on_press(trigger: On<Activate>, button: Query<(), With<ThemeButton>>, mut theme: ResMut<Theme>) {
-    if button.get(trigger.event().event_target()).is_ok() {
-        theme.light_dark_toggle();
-    }
 }
