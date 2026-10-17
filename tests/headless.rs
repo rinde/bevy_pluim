@@ -231,6 +231,50 @@ fn a_stack_child_can_be_spawned_from_a_scene() {
     assert_eq!(ui_root_count(&mut app), 1);
 }
 
+fn spawn_real_panel(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn(&mut commands, Panel::new("Trains"));
+}
+
+fn app_with_stack_child(create: impl FnOnce(&mut World) -> StackItem) -> App {
+    let mut app = headless_app();
+    let item = create(app.world_mut());
+    let selection_ref = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), item)]),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    for _ in 0..4 {
+        app.update();
+    }
+    app
+}
+
+#[test]
+fn a_panel_spawned_through_a_stack_keeps_its_own_width() {
+    let mut app =
+        app_with_stack_child(|world| StackItem::new(world.register_system(spawn_real_panel)));
+    let panel = single_entity_with::<Panel>(&mut app);
+    let width = app.world().entity(panel).get::<Node>().unwrap().width;
+    assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));
+}
+
+#[test]
+fn a_stack_child_without_a_node_of_its_own_gets_a_default_one() {
+    let mut app =
+        app_with_stack_child(|world| StackItem::new(world.register_system(spawn_panel_a)));
+    let child = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(
+        app.world().entity(child).get::<Node>().unwrap().width,
+        Node::default().width
+    );
+}
+
 #[test]
 fn a_stack_shows_only_the_selected_child_and_switches_on_selection_change() {
     let mut app = headless_app();

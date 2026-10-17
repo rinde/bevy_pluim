@@ -223,10 +223,9 @@ impl StackChildSpawner {
     pub fn spawn(self, commands: &mut Commands, child: impl Bundle) {
         let mut id = Entity::PLACEHOLDER;
         commands.entity(self.parent).with_children(|parent| {
-            id = parent
-                .spawn((Name::new("StackItem"), AddNodeIfAbsent, child))
-                .id();
+            id = parent.spawn((Name::new("StackItem"), child)).id();
         });
+        add_node_if_absent(commands, id);
         commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
     }
 
@@ -235,13 +234,10 @@ impl StackChildSpawner {
     /// Like [`StackChildSpawner::spawn`] otherwise; a `Node` in the scene patches the child's
     /// default one.
     pub fn spawn_scene(self, commands: &mut Commands, scene: impl Scene) {
-        let mut child = commands.spawn((
-            Name::new("StackItem"),
-            AddNodeIfAbsent,
-            ChildOf(self.parent),
-        ));
+        let mut child = commands.spawn((Name::new("StackItem"), ChildOf(self.parent)));
         let id = child.id();
         child.queue_apply_scene(scene);
+        add_node_if_absent(commands, id);
         commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
     }
 }
@@ -253,6 +249,14 @@ fn update_stack_item(input: In<(Entity, Entity)>, mut stack_items: Query<&mut St
     }
 }
 
-#[derive(Component, Clone, Copy, Debug)]
-#[require(Node::default())]
-struct AddNodeIfAbsent;
+/// Gives the stack child a default `Node` when neither it nor its required components brought
+/// one, so the child's own required `Node` (a `Panel`'s width) is never overridden.
+fn add_node_if_absent(commands: &mut Commands, child: Entity) {
+    commands.queue(move |world: &mut World| {
+        if let Ok(mut entity) = world.get_entity_mut(child)
+            && !entity.contains::<Node>()
+        {
+            entity.insert(Node::default());
+        }
+    });
+}
