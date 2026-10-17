@@ -13,7 +13,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{
-    ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ValueChange,
+    ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ReselectListRow, ValueChange,
 };
 use bevy::window::PrimaryWindow;
 use itertools::Either;
@@ -58,6 +58,7 @@ impl Plugin for ListPlugin {
             .add_systems(PostUpdate, sync_item_labels.in_set(AccessibilitySync))
             .add_observer(on_insert_selection)
             .add_observer(on_value_change)
+            .add_observer(on_reselect_row)
             .add_observer(keep_navigation_keys)
             .add_observer(pass_first_presses_from_descendants)
             .add_observer(handle_custom_view_mouse_events)
@@ -386,8 +387,8 @@ impl ItemLabel {
 
 fn handle_mouse_events(
     t: On<MouseEvent>,
-    mut selections: SelectionParam,
-    mut item_views: Query<(&ItemView, &mut BackgroundColor, Has<Selected>)>,
+    selections: SelectionParam,
+    mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
     styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
@@ -403,7 +404,6 @@ fn handle_mouse_events(
             list_ref,
         },
         mut background_color,
-        is_marked_selected,
     )) = item_views.get_mut(t.event().event_target())
     else {
         return;
@@ -413,20 +413,8 @@ fn handle_mouse_events(
     };
     let is_selected = selection.is_selected(*target_item_entity);
 
-    if matches!(t.event().kind, MouseKind::Released) {
-        // The `ListBox` leaves a click on a `Selected` row alone, so deselecting is ours.
-        // Selecting is the `ListBox`'s: it sends a `ValueChange`, see `on_value_change`.
-        // Both go by the `Selected` the `ListBox` saw, not by the `Selection`: the release
-        // can be handled after the `ValueChange` of the same click has changed the
-        // `Selection`, and the click would undo itself.
-        if is_marked_selected {
-            selections.update_selection(*list_ref, |selection| {
-                selection.toggle_selected(*target_item_entity)
-            });
-        }
-        return;
-    }
-
+    // Selecting and deselecting are the `ListBox`'s events, see `on_value_change` and
+    // `on_reselect_row`; a release only recolours.
     // The pointer is on the view for every event but `Out`; a press looks selected.
     let hovered = !matches!(t.event().kind, MouseKind::Out);
     let pressed = matches!(t.event().kind, MouseKind::Pressed);
@@ -459,8 +447,8 @@ fn handle_custom_view_mouse_events(
     parents: Query<&ChildOf>,
     custom_views: Query<(), With<CustomView>>,
     buttons: Query<(), With<Button>>,
-    mut selections: SelectionParam,
-    mut item_views: Query<(&ItemView, &Hovered, &mut BackgroundColor, Has<Selected>)>,
+    selections: SelectionParam,
+    mut item_views: Query<(&ItemView, &Hovered, &mut BackgroundColor)>,
     styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
@@ -472,9 +460,7 @@ fn handle_custom_view_mouse_events(
     else {
         return;
     };
-    let Ok((item_view, hovered, mut background_color, is_marked_selected)) =
-        item_views.get_mut(view)
-    else {
+    let Ok((item_view, hovered, mut background_color)) = item_views.get_mut(view) else {
         return;
     };
     let Some(is_selected) = selections
@@ -491,15 +477,8 @@ fn handle_custom_view_mouse_events(
         background_color.0 = item_background(&theme.colors, style, true, hovered.get());
         return;
     }
-    // See `handle_mouse_events`: deselecting a `Selected` row is ours, by the `Selected` the
-    // `ListBox` saw.
-    if is_marked_selected {
-        selections.update_selection(item_view.list_ref, |selection| {
-            selection.toggle_selected(item_view.item_ref)
-        });
-    } else {
-        background_color.0 = item_background(&theme.colors, style, is_selected, hovered.get());
-    }
+    // Deselecting is the `ListBox`'s event, see `on_reselect_row`.
+    background_color.0 = item_background(&theme.colors, style, is_selected, hovered.get());
 }
 
 /// Colours a custom view when the pointer enters or leaves it or anything inside it.
@@ -568,25 +547,42 @@ const fn item_border(colors: &ThemeColors, style: CornerStyle, selected: bool) -
 /// [`Selected`] by itself, past the rules of the [`Selection`], is not registered.
 /// [`Selected`] is put on the rows by `selection_change` once the selection has changed.
 ///
-/// A row that already carries [`Selected`] is left alone: the `ListBox` may still send a
-/// change for it (a click on any selected row but the first one of a multiple selection),
-/// but the release of that click deselects it, see `handle_mouse_events`.
+/// The `ListBox` sends it for a click on any row but the first selected one, selected rows
+/// included, so a click on a selected row deselects it here, as far as the selection allows.
 fn on_value_change(
     t: On<ValueChange<Entity>>,
     lists: Query<(), With<List>>,
-    item_views: Query<(&ItemView, Has<Selected>)>,
+    item_views: Query<&ItemView>,
     mut selections: SelectionParam,
 ) {
     let ValueChange { source, value, .. } = *t.event();
     if lists.get(source).is_err() {
         return;
     }
-    let Ok((item_view, is_marked_selected)) = item_views.get(value) else {
+    let Ok(item_view) = item_views.get(value) else {
         return;
     };
-    if is_marked_selected {
+    selections.update_selection(source, |selection| {
+        selection.toggle_selected(item_view.item_ref)
+    });
+}
+
+/// Toggles the already-selected row the `ListBox` reports as chosen again: Space or Enter on
+/// the active row, or a click on the first selected row. `toggle_selected` is `None` for `One`,
+/// so that selection keeps its item.
+fn on_reselect_row(
+    t: On<ReselectListRow>,
+    lists: Query<(), With<List>>,
+    item_views: Query<&ItemView>,
+    mut selections: SelectionParam,
+) {
+    let ReselectListRow { source, row } = *t.event();
+    if lists.get(source).is_err() {
         return;
     }
+    let Ok(item_view) = item_views.get(row) else {
+        return;
+    };
     selections.update_selection(source, |selection| {
         selection.toggle_selected(item_view.item_ref)
     });

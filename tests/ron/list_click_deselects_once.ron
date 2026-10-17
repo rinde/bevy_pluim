@@ -1,0 +1,18 @@
+// A click on the first selected row of a multiple selection list sends the `ListBox`'s
+// `ReselectListRow` as well as the release that deselects it; the row is toggled once, so
+// it ends up deselected and not selected again.
+(
+    format_version: 3,
+    name: "a click on the first selected row deselects it once",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))), Click(Left),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Portugal"]))),
+        MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands"))), Click(Left),
+        Wait(1),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Portugal"]))),
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands"))))),
+    ],
+    expect: [App(Selected(of: Name("one-or-more list"), items: ["Portugal"]))],
+)

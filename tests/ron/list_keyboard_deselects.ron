@@ -1,0 +1,52 @@
+// Enter or Space on the active row of a list that is already `Selected` deselects it as
+// far as the selection allows: `OneOrMore` keeps at least one, `ZeroOrMore` may end up with
+// none, and `One` keeps its row. (The `ListBox` sends no `ValueChange` for a selected row,
+// only a `ReselectListRow`.) Tab reaches `one-or-more list` on the first press, `one list`
+// on the second and `zero-or-more list` on the fifth.
+(
+    format_version: 3,
+    name: "Enter and Space deselect the active row of a multiple selection list",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("one-or-more list")))),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
+        // The last selected row stays.
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
+        Tap(key: ArrowDown),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Canada"]))),
+        // Canada is active and selected: Space takes it out, once.
+        Tap(key: Space),
+        Wait(1),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada"))))),
+        // A single selection keeps its row.
+        Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("one list")))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("one list"), items: ["NL"]))),
+        // A selection that may be empty ends up empty.
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("zero-or-more list")))),
+        Check(App(Selected(of: Name("zero-or-more list"), items: []))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("zero-or-more list"), items: ["Netherlands"]))),
+        Tap(key: Space),
+        Wait(1),
+        Check(App(Selected(of: Name("zero-or-more list"), items: []))),
+        Check(Not(Selected(Within(Name("zero-or-more list"), Role(role: ListItem, label: "Netherlands"))))),
+    ],
+    expect: [
+        App(Selected(of: Name("zero-or-more list"), items: [])),
+    ],
+)

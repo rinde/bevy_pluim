@@ -1,0 +1,32 @@
+// Enter on the active swatch of a palette that is already `Selected` deselects it, as a
+// second click does (the palette's selection holds at most one colour, `ZeroOrOne`). Tab
+// reaches the palette on the 8th press, see `color_palette_keyboard_follows_active_descendant`.
+(
+    format_version: 3,
+    name: "Enter on the selected swatch of a palette deselects it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
+        Wait(1),
+        Check(App(Focused(of: Name("palette")))),
+        Tap(key: ArrowRight),
+        Tap(key: ArrowRight),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("palette"), items: ["slate-200"]))),
+        Check(Selected(Nth(2, Within(Name("palette"), Component("ItemView"))))),
+        Tap(key: Enter),
+        Wait(1),
+        Check(App(Selected(of: Name("palette"), items: []))),
+        Check(Not(Selected(Nth(2, Within(Name("palette"), Component("ItemView")))))),
+        // And the same key selects it again.
+        Tap(key: Space),
+        Wait(1),
+        Check(App(Selected(of: Name("palette"), items: ["slate-200"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("palette"), items: ["slate-200"])),
+    ],
+)
