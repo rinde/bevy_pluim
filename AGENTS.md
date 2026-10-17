@@ -770,6 +770,14 @@ the examples are usable, which makes that first build slower still. Later
 builds only recompile this crate. Prefer `just test` over running examples in
 a loop, and note that examples need a display.
 
+**Dependencies have no debuginfo** (`debug = false` in
+`[profile.dev.package."*"]`), so a test or example binary is far smaller and a
+slot's `target/debug` fits a cloud container's disk; this crate keeps its
+own. The first build after that setting landed rebuilds every dependency, once
+per `target/`. To debug into a dependency, turn it back on for one invocation:
+`cargo --config 'profile.dev.package."*".debug=true' test ...` (that rebuilds
+the dependencies again, and again when you drop the flag).
+
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
 

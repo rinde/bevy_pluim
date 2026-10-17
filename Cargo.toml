@@ -102,6 +102,11 @@ print_stderr = "deny"
 indexing_slicing = "deny"
 
 # Bevy is unusably slow in an unoptimised build, so optimise dependencies but
-# not our own code, which keeps the edit-run loop short.
+# not our own code, which keeps the edit-run loop short. Dependencies also get
+# no debuginfo: with it every test or example binary is about 2 GB, and a
+# slot's `target/debug` outgrew a cloud container's disk. Our own crate keeps
+# its debuginfo. To step through a dependency, bring it back for one
+# invocation: `cargo --config 'profile.dev.package."*".debug=true' test ...`.
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
