@@ -456,17 +456,20 @@ of them (`just example gallery -- --run-all stack link`).
   and `ZeroOrMore` (and `None` for a disallowed change) keep deciding, and
   `Selected` can never disagree with the `Selection`. The `ListBox` ignores a click
   only on the first selected row (`listbox_on_row_click` compares the row with the
-  current one); on any other selected row of a multiple selection it still sends the
-  `ValueChange`, and `on_value_change` drops it because the row is `Selected`. So
-  deselecting is the item's `MouseEvent::Released`. Both paths go by the `Selected`
-  the `ListBox` saw, not by the `Selection`: a release is handled after the
-  `ValueChange` of the same click, and one that read the `Selection` would undo it. Hover and selected colours stay on `MouseEvent`. A `ListBox` also sets an
+  current one); on any other selected row it still sends the `ValueChange`, and a click
+  on the first selected row, like Enter or Space on an active row that is already
+  `Selected`, sends a `ReselectListRow` instead. `on_value_change` and `on_reselect_row`
+  (`list.rs`) both go through `toggle_selected`, so a click or a key on a selected row
+  deselects it as far as the selection allows (`One` keeps its item) and the `ListBox`'s
+  events are the only path: no `MouseEvent::Released` deselects, or a click on the first
+  selected row would toggle twice (`list_click_deselects_once.ron`,
+  `list_keyboard_deselects.ron`, `color_palette_keyboard_deselects.ron`). Hover and
+  selected colours stay on `MouseEvent`. A `ListBox` also sets an
   `ActiveDescendant` on a click and, once the list has focus (a `List` is one tab stop),
   handles the arrow keys (all four move, wrapping round), Home and End by moving it, and
   Enter / Space by sending the `ValueChange` of the active row, which goes through
   `on_value_change` like a click, so the `Selection` decides, also a `Selection::Ref` and a
-  palette's. Moving the active row selects nothing. Enter on a row that is already
-  `Selected` does nothing (the `ListBox` does not send it), so keys cannot deselect.
+  palette's. Moving the active row selects nothing.
   The list's focus ring is drawn on the active row, not on the box (see "Keyboard
   focus"). `ItemView`s keep `should_block_lower: false` so the wheel
   reaches the scroll area, which also lets a click through to what is below: a popup
@@ -477,7 +480,7 @@ of them (`just example gallery -- --run-all stack link`).
   `Selected` on its swatches (and `ListBoxMultiSelect` on the palette) from its
   `on_selection_change`, using `list.rs`'s `sync_selected` / `sync_multi_select`,
   `list.rs`'s `on_value_change` turns the `ListBox`'s pick into a selection update
-  for palettes too, and the swatch's release deselects a swatch that is `Selected`.
+  for palettes too, and `on_reselect_row` deselects a swatch that is `Selected`.
   A swatch has no text, so its accessible name is the name of its colour (see
   `color_palette.rs` in the module table); a `Role(role: ListItem)` locator without a label
   still reaches all of them, so the scenarios use `Nth(..)` or

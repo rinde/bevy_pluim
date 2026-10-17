@@ -215,25 +215,22 @@ fn on_insert_selection(
 
 fn handle_mouse_events(
     t: On<MouseEvent>,
-    mut selections: SelectionParam,
+    selections: SelectionParam,
     color_items: Query<&Item<Color>>,
-    item_views: Query<(&ItemView, Has<Selected>)>,
+    item_views: Query<&ItemView>,
     mut commands: Commands,
 ) {
-    let Ok((
-        ItemView {
-            item_ref: target_item_ref,
-            list_ref: target_list_ref,
-        },
-        is_marked_selected,
-    )) = item_views.get(t.event().event_target())
+    let Ok(ItemView {
+        item_ref: target_item_ref,
+        list_ref: target_list_ref,
+    }) = item_views.get(t.event().event_target())
     else {
         return;
     };
     let Ok(Item { data: item_color }) = color_items.get(*target_item_ref) else {
         return;
     };
-    let Some((selection_ref, selection)) = selections.get_with_ref(*target_list_ref) else {
+    let Some(selection) = selections.get(*target_list_ref) else {
         return;
     };
 
@@ -247,19 +244,9 @@ fn handle_mouse_events(
         // A click and a drag say nothing new about the pointer being on the swatch: the
         // over, press, release and out events around them set the highlight. A drag in
         // particular can arrive after the pointer left the swatch.
-        MouseKind::Click(_) | MouseKind::Drag => None,
-        MouseKind::Released => {
-            // The `ListBox` leaves a click on a `Selected` swatch alone, so deselecting is
-            // ours. Selecting is the `ListBox`'s, see `list::on_value_change`. Both go by
-            // the `Selected` the `ListBox` saw, not by the `Selection`: see
-            // `list::handle_mouse_events`.
-            if is_marked_selected {
-                selections.update_selection(selection_ref, |selection| {
-                    selection.toggle_selected(*target_item_ref)
-                });
-            }
-            None
-        }
+        // A release says nothing either: selecting and deselecting are the `ListBox`'s events,
+        // see `list::on_value_change` and `list::on_reselect_row`.
+        MouseKind::Click(_) | MouseKind::Drag | MouseKind::Released => None,
     };
 
     if let Some(hover_state) = highlight {
