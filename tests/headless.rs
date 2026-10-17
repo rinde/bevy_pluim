@@ -81,6 +81,11 @@ mod hud_ui;
 /// `Scrollbar` of `scroll_area.rs` reads `UiScale` on every press, which `UiPlugin`
 /// would insert.
 fn headless_app() -> App {
+    headless_app_with(|_| {})
+}
+
+/// [`headless_app`] with `extra` run on the app before it is finished.
+fn headless_app_with(extra: impl FnOnce(&mut App)) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     app.add_plugins((AssetPlugin::default(), MeshPlugin, VisibilityPlugin));
@@ -92,6 +97,7 @@ fn headless_app() -> App {
     app.add_plugins(DefaultPickingPlugins);
     app.init_resource::<ClearColor>();
     app.init_resource::<UiScale>();
+    extra(&mut app);
     app.add_plugins(WidgetsPlugin);
     app.finish();
     app.cleanup();
@@ -236,7 +242,9 @@ fn spawn_real_panel(spawner: In<StackChildSpawner>, mut commands: Commands) {
 }
 
 fn app_with_stack_child(create: impl FnOnce(&mut World) -> StackItem) -> App {
-    let mut app = headless_app();
+    let mut app = headless_app_with(|app| {
+        app.add_plugins(bevy::scene::ScenePlugin);
+    });
     let item = create(app.world_mut());
     let selection_ref = app
         .world_mut()
@@ -259,6 +267,19 @@ fn app_with_stack_child(create: impl FnOnce(&mut World) -> StackItem) -> App {
 fn a_panel_spawned_through_a_stack_keeps_its_own_width() {
     let mut app =
         app_with_stack_child(|world| StackItem::new(world.register_system(spawn_real_panel)));
+    let panel = single_entity_with::<Panel>(&mut app);
+    let width = app.world().entity(panel).get::<Node>().unwrap().width;
+    assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));
+}
+
+fn spawn_real_panel_scene(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn_scene(&mut commands, bsn! { Panel { title: "Trains" } });
+}
+
+#[test]
+fn a_panel_scene_spawned_through_a_stack_keeps_its_own_width() {
+    let mut app =
+        app_with_stack_child(|world| StackItem::new(world.register_system(spawn_real_panel_scene)));
     let panel = single_entity_with::<Panel>(&mut app);
     let width = app.world().entity(panel).get::<Node>().unwrap().width;
     assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));

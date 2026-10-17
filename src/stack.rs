@@ -5,6 +5,7 @@
 
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
+use bevy::scene::Ready;
 
 use crate::select::{Item, Selection, SelectionParam};
 
@@ -231,13 +232,15 @@ impl StackChildSpawner {
 
     /// Spawns `scene` as the child of the stack: the scene's root is the child.
     ///
-    /// Like [`StackChildSpawner::spawn`] otherwise; a `Node` in the scene patches the child's
-    /// default one.
+    /// Like [`StackChildSpawner::spawn`] otherwise: the default `Node` is added only once the
+    /// scene has been applied (bevy's `Ready`), and only if the scene's root still has none, so a
+    /// root that requires its own `Node` (a `Panel`) keeps it, and a `Node` in the scene is used
+    /// as written.
     pub fn spawn_scene(self, commands: &mut Commands, scene: impl Scene) {
         let mut child = commands.spawn((Name::new("StackItem"), ChildOf(self.parent)));
         let id = child.id();
         child.queue_apply_scene(scene);
-        add_node_if_absent(commands, id);
+        child.observe(add_node_when_scene_is_ready);
         commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
     }
 }
@@ -246,6 +249,19 @@ fn update_stack_item(input: In<(Entity, Entity)>, mut stack_items: Query<&mut St
     let (stack_item_ref, new_child_ref) = *input;
     if let Ok(mut stack_item) = stack_items.get_mut(stack_item_ref) {
         stack_item.entity = Some(new_child_ref);
+    }
+}
+
+/// Like [`add_node_if_absent`], for a scene child: runs when its scene has been applied, which
+/// bevy does later than the command queue, so a `Node` the scene's root requires is already there.
+fn add_node_when_scene_is_ready(
+    ready: On<Ready>,
+    nodes: Query<(), With<Node>>,
+    mut commands: Commands,
+) {
+    let entity = ready.event_target();
+    if !nodes.contains(entity) {
+        commands.entity(entity).insert(Node::default());
     }
 }
 
