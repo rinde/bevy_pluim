@@ -2438,3 +2438,22 @@ fn a_separated_virtual_list_with_a_row_height_its_padding_and_ring_do_not_fit_sh
 
     assert_eq!(rows_and_entities(&mut app).0, 0);
 }
+
+#[test]
+fn a_separated_virtual_list_with_a_row_height_just_above_its_padding_and_ring_shows_rows() {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((
+            VirtualList::separated(23.0),
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+        ));
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+
+    assert!(rows_and_entities(&mut app).0 > 0);
+}
