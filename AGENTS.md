@@ -437,9 +437,14 @@ of them (`just example gallery -- --run-all stack link`).
   `ItemsChanged` and themes. The items need not be `Item<String>`. Such a view
   is `CustomView`: its children take the pointer, so hover colours come from
   `Hovered` (`custom_view_hover`) and press and release from a global
-  `MouseEvent` observer that walks up from the target to the view, ignoring a
-  target inside a nested `Button` (which handles its own press; `Button` also
-  stops the click from reaching the `ListBox`). Selection and `Selected` are as
+  `MouseEvent` observer that walks up from the target to the view
+  (`custom_view_of`), ignoring a target inside a nested `Button`, `List` or `Combo`
+  (which handle their own press). A `Button` stops the click that hits it, but a
+  combo's root node and popup let the pointer through, and their click bubbles
+  through the row to the outer `ListBox`, which takes any click under a row as a
+  pick of that row; so each custom view stops a click whose original target lies
+  in a nested `Button`, `List` or `Combo` (`keep_nested_clicks_from_row`,
+  `list_combo_in_custom_row_pick_leaves_outer_list.ron`, the `ComboRows` screen). Selection and `Selected` are as
   for default views.
 - **Lists are `ListBox`es, and `Selection` keeps the last word.** A `List` is a
   `bevy::ui_widgets::ListBox` and its `ItemView`s are `ListItem`s (`Selectable`,
@@ -463,7 +468,10 @@ of them (`just example gallery -- --run-all stack link`).
   deselects it as far as the selection allows (`One` keeps its item) and the `ListBox`'s
   events are the only path: no `MouseEvent::Released` deselects, or a click on the first
   selected row would toggle twice (`list_click_deselects_once.ron`,
-  `list_keyboard_deselects.ron`, `color_palette_keyboard_deselects.ron`). Hover and
+  `list_keyboard_deselects.ron`, `color_palette_keyboard_deselects.ron`). Both ignore a row
+  whose `ItemView::list_ref` is not the event's source list: a nested list (a combo's popup
+  in a custom view) reports the row of the list around it, because `listbox_on_row_click`
+  searches above the popup when the click's target is the popup itself. Hover and
   selected colours stay on `MouseEvent`. A `ListBox` also sets an
   `ActiveDescendant` on a click and, once the list has focus (a `List` is one tab stop),
   handles the arrow keys (all four move, wrapping round), Home and End by moving it, and
@@ -941,7 +949,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Slider`, `SegmentedControls`, `FilterChips`,
-  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`, `ComboRows`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -1051,6 +1059,9 @@ a file can check any `Reflect` type of the app by short type path.
   a click on the border (at `Screen((20.5, 32.0))`, the left border of `name field`),
   Tab and the screen reader node, and the text following `RemSize`.
 - **The `Toast` screen.** "Save" and "Save again" raise a toast "Saved", "Delete" one "Deleted 3 pieces", each shown for 1 s (60 frames), and "Change theme". `Count(with: ["Toast"], ..)` counts the toasts showing (`toast_shows_stacks_and_goes.ron`).
+- **The `ComboRows` screen.** A `row list` (a, b, c; `ZeroOrOne`, nothing selected) of
+  custom-view rows, each a text and a `combo in row a` (b, c) over Alpha, Beta and Gamma with
+  its own selection; a pick in a row's combo leaves the list unselected.
 - **The `IconButtons` screen.** Six icon buttons with the default (blank) icon image,
   each with a `Name`: `small button`, `regular button`, `large button`,
   `toggle button` (a `ToggleState` that starts off), `warning button` and

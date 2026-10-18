@@ -41,7 +41,9 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, ItemNote, List, ListLayout};
+use rin_bevy_ui::list::{
+    CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout,
+};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
@@ -183,6 +185,10 @@ pub enum WidgetsSetup {
     /// "Row 1" first) in the 240 by 200 `separated virtual list scroll area`,
     /// and "Change theme".
     SeparatedVirtualList,
+    /// A `row list` of three custom-view rows (a, b, c; a `ZeroOrOne` selection of its own,
+    /// nothing selected), each holding a `combo in row a` (b, c) over the stations Alpha,
+    /// Beta and Gamma with a selection of its own, then "Change theme".
+    ComboRows,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -213,6 +219,7 @@ impl AppSetup for WidgetsSetup {
             Self::Themed => themed(world),
             Self::VirtualList => virtual_list(world, false),
             Self::SeparatedVirtualList => virtual_list(world, true),
+            Self::ComboRows => combo_rows(world),
         }
         Ok(())
     }
@@ -1704,6 +1711,42 @@ fn virtual_list(world: &mut World, separated: bool) {
                 true,
                 false,
             ),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+/// A custom item view of the [`WidgetsSetup::ComboRows`] screen: the item's text and a
+/// `combo in row <item>` over the stations, with a selection of its own.
+fn combo_row(spawner: In<ItemViewSpawner>, items: Query<&Item<String>>, mut commands: Commands) {
+    let Ok(item) = items.get(spawner.item) else {
+        return;
+    };
+    let name = format!("combo in row {}", item.data);
+    let text = item.data.clone();
+    commands.entity(spawner.view).with_children(|view| {
+        view.spawn(Text::new(text));
+        view.spawn((
+            Combo,
+            Name::new(name),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["Alpha", "Beta", "Gamma"].map(Item::new)),
+        ));
+    });
+}
+
+fn combo_rows(world: &mut World) {
+    let create = world.register_system(combo_row);
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("row list"),
+            List,
+            ItemViewCreator::new(create),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
         ));
         spawn_theme_button(root);
     });

@@ -9,6 +9,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusedInput, InputFocus};
+use bevy::picking::events::PointerClick;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Selected;
@@ -18,6 +19,7 @@ use bevy::ui_widgets::{
 use bevy::window::PrimaryWindow;
 use itertools::Either;
 
+use crate::combo::Combo;
 use crate::focus::{AccessibilitySync, TabStop, sync_label};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::{Theme, ThemeColors};
@@ -233,10 +235,10 @@ pub struct ItemView {
 /// A note shown after the label of an item.
 ///
 /// It goes on the item entity next to its [`Item<String>`] and shows in the default view of a
-/// [`List`] (so also in a [`Combo`](crate::combo::Combo)'s popup), in the caption size and the
+/// [`List`] (so also in a [`Combo`]'s popup), in the caption size and the
 /// colour of its [`NoteTone`].
 ///
-/// A [`Combo`](crate::combo::Combo)'s button shows the label of the selected item only, never
+/// A [`Combo`]'s button shows the label of the selected item only, never
 /// the note. To a screen reader the row's name is the label followed by the note
 /// (`Delft < unreachable >`). Inserting a new note, or removing it, updates the row in place; an
 /// empty note shows nothing.
@@ -423,22 +425,47 @@ fn handle_mouse_events(
 }
 
 /// The [`ItemView`] a pointer event on `target` belongs to, if `target` is a custom view or
-/// lies under one without a nested button in between.
+/// lies under one without a nested button, list or combo in between.
 fn custom_view_of(
     target: Entity,
     parents: &Query<&ChildOf>,
     views: &Query<(), With<CustomView>>,
-    buttons: &Query<(), With<Button>>,
+    nested: &Query<(), Or<(With<Button>, With<List>, With<Combo>)>>,
 ) -> Option<Entity> {
     let mut current = target;
     loop {
         if views.contains(current) {
             return Some(current);
         }
-        if buttons.contains(current) {
+        if nested.contains(current) {
             return None;
         }
         current = parents.get(current).ok()?.parent();
+    }
+}
+
+/// Stops a click that began inside a button, list or combo in a custom view from reaching the
+/// outer list, which would take it as a pick of the row.
+///
+/// The `ListBox` searches the ancestors of a click's original target for a row, whatever
+/// the target is, so a click on a combo inside a row (its root node or its popup, which let
+/// the pointer through) selects the row. A click whose original target is the row or lies
+/// under it without such a widget in between is the row's and goes on.
+fn keep_nested_clicks_from_row(
+    mut click: On<PointerClick>,
+    parents: Query<&ChildOf>,
+    custom_views: Query<(), With<CustomView>>,
+    nested: Query<(), Or<(With<Button>, With<List>, With<Combo>)>>,
+) {
+    let row = click.entity;
+    if custom_view_of(
+        click.original_event_target(),
+        &parents,
+        &custom_views,
+        &nested,
+    ) != Some(row)
+    {
+        click.propagate(false);
     }
 }
 
@@ -446,7 +473,7 @@ fn handle_custom_view_mouse_events(
     t: On<MouseEvent>,
     parents: Query<&ChildOf>,
     custom_views: Query<(), With<CustomView>>,
-    buttons: Query<(), With<Button>>,
+    nested: Query<(), Or<(With<Button>, With<List>, With<Combo>)>>,
     selections: SelectionParam,
     mut item_views: Query<(&ItemView, &Hovered, &mut BackgroundColor)>,
     styles: Query<&CornerStyle>,
@@ -456,7 +483,7 @@ fn handle_custom_view_mouse_events(
     if !matches!(kind, MouseKind::Pressed | MouseKind::Released) {
         return;
     }
-    let Some(view) = custom_view_of(t.event().event_target(), &parents, &custom_views, &buttons)
+    let Some(view) = custom_view_of(t.event().event_target(), &parents, &custom_views, &nested)
     else {
         return;
     };
@@ -562,6 +589,11 @@ fn on_value_change(
     let Ok(item_view) = item_views.get(value) else {
         return;
     };
+    // A nested list (a combo's popup in a custom view) can report a row of the list around
+    // it: `listbox_on_row_click` searches the ancestors of a click on the nested list itself.
+    if item_view.list_ref != source {
+        return;
+    }
     selections.update_selection(source, |selection| {
         selection.toggle_selected(item_view.item_ref)
     });
@@ -583,6 +615,9 @@ fn on_reselect_row(
     let Ok(item_view) = item_views.get(row) else {
         return;
     };
+    if item_view.list_ref != source {
+        return;
+    }
     selections.update_selection(source, |selection| {
         selection.toggle_selected(item_view.item_ref)
     });
@@ -833,7 +868,7 @@ fn on_items_changed(
                     item: item_ref,
                     view: view.id(),
                 };
-                view.insert(CustomView);
+                view.insert(CustomView).observe(keep_nested_clicks_from_row);
                 let create = creator.create;
                 commands_run.push((create, spawner));
             } else if let Some(item) = item {
