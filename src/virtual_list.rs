@@ -126,7 +126,8 @@ impl Plugin for VirtualListPlugin {
 )]
 pub struct VirtualList {
     /// The height of every row, in logical pixels. A list whose row height is not a positive,
-    /// finite number shows nothing and logs an error when it is inserted.
+    /// finite number, or for a separated list not more than 22 px (the 20 px of vertical padding
+    /// and the 2 px of ring), shows nothing and logs an error when it is inserted.
     pub row_height: f32,
     /// Whether the rows stand apart as in a [`CornerStyle::Separated`] list: padded, with gaps
     /// between them, rounded, and the selected one ringed.
@@ -216,9 +217,15 @@ impl VirtualList {
         }
     }
 
-    /// Whether the row height is one rows can be laid out with: positive and finite.
+    /// Whether the row height is one rows can be laid out with: positive and finite, and for a
+    /// separated list more than the vertical padding and ring of a row take up.
     const fn has_valid_row_height(self) -> bool {
-        self.row_height > 0.0 && self.row_height.is_finite()
+        let floor = if self.separated {
+            SEPARATED_ROW_CHROME
+        } else {
+            0.0
+        };
+        self.row_height > floor && self.row_height.is_finite()
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -226,8 +233,8 @@ impl VirtualList {
             && !list.has_valid_row_height()
         {
             error!(
-                "VirtualList {} has row height {}, which is not a positive, finite number; it shows nothing",
-                context.entity, list.row_height
+                "VirtualList {} has row height {}, which is not a positive, finite number, or for a separated list not more than {} px of padding and ring; it shows nothing",
+                context.entity, list.row_height, SEPARATED_ROW_CHROME
             );
         }
         world
@@ -235,6 +242,10 @@ impl VirtualList {
             .run_system_cached_with(theme_virtual_lists, Some(context.entity));
     }
 }
+
+/// The height of a separated row's vertical padding (2 x 10 px) and ring (2 x 1 px): its height
+/// must exceed it. Matches `SEPARATED_ITEM_PADDING` and `SEPARATED_RING_WIDTH`.
+const SEPARATED_ROW_CHROME: f32 = 22.0;
 
 /// One row of a [`VirtualList`], showing the item at `index` of the list's items.
 ///
