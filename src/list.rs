@@ -417,6 +417,7 @@ fn handle_mouse_events(
 
     // Selecting and deselecting are the `ListBox`'s events, see `on_value_change` and
     // `on_reselect_row`; a release only recolours.
+
     // The pointer is on the view for every event but `Out`; a press looks selected.
     let hovered = !matches!(t.event().kind, MouseKind::Out);
     let pressed = matches!(t.event().kind, MouseKind::Pressed);

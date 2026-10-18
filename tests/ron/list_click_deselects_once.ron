@@ -1,6 +1,6 @@
 // A click on the first selected row of a multiple selection list sends the `ListBox`'s
-// `ReselectListRow` as well as the release that deselects it; the row is toggled once, so
-// it ends up deselected and not selected again.
+// `ReselectListRow` alone, which deselects it; the row is toggled once, so it ends up
+// deselected and not selected again.
 (
     format_version: 3,
     name: "a click on the first selected row deselects it once",
