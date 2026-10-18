@@ -1,0 +1,25 @@
+// A combo inside a custom-view row of a list is the combo's own: picking an option in the
+// combo of row a leaves the outer list's selection on "a", and the combo shows the pick.
+// The click on the popup's item bubbles up to the outer list's `ListBox`, which reports
+// the popup's item as chosen for the outer list; the list must not apply a row of another
+// list to its selection. (Row a, because a click on a combo's button also reaches the row
+// below it, and that selects the row.)
+(
+    format_version: 3,
+    name: "picking in a combo inside a list row leaves the list's selection alone",
+    setup: App(ListWithCombos),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("row list"), items: ["a"]))),
+        MoveTo(Within(Name("combo in row a"), Component("ComboButton"))),
+        Click(Left),
+        Check(Visible(Within(Name("combo in row a"), Component("ComboList")))),
+        Check(App(Selected(of: Name("row list"), items: ["a"]))),
+        MoveTo(Within(Name("combo in row a"), Role(role: ListItem, label: "Canada"))),
+        Click(Left),
+        Check(App(Selected(of: Name("combo in row a"), items: ["Canada"]))),
+        Check(TextOf(Within(Name("combo in row a"), Component("ComboButton")), StartsWith("Canada"))),
+        Check(App(Selected(of: Name("row list"), items: ["a"]))),
+    ],
+    expect: [App(Selected(of: Name("row list"), items: ["a"]))],
+)

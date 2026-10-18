@@ -437,9 +437,11 @@ of them (`just example gallery -- --run-all stack link`).
   `ItemsChanged` and themes. The items need not be `Item<String>`. Such a view
   is `CustomView`: its children take the pointer, so hover colours come from
   `Hovered` (`custom_view_hover`) and press and release from a global
-  `MouseEvent` observer that walks up from the target to the view, ignoring a
-  target inside a nested `Button` (which handles its own press; `Button` also
-  stops the click from reaching the `ListBox`). Selection and `Selected` are as
+  `MouseEvent` observer that walks up from the target to the view, stopping at
+  a nested `Button` (which handles its own press; `Button` also stops the click from
+  reaching the `ListBox`), `ItemView`, `List` or `Combo`, so a press in a combo or list
+  inside a row is that widget's, not the row's (`custom_view_of`;
+  `list_row_combo_pick_leaves_list_selection.ron` on the `ListWithCombos` screen). Selection and `Selected` are as
   for default views.
 - **Lists are `ListBox`es, and `Selection` keeps the last word.** A `List` is a
   `bevy::ui_widgets::ListBox` and its `ItemView`s are `ListItem`s (`Selectable`,
@@ -459,7 +461,9 @@ of them (`just example gallery -- --run-all stack link`).
   current one); on any other selected row it still sends the `ValueChange`, and a click
   on the first selected row, like Enter or Space on an active row that is already
   `Selected`, sends a `ReselectListRow` instead. `on_value_change` and `on_reselect_row`
-  (`list.rs`) both go through `toggle_selected`, so a click or a key on a selected row
+  (`list.rs`) both ignore a row whose `ItemView::list_ref` is not the event's source list
+  (the `ListBox` of a nested combo's popup finds the outer row among its ancestors for a
+  click on the popup itself and reports it), and go through `toggle_selected`, so a click or a key on a selected row
   deselects it as far as the selection allows (`One` keeps its item) and the `ListBox`'s
   events are the only path: no `MouseEvent::Released` deselects, or a click on the first
   selected row would toggle twice (`list_click_deselects_once.ron`,
@@ -941,7 +945,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Slider`, `SegmentedControls`, `FilterChips`,
-  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`, `ListWithCombos`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -1088,6 +1092,7 @@ a file can check any `Reflect` type of the app by short type path.
   window. A list does not scroll itself: the wheel moves the `ScrollContents`
   of the area around it; read where it scrolled to as the scroll area's
   position above describes.
+- **The `ListWithCombos` screen.** A `row list` of custom-view rows a, b, c (`One`, "a" first), each holding a `Combo` named `combo in row a` (b, c) with its own selection over the countries, then "Change theme".
 - **The `SeparatedVirtualList` screen.** A `separated virtual list` of ten thousand rows (`VirtualList::separated(44.0)`, "Row 1" to "Row 10000", a `One` selection of its own) in the 240 by 200 `separated virtual list scroll area`, and "Change theme". It is a screen of its own because the `VirtualList` screen's files count its single list and its thirteen rows. Four rows with their gaps fit the view (46 px a row), so Page Down moves four.
 - **The `VirtualList` screen.** A `virtual list` of ten thousand rows ("Row 1" to
   "Row 10000", 28 px high, a `One` selection of its own, "Row 1" first) in the 240 by 200

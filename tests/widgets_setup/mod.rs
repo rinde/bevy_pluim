@@ -41,7 +41,9 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
 use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, ItemNote, List, ListLayout};
+use rin_bevy_ui::list::{
+    CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout,
+};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
@@ -183,6 +185,10 @@ pub enum WidgetsSetup {
     /// "Row 1" first) in the 240 by 200 `separated virtual list scroll area`,
     /// and "Change theme".
     SeparatedVirtualList,
+    /// A `row list` of custom-view rows (a, b, c; a `One` selection, "a" first), each holding
+    /// a `Combo` named `combo in row a` (and b, c) with a selection of its own over the
+    /// countries, then "Change theme".
+    ListWithCombos,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -213,6 +219,7 @@ impl AppSetup for WidgetsSetup {
             Self::Themed => themed(world),
             Self::VirtualList => virtual_list(world, false),
             Self::SeparatedVirtualList => virtual_list(world, true),
+            Self::ListWithCombos => list_with_combos(world),
         }
         Ok(())
     }
@@ -1704,6 +1711,43 @@ fn virtual_list(world: &mut World, separated: bool) {
                 true,
                 false,
             ),
+        ));
+        spawn_theme_button(root);
+    });
+}
+
+/// The creator of the rows of [`WidgetsSetup::ListWithCombos`]: a combo named after its row.
+fn row_with_combo(
+    spawner: In<ItemViewSpawner>,
+    items: Query<&Item<String>>,
+    mut commands: Commands,
+) {
+    let Ok(item) = items.get(spawner.item) else {
+        return;
+    };
+    let name = format!("combo in row {}", item.data);
+    commands.entity(spawner.view).with_children(|view| {
+        view.spawn((
+            Combo,
+            Name::new(name),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(countries()),
+        ));
+    });
+}
+
+fn list_with_combos(world: &mut World) {
+    let create = world.register_system(row_with_combo);
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("row list"),
+            List,
+            ItemViewCreator::new(create),
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
         ));
         spawn_theme_button(root);
     });
