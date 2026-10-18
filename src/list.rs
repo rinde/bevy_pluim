@@ -26,13 +26,13 @@ use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 /// Padding around a [`CornerStyle::Separated`] list.
-const SEPARATED_LIST_PADDING: Val = Val::Px(6.0);
+pub(crate) const SEPARATED_LIST_PADDING: Val = Val::Px(6.0);
 /// Gap between the rows of a [`CornerStyle::Separated`] list.
-const SEPARATED_ROW_GAP: Val = Val::Px(2.0);
+pub(crate) const SEPARATED_ROW_GAP: Val = Val::Px(2.0);
 /// Width of the ring on the selected row of a [`CornerStyle::Separated`] list.
-const SEPARATED_RING_WIDTH: Val = Val::Px(1.0);
+pub(crate) const SEPARATED_RING_WIDTH: Val = Val::Px(1.0);
 /// Padding inside a row of a [`CornerStyle::Separated`] list: 10 pixels by 12.
-const SEPARATED_ITEM_PADDING: UiRect = UiRect::axes(Val::Px(12.0), Val::Px(10.0));
+pub(crate) const SEPARATED_ITEM_PADDING: UiRect = UiRect::axes(Val::Px(12.0), Val::Px(10.0));
 
 pub(crate) struct ListPlugin;
 
@@ -557,7 +557,7 @@ pub(crate) const fn item_background(
 /// The border colour of an [`ItemView`]: the selection ring on a selected row of a
 /// [`CornerStyle::Separated`] list (transparent on the others), the plain and highlight
 /// borders elsewhere.
-const fn item_border(colors: &ThemeColors, style: CornerStyle, selected: bool) -> Color {
+pub(crate) const fn item_border(colors: &ThemeColors, style: CornerStyle, selected: bool) -> Color {
     match (style, selected) {
         (CornerStyle::Separated, true) => colors.selection_ring,
         (CornerStyle::Separated, false) => Color::NONE,

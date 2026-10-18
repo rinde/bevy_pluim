@@ -600,6 +600,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
         WidgetsSetup::VirtualList,
+        WidgetsSetup::SeparatedVirtualList,
         WidgetsSetup::ComboRows,
     ];
     for screen in screens {
@@ -2045,6 +2046,42 @@ fn a_virtual_list_tells_a_screen_reader_where_each_row_is_among_all_its_items() 
     let shown = shown_row_positions(&mut app);
     assert_eq!(shown.len(), 13);
     assert!(shown.iter().any(|(index, ..)| *index == 5_000));
+    for (index, position, size) in shown {
+        assert_eq!(
+            (position, size),
+            (Some(index + 1), Some(10_000)),
+            "row of item {index}"
+        );
+    }
+}
+
+#[test]
+fn a_separated_virtual_list_scrolled_by_gapped_rows_shows_the_rows_in_view_with_their_positions() {
+    // 44 pixel rows with 2 pixel gaps: the row at the top of the view after a scroll is found
+    // by the 46 pixel pitch (plus the 6 pixel padding), not by the row height, and a screen
+    // reader still reads its place among the items.
+    let mut app = widgets_app();
+    WidgetsSetup::SeparatedVirtualList
+        .build(app.world_mut())
+        .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let (_, contents) = virtual_list_and_contents(&mut app);
+    // Item 5001 (index 5000) starts at 6 + 5000 * 46 in the list, 3 pixels more in the
+    // contents, so index 4999 is the top row in view; two more lie beyond it.
+    app.world_mut()
+        .entity_mut(contents)
+        .insert(ScrollPosition(Vec2::new(
+            0.0,
+            5_000.0f32.mul_add(46.0, 6.0),
+        )));
+    for _ in 0..3 {
+        app.update();
+    }
+    let shown = shown_row_positions(&mut app);
+    assert_eq!(shown.len(), 10);
+    assert_eq!(shown.first().map(|(index, ..)| *index), Some(4_997));
     for (index, position, size) in shown {
         assert_eq!(
             (position, size),

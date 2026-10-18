@@ -92,7 +92,13 @@ fn setup(mut commands: Commands) {
                 width: px(240.0),
                 height: px(300.0),
             }
-            @virtual_list_scroll_area()
+            @virtual_list_scroll_area(VirtualList::new(28.0))
+            --
+            Node {
+                width: px(240.0),
+                height: px(300.0),
+            }
+            @virtual_list_scroll_area(VirtualList::separated(44.0))
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
@@ -101,10 +107,11 @@ fn setup(mut commands: Commands) {
 }
 
 /// A scroll area over a `VirtualList` of ten thousand rows, which spawns only the rows in view.
-fn virtual_list_scroll_area() -> impl Scene {
+/// The second has the separated look of a `List` with `CornerStyle::Separated`.
+fn virtual_list_scroll_area(list: VirtualList) -> impl Scene {
     ScrollArea::scene(
         bsn_list! {
-            ~{VirtualList::new(28.0)}
+            ~{list}
             @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
         },
         true,

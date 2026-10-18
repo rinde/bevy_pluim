@@ -17,11 +17,21 @@ use itertools::Either;
 
 use crate::focus::{AccessibilitySync, DrawFocusRing, TabStop};
 use crate::list::{
-    CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, item_background, sync_selected,
+    CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, SEPARATED_ITEM_PADDING,
+    SEPARATED_LIST_PADDING, SEPARATED_RING_WIDTH, SEPARATED_ROW_GAP, item_background, item_border,
+    sync_selected,
 };
 use crate::select::{Item, SelectionParam};
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
+
+/// The logical pixels of a [`Val::Px`], else 0.
+const fn px(val: Val) -> f32 {
+    match val {
+        Val::Px(value) => value,
+        _ => 0.0,
+    }
+}
 
 /// Rows kept beyond each edge of the view, so a small scroll shows rows that are ready.
 const OVERSCAN_ROWS: usize = 2;
@@ -84,6 +94,15 @@ impl Plugin for VirtualListPlugin {
 /// into view, and Enter or Space selects its item. The focus ring is on the active row, which
 /// [`ActiveDescendant`] names while it is in the pool, from the frame it moves.
 ///
+/// With `separated` set it has the look of a [`List`](crate::list::List) of
+/// [`CornerStyle::Separated`]: the rows stand apart, 6 px in from the list's edges with 2 px
+/// between them, each rounded on all corners at the control radius with 10 by 12 px of padding,
+/// and the selected row has a ring in the selection colour and the strong hover background. Rows
+/// and ring are styled by the functions the list uses, so they cannot drift apart. The rows stay
+/// absolutely placed: row `i` is at `6 + i * (row_height + 2)`, and the node is as tall as the
+/// rows, gaps and padding together. `row_height` is then the height of a row itself, padding
+/// and ring included, so it must exceed the 20 px of vertical padding and 2 of ring.
+///
 /// To a screen reader it is a [`Role::ListBox`] whose `size_of_set` is the number of items,
 /// and each row in view a list item whose `position_in_set` is its item's place among them,
 /// counted from 1, so a row says where it is among all items, not among the pooled rows.
@@ -109,13 +128,92 @@ pub struct VirtualList {
     /// The height of every row, in logical pixels. A list whose row height is not a positive,
     /// finite number shows nothing and logs an error when it is inserted.
     pub row_height: f32,
+    /// Whether the rows stand apart as in a [`CornerStyle::Separated`] list: padded, with gaps
+    /// between them, rounded, and the selected one ringed.
+    pub separated: bool,
 }
 
 impl VirtualList {
     /// A list whose rows are `row_height` logical pixels high.
     #[must_use]
     pub const fn new(row_height: f32) -> Self {
-        Self { row_height }
+        Self {
+            row_height,
+            separated: false,
+        }
+    }
+
+    /// A list of [`CornerStyle::Separated`] look, whose rows are `row_height` logical pixels
+    /// high.
+    #[must_use]
+    pub const fn separated(row_height: f32) -> Self {
+        Self {
+            row_height,
+            separated: true,
+        }
+    }
+
+    /// The corner style whose row look this list has.
+    const fn style(self) -> CornerStyle {
+        if self.separated {
+            CornerStyle::Separated
+        } else {
+            CornerStyle::FollowLayout
+        }
+    }
+
+    /// The space between the list's edge and its first and last row, in logical pixels.
+    const fn padding(self) -> f32 {
+        if self.separated {
+            px(SEPARATED_LIST_PADDING)
+        } else {
+            0.0
+        }
+    }
+
+    /// The distance between the tops of neighbouring rows: a row and the gap after it.
+    const fn pitch(self) -> f32 {
+        if self.separated {
+            self.row_height + px(SEPARATED_ROW_GAP)
+        } else {
+            self.row_height
+        }
+    }
+
+    /// The top of row `index` in the list, in logical pixels.
+    const fn row_top(self, index: usize) -> f32 {
+        (index as f32).mul_add(self.pitch(), self.padding())
+    }
+
+    /// The height of the list with `count` rows: all rows, the gaps between them and the
+    /// padding around.
+    fn content_height(self, count: usize) -> f32 {
+        if count == 0 {
+            return 0.0;
+        }
+        let gaps = if self.separated {
+            px(SEPARATED_ROW_GAP)
+        } else {
+            0.0
+        };
+        (count as f32).mul_add(self.pitch(), 2.0f32.mul_add(self.padding(), -gaps))
+    }
+
+    /// Sets the look of one row's node: where it lies across the list, padding, ring width and
+    /// corners.
+    fn style_row(self, node: &mut Node, theme: &Theme) {
+        let inset = Val::Px(self.padding());
+        node.left = inset;
+        node.right = inset;
+        if self.separated {
+            node.padding = SEPARATED_ITEM_PADDING;
+            node.border = UiRect::all(SEPARATED_RING_WIDTH);
+            node.border_radius = BorderRadius::all(theme.control_radius);
+        } else {
+            node.padding = theme.item_padding;
+            node.border = UiRect::ZERO;
+            node.border_radius = BorderRadius::ZERO;
+        }
     }
 
     /// Whether the row height is one rows can be laid out with: positive and finite.
@@ -192,27 +290,29 @@ struct View {
 
 impl View {
     /// The first and last-but-one index of the rows to show, `rows` of them at most, for
-    /// `count` items of `row_height`.
+    /// `count` items of `list`.
     #[expect(clippy::cast_sign_loss, reason = "the value is at least 0")]
-    fn rows_in_view(&self, row_height: f32, count: usize, rows: usize) -> std::ops::Range<usize> {
-        let top = ((self.scroll - self.offset) / row_height).floor().max(0.0) as usize;
+    fn rows_in_view(&self, list: VirtualList, count: usize, rows: usize) -> std::ops::Range<usize> {
+        let top = ((self.scroll - self.offset - list.padding()) / list.pitch())
+            .floor()
+            .max(0.0) as usize;
         let first = top
             .saturating_sub(OVERSCAN_ROWS)
             .min(count.saturating_sub(rows));
         first..first.saturating_add(rows).min(count)
     }
 
-    /// How many whole rows of `row_height` fit in the view, one at least: how far Page Up and
-    /// Page Down move.
+    /// How many whole rows of `list`, with their gaps, fit in the view, one at least: how far
+    /// Page Up and Page Down move.
     #[expect(clippy::cast_sign_loss, reason = "the value is at least 1")]
-    fn rows_per_page(&self, row_height: f32) -> usize {
-        (self.height / row_height).floor().max(1.0) as usize
+    fn rows_per_page(&self, list: VirtualList) -> usize {
+        (self.height / list.pitch()).floor().max(1.0) as usize
     }
 
     /// How many rows it takes to fill the view and the margin beyond it, for `count` items.
     #[expect(clippy::cast_sign_loss, reason = "the value is at least 0")]
-    fn rows_needed(&self, row_height: f32, count: usize) -> usize {
-        let fitting = (self.height / row_height).ceil().max(0.0) as usize;
+    fn rows_needed(&self, list: VirtualList, count: usize) -> usize {
+        let fitting = (self.height / list.pitch()).ceil().max(0.0) as usize;
         fitting.saturating_add(1 + 2 * OVERSCAN_ROWS).min(count)
     }
 }
@@ -308,7 +408,7 @@ fn grow_pools(
         let Some(view) = views.of(list) else {
             continue;
         };
-        let needed = view.rows_needed(virtual_list.row_height, count);
+        let needed = view.rows_needed(*virtual_list, count);
         while state.rows.len() < needed {
             let mut row = commands.spawn((
                 VirtualListRow {
@@ -316,17 +416,19 @@ fn grow_pools(
                     index: None,
                     item: None,
                 },
-                Node {
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(0.0),
-                    right: Val::Px(0.0),
-                    height: Val::Px(virtual_list.row_height),
-                    align_items: AlignItems::Center,
-                    overflow: Overflow::clip(),
-                    padding: theme.item_padding,
-                    ..default()
+                {
+                    let mut node = Node {
+                        display: Display::None,
+                        position_type: PositionType::Absolute,
+                        height: Val::Px(virtual_list.row_height),
+                        align_items: AlignItems::Center,
+                        overflow: Overflow::clip(),
+                        ..default()
+                    };
+                    virtual_list.style_row(&mut node, &theme);
+                    node
                 },
+                BorderColor::all(Color::NONE),
                 ChildOf(list),
             ));
             if creator.is_none() {
@@ -361,6 +463,7 @@ fn show_rows(
             &VirtualListRow,
             &mut Node,
             &mut BackgroundColor,
+            &mut BorderColor,
             &Hovered,
             Has<Selected>,
             Option<&RowLabel>,
@@ -385,7 +488,7 @@ fn show_rows(
             continue;
         };
         let row_height = virtual_list.row_height;
-        let height = Val::Px(items.len() as f32 * row_height);
+        let height = Val::Px(virtual_list.content_height(items.len()));
         if list_node.height != height {
             list_node.height = height;
         }
@@ -393,9 +496,9 @@ fn show_rows(
 
         let pool = state.rows.len();
         let range = view.rows_in_view(
-            row_height,
+            *virtual_list,
             items.len(),
-            view.rows_needed(row_height, items.len()).min(pool),
+            view.rows_needed(*virtual_list, items.len()).min(pool),
         );
 
         let mut active_row = None;
@@ -404,7 +507,7 @@ fn show_rows(
             // slot as its remainder: item `i` is shown by row `i % pool`.
             let index = Some(range.start + (slot + pool - range.start % pool) % pool)
                 .filter(|index| *index < range.end);
-            let Ok((current, mut node, mut background, hovered, was_selected, label)) =
+            let Ok((current, mut node, mut background, mut border, hovered, was_selected, label)) =
                 rows.get_mut(row)
             else {
                 continue;
@@ -425,7 +528,7 @@ fn show_rows(
             } else {
                 Display::None
             };
-            let top = Val::Px(index.unwrap_or_default() as f32 * row_height);
+            let top = Val::Px(virtual_list.row_top(index.unwrap_or_default()));
             let row_height = Val::Px(row_height);
             if node.display != display || node.top != top || node.height != row_height {
                 node.display = display;
@@ -446,9 +549,14 @@ fn show_rows(
             sync_selected(&mut commands, row, was_selected, is_selected);
             background.set_if_neq(BackgroundColor(item_background(
                 &theme.colors,
-                CornerStyle::FollowLayout,
+                virtual_list.style(),
                 is_selected,
                 hovered.get(),
+            )));
+            border.set_if_neq(BorderColor::all(item_border(
+                &theme.colors,
+                virtual_list.style(),
+                is_selected,
             )));
             if index.is_some() && index == state.active {
                 active_row = Some(row);
@@ -569,7 +677,7 @@ fn navigate(
     }
 
     let view = views.of(list);
-    let page = view.map_or(1, |view| view.rows_per_page(virtual_list.row_height));
+    let page = view.map_or(1, |view| view.rows_per_page(*virtual_list));
     let next = match key.key_code {
         KeyCode::ArrowUp | KeyCode::ArrowLeft => match current {
             Some(index) if index > 0 && index <= last_index => index - 1,
@@ -594,7 +702,7 @@ fn navigate(
     let Some(area) = view.area else {
         return;
     };
-    let row_top = (next as f32).mul_add(virtual_list.row_height, view.offset) - FOCUS_RING_REACH;
+    let row_top = view.offset + virtual_list.row_top(next) - FOCUS_RING_REACH;
     let row_bottom = 2.0f32.mul_add(FOCUS_RING_REACH, row_top + virtual_list.row_height);
     let scroll = if row_top < view.scroll {
         row_top
@@ -604,10 +712,9 @@ fn navigate(
         return;
     };
     // The list may have grown since the last layout measured how far the area scrolls.
-    let max_scroll = view.max_scroll.max(
-        (count as f32).mul_add(virtual_list.row_height, view.offset) + FOCUS_RING_REACH
-            - view.height,
-    );
+    let max_scroll = view
+        .max_scroll
+        .max(view.offset + virtual_list.content_height(count) + FOCUS_RING_REACH - view.height);
     let mut position = ScrollPosition(Vec2::new(0.0, scroll.clamp(0.0, max_scroll.max(0.0))));
     if let Ok((_, _, _, current_position)) = views.areas.get(area) {
         position.x = current_position.x;
@@ -707,18 +814,18 @@ fn sync_accessibility(
 fn theme_virtual_lists(
     list: In<Option<Entity>>,
     theme: Res<Theme>,
-    mut lists: Query<(&mut BackgroundColor, &VirtualListState), With<VirtualList>>,
+    mut lists: Query<(&mut BackgroundColor, &VirtualList, &VirtualListState)>,
     mut rows: Query<&mut Node, With<VirtualListRow>>,
 ) {
     let it = match list.0 {
         Some(list) => Either::Left(lists.get_mut(list).into_iter()),
         None => Either::Right(lists.iter_mut()),
     };
-    for (mut background, state) in it {
+    for (mut background, virtual_list, state) in it {
         background.0 = theme.colors.background_primary;
         for &row in &state.rows {
             if let Ok(mut node) = rows.get_mut(row) {
-                node.padding = theme.item_padding;
+                virtual_list.style_row(&mut node, &theme);
             }
         }
     }

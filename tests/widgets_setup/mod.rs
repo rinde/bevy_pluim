@@ -180,7 +180,12 @@ pub enum WidgetsSetup {
     /// pixels high, a `One` selection of its own, "Row 1" first) in the 240
     /// by 200 `virtual list scroll area`, and "Change theme".
     VirtualList,
-    /// A `row list` of three custom-view rows (a, b, c; a `One` selection of its own,
+    /// A `separated virtual list` of ten thousand rows ("Row 1" to "Row 10000",
+    /// 44 pixels high with the separated look, a `One` selection of its own,
+    /// "Row 1" first) in the 240 by 200 `separated virtual list scroll area`,
+    /// and "Change theme".
+    SeparatedVirtualList,
+    /// A `row list` of three custom-view rows (a, b, c; a `ZeroOrOne` selection of its own,
     /// nothing selected), each holding a `combo in row a` (b, c) over the stations Alpha,
     /// Beta and Gamma with a selection of its own, then "Change theme".
     ComboRows,
@@ -212,7 +217,8 @@ impl AppSetup for WidgetsSetup {
             Self::TextFields => text_fields(world),
             Self::ButtonNames => button_names(world),
             Self::Themed => themed(world),
-            Self::VirtualList => virtual_list(world),
+            Self::VirtualList => virtual_list(world, false),
+            Self::SeparatedVirtualList => virtual_list(world, true),
             Self::ComboRows => combo_rows(world),
         }
         Ok(())
@@ -1677,21 +1683,26 @@ fn themed(world: &mut World) {
 /// How many rows the `virtual list` of the [`WidgetsSetup::VirtualList`] screen has.
 const VIRTUAL_LIST_ROWS: usize = 10_000;
 
-fn virtual_list(world: &mut World) {
+fn virtual_list(world: &mut World, separated: bool) {
     let root = row_root(world);
+    let (prefix, list) = if separated {
+        ("separated ", VirtualList::separated(44.0))
+    } else {
+        ("", VirtualList::new(28.0))
+    };
     world.entity_mut(root).with_children(|root| {
         root.spawn((
-            Name::new("virtual list scroll area"),
+            Name::new(format!("{prefix}virtual list scroll area")),
             Node {
                 width: px(240),
                 height: px(200),
                 ..default()
             },
             ScrollArea::bundle(
-                |parent: &mut ChildSpawner| {
+                move |parent: &mut ChildSpawner| {
                     parent.spawn((
-                        Name::new("virtual list"),
-                        VirtualList::new(28.0),
+                        Name::new(format!("{prefix}virtual list")),
+                        list,
                         Selection::builder().one().build_with_items(
                             (1..=VIRTUAL_LIST_ROWS).map(|row| Item::new(format!("Row {row}"))),
                         ),
