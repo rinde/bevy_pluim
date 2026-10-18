@@ -600,6 +600,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::ButtonNames,
         WidgetsSetup::Themed,
         WidgetsSetup::VirtualList,
+        WidgetsSetup::ComboRows,
     ];
     for screen in screens {
         let scenario = Scenario::new(format!("{screen:?}"))
