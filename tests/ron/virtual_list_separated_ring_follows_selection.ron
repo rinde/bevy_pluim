@@ -1,0 +1,64 @@
+// A separated virtual list stands its rows apart as a separated list does: 6 pixels in from
+// the list's edges, 2 pixels between rows (44 pixel rows, so row i is at 6 + 46 i), the list
+// as tall as all of them. The selected row has the selection_ring border and the
+// hovered_selected_item background, the others neither; picking another row moves both. The
+// pointer rests on "Change theme" so that no row is hovered.
+(
+    format_version: 3,
+    name: "the selected row of a separated virtual list has the ring and picking another moves it",
+    setup: App(SeparatedVirtualList),
+    steps: [
+        Wait(3),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Check(App(Selected(of: Name("separated virtual list"), items: ["Row 1"]))),
+        Check(Component(target: Name("separated virtual list"), path: "Node.height", is: Eq(Px(460010.0)))),
+        Check(Component(target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 1")), path: "Node.top", is: Eq(Px(6.0)))),
+        Check(Component(target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")), path: "Node.top", is: Eq(Px(52.0)))),
+        Check(Component(target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")), path: "Node.left", is: Eq(Px(6.0)))),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 1")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.6823529601097107,green:0.4313725531101227,blue:0.0784313753247261,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 1")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9058823585510254,green:0.8901960849761963,blue:0.8509804010391235,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")),
+            path: "BorderColor.top",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")),
+            path: "BackgroundColor.0",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        MoveTo(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2"))), Click(Left),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(App(Selected(of: Name("separated virtual list"), items: ["Row 2"]))),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")),
+            path: "BorderColor.top",
+            is: Eq(Srgba((red:0.6823529601097107,green:0.4313725531101227,blue:0.0784313753247261,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9058823585510254,green:0.8901960849761963,blue:0.8509804010391235,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 1")),
+            path: "BorderColor.top",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+        Check(Component(
+            target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 1")),
+            path: "BackgroundColor.0",
+            is: Eq(LinearRgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
+        )),
+    ],
+    expect: [App(Selected(of: Name("separated virtual list"), items: ["Row 2"]))],
+)

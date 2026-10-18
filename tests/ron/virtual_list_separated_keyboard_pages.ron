@@ -1,0 +1,38 @@
+// Page Down and Page Up in a separated virtual list count the gap: a row and its gap are 46
+// pixels, so four fit in the 200 pixel view, not the four and a half of 44 pixel rows alone.
+// The active row is scrolled into view with its ring and the pool stays thirteen rows (four
+// in view, one for a part row, two beyond each edge, and one more as 200 / 46 rounds up).
+(
+    format_version: 3,
+    name: "page down and page up move a separated virtual list's active row by the rows and gaps that fit",
+    setup: App(SeparatedVirtualList),
+    steps: [
+        Wait(3),
+        Tap(key: Tab),
+        Check(App(Active(of: Name("separated virtual list"), is: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 1"))))),
+        Tap(key: PageDown),
+        Check(App(Active(of: Name("separated virtual list"), is: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 5"))))),
+        Tap(key: PageDown),
+        Wait(2),
+        Check(App(Active(of: Name("separated virtual list"), is: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 9"))))),
+        Check(Visible(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 9")))),
+        Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),
+        Tap(key: PageUp),
+        Wait(2),
+        Check(App(Active(of: Name("separated virtual list"), is: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 5"))))),
+        Check(Visible(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 5")))),
+        // Down to the last row: scrolled into view past its bottom padding.
+        Tap(key: End),
+        Wait(3),
+        Check(Visible(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 10000")))),
+        Check(Component(target: Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 10000")), path: "Node.top", is: Eq(Px(459960.0)))),
+        Tap(key: PageUp),
+        Wait(2),
+        Check(Visible(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 9996")))),
+        // Paging does not select.
+        Check(App(Selected(of: Name("separated virtual list"), items: ["Row 1"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("separated virtual list"), items: ["Row 1"])),
+    ],
+)
