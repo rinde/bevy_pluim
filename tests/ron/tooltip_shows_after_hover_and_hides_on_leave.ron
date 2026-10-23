@@ -1,6 +1,8 @@
 // A tooltip shows its text only after the pointer has rested on its node for
 // half a second (30 frames at 60 per second), and hides when the pointer
-// leaves. The popup text exists only while it shows.
+// leaves. The popup text exists only while it shows. The delay is time, not
+// frames, and the gallery's frames are as long as the display makes them, so
+// the checks wait with `Within` instead of a number of frames (#381).
 (
     format_version: 3,
     name: "a tooltip shows after the pointer rests on its node and hides when it leaves",
@@ -11,15 +13,13 @@
         MoveTo(Name("tooltip anchor")),
         Wait(10),
         Check(Not(Exists(Text("Anchor tip")))),
-        Wait(40),
-        Check(Visible(Text("Anchor tip"))),
+        Check(Within(600, Visible(Text("Anchor tip")))),
         MoveTo(Role(role: Button, label: "Change theme")),
         Wait(2),
         Check(Not(Exists(Text("Anchor tip")))),
         // The icon button has a tooltip of its own, its name.
         MoveTo(Name("help button")),
-        Wait(50),
-        Check(Visible(Text("Help"))),
+        Check(Within(600, Visible(Text("Help")))),
     ],
     expect: [],
 )
