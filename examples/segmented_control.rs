@@ -1,4 +1,4 @@
-//! `SegmentedControl`: one with its own selection, and two that share one.
+//! `SegmentedControl`: one with its own selection, a three-way one, and two that share one.
 
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
@@ -48,6 +48,9 @@ fn setup(mut commands: Commands) {
             SegmentedControl ~{Selection::reference(shared)}
             --
             SegmentedControl ~{Selection::reference(shared)}
+            --
+            SegmentedControl
+            @{Selection::builder().one().scene_with_items(["Dark", "System", "Light"].map(Item::new))}
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())

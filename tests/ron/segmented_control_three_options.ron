@@ -1,0 +1,24 @@
+// A control with three items shows three segments and a click on any of them selects it, the
+// middle one included.
+(
+    format_version: 3,
+    name: "a segmented control can have three options",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(Exists(Within(Name("three-way segmented control"), Role(role: Button, label: "Dark")))),
+        Check(Exists(Within(Name("three-way segmented control"), Role(role: Button, label: "System")))),
+        Check(Exists(Within(Name("three-way segmented control"), Role(role: Button, label: "Light")))),
+        Check(App(Selected(of: Name("three-way segmented control"), items: ["Dark"]))),
+        MoveTo(Within(Name("three-way segmented control"), Role(role: Button, label: "System"))),
+        Click(Left),
+        Check(App(Selected(of: Name("three-way segmented control"), items: ["System"]))),
+        MoveTo(Within(Name("three-way segmented control"), Role(role: Button, label: "Light"))),
+        Click(Left),
+        Check(App(Selected(of: Name("three-way segmented control"), items: ["Light"]))),
+        Check(Not(Selected(Within(Name("three-way segmented control"), Role(role: Button, label: "System"))))),
+    ],
+    expect: [
+        App(Selected(of: Name("three-way segmented control"), items: ["Light"])),
+    ],
+)

@@ -122,7 +122,8 @@ pub enum WidgetsSetup {
     /// Segmented controls, each with a `Name`: `own segmented control`
     /// (Auto, Manual, with a selection of its own) and `first shared
     /// segmented control` and `second shared segmented control` (Dark, Light,
-    /// sharing one selection), then "Change theme".
+    /// sharing one selection), then "Change theme" and `three-way segmented
+    /// control` (Dark, System, Light, with a selection of its own).
     SegmentedControls,
     /// Rows of filter chips, each with a `Name`: `status chips` (All 4, Running 2,
     /// Waiting 1, Problems 1, with a selection of its own, All first), `mirror chips`
@@ -1294,6 +1295,13 @@ fn segmented_controls(world: &mut World) {
             Name::new("second shared segmented control"),
         ));
         spawn_theme_button(root);
+        root.spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "System", "Light"].map(Item::new)),
+            Name::new("three-way segmented control"),
+        ));
     });
 }
 

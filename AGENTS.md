@@ -1073,7 +1073,7 @@ a file can check any `Reflect` type of the app by short type path.
 - **The `SegmentedControls` screen.** A row of `own segmented control` (Auto,
   Manual, its own selection, Auto first) and `first shared segmented control` and
   `second shared segmented control` (Dark, Light, one shared selection through
-  `Selection::reference`) and "Change theme". A file reaches a segment with
+  `Selection::reference`) and "Change theme", then `three-way segmented control` (Dark, System, Light, its own selection; spawned last to keep the tab order). A file reaches a segment with
   `Within(Name("own segmented control"), Role(role: Button, label: "Manual"))`,
   says what a control shows with `App(Selected(of: Name(..), items: [..]))` and
   whether a segment is `Selected(..)`; each segment is a tab stop, so Tab walks
