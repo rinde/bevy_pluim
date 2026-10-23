@@ -40,6 +40,18 @@ pub struct LightDarkTogglePlugin;
 
 impl Plugin for LightDarkTogglePlugin {
     fn build(&self, app: &mut App) {
+        // `WindowPlugin` spawns the primary window while it builds, so the window of a normal app
+        // exists before this plugin does and no `Add<Window>` observer will see it.
+        let preset: Vec<Entity> = app
+            .world_mut()
+            .query::<(Entity, &Window)>()
+            .iter(app.world())
+            .filter(|(_, window)| window.window_theme.is_some())
+            .map(|(entity, _)| entity)
+            .collect();
+        for entity in preset {
+            app.world_mut().entity_mut(entity).insert(PresetWindowTheme);
+        }
         app.init_resource::<SystemTheme>()
             .add_observer(mark_preset_window_theme)
             .add_message::<WindowThemeChanged>()
@@ -102,8 +114,7 @@ impl ThemePreference {
 /// the setting. `None` when no window has told (headless, or a system without the setting).
 /// A primary window spawned with a fixed [`Window::window_theme`] says nothing about the system:
 /// the windowing system reports that theme back as the window's, so it is not read, and
-/// `SystemTheme` stays `None` until a [`WindowThemeChanged`] arrives. (A window that already
-/// existed when [`WidgetsPlugin`](crate::WidgetsPlugin) was added is read as it is.)
+/// `SystemTheme` stays `None` until a [`WindowThemeChanged`] arrives.
 /// While the preference is fixed to light or dark the window is told to use that theme, and
 /// some platforms then stop reporting the system's, so a change made in that time may only be
 /// seen when the app goes back to [`ThemePreference::System`].
