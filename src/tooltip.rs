@@ -186,9 +186,17 @@ fn despawn_popup_with_owner(
     mut commands: Commands,
 ) {
     // The popup is a child of the node, so it goes with a despawned node by itself.
-    if let Ok(TooltipRef(popup)) = refs.get(t.event().event_target()) {
+    let node = t.event().event_target();
+    if let Ok(TooltipRef(popup)) = refs.get(node) {
         commands.entity(*popup).try_despawn();
     }
+    // `update_tooltips` only visits nodes with a `Tooltip`, so a ref left behind would stay stale
+    // and stop the popup showing once a `Tooltip` is inserted again. (A despawning node ignores
+    // these.)
+    commands
+        .entity(node)
+        .try_remove::<TooltipRef>()
+        .try_insert(TooltipClock::default());
 }
 
 /// Puts each popup centred under its node, inside the window, or above the node when it would

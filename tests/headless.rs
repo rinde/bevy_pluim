@@ -5045,6 +5045,29 @@ fn a_tooltip_popup_is_a_fixed_child_of_its_node() {
 }
 
 #[test]
+fn a_tooltip_removed_and_inserted_again_shows_its_popup_on_the_next_hover() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+
+    app.world_mut().entity_mut(button).remove::<Tooltip>();
+    tick(&mut app);
+    tick(&mut app);
+    assert!(tooltip_popups(&mut app).is_empty());
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Tooltip::new("Again"));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Again"]);
+}
+
+#[test]
 fn despawning_the_icon_button_removes_its_tooltip() {
     let (mut app, button) = tooltip_app();
     app.world_mut().entity_mut(button).insert(Hovered(true));
