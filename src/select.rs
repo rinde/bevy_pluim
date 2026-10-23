@@ -46,6 +46,12 @@ impl Plugin for ItemsPlugin {
 #[component(immutable)]
 pub enum Selection {
     /// Use the selection on that entity.
+    ///
+    /// Exactly one hop is followed: the target must hold a
+    /// [`Selection::Value`]. A target that is missing, has no `Selection`,
+    /// is this very entity, or is itself a `Ref` (a chain) resolves to
+    /// nothing, and [`SelectionParam`] logs an `error!`; point a `Ref` at the
+    /// entity that holds the value instead.
     Ref(Entity),
     /// The selection itself.
     Value(SelectionValue),
@@ -671,7 +677,7 @@ where
 
     /// Resolves `selection` to the entity holding the value and the value
     /// itself. `None` if a `Selection::Ref` does not point to a
-    /// `Selection::Value`.
+    /// `Selection::Value` (logged as an `error!`).
     fn find<'a>(
         &'a self,
         entity: Entity,
@@ -679,8 +685,25 @@ where
     ) -> Option<(Entity, &'a SelectionValue)> {
         match selection {
             Selection::Ref(entity_ref) => {
-                let value = self.selection_refs.get(*entity_ref).ok()?.as_selection()?;
-                Some((*entity_ref, value))
+                let value = self
+                    .selection_refs
+                    .get(*entity_ref)
+                    .ok()
+                    .and_then(Selection::as_selection);
+                if value.is_none() {
+                    error!(
+                        "Selection::Ref on {entity} points to {entity_ref}, which is {}; \
+                         a Ref must point to an entity holding a Selection::Value",
+                        if *entity_ref == entity {
+                            "itself"
+                        } else if self.selection_refs.contains(*entity_ref) {
+                            "another Selection::Ref (chains are not followed)"
+                        } else {
+                            "missing or without a Selection"
+                        }
+                    );
+                }
+                Some((*entity_ref, value?))
             }
             Selection::Value(selection) => Some((entity, selection)),
         }

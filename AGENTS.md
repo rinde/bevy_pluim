@@ -465,7 +465,13 @@ of them (`just example gallery -- --run-all stack link`).
   inserted, which fires `OnInsert` observers.
 - **Shared selections.** A widget holding `Selection::Ref(entity)` reads and
   writes the selection on `entity`. `BreadCrumbs`, `List` and `Combo` accept
-  one; `Stack` takes the selection entity directly in `selection_ref`.
+  one; `Stack` takes the selection entity directly in `selection_ref`. **One hop
+  is the contract:** a `Ref` must point to an entity holding a `Selection::Value`.
+  A target that is missing, has no `Selection`, is the `Ref`'s own entity, or is
+  another `Ref` (a chain) resolves to nothing (`SelectionParam::find` returns
+  `None`, so `single` is an error and `get`, `get_ref`, `get_with_ref` return
+  `None`) and `find` logs an `error!` each time; chains are not followed
+  (`a_selection_ref_to_*` in `tests/headless.rs`).
 - **Shared items.** `ItemsRef(entity)` lets several selections draw from one
   `ItemValues`.
 - **A scroll area leaves room for a focus ring.** `ScrollContents` has 3 px of

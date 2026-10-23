@@ -6844,3 +6844,106 @@ fn a_one_and_a_one_or_more_selection_are_repaired_when_their_items_arrive_later(
         )))
     );
 }
+
+/// A `Selection::Ref` that points to a holder of a value is followed.
+#[test]
+fn a_selection_ref_to_a_value_resolves_to_its_holder() {
+    let mut app = headless_app();
+    let holder = app
+        .world_mut()
+        .spawn(Selection::Value(SelectionValue::ZeroOrOne(None)))
+        .id();
+    let reference = app.world_mut().spawn(Selection::Ref(holder)).id();
+    app.update();
+    // `SelectionParam<Entity>` filters on `Entity`, which matches both.
+    let got = app
+        .world_mut()
+        .run_system_once(move |param: SelectionParam| {
+            (
+                param.get_ref(reference),
+                param.get_with_ref(reference).map(|(e, _)| e),
+            )
+        })
+        .unwrap();
+    assert_eq!(got, (Some(holder), Some(holder)));
+}
+
+/// A `Ref` to an entity without a `Selection` resolves to nothing.
+#[test]
+fn a_selection_ref_to_an_entity_without_a_selection_resolves_to_nothing() {
+    let mut app = headless_app();
+    let target = app.world_mut().spawn_empty().id();
+    let reference = app.world_mut().spawn((Selection::Ref(target), Marker)).id();
+    app.update();
+    assert_eq!(
+        resolve_marked(&mut app, reference),
+        (None, false, None, false)
+    );
+}
+
+/// A `Ref` to a despawned entity resolves to nothing.
+#[test]
+fn a_selection_ref_to_a_despawned_entity_resolves_to_nothing() {
+    let mut app = headless_app();
+    let target = app.world_mut().spawn_empty().id();
+    app.world_mut().despawn(target);
+    let reference = app.world_mut().spawn((Selection::Ref(target), Marker)).id();
+    app.update();
+    assert_eq!(
+        resolve_marked(&mut app, reference),
+        (None, false, None, false)
+    );
+}
+
+/// A `Ref` to its own entity resolves to nothing.
+#[test]
+fn a_selection_ref_to_itself_resolves_to_nothing() {
+    let mut app = headless_app();
+    let reference = app.world_mut().spawn(Marker).id();
+    app.world_mut()
+        .entity_mut(reference)
+        .insert(Selection::Ref(reference));
+    app.update();
+    assert_eq!(
+        resolve_marked(&mut app, reference),
+        (None, false, None, false)
+    );
+}
+
+/// A two-hop chain is not followed: the first `Ref` points to a `Ref`.
+#[test]
+fn a_selection_ref_chain_is_not_followed() {
+    let mut app = headless_app();
+    let holder = app
+        .world_mut()
+        .spawn(Selection::Value(SelectionValue::ZeroOrOne(None)))
+        .id();
+    let middle = app.world_mut().spawn(Selection::Ref(holder)).id();
+    let first = app.world_mut().spawn((Selection::Ref(middle), Marker)).id();
+    app.update();
+    assert_eq!(resolve_marked(&mut app, first), (None, false, None, false));
+    // One hop still works for the middle `Ref`.
+    let middle_ref = app
+        .world_mut()
+        .run_system_once(move |param: SelectionParam| param.get_ref(middle))
+        .unwrap();
+    assert_eq!(middle_ref, Some(holder));
+}
+
+/// Marks the one `Ref` entity that `resolve_marked` looks at.
+#[derive(Component)]
+struct Marker;
+
+/// [`resolve_selection`] over the `Marker` entity only, so `single` sees one.
+fn resolve_marked(app: &mut App, entity: Entity) -> (Option<Entity>, bool, Option<Entity>, bool) {
+    app.world_mut()
+        .run_system_once(move |param: SelectionParam<With<Marker>>| {
+            (
+                param.iter().next().map(|(holder, _)| holder),
+                param.single().is_ok(),
+                param.get_ref(entity),
+                param.get_with_ref(entity).is_some(),
+            )
+        })
+        .unwrap()
+}
