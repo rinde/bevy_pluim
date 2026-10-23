@@ -48,6 +48,7 @@ impl Plugin for TabBarPlugin {
                     .run_if(resource_changed::<Theme>),
                 selection_change,
                 hover_change,
+                sync_label_text,
             ),
         )
         .add_systems(
@@ -398,8 +399,65 @@ fn on_items_changed(
                 });
         });
     }
+    commands.run_system_cached_with(
+        order_tabs,
+        ItemsChangedInput {
+            bar_ref: *bar_ref,
+            items: items.clone(),
+        },
+    );
     commands.run_system_cached_with(sync_selected_tab, *bar_ref);
     commands.run_system_cached_with(theme_tab_bars, Some(*bar_ref));
+}
+
+/// Puts the tabs of a bar in the order of its items. Children are only reordered, and only when
+/// they differ.
+fn order_tabs(
+    input: In<ItemsChangedInput>,
+    bars: Query<&Children, With<TabBar>>,
+    tabs: Query<&TabBarTab>,
+    mut commands: Commands,
+) {
+    let ItemsChangedInput { bar_ref, items } = &*input;
+    let Ok(children) = bars.get(*bar_ref) else {
+        return;
+    };
+    let mut wanted: Vec<Entity> = items
+        .iter()
+        .filter_map(|item| {
+            children
+                .iter()
+                .find(|c| tabs.get(*c).is_ok_and(|t| t.item_ref == *item))
+        })
+        .collect();
+    let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();
+    wanted.extend(rest);
+    if !wanted.iter().copied().eq(children.iter()) {
+        commands.entity(*bar_ref).replace_children(&wanted);
+    }
+}
+
+/// Shows the current text of each tab's item: a changed [`Item<String>`] updates its
+/// [`TabBarTabLabel`] in place.
+fn sync_label_text(
+    changed_items: Query<(), Changed<Item<String>>>,
+    tabs: Query<&TabBarTab>,
+    items: Query<&Item<String>>,
+    mut labels: Query<(&ChildOf, &mut Text), With<TabBarTabLabel>>,
+) {
+    if changed_items.is_empty() {
+        return;
+    }
+    for (child_of, mut text) in &mut labels {
+        let Ok(tab) = tabs.get(child_of.parent()) else {
+            continue;
+        };
+        if let Ok(item) = items.get(tab.item_ref)
+            && text.0 != item.data
+        {
+            text.0.clone_from(&item.data);
+        }
+    }
 }
 
 fn on_insert_selection(

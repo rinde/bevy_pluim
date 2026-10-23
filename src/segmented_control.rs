@@ -56,6 +56,7 @@ impl Plugin for SegmentedControlPlugin {
                     .run_if(resource_changed::<Theme>),
                 selection_change,
                 sync_icons,
+                sync_label_text,
                 hover_change,
                 spawn_indicators,
                 animate_indicators,
@@ -331,6 +332,7 @@ fn sync_icons(
     changed_icons: Query<(), Changed<ItemIcon>>,
     mut removed_icons: RemovedComponents<ItemIcon>,
     changed_labels: Query<(), Changed<SegmentLabels>>,
+    changed_items: Query<(), Changed<Item<String>>>,
     added: Query<(), Added<Segment>>,
     segments: Query<(Entity, &Segment, Option<&Tooltip>, Option<&OwnedTooltip>)>,
     item_icons: Query<&ItemIcon>,
@@ -341,7 +343,12 @@ fn sync_icons(
     mut commands: Commands,
 ) {
     let removed = removed_icons.read().count() > 0;
-    if !removed && changed_icons.is_empty() && changed_labels.is_empty() && added.is_empty() {
+    if !removed
+        && changed_icons.is_empty()
+        && changed_labels.is_empty()
+        && changed_items.is_empty()
+        && added.is_empty()
+    {
         return;
     }
     let mut restyle = Vec::new();
@@ -415,6 +422,29 @@ fn sync_icons(
     }
     for control in restyle {
         commands.run_system_cached_with(theme_segmented_controls, Some(control));
+    }
+}
+
+/// Shows the current text of each segment's item: a changed [`Item<String>`] updates its
+/// segment's [`SegmentLabel`] in place.
+fn sync_label_text(
+    changed_items: Query<(), Changed<Item<String>>>,
+    segments: Query<&Segment>,
+    items: Query<&Item<String>>,
+    mut labels: Query<(&ChildOf, &mut Text), With<SegmentLabel>>,
+) {
+    if changed_items.is_empty() {
+        return;
+    }
+    for (child_of, mut text) in &mut labels {
+        let Ok(segment) = segments.get(child_of.parent()) else {
+            continue;
+        };
+        if let Ok(item) = items.get(segment.item_ref)
+            && text.0 != item.data
+        {
+            text.0.clone_from(&item.data);
+        }
     }
 }
 
@@ -628,7 +658,41 @@ fn on_items_changed(
             }
         });
     }
+    commands.run_system_cached_with(
+        order_segments,
+        ItemsChangedInput {
+            control_ref: *control_ref,
+            items: items.clone(),
+        },
+    );
     commands.run_system_cached_with(theme_segmented_controls, Some(*control_ref));
+}
+
+/// Puts the segments of a control in the order of its items, before any other child (the
+/// indicator). Children are only reordered, and only when they differ.
+fn order_segments(
+    input: In<ItemsChangedInput>,
+    controls: Query<&Children, With<SegmentedControl>>,
+    segments: Query<&Segment>,
+    mut commands: Commands,
+) {
+    let ItemsChangedInput { control_ref, items } = &*input;
+    let Ok(children) = controls.get(*control_ref) else {
+        return;
+    };
+    let mut wanted: Vec<Entity> = items
+        .iter()
+        .filter_map(|item| {
+            children
+                .iter()
+                .find(|c| segments.get(*c).is_ok_and(|s| s.item_ref == *item))
+        })
+        .collect();
+    let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();
+    wanted.extend(rest);
+    if !wanted.iter().copied().eq(children.iter()) {
+        commands.entity(*control_ref).replace_children(&wanted);
+    }
 }
 
 fn on_insert_selection(
