@@ -54,7 +54,7 @@ use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemVi
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{ButtonSize, PushButton, PushButtonRefs};
+use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton, PushButtonRefs};
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use rin_bevy_ui::select::{
@@ -1133,6 +1133,34 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
     assert_eq!(label_color(&app), colors.text_primary);
+}
+
+#[test]
+fn a_push_button_puts_its_icon_where_its_icon_placement_says() {
+    let mut app = headless_app();
+    let button = app.world_mut().spawn(PushButton::new("Label", ">")).id();
+    app.update();
+    app.update();
+    let direction = |app: &App| {
+        app.world()
+            .entity(button)
+            .get::<Node>()
+            .unwrap()
+            .flex_direction
+    };
+    // The default keeps the icon after the label, as before.
+    assert_eq!(direction(&app), FlexDirection::Row);
+    for (placement, expected) in [
+        (IconPlacement::Left, FlexDirection::RowReverse),
+        (IconPlacement::Top, FlexDirection::ColumnReverse),
+        (IconPlacement::Bottom, FlexDirection::Column),
+        (IconPlacement::Right, FlexDirection::Row),
+    ] {
+        app.world_mut().entity_mut(button).insert(placement);
+        app.update();
+        app.update();
+        assert_eq!(direction(&app), expected);
+    }
 }
 
 #[test]
