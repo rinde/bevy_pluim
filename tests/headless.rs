@@ -6347,6 +6347,47 @@ fn hidden_labels_hide_the_text_only_of_items_with_an_icon_and_add_a_tooltip() {
 }
 
 #[test]
+fn an_app_tooltip_on_a_segment_survives_label_and_icon_changes_and_is_not_overwritten() {
+    let mut app = headless_app();
+    let control = spawn_mixed_icon_control(&mut app);
+    let segments = segments_of(&app, control);
+    let grid = item_with_text(&mut app, "Grid");
+    app.world_mut()
+        .entity_mut(segments[0])
+        .insert(Tooltip::new("Mine"));
+    let tip = |app: &App| {
+        app.world()
+            .entity(segments[0])
+            .get::<Tooltip>()
+            .map(|t| t.text.clone())
+    };
+    let settle = |app: &mut App| {
+        app.update();
+        app.update();
+    };
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Shown);
+    settle(&mut app);
+    assert_eq!(tip(&app).as_deref(), Some("Mine"));
+    app.world_mut()
+        .entity_mut(grid)
+        .insert(ItemIcon(Handle::default()));
+    settle(&mut app);
+    assert_eq!(tip(&app).as_deref(), Some("Mine"));
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Hidden);
+    settle(&mut app);
+    assert_eq!(tip(&app).as_deref(), Some("Mine"));
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Shown);
+    settle(&mut app);
+    assert_eq!(tip(&app).as_deref(), Some("Mine"));
+}
+
+#[test]
 fn changing_or_removing_an_item_icon_updates_its_segment_in_place() {
     let mut app = headless_app();
     let control = spawn_mixed_icon_control(&mut app);
