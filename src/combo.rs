@@ -5,12 +5,14 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiSystems};
 use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
@@ -21,6 +23,7 @@ use crate::focus::{
     AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
     sync_role, sync_value,
 };
+use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
@@ -154,14 +157,46 @@ impl ComboState {
 
 const PLACEHOLDER_TEXT: &str = "Select..";
 
+/// The side of the chevron image, in logical pixels.
+const CHEVRON_SIZE: f32 = 16.0;
+
+/// A white-on-transparent 16 px triangle pointing down, tinted by its [`Icon`].
+fn chevron() -> Image {
+    const SIZE: u32 = 16;
+    let mut data = vec![0u8; (SIZE * SIZE * 4) as usize];
+    for y in 5..11u32 {
+        let half_width = 6 - (y - 5);
+        for x in (8 - half_width)..(8 + half_width) {
+            let at = ((y * SIZE + x) * 4) as usize;
+            if let Some(pixel) = data.get_mut(at..at + 4) {
+                pixel.copy_from_slice(&[255; 4]);
+            }
+        }
+    }
+    Image::new(
+        Extent3d {
+            width: SIZE,
+            height: SIZE,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    )
+}
+
 impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let mut button_id = Entity::PLACEHOLDER;
         let mut list_id = Entity::PLACEHOLDER;
+        let chevron = world
+            .get_resource_mut::<Assets<Image>>()
+            .map_or_else(Handle::default, |mut images| images.add(chevron()));
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((
-                    PushButton::new(PLACEHOLDER_TEXT, "\\/"),
+                    PushButton::from_label(PLACEHOLDER_TEXT),
                     ComboButton,
                     NoDefaultHover,
                     // allow mouse events to pass through to parent
@@ -170,6 +205,13 @@ impl Combo {
                         ..default()
                     },
                 ))
+                .with_children(|button| {
+                    button.spawn((
+                        Icon::bundle(chevron, CHEVRON_SIZE),
+                        Name::new("Chevron"),
+                        Pickable::IGNORE,
+                    ));
+                })
                 .id();
 
             x.spawn(Node::DEFAULT).with_children(|spawner| {
