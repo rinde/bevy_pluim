@@ -6454,3 +6454,160 @@ fn changing_or_removing_an_item_icon_updates_its_segment_in_place() {
     assert!(icon_of(&app, segments[1]).is_some());
     assert_eq!(segments_of(&app, control), segments);
 }
+
+#[test]
+fn changing_an_items_text_updates_its_segment_in_place() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+    let item = app
+        .world()
+        .entity(segments[1])
+        .get::<Segment>()
+        .unwrap()
+        .item_ref;
+
+    app.world_mut()
+        .entity_mut(item)
+        .get_mut::<Item<String>>()
+        .unwrap()
+        .data = "Custom".into();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(segments_of(&app, control), segments);
+    let texts: Vec<_> = segments.iter().map(|s| segment_text(&app, *s)).collect();
+    assert_eq!(texts, ["Auto", "Custom", "Off"]);
+}
+
+#[test]
+fn an_item_inserted_in_the_middle_puts_its_segment_there() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let before = segments_of(&app, control);
+
+    let new = app.world_mut().spawn(Item::new("Middle")).id();
+    app.world_mut()
+        .entity_mut(control)
+        .insert_related::<ItemOf>(1, &[new]);
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let segments = segments_of(&app, control);
+    let texts: Vec<_> = segments.iter().map(|s| segment_text(&app, *s)).collect();
+    assert_eq!(texts, ["Auto", "Middle", "Manual", "Off"]);
+    assert_eq!(segments[0], before[0]);
+    assert_eq!(segments[2], before[1]);
+    assert_eq!(segments[3], before[2]);
+}
+
+#[test]
+fn reordering_items_reorders_their_segments() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let before = segments_of(&app, control);
+    let last = app
+        .world()
+        .entity(before[2])
+        .get::<Segment>()
+        .unwrap()
+        .item_ref;
+
+    app.world_mut()
+        .entity_mut(control)
+        .insert_related::<ItemOf>(0, &[last]);
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let segments = segments_of(&app, control);
+    assert_eq!(segments, [before[2], before[0], before[1]]);
+}
+
+#[test]
+fn changing_an_items_text_updates_its_tab_in_place() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+    let item = app
+        .world()
+        .entity(tabs[1])
+        .get::<TabBarTab>()
+        .unwrap()
+        .item_ref;
+
+    app.world_mut()
+        .entity_mut(item)
+        .get_mut::<Item<String>>()
+        .unwrap()
+        .data = "Sound".into();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(tabs_of(&app, bar), tabs);
+    let texts: Vec<_> = tabs.iter().map(|t| segment_text(&app, *t)).collect();
+    assert_eq!(texts, ["General", "Sound", "Input"]);
+}
+
+#[test]
+fn an_item_inserted_in_the_middle_puts_its_tab_there() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let before = tabs_of(&app, bar);
+
+    let new = app.world_mut().spawn(Item::new("Video")).id();
+    app.world_mut()
+        .entity_mut(bar)
+        .insert_related::<ItemOf>(1, &[new]);
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let tabs = tabs_of(&app, bar);
+    let texts: Vec<_> = tabs.iter().map(|t| segment_text(&app, *t)).collect();
+    assert_eq!(texts, ["General", "Video", "Audio", "Input"]);
+    assert_eq!(
+        [tabs[0], tabs[2], tabs[3]],
+        [before[0], before[1], before[2]]
+    );
+}
+
+#[test]
+fn reordering_items_reorders_their_tabs() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let before = tabs_of(&app, bar);
+    let last = app
+        .world()
+        .entity(before[2])
+        .get::<TabBarTab>()
+        .unwrap()
+        .item_ref;
+
+    app.world_mut()
+        .entity_mut(bar)
+        .insert_related::<ItemOf>(0, &[last]);
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(tabs_of(&app, bar), [before[2], before[0], before[1]]);
+}
