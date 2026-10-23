@@ -1259,7 +1259,7 @@ a file can check any `Reflect` type of the app by short type path.
   window's left and right edges; the screen has `left edge palette combo` and
   `right edge palette combo`, absolutely placed in the top corners so nothing
   else moves, which open into those margins
-  (`color_palette_combo_keeps_margin_at_window_edge`). The layout rounds the
+  (`color_palette_combo_keeps_margin_at_window_edge`). In a 1280 by 260 window (`window_size`) the popup is capped to 192 high, top 58 and bottom 250, in every variant; the pointer on rows 249 and 250 tells whether it is on the popup, and Arrow Down scrolls the `ScrollContents` inside it, not the popup (`color_palette_combo_taller_than_window_stays_inside_window`, `color_palette_combo_taller_than_window_keyboard_scrolls_the_popup`). The layout rounds the
   popup to whole pixels, so beside the 39 pixel wide button (centre on a half
   pixel) its centre is the button's plus or minus 0.5. The popup's palette refers to
   the combo's selection from the moment it is spawned, so
