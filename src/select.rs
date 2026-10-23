@@ -6,10 +6,12 @@
 //! through [`ItemsRef`]. Widgets read and change selections through
 //! [`SelectionParam`].
 
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::query::{QueryData, QueryFilter, QuerySingleError, ROQueryItem};
 use bevy::ecs::relationship::RelatedSpawner;
 use bevy::ecs::spawn::SpawnIter;
 use bevy::ecs::system::SystemParam;
+use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
 use bevy::scene::{EmptySceneEffect, Scene, bsn};
 use derive_more::Deref;
@@ -770,6 +772,55 @@ pub struct ItemsChanged {
     pub entity: Entity,
     /// The new items.
     pub items: ItemValues,
+}
+
+/// Records the observer a widget put on its [`ItemValues`] entity to hear [`ItemsChanged`], on
+/// the widget itself, so the observer goes when the widget does (removing this component
+/// despawns it) and goes with the values entity when that is despawned first.
+#[derive(Component, Debug)]
+#[component(on_remove = despawn_items_observer)]
+pub(crate) struct ItemsObserver {
+    values: Entity,
+    observer: Entity,
+}
+
+fn despawn_items_observer(mut world: DeferredWorld, context: HookContext) {
+    let Some(watch) = world.get::<ItemsObserver>(context.entity) else {
+        return;
+    };
+    let observer = watch.observer;
+    world.commands().entity(observer).try_despawn();
+}
+
+/// Has `on_changed(commands, widget, items)` called when the items of `values` change, once
+/// per widget and values entity: returns `false`, doing nothing, when `widget` already
+/// watches `values`. Watching other values replaces the earlier observer.
+pub(crate) fn watch_items(
+    commands: &mut Commands,
+    watches: &Query<&ItemsObserver>,
+    observers: &Query<(), With<Observer>>,
+    widget: Entity,
+    values: Entity,
+    on_changed: fn(&mut Commands, Entity, Vec<Entity>),
+) -> bool {
+    if let Ok(old) = watches.get(widget) {
+        if old.values == values && observers.contains(old.observer) {
+            return false;
+        }
+        commands.entity(old.observer).try_despawn();
+    }
+    let observer = commands
+        .spawn(
+            Observer::new(move |t: On<ItemsChanged>, mut commands: Commands| {
+                on_changed(&mut commands, widget, t.event().items.iter().collect());
+            })
+            .with_entity(values),
+        )
+        .id();
+    commands
+        .entity(widget)
+        .insert(ItemsObserver { values, observer });
+    true
 }
 
 fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut commands: Commands) {
