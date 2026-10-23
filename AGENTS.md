@@ -41,6 +41,10 @@ file covers repository guidance only. Issues ready for Coordino use the
 description; ask for clarification if its scope is genuinely ambiguous.
 Changes should be made through pull requests.
 
+There is a GitHub Actions billing problem, this is a known problem, no
+action is required. Running `just ci` is a valid substitute and is enough
+for merging a PR.
+
 ## Where to find what
 
 | Module | Holds |
