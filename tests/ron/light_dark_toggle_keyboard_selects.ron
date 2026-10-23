@@ -1,0 +1,17 @@
+// Each option is a tab stop: Tab walks Light, System, Dark, and Enter on the
+// focused option fixes the preference to it.
+(
+    format_version: 3,
+    name: "a light dark toggle is driven from the keyboard",
+    setup: App(LightDarkToggle),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Tap(key: Tab),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Resource(path: "ThemePreference", is: Eq(Dark))),
+    ],
+)

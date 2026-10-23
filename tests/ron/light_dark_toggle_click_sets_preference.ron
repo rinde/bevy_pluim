@@ -1,0 +1,43 @@
+// A light / system / dark toggle starts on System. A click on "Dark" fixes the
+// preference to dark and the theme follows, and a click on "Light" fixes light.
+// The toggle is a radio group whose toggle follows the preference.
+(
+    format_version: 3,
+    name: "a light dark toggle starts on system and a click fixes light or dark",
+    setup: App(LightDarkToggle),
+    steps: [
+        Wait(2),
+        Check(Resource(path: "ThemePreference", is: Eq(System))),
+        Check(App(Accessible(
+            of: Name("light dark toggle"),
+            role: Some("RadioGroup"),
+            label: None,
+            value: None,
+            states: [],
+        ))),
+        MoveTo(Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "ThemePreference", is: Eq(Dark))),
+        Check(App(Accessible(
+            of: Within(Name("light dark toggle"), Role(role: Button, label: "Dark")),
+            role: Some("RadioButton"),
+            label: Some("Dark"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("light dark toggle"), Role(role: Button, label: "System")),
+            role: Some("RadioButton"),
+            label: Some("System"),
+            value: None,
+            states: [NotToggled],
+        ))),
+        Check(Selected(Within(Name("light dark toggle"), Role(role: Button, label: "Dark")))),
+        MoveTo(Within(Name("light dark toggle"), Role(role: Button, label: "Light"))),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "ThemePreference", is: Eq(Light))),
+        Check(Not(Selected(Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))))),
+    ],
+)

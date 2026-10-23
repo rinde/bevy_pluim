@@ -23,6 +23,7 @@ pub mod icon;
 pub mod icon_button;
 pub mod kbd;
 pub mod label;
+pub mod light_dark_toggle;
 pub mod link;
 pub mod list;
 pub mod numeric_stepper;
@@ -69,6 +70,7 @@ use crate::icon::IconPlugin;
 use crate::icon_button::IconButtonPlugin;
 use crate::kbd::KbdPlugin;
 use crate::label::LabelPlugin;
+use crate::light_dark_toggle::LightDarkTogglePlugin;
 use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
@@ -111,6 +113,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(ComboPlugin)
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(SegmentedControlPlugin)
+            .add_plugins(LightDarkTogglePlugin)
             .add_plugins(SettingRowPlugin)
             .add_plugins(TabBarPlugin)
             .add_plugins(StackPlugin)
