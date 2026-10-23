@@ -1,0 +1,22 @@
+// A segment of an item with an `ItemIcon` shows a 16 px icon before its text: both are there,
+// and picking the segment selects its item. Text-only segments of other controls have no icon.
+(
+    format_version: 3,
+    name: "a segment with an icon and text shows both and picks its item",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(Exists(Within(Within(Name("icon segmented control"), Role(role: Button, label: "Grid")), Name("SegmentIcon")))),
+        Check(Exists(Within(Within(Name("icon segmented control"), Role(role: Button, label: "List")), Name("SegmentIcon")))),
+        Check(Visible(Within(Name("icon segmented control"), Text("Grid")))),
+        Check(Visible(Within(Name("icon segmented control"), Text("List")))),
+        Check(Not(Exists(Within(Name("own segmented control"), Name("SegmentIcon"))))),
+        Check(App(Selected(of: Name("icon segmented control"), items: ["Grid"]))),
+        MoveTo(Within(Name("icon segmented control"), Role(role: Button, label: "List"))),
+        Click(Left),
+        Check(App(Selected(of: Name("icon segmented control"), items: ["List"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("icon segmented control"), items: ["List"])),
+    ],
+)

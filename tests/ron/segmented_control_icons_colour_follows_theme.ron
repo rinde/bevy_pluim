@@ -1,0 +1,35 @@
+// The icon of a segment is tinted like its text: `segmented_selected_text` on the selected
+// segment ("Grid"), `text_secondary` on the resting one ("List"), in the light theme and again
+// after "Change theme" in the dark one. The pointer stays away from the control.
+(
+    format_version: 3,
+    name: "a segment's icon follows the colour of its text in both themes",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Nth(0, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.13333334,green:0.14509805,blue:0.16470589,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.36078432,green:0.38431373,blue:0.41568628,alpha:1.0))),
+        )),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Nth(0, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.078431375,green:0.09019608,blue:0.10980392,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.6392157,green:0.6627451,blue:0.69411767,alpha:1.0))),
+        )),
+    ],
+    expect: [],
+)

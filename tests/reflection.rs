@@ -40,7 +40,9 @@ use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
-use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
+use rin_bevy_ui::segmented_control::{
+    ItemIcon, Segment, SegmentIcon, SegmentLabels, SegmentedControl,
+};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::slider::Slider;
 use rin_bevy_ui::stack::Stack;
@@ -116,6 +118,9 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<SettingRow>(registry);
         assert_component::<SettingRows>(registry);
         assert_component::<Segment>(registry);
+        assert_component::<SegmentIcon>(registry);
+        assert_component::<SegmentLabels>(registry);
+        assert_component::<ItemIcon>(registry);
         assert_component::<TabBar>(registry);
         assert_component::<TabBarTab>(registry);
         assert_component::<IconButton>(registry);

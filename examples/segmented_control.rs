@@ -1,11 +1,14 @@
-//! `SegmentedControl`: one with its own selection, a three-way one, and two that share one.
+//! `SegmentedControl`: one with its own selection, a three-way one, two that share one, and
+//! ones with icons, with and without their text.
+
+mod common;
 
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::segmented_control::SegmentedControl;
+use rin_bevy_ui::segmented_control::{ItemIcon, SegmentLabels, SegmentedControl};
 use rin_bevy_ui::select::{Item, Selection};
 use rin_bevy_ui::theme::Theme;
 
@@ -24,7 +27,9 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    let icon = common::cross_icon(&mut images);
+    let with_icon = |text| (Item::new(text), ItemIcon(icon.clone()));
     commands.spawn(Camera2d);
     let shared = commands
         .spawn(
@@ -51,6 +56,12 @@ fn setup(mut commands: Commands) {
             --
             SegmentedControl
             @{Selection::builder().one().scene_with_items(["Dark", "System", "Light"].map(Item::new))}
+            --
+            SegmentedControl
+            @{Selection::builder().one().scene_with_items(["Grid", "List"].map(with_icon))}
+            --
+            SegmentedControl ~{SegmentLabels::Hidden}
+            @{Selection::builder().one().scene_with_items(["Map", "Table"].map(with_icon))}
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())

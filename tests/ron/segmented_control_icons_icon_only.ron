@@ -1,0 +1,43 @@
+// With `SegmentLabels::Hidden` a segment with an icon shows the icon alone: its text has
+// `Display::None`, but the segment is still a radio button named after the item, and a click or
+// Tab and Enter picks it.
+(
+    format_version: 3,
+    name: "an icon only segment is a named radio button that a click or the keyboard picks",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(Exists(Nth(0, Within(Name("icon only segmented control"), Name("SegmentIcon"))))),
+        Check(Exists(Nth(1, Within(Name("icon only segmented control"), Name("SegmentIcon"))))),
+        Check(Component(target: Within(Name("icon only segmented control"), Text("Map")), path: "Node.display", is: Eq(None))),
+        Check(Component(target: Within(Name("icon only segmented control"), Text("Table")), path: "Node.display", is: Eq(None))),
+        Check(App(Accessible(
+            of: Within(Name("icon only segmented control"), Role(role: Button, label: "Map")),
+            role: Some("RadioButton"),
+            label: Some("Map"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Check(App(Accessible(
+            of: Within(Name("icon only segmented control"), Role(role: Button, label: "Table")),
+            role: Some("RadioButton"),
+            label: Some("Table"),
+            value: None,
+            states: [NotToggled],
+        ))),
+        MoveTo(Within(Name("icon only segmented control"), Role(role: Button, label: "Table"))),
+        Click(Left),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Table"]))),
+        MoveTo(Within(Name("icon only segmented control"), Role(role: Button, label: "Map"))),
+        Click(Left),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Map"]))),
+        // The click left the focus on "Map"; Tab moves to "Table".
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("icon only segmented control"), Role(role: Button, label: "Table"))))),
+        Tap(key: Enter),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Table"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("icon only segmented control"), items: ["Table"])),
+    ],
+)
