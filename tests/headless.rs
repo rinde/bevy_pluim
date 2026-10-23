@@ -1490,6 +1490,65 @@ fn a_tab_stop_is_reached_by_tab_only_while_it_is_enabled() {
 }
 
 #[test]
+fn a_widget_under_a_display_none_grandparent_is_hidden_then_shown_again_and_follows_a_move() {
+    let mut app = headless_app();
+    let index = |app: &App, e: Entity| app.world().entity(e).get::<TabIndex>().unwrap().0;
+    let hidden = |app: &App, e: Entity| {
+        app.world()
+            .entity(e)
+            .get::<AccessibilityNode>()
+            .unwrap()
+            .is_hidden()
+    };
+    let set_display = |app: &mut App, e: Entity, display: Display| {
+        app.world_mut()
+            .entity_mut(e)
+            .get_mut::<Node>()
+            .unwrap()
+            .display = display;
+        app.update();
+        app.update();
+    };
+
+    let outer = app.world_mut().spawn(Node::default()).id();
+    let inner = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(outer)))
+        .id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("deep"), ChildOf(inner)))
+        .id();
+    let other = app.world_mut().spawn(Node::default()).id();
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), 0);
+    assert!(!hidden(&app, button));
+
+    // Only the grandparent changes; nothing on the button or its parent does.
+    set_display(&mut app, outer, Display::None);
+    assert_eq!(index(&app, button), -1);
+    assert!(hidden(&app, button));
+
+    set_display(&mut app, outer, Display::Flex);
+    assert_eq!(index(&app, button), 0);
+    assert!(!hidden(&app, button));
+
+    // Moved under a hidden parent, then back out.
+    set_display(&mut app, other, Display::None);
+    app.world_mut().entity_mut(inner).insert(ChildOf(other));
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), -1);
+    assert!(hidden(&app, button));
+    app.world_mut().entity_mut(inner).insert(ChildOf(outer));
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), 0);
+    assert!(!hidden(&app, button));
+}
+
+#[test]
 fn a_tab_stop_in_a_hidden_stack_panel_or_hidden_popup_is_not_reached_by_tab() {
     let mut app = headless_app();
     let index = |app: &App, e: Entity| app.world().entity(e).get::<TabIndex>().unwrap().0;
