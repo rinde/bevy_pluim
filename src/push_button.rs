@@ -70,6 +70,7 @@ fn sync_accessibility(
     },
     Name::new("PushButton"),
     ButtonSize,
+    IconPlacement,
     Button,
     Hovered,
     TabStop,
@@ -93,6 +94,39 @@ pub enum ButtonSize {
     Regular,
     /// A small button for a row of other content.
     Compact,
+}
+
+/// Where the icon of a [`PushButton`] sits relative to its label.
+///
+/// Insert it with the button, or later; it only moves the existing children, nothing is
+/// respawned. A button without an icon is not affected.
+///
+/// The default is `Right`, the order the button has always had.
+#[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
+pub enum IconPlacement {
+    /// The icon is before the label.
+    Left,
+    /// The icon is after the label.
+    #[default]
+    Right,
+    /// The icon is above the label.
+    Top,
+    /// The icon is below the label.
+    Bottom,
+}
+
+impl IconPlacement {
+    /// The flex direction that lays out `[label, icon]` (the order they are spawned in) so the
+    /// icon ends up where this placement says.
+    const fn flex_direction(self) -> FlexDirection {
+        match self {
+            Self::Left => FlexDirection::RowReverse,
+            Self::Right => FlexDirection::Row,
+            Self::Top => FlexDirection::ColumnReverse,
+            Self::Bottom => FlexDirection::Column,
+        }
+    }
 }
 
 /// Marks the label text of a [`PushButton`].
@@ -227,9 +261,16 @@ fn restyle_on_disabled_change(
     }
 }
 
-/// Restyles a [`PushButton`] whose [`ButtonSize`] was changed after it was spawned.
+/// Restyles a [`PushButton`] whose [`ButtonSize`] or [`IconPlacement`] was changed after it was
+/// spawned.
 fn restyle_on_size_change(
-    changed: Query<Entity, (With<PushButtonRefs>, Changed<ButtonSize>)>,
+    changed: Query<
+        Entity,
+        (
+            With<PushButtonRefs>,
+            Or<(Changed<ButtonSize>, Changed<IconPlacement>)>,
+        ),
+    >,
     mut commands: Commands,
 ) {
     for entity in &changed {
@@ -252,6 +293,7 @@ fn theme_push_button(
             &Hovered,
             Has<NoDefaultHover>,
             &ButtonSize,
+            &IconPlacement,
         ),
         With<PushButton>,
     >,
@@ -280,6 +322,7 @@ fn theme_push_button(
         hovered,
         no_default_hover,
         size,
+        placement,
     ) in it
     {
         // A button with `NoDefaultHover` is coloured by its owner, so it rests here.
@@ -291,6 +334,7 @@ fn theme_push_button(
         );
         border_color.set_all(theme.colors.border);
         node.border = UiRect::all(theme.border_thickness);
+        node.flex_direction = placement.flex_direction();
         let compact = *size == ButtonSize::Compact;
         if compact {
             node.border_radius = BorderRadius::all(theme.compact_button_radius);
