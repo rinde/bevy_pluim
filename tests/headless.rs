@@ -58,7 +58,7 @@ use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton, PushButtonRefs};
-use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
+use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
@@ -6088,4 +6088,27 @@ fn a_light_dark_toggle_is_a_radio_group_whose_toggle_follows_the_preference() {
         assert_eq!(node.label(), Some(label));
         assert_eq!(node.toggled(), Some(accesskit::Toggled::from(toggled)));
     }
+}
+
+#[test]
+fn a_scroll_area_gives_its_bottom_margin_back_when_it_stops_being_clear_of_corners() {
+    let mut app = headless_app();
+    let radius = app.world().get_resource::<Theme>().unwrap().panel_radius;
+    let area = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            ScrollArea::bundle(|_: &mut ChildSpawner| {}, true, false),
+            ClearOfCorners,
+        ))
+        .id();
+    app.update();
+    app.update();
+    let margin = |app: &App| app.world().get::<Node>(area).unwrap().margin.bottom;
+    assert_eq!(margin(&app), radius);
+
+    app.world_mut().entity_mut(area).remove::<ClearOfCorners>();
+    assert_eq!(margin(&app), Val::ZERO);
+    app.update();
+    assert_eq!(margin(&app), Val::ZERO);
 }
