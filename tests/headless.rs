@@ -56,7 +56,7 @@ use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, PushButton, PushButtonRefs};
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
-use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
+use rin_bevy_ui::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
@@ -3235,6 +3235,17 @@ fn selected_segments(app: &App, control: Entity) -> Vec<String> {
         .collect()
 }
 
+/// The sliding indicator behind the segments of a control.
+fn indicator_of(app: &App, control: Entity) -> Entity {
+    app.world()
+        .entity(control)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains::<SegmentIndicator>())
+        .unwrap()
+}
+
 fn spawn_segmented_control(app: &mut App) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let control = app
@@ -3278,8 +3289,8 @@ fn a_segmented_control_shows_a_segment_per_item_with_the_first_selected() {
     assert_eq!(selected_segments(&app, control), ["Auto"]);
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     assert_eq!(background(&app, control), colors.segmented_track);
-    assert_eq!(background(&app, segments[0]), colors.segmented_selected);
-    assert_eq!(background(&app, segments[1]), colors.segmented_track);
+    assert_eq!(background(&app, segments[0]), Color::NONE);
+    assert_eq!(background(&app, segments[1]), Color::NONE);
 }
 
 #[test]
@@ -3291,9 +3302,8 @@ fn clicking_a_segment_selects_it() {
     activate(&mut app, segments[1]);
 
     assert_eq!(selected_segments(&app, control), ["Manual"]);
-    let colors = DEFAULT_LIGHT_THEME_COLORS;
-    assert_eq!(background(&app, segments[0]), colors.segmented_track);
-    assert_eq!(background(&app, segments[1]), colors.segmented_selected);
+    assert_eq!(background(&app, segments[0]), Color::NONE);
+    assert_eq!(background(&app, segments[1]), Color::NONE);
 
     // The selected segment stays selected when it is used again.
     activate(&mut app, segments[1]);
@@ -3310,8 +3320,8 @@ fn a_selection_changed_through_the_selection_param_restyles_the_segments() {
 
     assert_eq!(selected_segments(&app, control), ["Off"]);
     let colors = DEFAULT_LIGHT_THEME_COLORS;
-    assert_eq!(background(&app, segments[0]), colors.segmented_track);
-    assert_eq!(background(&app, segments[2]), colors.segmented_selected);
+    assert_eq!(background(&app, segments[0]), Color::NONE);
+    assert_eq!(background(&app, segments[2]), Color::NONE);
     let label = app.world().entity(segments[2]).get::<Children>().unwrap()[0];
     assert_eq!(
         app.world().entity(label).get::<TextColor>().unwrap().0,
@@ -3354,14 +3364,8 @@ fn a_segmented_control_follows_a_selection_it_refers_to() {
     // ... and a change made to it from elsewhere restyles the control.
     select_by_text(&mut app, selection, "Dark");
     assert_eq!(selected_segments(&app, control), ["Dark"]);
-    assert_eq!(
-        background(&app, segments[0]),
-        DEFAULT_LIGHT_THEME_COLORS.segmented_selected
-    );
-    assert_eq!(
-        background(&app, segments[1]),
-        DEFAULT_LIGHT_THEME_COLORS.segmented_track
-    );
+    assert_eq!(background(&app, segments[0]), Color::NONE);
+    assert_eq!(background(&app, segments[1]), Color::NONE);
 }
 
 #[test]
@@ -3375,7 +3379,11 @@ fn a_segmented_control_follows_a_theme_change() {
 
     let colors = DEFAULT_DARK_THEME_COLORS;
     assert_eq!(background(&app, control), colors.segmented_track);
-    assert_eq!(background(&app, segments[0]), colors.segmented_selected);
+    assert_eq!(
+        background(&app, indicator_of(&app, control)),
+        colors.segmented_selected
+    );
+    assert_eq!(background(&app, segments[0]), Color::NONE);
 }
 
 #[test]
@@ -3396,7 +3404,7 @@ fn an_unselected_segment_shows_primary_text_while_hovered_and_secondary_after() 
     app.world_mut().run_schedule(Update);
     app.world_mut().run_schedule(Update);
     assert_eq!(label_color(&app, segments[1]), colors.text_primary);
-    assert_eq!(background(&app, segments[1]), colors.segmented_track);
+    assert_eq!(background(&app, segments[1]), Color::NONE);
     assert_eq!(label_color(&app, segments[2]), colors.text_secondary);
 
     app.world_mut()
@@ -3449,10 +3457,7 @@ fn adding_and_removing_items_adds_and_removes_segments() {
     assert_eq!(selected_segments(&app, control), ["Auto"]);
     // The new segment is styled and works.
     let segments = segments_of(&app, control);
-    assert_eq!(
-        background(&app, segments[2]),
-        DEFAULT_LIGHT_THEME_COLORS.segmented_track
-    );
+    assert_eq!(background(&app, segments[2]), Color::NONE);
     activate(&mut app, segments[2]);
     assert_eq!(selected_segments(&app, control), ["New"]);
 }

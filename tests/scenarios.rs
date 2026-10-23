@@ -2457,3 +2457,92 @@ fn a_separated_virtual_list_with_a_row_height_just_above_its_padding_and_ring_sh
 
     assert!(rows_and_entities(&mut app).0 > 0);
 }
+
+/// The `left` of the segment indicator of `control`, in logical pixels, and the left edge of
+/// `segment` relative to `control`, as the layout has it.
+fn indicator_left_and_goal(app: &App, control: Entity, segment: Entity) -> (f32, f32) {
+    use rin_bevy_ui::segmented_control::SegmentIndicator;
+    let world = app.world();
+    let indicator = world
+        .entity(control)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| world.entity(*c).contains::<SegmentIndicator>())
+        .unwrap();
+    let Val::Px(left) = world.get::<Node>(indicator).unwrap().left else {
+        return (f32::NAN, f32::NAN);
+    };
+    let edge = |e: Entity| {
+        let node = world.get::<ComputedNode>(e).unwrap();
+        (world.get::<UiGlobalTransform>(e).unwrap().translation.x - node.size().x / 2.0)
+            * node.inverse_scale_factor()
+    };
+    (left, edge(segment) - edge(control))
+}
+
+#[test]
+fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
+    use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
+    use rin_bevy_ui::select::{Item, Selection, SelectionParam};
+
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    let control = world
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Auto", "Manual", "Off"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..5 {
+        app.update();
+    }
+    let [first, _, last]: [Entity; 3] = app
+        .world()
+        .entity(control)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<Segment>())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    // At rest it lies behind the selected segment.
+    let (left, goal) = indicator_left_and_goal(&app, control, first);
+    assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
+
+    let (start, _) = indicator_left_and_goal(&app, control, first);
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            let item = selections
+                .get_item_values(control)
+                .unwrap()
+                .1
+                .iter()
+                .nth(2)
+                .unwrap();
+            selections.update_selection(control, |s| s.set_selection([item]));
+        })
+        .unwrap();
+    // A few frames later it is on its way, neither at the start nor at the goal ...
+    for _ in 0..3 {
+        app.update();
+    }
+    let (left, goal) = indicator_left_and_goal(&app, control, last);
+    assert!(
+        left > start + 1.0 && left < goal - 1.0,
+        "{start} {left} {goal}"
+    );
+
+    // ... and a second later it has arrived.
+    for _ in 0..60 {
+        app.update();
+    }
+    let (left, goal) = indicator_left_and_goal(&app, control, last);
+    assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
+}
