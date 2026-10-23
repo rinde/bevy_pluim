@@ -15,6 +15,7 @@ use crate::focus::{clear_label, sync_labelled_by};
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::label::Label;
 use crate::scroll_area::ScrollArea;
+use crate::theme::Theme;
 
 /// Registers the systems and observers of [`Panel`].
 ///
@@ -370,11 +371,12 @@ fn sync_panel(
 /// Shows the strip and the footer (and the divider above it) only while they
 /// have children.
 fn sync_optional_sections(
-    panels: Query<&PanelRefs>,
+    theme: Res<Theme>,
+    panels: Query<(&Panel, &PanelRefs)>,
     children: Query<&Children>,
     mut nodes: Query<&mut Node>,
 ) {
-    for refs in &panels {
+    for (panel, refs) in &panels {
         for (section, divider) in [(refs.strip, None), (refs.footer, Some(refs.footer_divider))] {
             let display = if children.get(section).is_ok_and(|c| !c.is_empty()) {
                 Display::Flex
@@ -388,6 +390,29 @@ fn sync_optional_sections(
                     node.display = display;
                 }
             }
+        }
+        // A scroll area clips to a rectangle, which cannot follow the panel's rounded corners,
+        // so with no footer to hold them the body stops a corner radius short of the bottom edge
+        // (#384).
+        let has_footer = children.get(refs.footer).is_ok_and(|c| !c.is_empty());
+        let margin = if has_footer {
+            Val::ZERO
+        } else {
+            theme.panel_radius
+        };
+        // The margin counts against the maximum height, which is for the body alone.
+        let max_height = Val::Px(
+            panel.max_body_height
+                + match margin {
+                    Val::Px(px) => px,
+                    _ => 0.0,
+                },
+        );
+        if let Ok(mut node) = nodes.get_mut(refs.scroll_area)
+            && (node.margin.bottom != margin || node.max_height != max_height)
+        {
+            node.margin.bottom = margin;
+            node.max_height = max_height;
         }
     }
 }

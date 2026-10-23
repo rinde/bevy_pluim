@@ -1,0 +1,18 @@
+// A scroll area clips to a rectangle, so its contents, half scrolled or with
+// square corners of their own, would stick out of the panel's rounded bottom
+// corners. A panel without a footer therefore ends its body a corner radius
+// above its bottom edge (#384).
+(
+    format_version: 3,
+    name: "a panel body ends a corner radius above the panel's rounded bottom edge",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Within(Name("tall panel"), Component("rin_bevy_ui::scroll_area::ScrollArea")),
+            path: "Node.margin.bottom",
+            is: Eq(Px(12.0)),
+        )),
+    ],
+    expect: [],
+)

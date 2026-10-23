@@ -4113,7 +4113,8 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
             .get::<Node>(refs.scroll_area)
             .unwrap()
             .max_height,
-        Val::Px(620.0)
+        // The 620 px of the body plus the 12 px corner radius it stops short of the bottom edge.
+        Val::Px(632.0)
     );
 
     let footer_text = app
@@ -4132,6 +4133,35 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
     let plain_refs = *app.world().get::<PanelRefs>(plain).unwrap();
     assert_eq!(display(&app, plain_refs.subtitle), Display::None);
     assert_eq!(display(&app, plain_refs.close), Display::None);
+}
+
+#[test]
+fn a_panel_body_stops_a_corner_radius_short_of_the_bottom_unless_a_footer_holds_the_corner() {
+    let mut app = headless_app();
+    let radius = app.world().get_resource::<Theme>().unwrap().panel_radius;
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let margin = |app: &App| {
+        app.world()
+            .get::<Node>(refs.scroll_area)
+            .unwrap()
+            .margin
+            .bottom
+    };
+    assert_ne!(radius, Val::ZERO);
+    assert_eq!(margin(&app), radius);
+
+    let footer_text = app
+        .world_mut()
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer)))
+        .id();
+    app.update();
+    assert_eq!(margin(&app), Val::ZERO);
+    app.world_mut().despawn(footer_text);
+    app.update();
+    assert_eq!(margin(&app), radius);
 }
 
 #[test]
