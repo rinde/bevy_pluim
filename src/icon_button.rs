@@ -309,7 +309,7 @@ fn look(colors: &ThemeColors, tone: Tone, size: IconButtonSize, state: ButtonSta
 }
 
 /// Flips the [`ToggleState`] of a button that has one.
-fn toggle_on_activate(
+pub(crate) fn toggle_on_activate(
     trigger: On<Activate>,
     states: Query<&ToggleState, Without<InteractionDisabled>>,
     mut commands: Commands,

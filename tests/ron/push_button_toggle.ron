@@ -1,0 +1,30 @@
+// A push button with a `ToggleState` is a toggle: `Activate` flips it, an on
+// button shows the subtle accent background and text, and a screen reader
+// hears it as toggled. A plain push button has no toggled state at all.
+(
+    format_version: 3,
+    name: "a toggle push button flips on activate, looks on and is toggled to a screen reader",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        Check(Component(target: Role(role: Button, label: "Toggle"), path: "ToggleState.0", is: Eq(false))),
+        Check(App(Accessible(of: Role(role: Button, label: "Toggle"), role: Some("Button"), label: None, value: None, states: [NotToggled]))),
+        Check(Not(App(Accessible(of: Role(role: Button, label: "Other"), role: Some("Button"), label: None, value: None, states: [NotToggled])))),
+        Check(Not(App(Accessible(of: Role(role: Button, label: "Other"), role: Some("Button"), label: None, value: None, states: [Toggled])))),
+        MoveTo(Role(role: Button, label: "Toggle")),
+        Click(Left),
+        Wait(1),
+        Check(Component(target: Role(role: Button, label: "Toggle"), path: "ToggleState.0", is: Eq(true))),
+        Check(App(Accessible(of: Role(role: Button, label: "Toggle"), role: Some("Button"), label: None, value: None, states: [Toggled]))),
+        // Off the button, so it shows its resting on colour, not the hover one.
+        MoveTo(Screen((900.0, 600.0))),
+        Wait(1),
+        Check(Component(target: Role(role: Button, label: "Toggle"), path: "BackgroundColor.0", is: Eq(Srgba((red: 0.972549, green: 0.9019608, blue: 0.78431374, alpha: 1.0))))),
+        MoveTo(Role(role: Button, label: "Toggle")),
+        Click(Left),
+        Wait(1),
+        Check(Component(target: Role(role: Button, label: "Toggle"), path: "ToggleState.0", is: Eq(false))),
+        Check(App(Accessible(of: Role(role: Button, label: "Toggle"), role: Some("Button"), label: None, value: None, states: [NotToggled]))),
+    ],
+    expect: [],
+)
