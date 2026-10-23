@@ -62,10 +62,6 @@ pub struct ColorSquare;
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ColorSquareRef(pub Entity);
 
-/// Marker component that disables the default hover effect for `PushButton`s.
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NoDefaultHover;
-
 const SQUARE_SIZE: f32 = 25.0;
 
 impl ColorPushButton {
