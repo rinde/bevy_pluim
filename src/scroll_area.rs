@@ -284,15 +284,16 @@ fn handle_hover(
 /// Answers [`ScrollIntoView`], which a `ListBox` triggers when the arrow keys
 /// move its active descendant. An axis is moved only when the contents scroll
 /// along it, and the [`ScrollPosition`] stays within `0..=max` as in
-/// `update_scroll_position`. An entity outside any scroll area is left alone, and so is
-/// one in a [`FixedNode`] (a popup) inside a scroll area: it is not laid out in the
-/// area's contents, so scrolling them would not show it.
+/// `update_scroll_position`. An entity outside any scroll area is left alone. One in a
+/// [`FixedNode`] (a popup) scrolls that popup when it scrolls (a `Combo` list capped to the
+/// window height) and otherwise nothing, never the area around it: the popup is not laid
+/// out in the area's contents, so scrolling them would not show it.
 fn scroll_into_view(
     mut event: On<ScrollIntoView>,
     nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
     parents: Query<&ChildOf>,
     fixed_nodes: Query<(), With<FixedNode>>,
-    mut contents: Query<(&mut ScrollPosition, &Node), With<ScrollContents>>,
+    mut contents: Query<(&mut ScrollPosition, &Node), Or<(With<ScrollContents>, With<FixedNode>)>>,
 ) {
     let target = event.entity;
     let Ok((target_computed, target_transform)) = nodes.get(target) else {
@@ -300,8 +301,7 @@ fn scroll_into_view(
     };
     let Some(area) = parents
         .iter_ancestors(target)
-        .find(|ancestor| contents.contains(*ancestor) || fixed_nodes.contains(*ancestor))
-        .filter(|ancestor| contents.contains(*ancestor))
+        .find(|ancestor| contents.contains(*ancestor))
     else {
         return;
     };
@@ -311,6 +311,14 @@ fn scroll_into_view(
     let Ok((mut scroll_position, node)) = contents.get_mut(area) else {
         return;
     };
+    // A popup that does not scroll is not laid out in the contents of the area around it, so
+    // scrolling those would not show the target.
+    if fixed_nodes.contains(area)
+        && node.overflow.x != OverflowAxis::Scroll
+        && node.overflow.y != OverflowAxis::Scroll
+    {
+        return;
+    }
     event.propagate(false);
 
     let target_scale = target_computed.inverse_scale_factor();

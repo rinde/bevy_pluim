@@ -654,7 +654,9 @@ of them (`just example gallery -- --run-all stack link`).
   least that shows the entity, per axis only where the contents scroll and within
   `[0, max]`; an entity outside any scroll area is left alone, and so is one in a
   `FixedNode` (a combo's popup) inside one, since scrolling the area would not
-  show it. It reads the
+  show it; a `FixedNode` that itself scrolls (a `Combo` or `ColorPaletteCombo` popup
+  capped to the window height) has its own `ScrollPosition` moved instead, never the
+  area's (`combo_taller_than_window_keyboard_scrolls_the_list.ron`). It reads the
   entity's laid-out position, so it is one layout pass behind like the wheel's
   `ComputedNode`. The wheel is untouched, and so is the `Scrollbar`, which
   follows the `ScrollPosition` it sets
