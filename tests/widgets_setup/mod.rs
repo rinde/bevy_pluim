@@ -92,7 +92,8 @@ pub enum WidgetsSetup {
     /// Four 200 by 200 scroll areas, each named after what it does
     /// (`two-way scroll area`, `vertical scroll area`, `horizontal scroll
     /// area` and `fitting scroll area`, whose three squares fit and so
-    /// never scroll), and "Change theme".
+    /// never scroll), and "Change theme". An `outer scroll area` (vertical, absolutely
+    /// placed at x 0, y 300) holds a `nested horizontal scroll area` in a column 400 px taller than it.
     ScrollAreas,
     /// A breadcrumb trail over a stack of four panels with buttons that go
     /// further in or back, and "Change theme".
@@ -691,6 +692,42 @@ fn scroll_areas(world: &mut World) {
             ScrollArea::bundle(squares(3, GridAutoFlow::Row), true, true),
         ));
         spawn_theme_button(root);
+        // A horizontal-only area inside a vertical one, out of the flow below the row and
+        // spawned last so nothing else moves and the tab order stays.
+        root.spawn((
+            Name::new("outer scroll area"),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(0),
+                top: px(300),
+                width: px(SCROLL_AREA_SIZE + 30.0),
+                height: px(SCROLL_AREA_SIZE),
+                ..default()
+            },
+            ScrollArea::bundle(
+                |parent: &mut ChildSpawner| {
+                    // 400 px taller than the nested area, so the outer area's contents overflow.
+                    parent
+                        .spawn((
+                            see_through(),
+                            Node {
+                                width: px(SCROLL_AREA_SIZE),
+                                height: px(SCROLL_AREA_SIZE + 400.0),
+                                flex_shrink: 0.0,
+                                ..default()
+                            },
+                        ))
+                        .with_children(|column| {
+                            column.spawn(sized_scroll_area(
+                                "nested horizontal scroll area",
+                                ScrollArea::bundle(squares(200, GridAutoFlow::Column), false, true),
+                            ));
+                        });
+                },
+                true,
+                false,
+            ),
+        ));
     });
 }
 
