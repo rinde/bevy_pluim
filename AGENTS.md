@@ -1072,7 +1072,7 @@ a file can check any `Reflect` type of the app by short type path.
   `text_field_*.ron` files cover typing and `Enter`, `Escape` restoring, a click elsewhere,
   a click on the border (at `Screen((20.5, 32.0))`, the left border of `name field`),
   Tab and the screen reader node, and the text following `RemSize`.
-- **The `Toast` screen.** "Save" and "Save again" raise a toast "Saved", "Delete" one "Deleted 3 pieces", each shown for 1 s (60 frames), and "Change theme". `Count(with: ["Toast"], ..)` counts the toasts showing (`toast_shows_stacks_and_goes.ron`).
+- **The `Toast` screen.** "Save" and "Save again" raise a toast "Saved", "Delete" one "Deleted 3 pieces", each shown for 1 s (the file waits for time with `Within`, not a number of frames, and `the_toast_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_second` plays it at 1/240 s), and "Change theme". `Count(with: ["Toast"], ..)` counts the toasts showing (`toast_shows_stacks_and_goes.ron`).
 - **The `ComboRows` screen.** A `row list` (a, b, c; `ZeroOrOne`, nothing selected) of
   custom-view rows, each a text and a `combo in row a` (b, c) over Alpha, Beta and Gamma with
   its own selection; a pick in a row's combo leaves the list unselected.
