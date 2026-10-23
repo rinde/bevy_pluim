@@ -17,7 +17,11 @@ pub struct StackPlugin;
 
 impl Plugin for StackPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_add_stack).register_type::<Stack>();
+        app.add_observer(on_add_stack)
+            .add_observer(on_selection_insert)
+            .register_type::<Stack>()
+            .register_type::<StackItem>()
+            .register_type::<PrevDisplay>();
     }
 }
 
@@ -30,7 +34,9 @@ pub struct Stack {
     pub selection_ref: Entity,
 }
 
-#[derive(Component)]
+/// The `display` a hidden stack child had before the stack hid it.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
 struct PrevDisplay(Display);
 
 fn on_add_stack(
@@ -47,12 +53,22 @@ fn on_add_stack(
     if selections.get(stack.selection_ref).is_some() {
         commands.run_system_cached_with(switch_view, (stack_ref, stack));
     }
+}
 
-    commands.entity(stack.selection_ref).observe(
-        move |_: On<Insert<Selection>>, mut commands: Commands| {
-            commands.run_system_cached_with(switch_view, (stack_ref, stack));
-        },
-    );
+/// Switches every live stack showing the selection that was just inserted.
+///
+/// One global observer, so a despawned stack leaves nothing behind that reacts to the selection.
+fn on_selection_insert(
+    t: On<Insert<Selection>>,
+    stacks: Query<(Entity, &Stack)>,
+    mut commands: Commands,
+) {
+    let selection = t.event_target();
+    for (stack_ref, stack) in &stacks {
+        if stack.selection_ref == selection {
+            commands.run_system_cached_with(switch_view, (stack_ref, *stack));
+        }
+    }
 }
 
 fn switch_view(
@@ -170,10 +186,12 @@ fn switch_view(
 type StackChildCreator = SystemId<In<StackChildSpawner>>;
 
 /// An item that a [`Stack`] can show; its child is created lazily by `create`.
-#[derive(Component, Copy, Clone, Debug)]
+#[derive(Component, Copy, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct StackItem {
     entity: Option<Entity>,
     /// The system that spawns the child, through the [`StackChildSpawner`] it is given.
+    #[reflect(ignore, default = "Option::default")]
     pub create: Option<StackChildCreator>,
     id: Option<usize>,
 }

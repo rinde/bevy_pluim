@@ -375,6 +375,99 @@ fn a_stack_shows_only_the_selected_child_and_switches_on_selection_change() {
 }
 
 #[test]
+fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is_skipped() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one_or_more()
+                .build_with_items([(Item::new("a"),), (Item::new("b"),)]),
+        )
+        .id();
+    // A third item has no text, so it gets no crumb.
+    let no_text = app
+        .world_mut()
+        .spawn(Item::<Color> { data: Color::WHITE })
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((
+        Node::default(),
+        BreadCrumbs,
+        Selection::reference(selection),
+        ChildOf(root),
+    ));
+    app.update();
+
+    app.world_mut()
+        .entity_mut(selection)
+        .insert(Selection::Value(SelectionValue::OneOrMore(
+            smallvec::smallvec![items[0], items[1], no_text],
+        )));
+    app.update();
+    app.update();
+
+    let world = app.world_mut();
+    let mut links = world.query::<(&Link, &LinkState)>();
+    let states = links
+        .iter(world)
+        .map(|(_, state)| *state)
+        .collect::<Vec<_>>();
+    assert_eq!(states.len(), 2);
+    assert_eq!(
+        states
+            .iter()
+            .filter(|state| matches!(state, LinkState::Disabled))
+            .count(),
+        1,
+        "exactly the last crumb is current"
+    );
+}
+
+#[test]
+fn a_despawned_stack_does_not_react_to_its_selection_changing() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection_ref)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stack = app
+        .world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    app.world_mut().entity_mut(stack).despawn();
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::One(items[1])));
+    app.update();
+    app.update();
+
+    assert!(no_entity_with::<PanelB>(&mut app));
+}
+
+#[test]
 fn a_selection_ref_shared_by_bread_crumbs_and_a_stack_stays_in_sync() {
     let mut app = headless_app();
     let create_a = app.world_mut().register_system(spawn_panel_a);
