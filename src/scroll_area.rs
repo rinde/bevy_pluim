@@ -361,6 +361,12 @@ fn scroll_into_view(
 /// logical pixels. It moves any [`ScrollPosition`] under the pointer, not only a
 /// [`ScrollContents`], so a node of an app's own with one scrolls too.
 ///
+/// With Ctrl held the wheel's horizontal and vertical deltas are swapped first.
+/// Then a node that scrolls horizontally but not vertically (`overflow.y` is not
+/// `Scroll`) takes a wheel event with no horizontal delta (`dx == 0`) as a
+/// horizontal scroll by its vertical delta, since a mouse wheel only turns
+/// vertically. An event with a horizontal delta scrolls by that delta alone.
+///
 /// Registered once, by [`ScrollAreaPlugin`].
 fn update_scroll_position(
     mut mouse_wheel_events: MessageReader<MouseWheel>,

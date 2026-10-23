@@ -630,7 +630,10 @@ of them (`just example gallery -- --run-all stack link`).
   (`update_scroll_position` in `scroll_area.rs`) moves only an axis whose
   `Node::overflow` is `Scroll` and leaves `ScrollPosition` inside `[0, max]`
   per axis, `max` being how far the contents overflow in logical pixels (0 when
-  they fit); a node that does not scroll along an axis is not moved along it.
+  they fit); a node that does not scroll along an axis is not moved along it,
+  except that, after the Ctrl swap of the wheel's two deltas, a node that scrolls
+  horizontally but not vertically takes an event with no horizontal delta
+  (`dx == 0`) as a horizontal scroll by its vertical delta.
   A scenario reads `ScrollPosition.0.y`, the value that was set (logical
   pixels). `ComputedNode.scroll_position.y` is what the layout shows, floored,
   in physical pixels and one layout pass behind, so it doubles at a scale
