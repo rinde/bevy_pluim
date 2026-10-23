@@ -39,8 +39,31 @@ check that its oldest live claim is that run's: a comment starting
 `<!-- coordinator-release session=<run id> -->` after it (see **Agents** in
 `AGENTS.md`). If it is not, push and post nothing more, and report that the
 claim was lost. Started by hand with no run named, check instead that no
-coordinator holds a live claim on the issue; if one does, stop and tell the
-user which run owns it.
+coordinator holds a live claim on the issue and no other `implementer-claim`
+is live (no `<!-- implementer-release session=<same id> -->` after it); if one
+is, stop and tell the user which run owns it.
+
+**A hand-started run claims the issue.** Make a run id as the coordinator does
+(`echo "${CLAUDE_CODE_SESSION_ID:-local}-$(date -u +%Y%m%dT%H%M%SZ)-$RANDOM"`)
+and, once the checks above pass and before adding `In progress`, post
+
+```
+<!-- implementer-claim session=<run id> -->
+Claimed by hand run `<run id>` on `<hostname>`.
+```
+
+If you end with the issue still open (the pull request waits for review or
+CI), post
+
+```
+<!-- implementer-release session=<run id> -->
+Released by hand run `<run id>`: <why, e.g. "PR #N opened">.
+```
+
+and keep `In progress` on while the pull request is open. A claim live for 6
+hours without activity is stale: coordinators report it and never take it
+over. Implementers a coordinator dispatched post neither marker; its claim
+covers them.
 
 ## 2. Read and decide whether you can start
 
@@ -63,7 +86,7 @@ user which run owns it.
 
 ## 3. Start
 
-1. Add the `In progress` label:
+1. A hand-started run posts its `implementer-claim` (section 1). Add the `In progress` label:
    `gh api repos/rinde/rin-bevy-ui/issues/<issue>/labels -f "labels[]=In progress"`.
 2. Branch from a fresh `main`, named `RINUI-<issue>/<descriptive-slug>`:
    `git fetch origin main && git switch -c RINUI-<issue>/<slug> origin/main`.

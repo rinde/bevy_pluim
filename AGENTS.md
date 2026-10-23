@@ -56,6 +56,14 @@ the coordinator sends it back or merges it. They live in `.claude/agents/` and
 `.claude/skills/` and follow the same rules as anyone else: this file. Nothing
 runs on GitHub's side; the coordinator starts every agent, in its own session.
 
+**The coordinator runs as the session's main agent** (`/coordinate` or
+`claude --agent coordinator`), never as a subagent: it dispatches with the
+`Agent` tool, which a subagent lacks, so `/coordinate` has no `context: fork`.
+Started without an `Agent` tool, it stops at once, claiming and changing
+nothing, and says so; it never spawns a sibling session. It coordinates
+`rinde/rin-bevy-ui` only: agent definitions, skills or repositories attached to
+the session from another repository (`rin-bevy-ui-tester`, say) are ignored.
+
 | Agent | Model | Does |
 | --- | --- | --- |
 | `coordinator` | Sonnet | Decides what is ready, claims each issue it starts so that no other run touches it, keeps the slots, dispatches implementers and reviewers into them, checks on GitHub that each did its job, merges, and turns what is left undone (review nits, questions on an issue, anything a pull request left open) into issues it refines and labels `ready-for-agent`, or `require-human-review` where a human must decide first. Writes no code. |
@@ -127,19 +135,25 @@ two runs in one session share the session id).
   own; a head that moved without one of its agents stops it. The agents it
   dispatches carry its run id (`for coordinator run <run id>`) and act only
   while that run owns the issue; run by hand, they stop when a coordinator
-  holds a live claim.
+  holds a live claim or another by-hand run does.
+- **By-hand claims.** `implement-issue` run by hand posts
+  `<!-- implementer-claim session=<run id> -->` before adding `In progress` and
+  `<!-- implementer-release session=<run id> -->` when it ends with the issue
+  still open (its pull request waiting); dispatched implementers post neither.
+  A live `implementer-claim` makes the issue someone else's: a coordinator
+  reports it and never claims it, `ready-for-agent` or not.
 - **Release.** A run that lets go of an open issue (it winds down with the
   pull request waiting, the loop did not converge, the issue went to
   `Needs refinement`) posts the release comment, keeping `In progress` while
   a pull request is open. An issue whose last coordinator marker is a
   release, labelled `ready-for-agent`, is free for the next run to claim. A
   merged, closed issue needs no release.
-- **Stale.** A claim of another run whose issue and pull request have shown
+- **Stale.** A claim (a coordinator's or an `implementer-claim`) of another run whose issue and pull request have shown
   no activity for 6 hours is stale. A coordinator reports it and never
   deletes or takes it over; a human releases it, by deleting the claim or
   posting a release with its `session`.
-- An issue with `In progress` and no claim is someone else's (a human, an
-  agent run by hand): coordinators report it and leave it alone.
+- An issue with `In progress` and no claim of either kind is someone else's (a
+  human, an agent run by hand before it claimed): coordinators report it and leave it alone.
 
 | How | What |
 | --- | --- |
