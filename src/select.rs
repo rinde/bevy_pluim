@@ -28,10 +28,7 @@ impl Plugin for ItemsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectionResource>()
             .add_systems(Update, items_change)
-            .add_systems(
-                Update,
-                process_event_buffer.run_if(resource_changed::<SelectionResource>),
-            )
+            .add_systems(Update, process_event_buffer.run_if(has_pending_selections))
             .add_observer(on_add_selection)
             .register_type::<Item<String>>()
             .register_type::<ItemOf>()
@@ -250,42 +247,66 @@ fn on_add_selection(
     }
 }
 
+fn has_pending_selections(r: Res<SelectionResource>) -> bool {
+    !r.buffer.is_empty()
+}
+
 #[derive(Resource, Default)]
 struct SelectionResource {
     buffer: Vec<(Entity, Entity)>,
 }
 
+/// Repairs the selections waiting for their first item.
+///
+/// An entry stays in the buffer until it is repaired (or its entity is gone), and the
+/// buffer is only borrowed mutably when something was removed, so the resource is not
+/// marked changed otherwise.
 fn process_event_buffer(
     mut r: ResMut<SelectionResource>,
     mut commands: Commands,
     selections: SelectionParam,
 ) {
-    for (target_ref, selection_ref) in r.buffer.drain(..) {
-        if let Some((_, values)) = selections.get_item_values(selection_ref) {
-            let Some(selection_value) = selections.get(selection_ref) else {
-                continue;
-            };
-            let Some(first_item) = values.iter().next() else {
-                continue;
-            };
-            let new_selection_value = match selection_value {
-                SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
-                    Some(SelectionValue::One(first_item))
-                }
-                SelectionValue::OneOrMore(selected) if selected.is_empty() => {
-                    Some(SelectionValue::OneOrMore(smallvec![first_item]))
-                }
-                SelectionValue::One(_)
-                | SelectionValue::OneOrMore(_)
-                | SelectionValue::ZeroOrOne(_)
-                | SelectionValue::ZeroOrMore(_) => None,
-            };
-            if let Some(new_selection_value) = new_selection_value {
-                commands
-                    .entity(target_ref)
-                    .insert(Selection::Value(new_selection_value));
-            }
+    let mut done = Vec::new();
+    for (index, (target_ref, selection_ref)) in r.buffer.iter().enumerate() {
+        if commands.get_entity(*target_ref).is_err() {
+            done.push(index);
+            continue;
         }
+        let Some((_, values)) = selections.get_item_values(*selection_ref) else {
+            continue;
+        };
+        let Some(selection_value) = selections.get(*selection_ref) else {
+            continue;
+        };
+        let Some(first_item) = values.iter().next() else {
+            continue;
+        };
+        let new_selection_value = match selection_value {
+            SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
+                Some(SelectionValue::One(first_item))
+            }
+            SelectionValue::OneOrMore(selected) if selected.is_empty() => {
+                Some(SelectionValue::OneOrMore(smallvec![first_item]))
+            }
+            SelectionValue::One(_)
+            | SelectionValue::OneOrMore(_)
+            | SelectionValue::ZeroOrOne(_)
+            | SelectionValue::ZeroOrMore(_) => None,
+        };
+        if let Some(new_selection_value) = new_selection_value {
+            commands
+                .entity(*target_ref)
+                .insert(Selection::Value(new_selection_value));
+        }
+        done.push(index);
+    }
+    if !done.is_empty() {
+        let mut index = 0;
+        r.buffer.retain(|_| {
+            let keep = !done.contains(&index);
+            index += 1;
+            keep
+        });
     }
 }
 
