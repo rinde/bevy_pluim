@@ -51,7 +51,7 @@ use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
-use rin_bevy_ui::tooltip::Tooltip;
+use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 
 fn app_with_widgets() -> App {
@@ -139,6 +139,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<VirtualList>(registry);
         assert_component::<VirtualListRow>(registry);
         assert_component::<Tooltip>(registry);
+        assert_component::<TooltipPopup>(registry);
         assert_component::<Toast>(registry);
         assert_component::<ToastStack>(registry);
         assert_component::<TextField>(registry);
