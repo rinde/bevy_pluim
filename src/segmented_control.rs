@@ -26,6 +26,11 @@ const SEGMENT_SIDE_PADDING: f32 = 10.0;
 const TRACK_PADDING: f32 = 3.0;
 /// The gap between two segments.
 const SEGMENT_GAP: f32 = 2.0;
+/// How fast the selection indicator catches up with the selected segment, per second: it covers
+/// all but about 1 % of the way in a quarter of a second.
+const INDICATOR_RATE: f32 = 18.0;
+/// The distance in logical pixels under which the indicator snaps to its target.
+const INDICATOR_SNAP: f32 = 0.5;
 /// The size of a segment's text.
 const SEGMENT_FONT_SIZE: f32 = 13.0;
 
@@ -45,12 +50,16 @@ impl Plugin for SegmentedControlPlugin {
                     .run_if(resource_changed::<Theme>),
                 selection_change,
                 hover_change,
-            ),
+                spawn_indicators,
+                animate_indicators,
+            )
+                .chain(),
         )
         .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
         .add_observer(on_insert_selection)
         .register_type::<SegmentedControl>()
-        .register_type::<Segment>();
+        .register_type::<Segment>()
+        .register_type::<SegmentIndicator>();
     }
 }
 
@@ -78,6 +87,9 @@ impl Plugin for SegmentedControlPlugin {
 ///     ));
 /// }
 /// ```
+///
+/// The selected segment is marked by a [`SegmentIndicator`] behind the segments, which slides to
+/// a newly selected segment instead of jumping.
 ///
 /// Each segment is a [`Button`] and a tab stop, and carries [`Selected`] while it is the
 /// selected one.
@@ -129,6 +141,18 @@ pub struct Segment {
     pub control_ref: Entity,
 }
 
+/// The highlight behind the selected [`Segment`] of a [`SegmentedControl`].
+///
+/// It is a child of the control, placed absolutely behind the segments, and slides to the
+/// selected segment when the selection changes; the segments themselves are transparent.
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Name::new("SegmentIndicator"), Node, BackgroundColor::default())]
+pub struct SegmentIndicator {
+    /// The control this indicator belongs to.
+    pub control_ref: Entity,
+}
+
 /// Marks the text of a [`Segment`].
 #[derive(Component, Debug, Copy, Clone)]
 struct SegmentLabel;
@@ -164,11 +188,19 @@ fn theme_segmented_controls(
     selections: SelectionParam,
     mut controls: Query<
         (Entity, &mut Node, &mut BackgroundColor),
-        (With<SegmentedControl>, Without<Segment>),
+        (
+            With<SegmentedControl>,
+            Without<Segment>,
+            Without<SegmentIndicator>,
+        ),
     >,
     mut segments: Query<
-        (&Segment, &Hovered, &mut Node, &mut BackgroundColor),
-        Without<SegmentedControl>,
+        (&Segment, &mut Node, &mut BackgroundColor),
+        (Without<SegmentedControl>, Without<SegmentIndicator>),
+    >,
+    mut indicators: Query<
+        (&SegmentIndicator, &mut Node, &mut BackgroundColor),
+        (Without<SegmentedControl>, Without<Segment>),
     >,
     mut labels: Query<(&ChildOf, &mut TextColor, &mut TextFont), With<SegmentLabel>>,
     states: Query<(&Segment, &Hovered)>,
@@ -181,20 +213,25 @@ fn theme_segmented_controls(
         background.0 = theme.colors.segmented_track;
     }
 
-    for (segment, hovered, mut node, mut background) in &mut segments {
+    for (segment, mut node, mut background) in &mut segments {
         if control_id.0.is_some_and(|id| id != segment.control_ref) {
             continue;
         }
-        let selected = selections
-            .get(segment.control_ref)
-            .is_some_and(|selection| selection.is_selected(segment.item_ref));
         node.height = Val::Px(SEGMENT_HEIGHT);
         node.min_width = Val::Px(SEGMENT_MIN_WIDTH);
         node.padding = UiRect::axes(Val::Px(SEGMENT_SIDE_PADDING), Val::ZERO);
         node.align_items = AlignItems::Center;
         node.justify_content = JustifyContent::Center;
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = segment_colors(&theme.colors, selected, hovered.get()).0;
+        background.0 = Color::NONE;
+    }
+
+    for (indicator, mut node, mut background) in &mut indicators {
+        if control_id.0.is_some_and(|id| id != indicator.control_ref) {
+            continue;
+        }
+        node.border_radius = BorderRadius::all(theme.control_radius);
+        background.0 = theme.colors.segmented_selected;
     }
 
     for (child_of, mut text_color, mut text_font) in &mut labels {
@@ -214,6 +251,96 @@ fn theme_segmented_controls(
             weight: FontWeight::SEMIBOLD,
             ..default()
         };
+    }
+}
+
+/// Gives every control without one its [`SegmentIndicator`], drawn behind the segments.
+fn spawn_indicators(
+    controls: Query<Entity, With<SegmentedControl>>,
+    indicators: Query<&SegmentIndicator>,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    for control in &controls {
+        if indicators.iter().any(|i| i.control_ref == control) {
+            continue;
+        }
+        commands.entity(control).with_child((
+            SegmentIndicator {
+                control_ref: control,
+            },
+            Node {
+                position_type: PositionType::Absolute,
+                display: Display::None,
+                border_radius: BorderRadius::all(theme.control_radius),
+                ..default()
+            },
+            BackgroundColor(theme.colors.segmented_selected),
+            ZIndex(-1),
+            Pickable::IGNORE,
+        ));
+    }
+}
+
+/// Moves each indicator towards the selected segment, snapping the first time it is placed.
+fn animate_indicators(
+    time: Res<Time>,
+    controls: Query<(&ComputedNode, &UiGlobalTransform, &Children), With<SegmentedControl>>,
+    selected: Query<(&ComputedNode, &UiGlobalTransform), (With<Segment>, With<Selected>)>,
+    mut indicators: Query<(&SegmentIndicator, &mut Node)>,
+) {
+    let blend = 1.0 - (-time.delta_secs() * INDICATOR_RATE).exp();
+    for (indicator, mut node) in &mut indicators {
+        let Ok((control, control_at, children)) = controls.get(indicator.control_ref) else {
+            continue;
+        };
+        let target = children.iter().find_map(|c| selected.get(c).ok());
+        let Some((segment, segment_at)) = target.filter(|(s, _)| s.size().x > 0.0) else {
+            if node.display != Display::None {
+                node.display = Display::None;
+            }
+            continue;
+        };
+        let scale = segment.inverse_scale_factor();
+        let size = segment.size() * scale;
+        let origin = (segment_at.translation - segment.size() / 2.0)
+            - (control_at.translation - control.size() / 2.0);
+        let goal = [origin.x * scale, origin.y * scale, size.x, size.y];
+
+        let placed = node.display != Display::None;
+        let now = [node.left, node.top, node.width, node.height].map(|v| match v {
+            Val::Px(px) => px,
+            _ => 0.0,
+        });
+        let next: [f32; 4] = if placed {
+            std::array::from_fn(|i| {
+                let (from, to) = (
+                    now.get(i).copied().unwrap_or(0.0),
+                    goal.get(i).copied().unwrap_or(0.0),
+                );
+                if (to - from).abs() < INDICATOR_SNAP {
+                    to
+                } else {
+                    (to - from).mul_add(blend, from)
+                }
+            })
+        } else {
+            goal
+        };
+        if placed
+            && next
+                .iter()
+                .zip(&now)
+                .all(|(a, b)| a.to_bits() == b.to_bits())
+        {
+            continue;
+        }
+        let [left, top, width, height] = next.map(Val::Px);
+        node.display = Display::Flex;
+        node.left = left;
+        node.top = top;
+        node.width = width;
+        node.height = height;
     }
 }
 
