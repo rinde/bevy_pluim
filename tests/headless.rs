@@ -6347,6 +6347,34 @@ fn hidden_labels_hide_the_text_only_of_items_with_an_icon_and_add_a_tooltip() {
 }
 
 #[test]
+fn an_app_tooltip_swapped_in_over_the_widgets_own_is_kept_and_not_removed_on_shown() {
+    let mut app = headless_app();
+    let control = spawn_mixed_icon_control(&mut app);
+    let segment = segments_of(&app, control)[0];
+    let tip = |app: &App| {
+        app.world()
+            .entity(segment)
+            .get::<Tooltip>()
+            .map(|t| t.text.clone())
+    };
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Hidden);
+    app.update();
+    app.update();
+    assert_eq!(tip(&app).as_deref(), Some("Grid"));
+    app.world_mut()
+        .entity_mut(segment)
+        .insert(Tooltip::new("Mine"));
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Shown);
+    app.update();
+    app.update();
+    assert_eq!(tip(&app).as_deref(), Some("Mine"));
+}
+
+#[test]
 fn an_app_tooltip_on_a_segment_survives_label_and_icon_changes_and_is_not_overwritten() {
     let mut app = headless_app();
     let control = spawn_mixed_icon_control(&mut app);

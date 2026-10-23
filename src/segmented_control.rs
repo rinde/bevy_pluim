@@ -320,10 +320,10 @@ fn theme_segmented_controls(
     }
 }
 
-/// Marks a segment whose [`Tooltip`] `sync_icons` added, so that only that one is removed again
-/// and a tooltip the app put on a segment is left alone.
-#[derive(Component, Debug, Copy, Clone, Default)]
-struct OwnedTooltip;
+/// Marks a segment whose [`Tooltip`] `sync_icons` added, holding the text it gave it, so that
+/// only that one is overwritten or removed again: a [`Tooltip`] with other text is the app's.
+#[derive(Component, Debug, Clone)]
+struct OwnedTooltip(String);
 
 /// Keeps each segment's icon, the visibility of its text and its tooltip in step with its item's
 /// [`ItemIcon`] and its control's [`SegmentLabels`], in place.
@@ -332,7 +332,7 @@ fn sync_icons(
     mut removed_icons: RemovedComponents<ItemIcon>,
     changed_labels: Query<(), Changed<SegmentLabels>>,
     added: Query<(), Added<Segment>>,
-    segments: Query<(Entity, &Segment, Option<&Tooltip>, Has<OwnedTooltip>)>,
+    segments: Query<(Entity, &Segment, Option<&Tooltip>, Option<&OwnedTooltip>)>,
     item_icons: Query<&ItemIcon>,
     items: Query<&Item<String>>,
     controls: Query<&SegmentLabels>,
@@ -388,15 +388,24 @@ fn sync_icons(
                 }
             }
         }
+        // A tooltip whose text is not the one the widget added replaced it: it is the app's.
+        let owned = match (owned, tooltip) {
+            (Some(owned), Some(tooltip)) if owned.0 == tooltip.text => true,
+            (Some(_), _) => {
+                commands.entity(segment_id).remove::<OwnedTooltip>();
+                false
+            }
+            (None, _) => false,
+        };
         if hidden {
-            // A tooltip the app put on the segment is its own and is not overwritten.
             if let Ok(item) = items.get(segment.item_ref)
                 && (tooltip.is_none() || owned)
                 && tooltip.is_none_or(|t| t.text != item.data)
             {
-                commands
-                    .entity(segment_id)
-                    .insert((Tooltip::new(item.data.clone()), OwnedTooltip));
+                commands.entity(segment_id).insert((
+                    Tooltip::new(item.data.clone()),
+                    OwnedTooltip(item.data.clone()),
+                ));
             }
         } else if owned {
             commands
