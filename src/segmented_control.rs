@@ -320,6 +320,11 @@ fn theme_segmented_controls(
     }
 }
 
+/// Marks a segment whose [`Tooltip`] `sync_icons` added, so that only that one is removed again
+/// and a tooltip the app put on a segment is left alone.
+#[derive(Component, Debug, Copy, Clone, Default)]
+struct OwnedTooltip;
+
 /// Keeps each segment's icon, the visibility of its text and its tooltip in step with its item's
 /// [`ItemIcon`] and its control's [`SegmentLabels`], in place.
 fn sync_icons(
@@ -327,7 +332,7 @@ fn sync_icons(
     mut removed_icons: RemovedComponents<ItemIcon>,
     changed_labels: Query<(), Changed<SegmentLabels>>,
     added: Query<(), Added<Segment>>,
-    segments: Query<(Entity, &Segment, Option<&Tooltip>)>,
+    segments: Query<(Entity, &Segment, Option<&Tooltip>, Has<OwnedTooltip>)>,
     item_icons: Query<&ItemIcon>,
     items: Query<&Item<String>>,
     controls: Query<&SegmentLabels>,
@@ -340,7 +345,7 @@ fn sync_icons(
         return;
     }
     let mut restyle = Vec::new();
-    for (segment_id, segment, tooltip) in &segments {
+    for (segment_id, segment, tooltip, owned) in &segments {
         let icon = item_icons.get(segment.item_ref).ok();
         let hidden = controls
             .get(segment.control_ref)
@@ -384,15 +389,19 @@ fn sync_icons(
             }
         }
         if hidden {
+            // A tooltip the app put on the segment is its own and is not overwritten.
             if let Ok(item) = items.get(segment.item_ref)
+                && (tooltip.is_none() || owned)
                 && tooltip.is_none_or(|t| t.text != item.data)
             {
                 commands
                     .entity(segment_id)
-                    .insert(Tooltip::new(item.data.clone()));
+                    .insert((Tooltip::new(item.data.clone()), OwnedTooltip));
             }
-        } else if tooltip.is_some() {
-            commands.entity(segment_id).remove::<Tooltip>();
+        } else if owned {
+            commands
+                .entity(segment_id)
+                .remove::<(Tooltip, OwnedTooltip)>();
         }
     }
     for control in restyle {
