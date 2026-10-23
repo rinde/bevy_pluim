@@ -30,6 +30,9 @@ use rin_bevy_ui::icon::Icon;
 use rin_bevy_ui::icon_button::{IconButton, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
+use rin_bevy_ui::light_dark_toggle::{
+    LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
+};
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
@@ -107,6 +110,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Divider>(registry);
         assert_component::<Icon>(registry);
         assert_component::<SegmentedControl>(registry);
+        assert_component::<LightDarkToggle>(registry);
+        assert_component::<LightDarkOption>(registry);
         assert_component::<SettingRow>(registry);
         assert_component::<SettingRows>(registry);
         assert_component::<Segment>(registry);
@@ -155,6 +160,16 @@ fn the_theme_is_in_the_type_registry_as_a_resource() {
             .expect("Theme is in the type registry");
         assert!(theme.data::<ReflectResource>().is_some());
         assert!(registry.contains(TypeId::of::<ThemeColors>()));
+    });
+}
+
+#[test]
+fn the_theme_preference_and_the_system_theme_are_in_the_type_registry_as_resources() {
+    with_registry(|registry| {
+        for id in [TypeId::of::<ThemePreference>(), TypeId::of::<SystemTheme>()] {
+            let registration = registry.get(id).expect("in the type registry");
+            assert!(registration.data::<ReflectResource>().is_some());
+        }
     });
 }
 

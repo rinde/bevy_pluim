@@ -32,7 +32,7 @@ use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab,
     SetSliderValue, SliderValueChange, Tab, TabList, ValueChange,
 };
-use bevy::window::{PrimaryWindow, WindowPlugin};
+use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::badge::{Badge, BadgeTone};
@@ -49,6 +49,9 @@ use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
+use rin_bevy_ui::light_dark_toggle::{
+    LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
+};
 use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
@@ -64,7 +67,7 @@ use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::slider::{Slider, SliderRefs};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
-use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme};
+use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
@@ -5808,4 +5811,193 @@ fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
         app.world().get_entity(toast).is_err(),
         "the toast outlived its restarted timer"
     );
+}
+
+/// The option of the toggle that sets `preference`.
+fn light_dark_option(app: &mut App, preference: ThemePreference) -> Entity {
+    let world = app.world_mut();
+    world
+        .query::<(Entity, &LightDarkOption)>()
+        .iter(world)
+        .find(|(_, option)| option.preference == preference)
+        .map(|(entity, _)| entity)
+        .unwrap()
+}
+
+/// Tell the app that the system theme became `theme`.
+fn system_theme_changes(app: &mut App, theme: WindowTheme) {
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .write_message(WindowThemeChanged { window, theme });
+    app.update();
+    app.update();
+}
+
+#[test]
+fn a_light_dark_toggle_has_a_light_a_system_and_a_dark_option() {
+    let mut app = headless_app();
+    let toggle = app.world_mut().spawn(LightDarkToggle).id();
+    app.update();
+    app.update();
+    let world = app.world_mut();
+    let mut options = world
+        .query::<(&LightDarkOption, &ChildOf)>()
+        .iter(world)
+        .map(|(option, parent)| (option.preference, parent.parent()))
+        .collect::<Vec<_>>();
+    options.sort_by_key(|(preference, _)| *preference as u8);
+    assert_eq!(
+        options,
+        vec![
+            (ThemePreference::Light, toggle),
+            (ThemePreference::System, toggle),
+            (ThemePreference::Dark, toggle),
+        ]
+    );
+    assert_eq!(
+        *app.world().get_resource::<ThemePreference>().unwrap(),
+        ThemePreference::System,
+        "the toggle follows the system by default"
+    );
+}
+
+#[test]
+fn activating_a_light_dark_option_sets_the_preference_and_the_theme_mode() {
+    let mut app = headless_app();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    let dark = light_dark_option(&mut app, ThemePreference::Dark);
+    app.world_mut().trigger(Activate { entity: dark });
+    app.update();
+    app.update();
+    assert_eq!(
+        *app.world().get_resource::<ThemePreference>().unwrap(),
+        ThemePreference::Dark
+    );
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Dark
+    );
+    assert!(app.world().entity(dark).contains::<Selected>());
+    let light = light_dark_option(&mut app, ThemePreference::Light);
+    app.world_mut().trigger(Activate { entity: light });
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Light
+    );
+    assert!(!app.world().entity(dark).contains::<Selected>());
+    assert!(app.world().entity(light).contains::<Selected>());
+}
+
+#[test]
+fn a_system_preference_follows_the_system_theme_as_it_changes() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    system_theme_changes(&mut app, WindowTheme::Dark);
+    assert_eq!(
+        app.world().get_resource::<SystemTheme>().unwrap().0,
+        Some(ThemeMode::Dark)
+    );
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Dark
+    );
+    system_theme_changes(&mut app, WindowTheme::Light);
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Light
+    );
+}
+
+#[test]
+fn a_fixed_preference_ignores_the_system_theme_and_system_goes_back_to_it() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    let light = light_dark_option(&mut app, ThemePreference::Light);
+    app.world_mut().trigger(Activate { entity: light });
+    app.update();
+    system_theme_changes(&mut app, WindowTheme::Dark);
+    assert_eq!(
+        app.world().get_resource::<SystemTheme>().unwrap().0,
+        Some(ThemeMode::Dark),
+        "the system theme is still tracked"
+    );
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Light
+    );
+    let system = light_dark_option(&mut app, ThemePreference::System);
+    app.world_mut().trigger(Activate { entity: system });
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Dark
+    );
+}
+
+#[test]
+fn the_primary_window_theme_follows_the_preference() {
+    let mut app = headless_app();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    app.update();
+    let window_theme = |app: &App| app.world().get::<Window>(window).unwrap().window_theme;
+    assert_eq!(
+        window_theme(&app),
+        None,
+        "System leaves the window to the system"
+    );
+    for (preference, expected) in [
+        (ThemePreference::Dark, Some(WindowTheme::Dark)),
+        (ThemePreference::Light, Some(WindowTheme::Light)),
+        (ThemePreference::System, None),
+    ] {
+        let option = light_dark_option(&mut app, preference);
+        app.world_mut().trigger(Activate { entity: option });
+        app.update();
+        app.update();
+        assert_eq!(window_theme(&app), expected, "{preference:?}");
+    }
+}
+
+#[test]
+fn a_light_dark_toggle_is_a_radio_group_whose_toggle_follows_the_preference() {
+    let mut app = headless_app();
+    let toggle = app.world_mut().spawn(LightDarkToggle).id();
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get::<AccessibilityNode>(toggle).unwrap().role(),
+        accesskit::Role::RadioGroup
+    );
+    let dark = light_dark_option(&mut app, ThemePreference::Dark);
+    app.world_mut().trigger(Activate { entity: dark });
+    app.update();
+    app.update();
+    for (preference, label, toggled) in [
+        (ThemePreference::Light, "Light", false),
+        (ThemePreference::System, "System", false),
+        (ThemePreference::Dark, "Dark", true),
+    ] {
+        let option = light_dark_option(&mut app, preference);
+        let node = app.world().get::<AccessibilityNode>(option).unwrap();
+        assert_eq!(node.role(), accesskit::Role::RadioButton);
+        assert_eq!(node.label(), Some(label));
+        assert_eq!(node.toggled(), Some(accesskit::Toggled::from(toggled)));
+    }
 }

@@ -40,6 +40,7 @@ use rin_bevy_ui::filter_chips::{Chip, FilterChips};
 use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
+use rin_bevy_ui::light_dark_toggle::LightDarkToggle;
 use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout,
@@ -125,6 +126,9 @@ pub enum WidgetsSetup {
     /// sharing one selection), then "Change theme" and `three-way segmented
     /// control` (Dark, System, Light, with a selection of its own).
     SegmentedControls,
+    /// A `light dark toggle` (a `LightDarkToggle`, following the system, which a
+    /// headless app does not have, so it shows light) and "Change theme".
+    LightDarkToggle,
     /// Rows of filter chips, each with a `Name`: `status chips` (All 4, Running 2,
     /// Waiting 1, Problems 1, with a selection of its own, All first), `mirror chips`
     /// (the same selection through `Selection::reference`) and `narrow chips` (150
@@ -206,6 +210,7 @@ impl AppSetup for WidgetsSetup {
             Self::NumericStepper => numeric_stepper(world),
             Self::Slider => slider(world),
             Self::SegmentedControls => segmented_controls(world),
+            Self::LightDarkToggle => light_dark_toggle(world),
             Self::FilterChips => filter_chips(world),
             Self::Panel => panel(world),
             Self::SettingRows => setting_rows(world),
@@ -1302,6 +1307,14 @@ fn segmented_controls(world: &mut World) {
                 .build_with_items(["Dark", "System", "Light"].map(Item::new)),
             Name::new("three-way segmented control"),
         ));
+    });
+}
+
+fn light_dark_toggle(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((LightDarkToggle, Name::new("light dark toggle")));
+        spawn_theme_button(root);
     });
 }
 
