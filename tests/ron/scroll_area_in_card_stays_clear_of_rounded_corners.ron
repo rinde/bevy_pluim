@@ -1,0 +1,23 @@
+// A scroll area clips to a rectangle, so contents scrolled half out of view
+// would stick out of a rounded card's bottom corners. A `ClearOfCorners` area
+// ends a corner radius above the card's bottom edge; one without it does not
+// (#405).
+(
+    format_version: 3,
+    name: "a scroll area marked ClearOfCorners ends a corner radius above its card's bottom edge",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Within(Name("card scroll area"), Component("rin_bevy_ui::scroll_area::ScrollArea")),
+            path: "Node.margin.bottom",
+            is: Eq(Px(12.0)),
+        )),
+        Check(Component(
+            target: Within(Name("card scroll area without opt-in"), Component("rin_bevy_ui::scroll_area::ScrollArea")),
+            path: "Node.margin.bottom",
+            is: Eq(Px(0.0)),
+        )),
+    ],
+    expect: [],
+)

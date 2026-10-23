@@ -39,7 +39,7 @@ use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
-use rin_bevy_ui::scroll_area::{ScrollArea, ScrollBar, ScrollContents};
+use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::slider::Slider;
@@ -103,6 +103,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<NumericStepper>(registry);
         assert_component::<Slider>(registry);
         assert_component::<ScrollArea>(registry);
+        assert_component::<ClearOfCorners>(registry);
         assert_component::<ScrollContents>(registry);
         assert_component::<ScrollBar>(registry);
         assert_component::<Stack>(registry);

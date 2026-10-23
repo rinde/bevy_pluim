@@ -48,7 +48,7 @@ use rin_bevy_ui::list::{
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::ScrollArea;
+use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea};
 use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue,
@@ -94,6 +94,9 @@ pub enum WidgetsSetup {
     /// area` and `fitting scroll area`, whose three squares fit and so
     /// never scroll), and "Change theme". An `outer scroll area` (vertical, absolutely
     /// placed at x 0, y 300) holds a `nested horizontal scroll area` in a column 400 px taller than it.
+    /// A `card scroll area` (absolutely placed at x 400, y 300, 200 by 200) is a `Card` holding
+    /// a `ClearOfCorners` scroll area of squares, and a `card scroll area without opt-in` (x 650)
+    /// the same without it.
     ScrollAreas,
     /// A breadcrumb trail over a stack of four panels with buttons that go
     /// further in or back, and "Change theme".
@@ -728,6 +731,38 @@ fn scroll_areas(world: &mut World) {
                 false,
             ),
         ));
+        // Two rounded cards each holding a bare scroll area, spawned last so nothing else moves.
+        for (name, left, clear) in [
+            ("card scroll area", 400, true),
+            ("card scroll area without opt-in", 650, false),
+        ] {
+            root.spawn((
+                Name::new(name),
+                Card,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(left),
+                    top: px(300),
+                    width: px(SCROLL_AREA_SIZE),
+                    height: px(SCROLL_AREA_SIZE),
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                },
+            ))
+            .with_children(|card| {
+                let mut area = card.spawn((
+                    Node {
+                        flex_grow: 1.0,
+                        min_height: px(0),
+                        ..default()
+                    },
+                    ScrollArea::bundle(squares(50, GridAutoFlow::Row), true, false),
+                ));
+                if clear {
+                    area.insert(ClearOfCorners);
+                }
+            });
+        }
     });
 }
 

@@ -41,6 +41,13 @@ impl Plugin for ScrollAreaPlugin {
                     .pipe(theme_scroll_area)
                     .run_if(resource_changed::<Theme>),
             )
+            .add_systems(
+                Update,
+                (|| None::<Entity>)
+                    .pipe(clear_of_corners)
+                    .run_if(resource_changed::<Theme>),
+            )
+            .register_type::<ClearOfCorners>()
             .register_type::<ScrollBar>()
             .register_type::<ScrollAreaRefs>();
     }
@@ -72,6 +79,47 @@ impl ScrollArea {
         node.grid_template_columns =
             vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)];
         node.grid_template_rows = vec![RepeatedGridTrack::flex(1, 1.), RepeatedGridTrack::auto(1)];
+    }
+}
+
+/// Opt-in that keeps a [`ScrollArea`] at the bottom of a rounded [`Card`](crate::card::Card)
+/// above the card's corners.
+///
+/// The area gets a bottom margin of the card's corner radius (`Theme::panel_radius`).
+///
+/// An area clips to a rectangle (Bevy 0.20 has no rounded clip), so contents scrolled half out
+/// of view, or with square corners of their own, would otherwise stick out of the card's rounded
+/// bottom corners. It is opt-in because an area cannot tell whether it touches the card's
+/// corners (other nodes may sit below it, or the card may be square), and it keeps
+/// the margin in step with the theme. Insert it with the area, or later. A [`Panel`](crate::panel::Panel)
+/// does the same for its own body, and only while it has no footer.
+#[derive(Component, Clone, Copy, Debug, Default, Reflect)]
+#[reflect(Component)]
+#[component(on_add=Self::on_add)]
+pub struct ClearOfCorners;
+
+impl ClearOfCorners {
+    fn on_add(mut world: DeferredWorld, context: HookContext) {
+        world
+            .commands()
+            .run_system_cached_with(clear_of_corners, Some(context.entity));
+    }
+}
+
+fn clear_of_corners(
+    area: In<Option<Entity>>,
+    theme: Res<Theme>,
+    mut areas: Query<&mut Node, With<ClearOfCorners>>,
+) {
+    let iter = if let Some(area) = area.0 {
+        Either::Left(areas.get_mut(area).into_iter())
+    } else {
+        Either::Right(areas.iter_mut())
+    };
+    for mut node in iter {
+        if node.margin.bottom != theme.panel_radius {
+            node.margin.bottom = theme.panel_radius;
+        }
     }
 }
 
