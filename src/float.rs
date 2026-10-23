@@ -76,22 +76,47 @@ pub(crate) fn keep_in_window_x(left: f32, width: f32, window_width: f32) -> f32 
         .max(WINDOW_MARGIN)
 }
 
-/// The `top` of a popup `height` high for a button spanning `button_top` to `button_bottom`:
-/// `gap` under the button, or `gap` above it when the popup would come within
-/// [`WINDOW_MARGIN`] of the window's bottom.
-pub(crate) fn below_or_above(
+/// The least height a popup keeps when the window leaves it less room, in logical pixels.
+pub(crate) const MIN_POPUP_HEIGHT: f32 = 100.0;
+
+/// Where a popup goes vertically: its `top` and the `max_height` it may grow to.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct VerticalFit {
+    /// The popup's `top`, in the viewport.
+    pub top: f32,
+    /// The popup's `max_height`: all the room on its side of the button, never less than
+    /// [`MIN_POPUP_HEIGHT`] (or the window less its margins, when that is smaller).
+    pub max_height: f32,
+}
+
+/// Places a popup `height` high for a button spanning `button_top` to `button_bottom`: `gap`
+/// under the button, or `gap` above it when it would come within [`WINDOW_MARGIN`] of the
+/// window's bottom and fits above. When it fits on neither side it goes on the side with more
+/// room and its `max_height` is that room, at least [`MIN_POPUP_HEIGHT`], so it stays inside
+/// the window's top and bottom margins (and so it needs to scroll, as a [`ScrollPosition`]
+/// node does). The `max_height` is always the room of the chosen side, so applying it does not
+/// change which side the next frame's measured height picks.
+pub(crate) fn fit_vertically(
     button_top: f32,
     button_bottom: f32,
     gap: f32,
     height: f32,
     window_height: f32,
-) -> f32 {
+) -> VerticalFit {
     let below = button_bottom + gap;
-    if below + height + WINDOW_MARGIN > window_height {
-        button_top - gap - height
+    let room_below = window_height - WINDOW_MARGIN - below;
+    let room_above = button_top - gap - WINDOW_MARGIN;
+    let window_room = (window_height - WINDOW_MARGIN - WINDOW_MARGIN).max(0.0);
+    let go_below = height <= room_below || (height > room_above && room_below >= room_above);
+    let room = if go_below { room_below } else { room_above };
+    let max_height = room.max(MIN_POPUP_HEIGHT).min(window_room);
+    let height = height.min(max_height);
+    let top = if go_below {
+        below.min(window_height - WINDOW_MARGIN - height)
     } else {
-        below
-    }
+        (button_top - gap - height).max(WINDOW_MARGIN)
+    };
+    VerticalFit { top, max_height }
 }
 
 #[cfg(test)]
@@ -108,7 +133,42 @@ mod tests {
 
     #[test]
     fn a_popup_goes_above_its_button_when_it_would_run_off_the_bottom() {
-        assert!((below_or_above(100.0, 130.0, 3.0, 200.0, 720.0) - 133.0).abs() < f32::EPSILON);
-        assert!((below_or_above(600.0, 630.0, 3.0, 200.0, 720.0) - 397.0).abs() < f32::EPSILON);
+        let fit = fit_vertically(100.0, 130.0, 3.0, 200.0, 720.0);
+        assert!((fit.top - 133.0).abs() < f32::EPSILON);
+        let fit = fit_vertically(600.0, 630.0, 3.0, 200.0, 720.0);
+        assert!((fit.top - 397.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_popup_too_tall_for_either_side_is_capped_to_the_larger_room_inside_the_window() {
+        // Room below 720 - 10 - 133 = 577, above 600 - 3 - 10 = 587 (taller wins).
+        let fit = fit_vertically(600.0, 630.0, 3.0, 2000.0, 720.0);
+        assert!((fit.max_height - 587.0).abs() < f32::EPSILON);
+        assert!((fit.top - 10.0).abs() < f32::EPSILON);
+        let fit = fit_vertically(100.0, 130.0, 3.0, 2000.0, 720.0);
+        assert!((fit.max_height - 577.0).abs() < f32::EPSILON);
+        assert!((fit.top - 133.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_popup_keeps_a_minimum_height_and_stays_in_the_window_where_there_is_no_room() {
+        // Room below 720 - 10 - 683 = 27, above 650 - 3 - 10 = 637 would fit: above.
+        let fit = fit_vertically(650.0, 680.0, 3.0, 2000.0, 720.0);
+        assert!(fit.max_height >= MIN_POPUP_HEIGHT);
+        // A short window: 150 high, button in the middle.
+        let fit = fit_vertically(60.0, 90.0, 0.0, 500.0, 150.0);
+        assert!((fit.max_height - MIN_POPUP_HEIGHT).abs() < f32::EPSILON);
+        assert!(fit.top >= WINDOW_MARGIN);
+        assert!(fit.top + fit.max_height <= 150.0 - WINDOW_MARGIN + f32::EPSILON);
+    }
+
+    #[test]
+    fn the_side_chosen_is_stable_once_the_height_is_capped() {
+        let first = fit_vertically(100.0, 130.0, 3.0, 2000.0, 720.0);
+        let again = fit_vertically(100.0, 130.0, 3.0, first.max_height, 720.0);
+        assert_eq!(first, again);
+        let first = fit_vertically(650.0, 680.0, 3.0, 2000.0, 720.0);
+        let again = fit_vertically(650.0, 680.0, 3.0, first.max_height, 720.0);
+        assert_eq!(first, again);
     }
 }

@@ -12,7 +12,7 @@ use itertools::Either;
 
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
-use crate::float::{Float, below_or_above, keep_in_window_x};
+use crate::float::{Float, fit_vertically, keep_in_window_x};
 use crate::focus::{
     AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
     sync_role, sync_value,
@@ -363,13 +363,17 @@ fn position_float(
     // Centred under the button, then pushed back inside the window.
     let centered_x = button_center.x - float_size.x / 2.0;
     node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, window.width()));
-    node.top = Val::Px(below_or_above(
+    let fit = fit_vertically(
         button_center.y - button_size.y / 2.0,
         button_center.y + button_size.y / 2.0,
         BUTTON_FLOAT_DIST,
         float_size.y,
         window.height(),
-    ));
+    );
+    node.top = Val::Px(fit.top);
+    // A popup taller than the window scrolls with the wheel instead of running off it.
+    node.max_height = Val::Px(fit.max_height);
+    node.overflow.y = OverflowAxis::Scroll;
 }
 
 /// Keeps the popup's palette and the button's colour square in step with the combo's

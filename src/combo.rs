@@ -18,7 +18,7 @@ use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use itertools::Itertools;
 
-use crate::float::{Float, below_or_above, keep_in_window_x};
+use crate::float::{Float, fit_vertically, keep_in_window_x};
 use crate::focus::{
     AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
     sync_role, sync_value,
@@ -329,16 +329,25 @@ fn place_open_lists(
             list_size.x,
             window.width(),
         ));
-        let top = Val::Px(below_or_above(
+        let fit = fit_vertically(
             button_center.y - button_size.y / 2.0,
             button_center.y + button_size.y / 2.0,
             0.0,
             list_size.y,
             window.height(),
-        ));
-        if node.left != left || node.top != top {
+        );
+        let top = Val::Px(fit.top);
+        let max_height = Val::Px(fit.max_height);
+        if node.left != left
+            || node.top != top
+            || node.max_height != max_height
+            || node.overflow.y != OverflowAxis::Scroll
+        {
             node.left = left;
             node.top = top;
+            // A list taller than the window scrolls with the wheel instead of running off it.
+            node.max_height = max_height;
+            node.overflow.y = OverflowAxis::Scroll;
         }
     }
 }

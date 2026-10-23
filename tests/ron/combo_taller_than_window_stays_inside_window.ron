@@ -1,0 +1,18 @@
+// A combo with 80 options is far taller than the window (720 high, the button at y 300).
+// Its list is capped to the room on one side of the button, at least 100 pixels, and stays
+// inside the window's 10 pixel margins top and bottom; the wheel scrolls the rest.
+(
+    format_version: 3,
+    name: "a combo list taller than the window is capped and stays inside it",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("long combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("long combo"), path: "ComboState", is: Eq(Open))),
+        Wait(3),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "ComputedNode.size.y", unit: Logical, is: Between(100.0, 700.0))),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Between(60.0, 660.0))),
+    ],
+    expect: [],
+)
