@@ -6062,6 +6062,36 @@ fn a_system_preference_follows_the_system_theme_as_it_changes() {
 }
 
 #[test]
+fn a_window_created_with_a_fixed_theme_is_not_taken_for_the_system_theme() {
+    let mut app = headless_app();
+    app.world_mut().spawn((
+        Window {
+            window_theme: Some(WindowTheme::Dark),
+            ..default()
+        },
+        PrimaryWindow,
+    ));
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<SystemTheme>().unwrap().0,
+        None,
+        "the window's fixed theme says nothing about the system"
+    );
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Light,
+        "an unknown system theme means light"
+    );
+    system_theme_changes(&mut app, WindowTheme::Dark);
+    assert_eq!(
+        app.world().get_resource::<SystemTheme>().unwrap().0,
+        Some(ThemeMode::Dark)
+    );
+}
+
+#[test]
 fn a_fixed_preference_ignores_the_system_theme_and_system_goes_back_to_it() {
     let mut app = headless_app();
     app.world_mut().spawn((Window::default(), PrimaryWindow));
