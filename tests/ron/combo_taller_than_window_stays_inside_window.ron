@@ -1,6 +1,9 @@
 // A combo with 80 options is far taller than the window (720 high, the button at y 300).
 // Its list is capped to the room on one side of the button, at least 100 pixels, and stays
 // inside the window's 10 pixel margins top and bottom; the wheel scrolls the rest.
+// Its size and centre depend on the text size (the button's height), so the edges are probed
+// with the pointer instead: the list's bottom edge is at 710 exactly (720 less the margin), so
+// the pointer is on it on the pixel row 709 and off it on row 710.
 (
     format_version: 3,
     name: "a combo list taller than the window is capped and stays inside it",
@@ -11,8 +14,15 @@
         Click(Left),
         Check(Component(target: Name("long combo"), path: "ComboState", is: Eq(Open))),
         Wait(3),
-        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "ComputedNode.size.y", unit: Logical, is: Between(100.0, 700.0))),
-        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Between(60.0, 660.0))),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "ComputedNode.size.y", unit: Logical, is: Between(300.0, 400.0))),
+        // Its top (logical pixels, as the float sets it) is under the button, inside the top margin.
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "Node.top.0", is: Ge(10.0))),
+        MoveTo(Screen((300.0, 709.0))),
+        Wait(2),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "Hovered.0", is: Eq(true))),
+        MoveTo(Screen((300.0, 710.0))),
+        Wait(2),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "Hovered.0", is: Eq(false))),
     ],
     expect: [],
 )
