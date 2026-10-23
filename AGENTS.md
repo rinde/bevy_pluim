@@ -235,6 +235,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 
 | Example | Shows |
 | --- | --- |
+| `overview` | every widget that stands alone, one page each (18 pages, with several variants over example data), behind a vertical `TabBar` driving a `Stack`; a button toggles the theme. `tests/headless.rs` includes it with `#[path]` and shows every page (`the_overview_example_builds_and_every_page_runs`) |
 | `widgets` | a showcase: a scroll area, a list and combos sharing one selection via `Selection::reference`, and buttons that add more |
 | `breadcrumbs` | `BreadCrumbs` and a `Stack` sharing one selection, with reused `StackItem` creators |
 | `tabs` | a `TabBar` driving a `Stack`, with combos, colour palettes and cards inside |
