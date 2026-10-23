@@ -16,7 +16,7 @@ use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggl
 use crate::list::sync_selected;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
-use crate::tooltip::Tooltip;
+use crate::tooltip::{OwnedTooltip, Tooltip};
 
 /// The height of a segment, in logical pixels.
 const SEGMENT_HEIGHT: f32 = 28.0;
@@ -320,11 +320,6 @@ fn theme_segmented_controls(
         }
     }
 }
-
-/// Marks a segment whose [`Tooltip`] `sync_icons` added, holding the text it gave it, so that
-/// only that one is overwritten or removed again: a [`Tooltip`] with other text is the app's.
-#[derive(Component, Debug, Clone)]
-struct OwnedTooltip(String);
 
 /// Keeps each segment's icon, the visibility of its text and its tooltip in step with its item's
 /// [`ItemIcon`] and its control's [`SegmentLabels`], in place.

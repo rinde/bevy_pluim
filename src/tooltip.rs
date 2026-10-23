@@ -16,6 +16,11 @@ const MARGIN: f32 = 6.0;
 /// The gap between the node and its popup, in logical pixels.
 const GAP: f32 = 6.0;
 
+/// Marks an entity whose [`Tooltip`] a widget added, holding the text it gave it, so that the
+/// widget replaces or removes only that one: a [`Tooltip`] with other text is the app's.
+#[derive(Component, Debug, Clone)]
+pub(crate) struct OwnedTooltip(pub String);
+
 /// Registers the systems and observers of [`Tooltip`].
 ///
 /// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).

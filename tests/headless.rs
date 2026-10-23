@@ -5101,6 +5101,26 @@ fn only_the_buttons_of_an_underlined_toolbar_have_a_tooltip_with_their_label() {
     }
 }
 
+#[test]
+fn a_tooltip_the_app_put_on_an_underlined_toolbar_button_is_kept() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().zero_or_one(),
+    );
+    let select = toolbar_buttons(&app, toolbar)[0];
+    app.world_mut()
+        .entity_mut(select)
+        .insert(Tooltip::new("Select (1)"));
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get::<Tooltip>(select).map(|t| t.text.as_str()),
+        Some("Select (1)")
+    );
+}
+
 /// The badge node under `host`, with its text, if there is one.
 fn badge_under(app: &App, host: Entity) -> Option<(Entity, String)> {
     let children = app.world().entity(host).get::<Children>()?;
