@@ -1,0 +1,38 @@
+// Pins the nesting behaviour: the area under the pointer takes the wheel turn alone. The
+// inner area's contents block the pointer, so the outer area is not hovered over the
+// inner one and does not scroll with it, and the inner area does not pass anything on.
+// Over the outer area beside the inner one, only the outer area scrolls.
+(
+    format_version: 3,
+    name: "a wheel turn over a horizontal scroll area in a vertical one scrolls only the inner",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("nested horizontal scroll area")),
+        Wheel(x: 0.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("nested horizontal scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0",
+            is: Eq((100.0, 0.0)),
+        )),
+        Check(Component(
+            target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))),
+            path: "ScrollPosition.0",
+            is: Eq((0.0, 0.0)),
+        )),
+        MoveTo(Screen((210.0, 400.0))),
+        Wheel(x: 0.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))),
+            path: "ScrollPosition.0",
+            is: Eq((0.0, 100.0)),
+        )),
+        Check(Component(
+            target: Within(Name("nested horizontal scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0",
+            is: Eq((100.0, 0.0)),
+        )),
+    ],
+    expect: [],
+)

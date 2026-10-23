@@ -367,6 +367,11 @@ fn scroll_into_view(
 /// horizontal scroll by its vertical delta, since a mouse wheel only turns
 /// vertically. An event with a horizontal delta scrolls by that delta alone.
 ///
+/// Nested areas: only nodes in picking's [`HoverMap`] are scrolled, and a
+/// [`ScrollContents`] blocks the pointer for what is below it, so over an inner area
+/// only that one scrolls; the area around it gets nothing, also when the inner one is at
+/// its limit.
+///
 /// Registered once, by [`ScrollAreaPlugin`].
 fn update_scroll_position(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
