@@ -6798,3 +6798,49 @@ fn reordering_items_reorders_their_tabs() {
 
     assert_eq!(tabs_of(&app, bar), [before[2], before[0], before[1]]);
 }
+
+#[test]
+fn a_one_and_a_one_or_more_selection_are_repaired_when_their_items_arrive_later() {
+    let mut app = headless_app();
+    let one = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<Item<String>>::new()),
+        )
+        .id();
+    let one_or_more = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one_or_more()
+                .build_with_items(Vec::<Item<String>>::new()),
+        )
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let first_of_one = app.world_mut().spawn((Item::new("a"), ItemOf(one))).id();
+    let first_of_many = app
+        .world_mut()
+        .spawn((Item::new("b"), ItemOf(one_or_more)))
+        .id();
+    app.world_mut().spawn((Item::new("c"), ItemOf(one)));
+    app.world_mut().spawn((Item::new("d"), ItemOf(one_or_more)));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(
+        app.world().entity(one).get::<Selection>(),
+        Some(&Selection::Value(SelectionValue::One(first_of_one)))
+    );
+    assert_eq!(
+        app.world().entity(one_or_more).get::<Selection>(),
+        Some(&Selection::Value(SelectionValue::OneOrMore(
+            std::iter::once(first_of_many).collect()
+        )))
+    );
+}
