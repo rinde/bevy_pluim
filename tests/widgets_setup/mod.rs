@@ -429,6 +429,24 @@ fn combos(world: &mut World) {
                 (Item::new("Utrecht"), ItemNote::new("4 km")),
             ]),
         ));
+        // A combo with far more options than the window is high, out of the flow and last:
+        // its list is capped to the room beside the button and scrolls
+        // (`combo_taller_than_window_stays_inside_window`).
+        root.spawn((
+            Combo,
+            Name::new("long combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(200),
+                top: px(300),
+                left: px(200),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items((1..=80).map(|n| Item::new(format!("Option {n}")))),
+        ));
         root.spawn((
             Combo,
             Name::new("bottom edge combo"),
