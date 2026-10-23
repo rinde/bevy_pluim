@@ -77,10 +77,19 @@ struct TooltipClock {
 }
 
 /// The popup of a [`Tooltip`] node that is showing.
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct TooltipPopup {
     /// The node the popup belongs to.
-    pub owner: Entity,
+    owner: Entity,
+}
+
+impl TooltipPopup {
+    /// The node the popup belongs to.
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// The text of a popup.
@@ -214,7 +223,7 @@ fn place_popups(
 ) {
     let window = window.iter().next();
     for (popup, popup_computed, mut node, mut visibility) in &mut popups {
-        let Ok((owner_computed, owner_transform)) = owners.get(popup.owner) else {
+        let Ok((owner_computed, owner_transform)) = owners.get(popup.owner()) else {
             continue;
         };
         let scale = owner_computed.inverse_scale_factor();
