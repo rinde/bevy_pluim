@@ -72,9 +72,6 @@ Claimed by coordinator run `<run id>` in slot `slot-<n>` on `<hostname>`.
 Released by coordinator run `<run id>`: <why, and what is left, e.g. "PR #312 waits for CI">.
 ```
 
-Read them from `gh api --paginate repos/rinde/rin-bevy-ui/issues/<n>/comments`,
-in the order GitHub returns them (oldest first):
-
 A run started by hand with `implement-issue` (no `for coordinator run`) posts
 an **implementer claim** instead, which is not yours and is read the same way:
 
@@ -90,13 +87,17 @@ Released by hand run `<run id>`: <why, e.g. "PR #N opened">.
 
 Implementers you dispatch post neither; your claim covers them.
 
+Read claims from `gh api --paginate repos/rinde/rin-bevy-ui/issues/<n>/comments`,
+in the order GitHub returns them (oldest first):
+
 - A claim is **live** while its comment exists and no release with the same
   `session` comes after it.
 - The issue's **owner** is the run of its oldest live claim. An issue is
   **yours** when the owner is your run id.
 - An issue is **free to claim** when it is labelled `ready-for-agent`, has no
-  `Needs refinement`, has no live claim (of a coordinator or an implementer), and either has no `In progress` or the
-  last coordinator marker on it is a release (a run that wound down left the
+  `Needs refinement`, has no live claim (of a coordinator or an
+  implementer), and either has no `In progress` or the last coordinator marker
+  on it is a release (a run that wound down left the
   label on an issue whose pull request is still open). An issue with
   `In progress` and no claim at all is someone else's, a human's or an agent
   run by hand: report it, never claim it. An issue with a live
@@ -404,9 +405,10 @@ the prompt `Implement issue #<n> in slot <path> for coordinator run <run id>`.
 With no free slot, do not claim the issue; it waits for a later pass.
 
 An issue with `In progress` that is not yours is someone else's: another
-run's live claim (a coordinator's or a by-hand implementer's) (report its owner, and say it is stale when it is), or no
-claim at all and no open pull request (stalled: report it rather than start
-it again, since someone may be working on it). If a slot is bound to it,
+run's live claim, a coordinator's or a by-hand implementer's (report its
+owner, and say it is stale when it is), or no claim at all and no open pull
+request (stalled: report it rather than start it again, since someone may be
+working on it). If a slot is bound to it,
 leave the slot bound and say so.
 
 ### 4. Act on what agents report
