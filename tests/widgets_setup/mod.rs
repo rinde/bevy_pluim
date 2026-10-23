@@ -49,7 +49,7 @@ use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea};
-use rin_bevy_ui::segmented_control::SegmentedControl;
+use rin_bevy_ui::segmented_control::{ItemIcon, SegmentLabels, SegmentedControl};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemParam, ItemValues, Selection, SelectionParam, SelectionValue,
 };
@@ -128,7 +128,9 @@ pub enum WidgetsSetup {
     /// Segmented controls, each with a `Name`: `own segmented control`
     /// (Auto, Manual, with a selection of its own) and `first shared
     /// segmented control` and `second shared segmented control` (Dark, Light,
-    /// sharing one selection), then "Change theme" and `three-way segmented
+    /// sharing one selection), then "Change theme", `icon segmented control`
+    /// (Grid, List, text and icon, spawned last) and `icon only segmented control`
+    /// (Map, Table, `SegmentLabels::Hidden`, spawned last) and `three-way segmented
     /// control` (Dark, System, Light, with a selection of its own).
     SegmentedControls,
     /// A `light dark toggle` (a `LightDarkToggle`, following the system, which a
@@ -1417,6 +1419,21 @@ fn segmented_controls(world: &mut World) {
                 .one()
                 .build_with_items(["Dark", "System", "Light"].map(Item::new)),
             Name::new("three-way segmented control"),
+        ));
+        root.spawn((
+            SegmentedControl,
+            Selection::builder().one().build_with_items(
+                ["Grid", "List"].map(|text| (Item::new(text), ItemIcon(Handle::default()))),
+            ),
+            Name::new("icon segmented control"),
+        ));
+        root.spawn((
+            SegmentedControl,
+            SegmentLabels::Hidden,
+            Selection::builder().one().build_with_items(
+                ["Map", "Table"].map(|text| (Item::new(text), ItemIcon(Handle::default()))),
+            ),
+            Name::new("icon only segmented control"),
         ));
     });
 }

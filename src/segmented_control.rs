@@ -1,4 +1,5 @@
-//! `SegmentedControl`: a track of text segments, one per item of a [`Selection`], that picks one.
+//! `SegmentedControl`: a track of segments, one per item of a [`Selection`], that picks one.
+//! A segment shows the item's text, an icon, or both.
 
 use std::collections::HashMap;
 
@@ -15,6 +16,7 @@ use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggl
 use crate::list::sync_selected;
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
+use crate::tooltip::Tooltip;
 
 /// The height of a segment, in logical pixels.
 const SEGMENT_HEIGHT: f32 = 28.0;
@@ -31,6 +33,10 @@ const SEGMENT_GAP: f32 = 2.0;
 const INDICATOR_RATE: f32 = 18.0;
 /// The distance in logical pixels under which the indicator snaps to its target.
 const INDICATOR_SNAP: f32 = 0.5;
+/// The side of a segment's icon, in logical pixels.
+const SEGMENT_ICON_SIZE: f32 = 16.0;
+/// The gap between a segment's icon and its text.
+const SEGMENT_ICON_GAP: f32 = 6.0;
 /// The size of a segment's text.
 const SEGMENT_FONT_SIZE: f32 = 13.0;
 
@@ -49,6 +55,7 @@ impl Plugin for SegmentedControlPlugin {
                     .pipe(theme_segmented_controls)
                     .run_if(resource_changed::<Theme>),
                 selection_change,
+                sync_icons,
                 hover_change,
                 spawn_indicators,
                 animate_indicators,
@@ -59,11 +66,14 @@ impl Plugin for SegmentedControlPlugin {
         .add_observer(on_insert_selection)
         .register_type::<SegmentedControl>()
         .register_type::<Segment>()
-        .register_type::<SegmentIndicator>();
+        .register_type::<SegmentIndicator>()
+        .register_type::<SegmentIcon>()
+        .register_type::<SegmentLabels>()
+        .register_type::<ItemIcon>();
     }
 }
 
-/// A track of text segments that picks one item, like a small tab bar or a switch.
+/// A track of segments that picks one item, like a small tab bar or a switch.
 ///
 /// The track and its segments are rounded by [`Theme::control_radius`], like the other controls,
 /// not by radii of their own.
@@ -87,6 +97,10 @@ impl Plugin for SegmentedControlPlugin {
 ///     ));
 /// }
 /// ```
+///
+/// A segment shows its item's text. An item that also carries an [`ItemIcon`] shows that icon,
+/// 16 px, before the text; with [`SegmentLabels::Hidden`] on the control the icon is all it
+/// shows, and a [`Tooltip`] with the text. An item without an icon always shows its text.
 ///
 /// The selected segment is marked by a [`SegmentIndicator`] behind the segments, which slides to
 /// a newly selected segment instead of jumping.
@@ -112,6 +126,7 @@ impl Plugin for SegmentedControlPlugin {
         ..default()
     },
     BackgroundColor::default(),
+    SegmentLabels,
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct SegmentedControl;
@@ -123,6 +138,39 @@ impl SegmentedControl {
             .run_system_cached_with(theme_segmented_controls, Some(context.entity));
     }
 }
+
+/// An icon for the segment of an item of a [`SegmentedControl`], put on the item entity next to
+/// its [`Item<String>`] (like [`ItemNote`](crate::list::ItemNote) on a list item).
+///
+/// The image is white on transparent, like those of [`Icon`](crate::icon::Icon); the segment
+/// tints it with the colour of its text. Inserting, changing or removing it updates the segment
+/// in place.
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+pub struct ItemIcon(pub Handle<Image>);
+
+/// Whether the segments of a [`SegmentedControl`] show their text next to their icon.
+///
+/// Insert a new value on the control to switch; segments are not respawned. It only affects
+/// items with an [`ItemIcon`]: an item without one keeps its text, so no segment is empty. A
+/// segment whose text is hidden gets a [`Tooltip`] with it, and its accessible name stays the
+/// text.
+#[derive(Component, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+pub enum SegmentLabels {
+    /// The text is shown, after the icon if there is one.
+    #[default]
+    Shown,
+    /// Segments with an icon show the icon alone.
+    Hidden,
+}
+
+/// The icon of a [`Segment`] whose item has an [`ItemIcon`]: a 16 px image, tinted with the
+/// segment's text colour.
+#[derive(Component, Debug, Copy, Clone, Default, Reflect)]
+#[reflect(Component)]
+#[require(Name::new("SegmentIcon"))]
+pub struct SegmentIcon;
 
 /// One segment of a [`SegmentedControl`]: a button showing one item.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
@@ -203,6 +251,7 @@ fn theme_segmented_controls(
         (Without<SegmentedControl>, Without<Segment>),
     >,
     mut labels: Query<(&ChildOf, &mut TextColor, &mut TextFont), With<SegmentLabel>>,
+    mut icons: Query<(&ChildOf, &mut ImageNode), With<SegmentIcon>>,
     states: Query<(&Segment, &Hovered)>,
 ) {
     for (control, mut node, mut background) in &mut controls {
@@ -222,6 +271,7 @@ fn theme_segmented_controls(
         node.padding = UiRect::axes(Val::Px(SEGMENT_SIDE_PADDING), Val::ZERO);
         node.align_items = AlignItems::Center;
         node.justify_content = JustifyContent::Center;
+        node.column_gap = Val::Px(SEGMENT_ICON_GAP);
         node.border_radius = BorderRadius::all(theme.control_radius);
         background.0 = Color::NONE;
     }
@@ -251,6 +301,102 @@ fn theme_segmented_controls(
             weight: FontWeight::SEMIBOLD,
             ..default()
         };
+    }
+
+    for (child_of, mut image) in &mut icons {
+        let Ok((segment, hovered)) = states.get(child_of.parent()) else {
+            continue;
+        };
+        if control_id.0.is_some_and(|id| id != segment.control_ref) {
+            continue;
+        }
+        let selected = selections
+            .get(segment.control_ref)
+            .is_some_and(|selection| selection.is_selected(segment.item_ref));
+        let color = segment_colors(&theme.colors, selected, hovered.get()).1;
+        if image.color != color {
+            image.color = color;
+        }
+    }
+}
+
+/// Keeps each segment's icon, the visibility of its text and its tooltip in step with its item's
+/// [`ItemIcon`] and its control's [`SegmentLabels`], in place.
+fn sync_icons(
+    changed_icons: Query<(), Changed<ItemIcon>>,
+    mut removed_icons: RemovedComponents<ItemIcon>,
+    changed_labels: Query<(), Changed<SegmentLabels>>,
+    added: Query<(), Added<Segment>>,
+    segments: Query<(Entity, &Segment, Option<&Tooltip>)>,
+    item_icons: Query<&ItemIcon>,
+    items: Query<&Item<String>>,
+    controls: Query<&SegmentLabels>,
+    mut icons: Query<(Entity, &ChildOf, &mut ImageNode), With<SegmentIcon>>,
+    mut labels: Query<(&ChildOf, &mut Node), With<SegmentLabel>>,
+    mut commands: Commands,
+) {
+    let removed = removed_icons.read().count() > 0;
+    if !removed && changed_icons.is_empty() && changed_labels.is_empty() && added.is_empty() {
+        return;
+    }
+    let mut restyle = Vec::new();
+    for (segment_id, segment, tooltip) in &segments {
+        let icon = item_icons.get(segment.item_ref).ok();
+        let hidden = controls
+            .get(segment.control_ref)
+            .is_ok_and(|labels| *labels == SegmentLabels::Hidden)
+            && icon.is_some();
+        let existing = icons.iter_mut().find(|(_, c, _)| c.parent() == segment_id);
+        match (icon, existing) {
+            (Some(icon), Some((_, _, mut image))) => {
+                if image.image != icon.0 {
+                    image.image = icon.0.clone();
+                }
+            }
+            (Some(icon), None) => {
+                let id = commands
+                    .spawn((
+                        SegmentIcon,
+                        ImageNode::new(icon.0.clone()),
+                        Node {
+                            width: Val::Px(SEGMENT_ICON_SIZE),
+                            height: Val::Px(SEGMENT_ICON_SIZE),
+                            flex_shrink: 0.0,
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .id();
+                commands.entity(segment_id).insert_children(0, &[id]);
+                restyle.push(segment.control_ref);
+            }
+            (None, Some((id, _, _))) => {
+                commands.entity(id).despawn();
+            }
+            (None, None) => {}
+        }
+        for (child_of, mut node) in &mut labels {
+            if child_of.parent() == segment_id {
+                let display = if hidden { Display::None } else { Display::Flex };
+                if node.display != display {
+                    node.display = display;
+                }
+            }
+        }
+        if hidden {
+            if let Ok(item) = items.get(segment.item_ref)
+                && tooltip.is_none_or(|t| t.text != item.data)
+            {
+                commands
+                    .entity(segment_id)
+                    .insert(Tooltip::new(item.data.clone()));
+            }
+        } else if tooltip.is_some() {
+            commands.entity(segment_id).remove::<Tooltip>();
+        }
+    }
+    for control in restyle {
+        commands.run_system_cached_with(theme_segmented_controls, Some(control));
     }
 }
 

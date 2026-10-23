@@ -59,7 +59,9 @@ use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton, PushButtonRefs};
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
-use rin_bevy_ui::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
+use rin_bevy_ui::segmented_control::{
+    ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
+};
 use rin_bevy_ui::select::{
     Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
 };
@@ -6165,4 +6167,169 @@ fn a_scroll_area_gives_its_bottom_margin_back_when_it_stops_being_clear_of_corne
     assert_eq!(margin(&app), Val::ZERO);
     app.update();
     assert_eq!(margin(&app), Val::ZERO);
+}
+
+/// A control over "Grid" (given an icon) and "List" (without one).
+fn spawn_mixed_icon_control(app: &mut App) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Grid", "List"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let grid = item_with_text(app, "Grid");
+    app.world_mut()
+        .entity_mut(grid)
+        .insert(ItemIcon(Handle::default()));
+    for _ in 0..3 {
+        app.update();
+    }
+    control
+}
+
+/// The icon child of a segment, if any.
+fn icon_of(app: &App, segment: Entity) -> Option<Entity> {
+    app.world().entity(segment).get::<Children>().and_then(|c| {
+        c.iter()
+            .find(|c| app.world().entity(*c).contains::<SegmentIcon>())
+    })
+}
+
+/// The display of the text child of a segment.
+fn label_display(app: &App, segment: Entity) -> Display {
+    let label = app
+        .world()
+        .entity(segment)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains::<Text>())
+        .unwrap();
+    app.world().entity(label).get::<Node>().unwrap().display
+}
+
+/// The entity of the item with the given text.
+fn item_with_text(app: &mut App, text: &'static str) -> Entity {
+    app.world_mut()
+        .run_system_once(move |items: Query<(Entity, &Item<String>)>| {
+            items.iter().find(|(_, i)| i.data == text).unwrap().0
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_segment_of_an_item_with_an_icon_gets_a_sixteen_pixel_icon_before_its_text() {
+    let mut app = headless_app();
+    let control = spawn_mixed_icon_control(&mut app);
+    let segments = segments_of(&app, control);
+    let icon = icon_of(&app, segments[0]).unwrap();
+    assert!(icon_of(&app, segments[1]).is_none());
+    assert_eq!(
+        app.world().entity(segments[0]).get::<Children>().unwrap()[0],
+        icon
+    );
+    let node = app.world().entity(icon).get::<Node>().unwrap();
+    assert_eq!((node.width, node.height), (Val::Px(16.0), Val::Px(16.0)));
+    assert_eq!(label_display(&app, segments[0]), Display::Flex);
+}
+
+#[test]
+fn the_icon_of_a_segment_follows_the_colour_of_its_text_and_the_theme() {
+    let mut app = headless_app();
+    let control = spawn_mixed_icon_control(&mut app);
+    let segment = segments_of(&app, control)[0];
+    let icon = icon_of(&app, segment).unwrap();
+    let colour = |app: &App| app.world().entity(icon).get::<ImageNode>().unwrap().color;
+    assert_eq!(
+        colour(&app),
+        DEFAULT_LIGHT_THEME_COLORS.segmented_selected_text
+    );
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    app.update();
+    app.update();
+    assert_eq!(
+        colour(&app),
+        DEFAULT_DARK_THEME_COLORS.segmented_selected_text
+    );
+}
+
+#[test]
+fn hidden_labels_hide_the_text_only_of_items_with_an_icon_and_add_a_tooltip() {
+    let mut app = headless_app();
+    let control = spawn_mixed_icon_control(&mut app);
+    let segments = segments_of(&app, control);
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Hidden);
+    app.update();
+    app.update();
+    assert_eq!(label_display(&app, segments[0]), Display::None);
+    assert_eq!(label_display(&app, segments[1]), Display::Flex);
+    assert_eq!(
+        app.world()
+            .entity(segments[0])
+            .get::<Tooltip>()
+            .unwrap()
+            .text,
+        "Grid"
+    );
+    assert!(app.world().entity(segments[1]).get::<Tooltip>().is_none());
+    app.world_mut()
+        .entity_mut(control)
+        .insert(SegmentLabels::Shown);
+    app.update();
+    app.update();
+    assert_eq!(label_display(&app, segments[0]), Display::Flex);
+    assert!(app.world().entity(segments[0]).get::<Tooltip>().is_none());
+}
+
+#[test]
+fn changing_or_removing_an_item_icon_updates_its_segment_in_place() {
+    let mut app = headless_app();
+    let control = spawn_mixed_icon_control(&mut app);
+    let segments = segments_of(&app, control);
+    let indicator = indicator_of(&app, control);
+    let icon = icon_of(&app, segments[0]).unwrap();
+    let grid = item_with_text(&mut app, "Grid");
+    let other = Handle::<Image>::Uuid(
+        bevy::asset::uuid::Uuid::from_u128(7),
+        std::marker::PhantomData,
+    );
+    app.world_mut()
+        .entity_mut(grid)
+        .insert(ItemIcon(other.clone()));
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(icon).get::<ImageNode>().unwrap().image,
+        other
+    );
+    assert_eq!(segments_of(&app, control), segments);
+
+    app.world_mut().entity_mut(grid).remove::<ItemIcon>();
+    app.update();
+    app.update();
+    assert!(icon_of(&app, segments[0]).is_none());
+    assert_eq!(segments_of(&app, control), segments);
+    assert_eq!(indicator_of(&app, control), indicator);
+
+    let list = item_with_text(&mut app, "List");
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ItemIcon(Handle::default()));
+    app.update();
+    app.update();
+    assert!(icon_of(&app, segments[1]).is_some());
+    assert_eq!(segments_of(&app, control), segments);
 }
