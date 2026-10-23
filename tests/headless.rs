@@ -4466,6 +4466,34 @@ fn selected_label(app: &App, selection_holder: Entity) -> Option<String> {
 }
 
 #[test]
+fn toolbar_buttons_always_have_the_children_of_their_toolbars_style() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let check = |app: &App, style: ToolbarStyle| {
+        let buttons = toolbar_buttons(app, toolbar);
+        assert!(!buttons.is_empty());
+        for button in buttons {
+            let refs = app.world().get::<ToolbarButtonRefs>(button).unwrap();
+            assert_eq!(refs.style(), style);
+            assert_eq!(refs.label().is_some(), style == ToolbarStyle::Filled);
+            assert_eq!(refs.bar().is_some(), style == ToolbarStyle::Underlined);
+            assert_eq!(
+                app.world().get::<ToolbarButton>(button).unwrap().toolbar(),
+                toolbar
+            );
+        }
+    };
+    check(&app, ToolbarStyle::Filled);
+    app.world_mut()
+        .entity_mut(toolbar)
+        .insert(Toolbar::new(ToolbarStyle::Underlined));
+    for _ in 0..3 {
+        app.update();
+    }
+    check(&app, ToolbarStyle::Underlined);
+}
+
+#[test]
 fn a_tool_with_a_key_hint_gets_a_positioned_hint_text_and_one_without_gets_none() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -4492,7 +4520,7 @@ fn a_tool_with_a_key_hint_gets_a_positioned_hint_text_and_one_without_gets_none(
             .entity(button)
             .get::<ToolbarButtonRefs>()
             .unwrap()
-            .hint
+            .hint()
     };
     let hint = hint_of(buttons[0]).unwrap();
     assert_eq!(hint_of(buttons[1]), None);
@@ -4550,7 +4578,7 @@ fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_colour_whe
     let colors = app.world().get_resource::<Theme>().unwrap().colors;
     let label = |app: &App, b: Entity| {
         let refs = app.world().entity(b).get::<ToolbarButtonRefs>().unwrap();
-        let e = app.world().entity(refs.label.unwrap());
+        let e = app.world().entity(refs.label().unwrap());
         (
             e.get::<Text>().unwrap().0.clone(),
             e.get::<TextColor>().unwrap().0,
@@ -4586,12 +4614,12 @@ fn clicking_the_open_panel_of_a_zero_or_one_toolbar_closes_it() {
         .entity(buttons[1])
         .get::<ToolbarButtonRefs>()
         .unwrap();
-    assert_eq!(node_display(&app, refs.bar.unwrap()), Display::Flex);
+    assert_eq!(node_display(&app, refs.bar().unwrap()), Display::Flex);
 
     activate(&mut app, buttons[1]);
     assert_eq!(selected_label(&app, toolbar), None);
     assert_eq!(background(&app, buttons[1]), Color::NONE);
-    assert_eq!(node_display(&app, refs.bar.unwrap()), Display::None);
+    assert_eq!(node_display(&app, refs.bar().unwrap()), Display::None);
 }
 
 #[test]
@@ -4605,7 +4633,7 @@ fn a_selection_changed_through_the_selection_param_restyles_the_buttons() {
         .entity(buttons[3])
         .get::<ToolbarButton>()
         .unwrap()
-        .item;
+        .item();
 
     app.world_mut()
         .run_system_once(move |mut selections: SelectionParam| {
@@ -4913,7 +4941,7 @@ fn hiding_the_tool_labels_shrinks_the_buttons_and_showing_them_restores_it() {
         let world = app.world();
         let node = world.entity(buttons[0]).get::<Node>().unwrap();
         let refs = world.entity(buttons[0]).get::<ToolbarButtonRefs>().unwrap();
-        let label = world.entity(refs.label.unwrap()).get::<Node>().unwrap();
+        let label = world.entity(refs.label().unwrap()).get::<Node>().unwrap();
         (node.width, node.height, label.display)
     };
     assert_eq!(state(&app), (Val::Px(66.0), Val::Px(60.0), Display::Flex));
@@ -5200,7 +5228,7 @@ fn a_badge_on_a_toolbar_item_shows_on_its_button_and_follows_the_item() {
         Selection::builder().one(),
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item;
+    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item();
     assert_eq!(badge_under(&app, buttons[1]), None);
 
     app.world_mut().entity_mut(item).insert(Badge::count(6));
@@ -5226,7 +5254,7 @@ fn a_badge_on_a_toolbar_item_describes_its_button_for_accessibility() {
         Selection::builder().one(),
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item;
+    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item();
     let description = |app: &App, button: Entity| {
         app.world()
             .get::<AccessibilityNode>(button)
@@ -5375,7 +5403,7 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
         let buttons = toolbar_buttons(&app, toolbar);
         let bulldoze = buttons[1];
         let tint = |app: &App, b: Entity| {
-            let icon = app.world().get::<ToolbarButtonRefs>(b).unwrap().icon;
+            let icon = app.world().get::<ToolbarButtonRefs>(b).unwrap().icon();
             app.world().get::<ImageNode>(icon).unwrap().color
         };
         let light = DEFAULT_LIGHT_THEME_COLORS;
@@ -5387,7 +5415,7 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
         assert_eq!(background(&app, bulldoze), light.hovered_item);
         assert_eq!(tint(&app, bulldoze), light.danger_hover_text);
         let refs = *app.world().get::<ToolbarButtonRefs>(bulldoze).unwrap();
-        if let Some(label) = refs.label {
+        if let Some(label) = refs.label() {
             assert_eq!(
                 app.world().get::<TextColor>(label).unwrap().0,
                 light.danger_hover_text
