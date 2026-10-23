@@ -1637,6 +1637,20 @@ fn a_combo_button_controls_its_list() {
     assert_eq!(controls(&app, button), vec![list.to_bits()]);
 }
 
+#[test]
+fn a_combo_button_shows_a_chevron_image_after_its_label_not_text() {
+    let mut app = headless_app();
+    let (_, button) = spawn_combo(&mut app);
+    let children = app.world().get::<Children>(button).unwrap();
+    assert_eq!(children.len(), 2);
+    let label = children[0];
+    let chevron = children[1];
+    assert!(app.world().get::<Text>(label).is_some());
+    assert!(app.world().get::<Text>(chevron).is_none());
+    assert!(app.world().get::<Icon>(chevron).is_some());
+    assert!(app.world().get::<ImageNode>(chevron).is_some());
+}
+
 /// The tick at which the [`AccessibilityNode`] of `entity` last changed.
 fn accessibility_changed_at(app: &App, entity: Entity) -> bevy::ecs::change_detection::Tick {
     app.world()

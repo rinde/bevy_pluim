@@ -1,5 +1,5 @@
-// The chevron on a combo's button is the icon of its PushButton and is drawn
-// in text_primary, like the label, so it can be seen against the button: the
+// The chevron on a combo's button is an Icon image (a triangle) tinted with
+// text_primary, like the label, so it can be seen against the button: the
 // light theme's gray-900 (DEFAULT_LIGHT_THEME_COLORS) at first, and after
 // "Change theme" the dark theme's gray-100 (DEFAULT_DARK_THEME_COLORS). It used
 // to take the border colour, which is barely visible on background_primary.
@@ -10,16 +10,16 @@
     steps: [
         Wait(2),
         Check(Component(
-            target: Within(Name("first combo"), Text("\\/")),
-            path: "TextColor.0",
+            target: Within(Name("first combo"), Name("Chevron")),
+            path: "ImageNode.color",
             is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
         )),
         MoveTo(Role(role: Button, label: "Change theme")),
         Click(Left),
         Wait(2),
         Check(Component(
-            target: Within(Name("first combo"), Text("\\/")),
-            path: "TextColor.0",
+            target: Within(Name("first combo"), Name("Chevron")),
+            path: "ImageNode.color",
             is: Eq(Srgba((red:0.9529412,green:0.95686275,blue:0.9647059,alpha:1.0))),
         )),
     ],
