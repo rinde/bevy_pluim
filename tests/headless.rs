@@ -1004,6 +1004,74 @@ fn a_press_on_a_link_restyles_it() {
     assert_eq!(after.0, expected);
 }
 
+/// A link in a root node, after two updates.
+fn spawn_link(app: &mut App, state: LinkState) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let link = app
+        .world_mut()
+        .spawn((Link::new("link"), state, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    link
+}
+
+/// The text colour of a link.
+fn link_text_color(app: &App, link: Entity) -> Color {
+    let text = app.world().entity(link).get::<Children>().unwrap()[0];
+    app.world().entity(text).get::<TextColor>().unwrap().0
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_link_keeps_it_hovered() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+
+    hover_and_toggle_theme(&mut app, link);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_secondary);
+    assert_eq!(link_text_color(&app, link), dark.link);
+}
+
+#[test]
+fn changing_the_theme_under_a_pressed_link_keeps_it_pressed() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+    press(&mut app, link);
+
+    hover_and_toggle_theme(&mut app, link);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_secondary);
+    assert_eq!(link_text_color(&app, link), dark.link_selected);
+}
+
+#[test]
+fn changing_the_theme_under_a_link_the_pointer_is_not_on_leaves_it_at_rest() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+
+    toggle_theme(&mut app);
+    app.update();
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_primary);
+    assert_eq!(link_text_color(&app, link), dark.link);
+}
+
+#[test]
+fn a_disabled_link_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Disabled);
+
+    hover_and_toggle_theme(&mut app, link);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_primary);
+    assert_eq!(link_text_color(&app, link), dark.text_primary);
+}
+
 #[test]
 fn a_disabled_link_keeps_its_button_and_is_interaction_disabled() {
     let mut app = headless_app();
