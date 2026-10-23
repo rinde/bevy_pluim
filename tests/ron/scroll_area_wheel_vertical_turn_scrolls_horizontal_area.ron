@@ -1,0 +1,26 @@
+// A mouse wheel turns vertically only, so over an area that scrolls sideways
+// alone (the horizontal scroll area) a vertical turn scrolls the contents
+// sideways, and back; it never moves ScrollPosition.y.
+(
+    format_version: 3,
+    name: "a vertical wheel turn scrolls a horizontal scroll area sideways",
+    setup: App(ScrollAreas),
+    steps: [
+        MoveTo(Name("horizontal scroll area")),
+        Wheel(x: 0.0, y: -100.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0",
+            is: Eq((100.0, 0.0)),
+        )),
+        Wheel(x: 0.0, y: 40.0),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("horizontal scroll area"), Component("ScrollContents")),
+            path: "ScrollPosition.0",
+            is: Eq((60.0, 0.0)),
+        )),
+    ],
+    expect: [],
+)

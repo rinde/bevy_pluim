@@ -381,6 +381,13 @@ fn update_scroll_position(
                 };
                 let overflow =
                     (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
+                // A mouse wheel only turns vertically, so an area that scrolls sideways
+                // alone takes the vertical turn for a horizontal one.
+                let dx = if dx == 0.0 && node.overflow.y != OverflowAxis::Scroll {
+                    dy
+                } else {
+                    dx
+                };
                 if node.overflow.x == OverflowAxis::Scroll {
                     scroll_position.x = (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0));
                 }
