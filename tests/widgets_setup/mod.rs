@@ -462,6 +462,24 @@ fn combos(world: &mut World) {
                 .zero_or_one()
                 .build_with_items(countries()),
         ));
+        // A combo with far more options than fit under it, low in the window and last: its list
+        // opens above the button, capped to the room there
+        // (`combo_list_opening_upward_stays_below_the_top_margin`).
+        root.spawn((
+            Combo,
+            Name::new("upward combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(200),
+                top: px(600),
+                left: px(800),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items((1..=80).map(|n| Item::new(format!("Option {n}")))),
+        ));
     });
 }
 

@@ -1204,6 +1204,7 @@ a file can check any `Reflect` type of the app by short type path.
   (`combo_in_scroll_area_keyboard_does_not_scroll_the_area`). `right edge combo` (x 1200,
   y 100, 100 wide) and `bottom edge combo` (x 500, y 660) and `long combo` (80 options, x 200, y 300) are absolutely placed and spawned
   last too; their lists stay inside the window (`combo_keeps_list_inside_window`).
+  `upward combo` (80 options, x 800, y 600, 200 wide; absolute, spawned last) has no room under it, so its list opens above the button, capped to the room there, and its top is the window's 10 px margin: `Node.top.0` is between 10 and 12 and the pointer is on the list at row 12 and not at row 9 (`combo_list_opening_upward_stays_below_the_top_margin`).
 - **Targets on the `BreadCrumbs` and `Tabs` screens.** The trail is
   `Name("BreadCrumbs")` and the stack `Name("Stack")`. A crumb before the last
   is a `Button` (`Within(Name("BreadCrumbs"), Role(role: Button, label:
