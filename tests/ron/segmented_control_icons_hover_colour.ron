@@ -1,0 +1,35 @@
+// The icon of a resting segment ("List") turns `text_primary` with the pointer on the segment,
+// like its text, in the light theme and again after "Change theme" in the dark one, and goes
+// back to `text_secondary` when the pointer leaves.
+(
+    format_version: 3,
+    name: "a hovered unselected segment's icon is text_primary in both themes",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("icon segmented control"), Role(role: Button, label: "List"))),
+        Wait(2),
+        Check(Component(
+            target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(Component(
+            target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.36078432,green:0.38431373,blue:0.41568628,alpha:1.0))),
+        )),
+        Click(Left),
+        Wait(2),
+        MoveTo(Within(Name("icon segmented control"), Role(role: Button, label: "List"))),
+        Wait(2),
+        Check(Component(
+            target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))),
+            path: "ImageNode.color",
+            is: Eq(Srgba((red:0.9529412,green:0.95686275,blue:0.9647059,alpha:1.0))),
+        )),
+    ],
+    expect: [],
+)
