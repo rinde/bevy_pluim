@@ -92,10 +92,10 @@ impl ScrollArea {
 /// bottom corners. It is opt-in because an area cannot tell whether it touches the card's
 /// corners (other nodes may sit below it, or the card may be square), and it keeps
 /// the margin in step with the theme. Insert it with the area, or later. A [`Panel`](crate::panel::Panel)
-/// does the same for its own body, and only while it has no footer.
+/// does the same for its own body, and only while it has no footer. Removing it sets the bottom margin back to zero.
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[reflect(Component)]
-#[component(on_add=Self::on_add)]
+#[component(on_add=Self::on_add, on_remove=Self::on_remove)]
 pub struct ClearOfCorners;
 
 impl ClearOfCorners {
@@ -103,6 +103,13 @@ impl ClearOfCorners {
         world
             .commands()
             .run_system_cached_with(clear_of_corners, Some(context.entity));
+    }
+
+    /// Takes the margin back to [`Val::ZERO`] when the opt-in goes.
+    fn on_remove(mut world: DeferredWorld, context: HookContext) {
+        if let Some(mut node) = world.get_mut::<Node>(context.entity) {
+            node.margin.bottom = Val::ZERO;
+        }
     }
 }
 

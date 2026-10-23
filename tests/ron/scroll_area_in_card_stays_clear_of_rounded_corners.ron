@@ -1,23 +1,22 @@
 // A scroll area clips to a rectangle, so contents scrolled half out of view
 // would stick out of a rounded card's bottom corners. A `ClearOfCorners` area
-// ends a corner radius above the card's bottom edge; one without it does not
-// (#405).
+// ends a corner radius above the card's inner bottom edge; one without it
+// reaches that edge (#405, #413). Compares laid-out geometry, not the margin.
 (
     format_version: 3,
     name: "a scroll area marked ClearOfCorners ends a corner radius above its card's bottom edge",
     setup: App(ScrollAreas),
     steps: [
         Wait(2),
-        Check(Component(
-            target: Within(Name("card scroll area"), Component("rin_bevy_ui::scroll_area::ScrollArea")),
-            path: "Node.margin.bottom",
-            is: Eq(Px(12.0)),
-        )),
-        Check(Component(
-            target: Within(Name("card scroll area without opt-in"), Component("rin_bevy_ui::scroll_area::ScrollArea")),
-            path: "Node.margin.bottom",
-            is: Eq(Px(0.0)),
-        )),
+        // The card is 200 high from y 300 with a 1 px border, so its inner bottom edge is at
+        // 499 and its centre at 400. The opted-in area is 186 high centred on 394 (bottom edge
+        // 487, 12 = `panel_radius` above 499); the other is 198 high centred on 400 (bottom 499).
+        Check(Component(target: Name("card scroll area"), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(400.0))),
+        Check(Component(target: Name("card scroll area"), path: "ComputedNode.size.y", unit: Logical, is: Eq(200.0))),
+        Check(Component(target: Within(Name("card scroll area"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "ComputedNode.size.y", unit: Logical, is: Eq(186.0))),
+        Check(Component(target: Within(Name("card scroll area without opt-in"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "ComputedNode.size.y", unit: Logical, is: Eq(198.0))),
+        Check(Component(target: Within(Name("card scroll area"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(394.0))),
+        Check(Component(target: Within(Name("card scroll area without opt-in"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(400.0))),
     ],
     expect: [],
 )
