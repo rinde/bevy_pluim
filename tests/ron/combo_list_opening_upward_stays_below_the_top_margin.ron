@@ -1,0 +1,28 @@
+// The `upward combo` sits low (button at y 600) and has 80 options, so its list cannot fit
+// under it and opens above the button, capped to the room there. Its top is then the window's
+// 10 pixel top margin: `Node.top` is at least 10 (and not far above it, so the list really
+// reaches up), and, as the size depends on the text size, the edge is also probed with the
+// pointer: the list is under it on the pixel row 12 and not on row 9.
+(
+    format_version: 3,
+    name: "a combo list that opens upward stays below the window's top margin",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("upward combo"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("upward combo"), path: "ComboState", is: Eq(Open))),
+        Wait(3),
+        // Above the button: its centre is over the button's top (y 600), not under the button.
+        Check(Component(target: Within(Name("upward combo"), Component("ComboList")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Between(10.0, 600.0))),
+        Check(Component(target: Within(Name("upward combo"), Component("ComboList")), path: "Node.top.0", is: Ge(10.0))),
+        Check(Component(target: Within(Name("upward combo"), Component("ComboList")), path: "Node.top.0", is: Le(12.0))),
+        MoveTo(Screen((815.0, 12.0))),
+        Wait(2),
+        Check(Component(target: Within(Name("upward combo"), Component("ComboList")), path: "Hovered.0", is: Eq(true))),
+        MoveTo(Screen((815.0, 9.0))),
+        Wait(2),
+        Check(Component(target: Within(Name("upward combo"), Component("ComboList")), path: "Hovered.0", is: Eq(false))),
+    ],
+    expect: [],
+)
