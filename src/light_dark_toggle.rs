@@ -40,7 +40,20 @@ pub struct LightDarkTogglePlugin;
 
 impl Plugin for LightDarkTogglePlugin {
     fn build(&self, app: &mut App) {
+        // `WindowPlugin` spawns the primary window while it builds, so the window of a normal app
+        // exists before this plugin does and no `Add<Window>` observer will see it.
+        let preset: Vec<Entity> = app
+            .world_mut()
+            .query::<(Entity, &Window)>()
+            .iter(app.world())
+            .filter(|(_, window)| window.window_theme.is_some())
+            .map(|(entity, _)| entity)
+            .collect();
+        for entity in preset {
+            app.world_mut().entity_mut(entity).insert(PresetWindowTheme);
+        }
         app.init_resource::<SystemTheme>()
+            .add_observer(mark_preset_window_theme)
             .add_message::<WindowThemeChanged>()
             .add_systems(PreUpdate, track_system_theme)
             .add_systems(
@@ -99,6 +112,9 @@ impl ThemePreference {
 /// Read from the primary window when the app starts, and kept up to date from Bevy's
 /// [`WindowThemeChanged`] messages, which the windowing system sends when the person changes
 /// the setting. `None` when no window has told (headless, or a system without the setting).
+/// A primary window spawned with a fixed [`Window::window_theme`] says nothing about the system:
+/// the windowing system reports that theme back as the window's, so it is not read, and
+/// `SystemTheme` stays `None` until a [`WindowThemeChanged`] arrives.
 /// While the preference is fixed to light or dark the window is told to use that theme, and
 /// some platforms then stop reporting the system's, so a change made in that time may only be
 /// seen when the app goes back to [`ThemePreference::System`].
@@ -113,17 +129,34 @@ const fn mode_of(theme: WindowTheme) -> ThemeMode {
     }
 }
 
+/// Marks a window that was spawned with a fixed theme, whose `window_theme` is then not the
+/// system's.
+#[derive(Component, Debug, Copy, Clone)]
+struct PresetWindowTheme;
+
+/// Marks a window spawned with a [`Window::window_theme`], before the windowing system fills it
+/// in with the theme it really uses.
+fn mark_preset_window_theme(add: On<Add<Window>>, windows: Query<&Window>, mut commands: Commands) {
+    if windows
+        .get(add.entity)
+        .is_ok_and(|w| w.window_theme.is_some())
+    {
+        commands.entity(add.entity).insert(PresetWindowTheme);
+    }
+}
+
 /// Keeps [`SystemTheme`] up to date.
 fn track_system_theme(
     mut changes: MessageReader<WindowThemeChanged>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    windows: Query<(&Window, Has<PresetWindowTheme>), With<PrimaryWindow>>,
     mut system: ResMut<SystemTheme>,
     mut probed: Local<bool>,
 ) {
-    // The window's own theme is the system's until we fix it, which we only do later.
-    if !*probed && let Some(window) = windows.iter().next() {
+    // The window's own theme is the system's until we fix it, which we only do later, unless
+    // the app fixed it at creation.
+    if !*probed && let Some((window, preset)) = windows.iter().next() {
         *probed = true;
-        if let Some(theme) = window.window_theme {
+        if !preset && let Some(theme) = window.window_theme {
             system.set_if_neq(SystemTheme(Some(mode_of(theme))));
         }
     }
