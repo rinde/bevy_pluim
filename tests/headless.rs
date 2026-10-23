@@ -27,7 +27,9 @@ use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
-use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
+use bevy::ui::{
+    ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
+};
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab,
     SetSliderValue, SliderValueChange, Tab, TabList, ValueChange,
@@ -5070,6 +5072,120 @@ fn a_tooltip_popup_is_a_fixed_child_of_its_node() {
         .map(|(parent, fixed)| (parent.map(ChildOf::parent), fixed))
         .collect();
     assert_eq!(popups, [(Some(button), true)]);
+}
+
+/// A tooltip app with a primary window of `window` logical pixels and a laid-out node centred at
+/// `center`, `size` big: the headless app has no layout, so the sizes are set by hand.
+fn placement_app(window: (u32, u32), center: Vec2, size: Vec2) -> (App, Entity) {
+    let mut app = headless_app();
+    app.world_mut().spawn((
+        Window {
+            resolution: window.into(),
+            ..default()
+        },
+        PrimaryWindow,
+    ));
+    let node = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            Tooltip::new("Tip"),
+            ComputedNode {
+                size,
+                inverse_scale_factor: 1.0,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(center),
+        ))
+        .id();
+    app.world_mut().entity_mut(node).insert(Hovered(true));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    (app, node)
+}
+
+/// Gives the popup a laid-out size of `popup`, places it and returns its `left` and `top`.
+fn placed_popup(app: &mut App, popup_size: Vec2) -> (f32, f32) {
+    let popup = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<TooltipPopup>>()
+            .single(world)
+            .unwrap()
+    };
+    app.world_mut().entity_mut(popup).insert(ComputedNode {
+        size: popup_size,
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+    tick(app);
+    let node = app.world().get::<Node>(popup).unwrap();
+    let px = |val: Val| match val {
+        Val::Px(px) => Some(px),
+        _ => None,
+    };
+    (px(node.left).unwrap(), px(node.top).unwrap())
+}
+
+#[test]
+fn a_tooltip_popup_keeps_six_pixels_from_the_left_and_right_window_edges() {
+    let popup = Vec2::new(100.0, 20.0);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(10.0, 100.0), Vec2::new(20.0, 20.0));
+    assert!((placed_popup(&mut app, popup).0 - 6.0).abs() < 0.01);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(790.0, 100.0), Vec2::new(20.0, 20.0));
+    let (left, _) = placed_popup(&mut app, popup);
+    assert!(
+        (left + popup.x - (800.0 - 6.0)).abs() < 0.01,
+        "left {left} leaves less than 6 px at the right edge"
+    );
+    let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
+    assert!(
+        (placed_popup(&mut app, popup).0 - 350.0).abs() < 0.01,
+        "a node away from the edges has its popup centred"
+    );
+}
+
+#[test]
+fn a_tooltip_popup_is_below_its_node_or_above_it_when_it_would_run_off_the_bottom() {
+    let popup = Vec2::new(100.0, 20.0);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
+    // Below: the node's bottom (110) and the 6 px gap.
+    assert!((placed_popup(&mut app, popup).1 - 116.0).abs() < 0.01);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 580.0), Vec2::new(20.0, 20.0));
+    // Above: the node's top (570), the gap and the popup's height.
+    assert!((placed_popup(&mut app, popup).1 - 544.0).abs() < 0.01);
+}
+
+#[test]
+fn a_tooltip_popup_above_a_node_in_a_short_window_stays_below_the_window_margin() {
+    let (mut app, _) = placement_app((800, 60), Vec2::new(400.0, 30.0), Vec2::new(20.0, 20.0));
+    let (_, top) = placed_popup(&mut app, Vec2::new(100.0, 40.0));
+    assert!(top >= 6.0, "top {top} is above the window margin");
+}
+
+#[test]
+fn a_tooltip_with_empty_text_shows_no_popup() {
+    let (mut app, node) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
+    app.world_mut().entity_mut(node).insert(Tooltip::new(""));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    let world = app.world_mut();
+    assert_eq!(
+        world
+            .query_filtered::<Entity, With<TooltipPopup>>()
+            .iter(world)
+            .count(),
+        0,
+        "an empty tooltip shows a popup"
+    );
+    app.world_mut()
+        .entity_mut(node)
+        .insert(Tooltip::new("Back"));
+    tick(&mut app);
+    tick(&mut app);
+    assert_eq!(tooltip_popups(&mut app), ["Back"]);
 }
 
 #[test]
