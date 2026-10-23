@@ -715,6 +715,60 @@ fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
     assert_eq!(app.world().get::<Children>(plain).unwrap().len(), 1);
 }
 
+#[test]
+fn activating_a_toggle_push_button_flips_its_state_restyles_it_and_sets_its_toggled_state() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let toggle = app
+        .world_mut()
+        .spawn((
+            PushButton::from_label("Grid"),
+            ToggleState(false),
+            ChildOf(root),
+        ))
+        .id();
+    let plain = app
+        .world_mut()
+        .spawn((PushButton::from_label("Plain"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    let state = |app: &App, e: Entity| app.world().get::<ToggleState>(e).copied();
+    let label_color = |app: &App, e: Entity| {
+        let label = app.world().get::<PushButtonRefs>(e).unwrap().label_id;
+        app.world().get::<TextColor>(label).unwrap().0
+    };
+    let toggled = |app: &App, e: Entity| app.world().get::<AccessibilityNode>(e).unwrap().toggled();
+    assert_eq!(background(&app, toggle), colors.background_primary);
+    assert_eq!(label_color(&app, toggle), colors.text_primary);
+    assert_eq!(toggled(&app, toggle), Some(accesskit::Toggled::False));
+    assert_eq!(toggled(&app, plain), None);
+
+    app.world_mut().trigger(Activate { entity: toggle });
+    app.update();
+    app.update();
+    assert_eq!(state(&app, toggle), Some(ToggleState(true)));
+    assert_eq!(background(&app, toggle), colors.accent_subtle);
+    assert_eq!(label_color(&app, toggle), colors.accent_subtle_text);
+    assert_eq!(toggled(&app, toggle), Some(accesskit::Toggled::True));
+
+    app.world_mut().trigger(Activate { entity: toggle });
+    app.update();
+    app.update();
+    assert_eq!(state(&app, toggle), Some(ToggleState(false)));
+    assert_eq!(background(&app, toggle), colors.background_primary);
+    assert_eq!(toggled(&app, toggle), Some(accesskit::Toggled::False));
+
+    // A button without a ToggleState stays momentary.
+    app.world_mut().trigger(Activate { entity: plain });
+    app.update();
+    app.update();
+    assert_eq!(state(&app, plain), None);
+    assert_eq!(background(&app, plain), colors.background_primary);
+}
+
 /// Says the pointer moves onto (`over`) or off `target`, as picking would.
 fn pointer_over_or_out(app: &mut App, target: Entity, over: bool) {
     let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);

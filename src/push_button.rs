@@ -13,7 +13,8 @@ use itertools::Either;
 use bevy::a11y::AccessibilityNode;
 
 use crate::combo::ComboButton;
-use crate::focus::{AccessibilitySync, TabStop, sync_label};
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_toggled};
+use crate::icon_button::{ToggleState, toggle_on_activate};
 use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
@@ -35,18 +36,36 @@ impl Plugin for PushButtonPlugin {
                 restyle_on_size_change,
             ),
         )
+        .add_observer(restyle_on_toggle)
         .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync));
     }
 }
 
-/// Keeps the label of each button's [`AccessibilityNode`] at its text, without the icon. Bevy
-/// leaves a [`bevy::ui_widgets::Button`] unlabelled. A combo's button is left alone: it is a
+/// Restyles a [`PushButton`] whose [`ToggleState`] was just inserted.
+fn restyle_on_toggle(
+    t: On<Insert<ToggleState>>,
+    buttons: Query<(), With<PushButton>>,
+    mut commands: Commands,
+) {
+    let target = t.event().event_target();
+    if buttons.contains(target) {
+        commands.run_system_cached_with(theme_push_button, Some(target));
+    }
+}
+
+/// Keeps the label of each button's [`AccessibilityNode`] at its text, without the icon, and its
+/// toggled state at its [`ToggleState`] (unset without one). Bevy leaves a
+/// [`bevy::ui_widgets::Button`] unlabelled. A combo's button is left alone: it is a
 /// combo box whose value says the selection.
 fn sync_accessibility(
-    mut buttons: Query<(&PushButton, &mut AccessibilityNode), Without<ComboButton>>,
+    mut buttons: Query<
+        (&PushButton, Option<&ToggleState>, &mut AccessibilityNode),
+        Without<ComboButton>,
+    >,
 ) {
-    for (button, mut node) in &mut buttons {
+    for (button, toggle, mut node) in &mut buttons {
         sync_label(&mut node, &button.label);
+        sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
     }
 }
 
@@ -59,6 +78,12 @@ fn sync_accessibility(
 /// `Activate`; the hover and press colours follow the pointer on their own, and
 /// stay right when the [`Theme`] changes under a pointer that rests on the button.
 /// Its [`Hovered`] says whether the pointer is on it.
+///
+/// Insert a [`ToggleState`] to make it an on/off toggle, as on an
+/// [`IconButton`](crate::icon_button::IconButton): an `Activate` inserts the flipped value
+/// (observe `On<Insert<ToggleState>>` to react), and an on button has the `accent_subtle`
+/// background and `accent_subtle_text` text. To a screen reader it is `toggled` with the state;
+/// without a `ToggleState` it has no toggled state.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -183,6 +208,7 @@ impl PushButton {
         let mut commands = world.commands();
         let mut entity_commands = commands.entity(context.entity);
 
+        entity_commands.observe(toggle_on_activate);
         if default_hover {
             entity_commands.observe(handle_hover);
         }
@@ -208,17 +234,37 @@ impl PushButton {
     }
 }
 
-/// The background of a [`PushButton`] with the default hover, from its state.
-const fn background_for(
-    colors: &ThemeColors,
+/// What the pointer and the app are doing to a [`PushButton`].
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independent facts of a button's state"
+)]
+#[derive(Clone, Copy)]
+struct ButtonState {
     disabled: bool,
     pressed: bool,
     hovered: bool,
-) -> Color {
+    on: bool,
+}
+
+/// The background of a [`PushButton`] with the default hover, from its state.
+const fn background_for(colors: &ThemeColors, state: ButtonState) -> Color {
+    let ButtonState {
+        disabled,
+        pressed,
+        hovered,
+        on,
+    } = state;
     if disabled {
         colors.background_primary
     } else if pressed {
         colors.selected_hovered_item
+    } else if on {
+        if hovered {
+            colors.hovered_selected_item
+        } else {
+            colors.accent_subtle
+        }
     } else if hovered {
         colors.hovered_item
     } else {
@@ -228,7 +274,7 @@ const fn background_for(
 
 fn handle_hover(
     trigger: On<MouseEvent>,
-    mut query: Query<&mut BackgroundColor, Without<InteractionDisabled>>,
+    mut query: Query<(&mut BackgroundColor, Option<&ToggleState>), Without<InteractionDisabled>>,
     theme: Res<Theme>,
 ) {
     // A click and a drag say nothing new about the pointer being on the button: the over,
@@ -241,8 +287,17 @@ fn handle_hover(
     // The pointer is on the button for every event but `Out`, a release included.
     let pressed = matches!(kind, MouseKind::Pressed);
     let hovered = !matches!(kind, MouseKind::Out);
-    if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
-        *background = BackgroundColor(background_for(&theme.colors, false, pressed, hovered));
+    if let Ok((mut background, toggle)) = query.get_mut(trigger.event().event_target()) {
+        let on = toggle.is_some_and(|t| t.0);
+        *background = BackgroundColor(background_for(
+            &theme.colors,
+            ButtonState {
+                disabled: false,
+                pressed,
+                hovered,
+                on,
+            },
+        ));
     }
 }
 
@@ -294,6 +349,7 @@ fn theme_push_button(
             Has<NoDefaultHover>,
             &ButtonSize,
             &IconPlacement,
+            Option<&ToggleState>,
         ),
         With<PushButton>,
     >,
@@ -323,14 +379,19 @@ fn theme_push_button(
         no_default_hover,
         size,
         placement,
+        toggle,
     ) in it
     {
+        let on = toggle.is_some_and(|t| t.0);
         // A button with `NoDefaultHover` is coloured by its owner, so it rests here.
         background_color.0 = background_for(
             &theme.colors,
-            disabled,
-            pressed && !no_default_hover,
-            hovered.get() && !no_default_hover,
+            ButtonState {
+                disabled,
+                pressed: pressed && !no_default_hover,
+                hovered: hovered.get() && !no_default_hover,
+                on,
+            },
         );
         border_color.set_all(theme.colors.border);
         node.border = UiRect::all(theme.border_thickness);
@@ -357,6 +418,8 @@ fn theme_push_button(
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
             *text_color = TextColor(if disabled {
                 theme.colors.text_disabled
+            } else if on {
+                theme.colors.accent_subtle_text
             } else {
                 theme.colors.text_primary
             });
@@ -374,6 +437,8 @@ fn theme_push_button(
         {
             *text_color = TextColor(if disabled {
                 theme.colors.text_disabled
+            } else if on {
+                theme.colors.accent_subtle_text
             } else {
                 theme.colors.text_primary
             });

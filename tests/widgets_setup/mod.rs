@@ -72,8 +72,9 @@ use crate::common::spawn_camera_and_root;
 #[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(AppSetup)]
 pub enum WidgetsSetup {
-    /// "Add", "Other", a "Disabled" one (`InteractionDisabled`) and "Change
-    /// theme" push buttons; the clicks on "Add" are counted in [`Clicks`].
+    /// "Add", "Other", a "Disabled" one (`InteractionDisabled`), "Change
+    /// theme" and "Toggle" (a `ToggleState`, off) push buttons; the clicks on
+    /// "Add" are counted in [`Clicks`].
     Buttons,
     /// Three combos over one list of countries (`first combo` and `third
     /// combo` share one selection, `own combo` has a selection of its own over
@@ -314,6 +315,8 @@ fn buttons(world: &mut World) {
         root.spawn(PushButton::from_label("Other"));
         root.spawn((PushButton::from_label("Disabled"), InteractionDisabled));
         spawn_theme_button(root);
+        // Spawned last so the tab order of the others stays.
+        root.spawn((PushButton::from_label("Toggle"), ToggleState(false)));
     });
 }
 
