@@ -15,7 +15,7 @@ use bevy::ui_widgets::{ActiveDescendant, Button, ListItem};
 use bevy::window::PrimaryWindow;
 use itertools::Either;
 
-use crate::focus::{AccessibilitySync, DrawFocusRing, TabStop};
+use crate::focus::{AccessibilitySync, DrawFocusRing, FOCUS_RING_REACH, TabStop};
 use crate::list::{
     CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, SEPARATED_ITEM_PADDING,
     SEPARATED_LIST_PADDING, SEPARATED_RING_WIDTH, SEPARATED_ROW_GAP, item_background, item_border,
@@ -35,10 +35,6 @@ const fn px(val: Val) -> f32 {
 
 /// Rows kept beyond each edge of the view, so a small scroll shows rows that are ready.
 const OVERSCAN_ROWS: usize = 2;
-
-/// How far a focus ring reaches beyond its row, in logical pixels: its 1 px offset and 2 px
-/// width. The keyboard scrolls the active row into view with its ring.
-const FOCUS_RING_REACH: f32 = 3.0;
 
 pub(crate) struct VirtualListPlugin;
 

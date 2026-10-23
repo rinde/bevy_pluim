@@ -21,6 +21,7 @@ use bevy::ui::FixedNode;
 use bevy::ui_widgets::{ControlOrientation, ScrollIntoView, Scrollbar, ScrollbarThumb};
 use itertools::Either;
 
+use crate::focus::FOCUS_RING_REACH;
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
 
@@ -129,9 +130,6 @@ fn clear_of_corners(
         }
     }
 }
-
-/// How far a focus ring reaches beyond its node, in logical pixels: its 1 px offset and 2 px width.
-const FOCUS_RING_REACH: f32 = 3.0;
 
 /// Marks the node holding the scrolled contents of a [`ScrollArea`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]

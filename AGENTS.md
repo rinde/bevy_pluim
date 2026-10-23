@@ -474,8 +474,9 @@ of them (`just example gallery -- --run-all stack link`).
 - **Shared items.** `ItemsRef(entity)` lets several selections draw from one
   `ItemValues`.
 - **A scroll area leaves room for a focus ring.** `ScrollContents` has 3 px of
-  padding on every side (`FOCUS_RING_REACH`: the ring's 2 px width and 1 px
-  offset), because the area clips at its padding box and the ring of a row at
+  padding on every side (`FOCUS_RING_REACH`: `focus.rs`'s `FOCUS_RING_WIDTH` of 2 px
+  plus `FOCUS_RING_OFFSET` of 1 px, which `draw_focus_ring`, `scroll_area.rs` and
+  `virtual_list.rs` all use), because the area clips at its padding box and the ring of a row at
   the edge would be cut off (#293). `scroll_into_view` counts the same 3 px as
   part of the entity, so a row scrolled into view shows its ring. The maximum
   scroll of every area is 6 px more than the contents' overflow alone.
