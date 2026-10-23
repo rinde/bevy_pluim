@@ -26,13 +26,13 @@ impl Plugin for BreadCrumbsPlugin {
 /// Clicking a crumb trims the selection back to it.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
-#[require(Name::new("BreadCrumbs"), Node{
-    ..default()
-})]
+#[require(Name::new("BreadCrumbs"), Node)]
 pub struct BreadCrumbs;
 
-#[derive(Component, Debug, Clone, Copy)]
-struct BreadCrumb(Entity);
+/// A crumb of a [`BreadCrumbs`] trail: the selected item it stands for.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct BreadCrumb(Entity);
 
 fn selection_change(
     q: Query<(), Changed<Selection>>,
@@ -66,14 +66,21 @@ fn selection_change(
                 })
                 .unwrap_or(vec![]);
 
-            let selected = selection.iter().map(BreadCrumb).collect::<Vec<_>>();
+            // Items without text get no crumb. Each crumb keeps its position in the selection,
+            // which is the length the selection is trimmed to when the crumb is clicked.
+            let selected = selection
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| items.contains(*e))
+                .map(|(position, e)| (position, BreadCrumb(e)))
+                .collect::<Vec<_>>();
 
             let first_diff = existing
                 .iter()
                 .enumerate()
                 .find_map(|(i, (_, bc))| {
                     let sel = selected.get(i);
-                    sel.is_none_or(|sel| sel.0 != bc.0).then_some(i)
+                    sel.is_none_or(|(_, sel)| sel.0 != bc.0).then_some(i)
                 })
                 .unwrap_or(existing.len())
                 .saturating_sub(1);
@@ -81,24 +88,23 @@ fn selection_change(
             for (existing_bc_view, _) in existing.iter().skip(first_diff) {
                 commands.entity(*existing_bc_view).despawn();
             }
-            for (index, bc) in selected.iter().skip(first_diff).enumerate() {
+            for (index, (position, bc)) in selected.iter().enumerate().skip(first_diff) {
                 let Ok(item) = items.get(bc.0) else {
                     continue;
                 };
                 let link = Link::new(item.data.clone());
-                let current_index = index + first_diff;
 
                 // The current crumb is a disabled button: it never activates.
-                let link = if current_index == selected.len() - 1 {
+                let link = if index + 1 == selected.len() {
                     (link, LinkState::Disabled)
                 } else {
                     (link, LinkState::Enabled)
                 };
-                if current_index == 0 {
+                if index == 0 {
                     commands.entity(bread_crumbs_ref).with_children(|parent| {
                         parent
                             .spawn((*bc, link))
-                            .observe(create_observer(bread_crumbs_ref, current_index + 1));
+                            .observe(create_observer(bread_crumbs_ref, position + 1));
                     });
                 } else {
                     let separator = Label::regular(" > ");
@@ -109,7 +115,7 @@ fn selection_change(
                                 sub_parent.spawn(separator);
                                 sub_parent
                                     .spawn(link)
-                                    .observe(create_observer(bread_crumbs_ref, current_index + 1));
+                                    .observe(create_observer(bread_crumbs_ref, position + 1));
                             });
                     });
                 }
