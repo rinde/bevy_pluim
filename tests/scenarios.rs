@@ -1380,6 +1380,26 @@ fn the_tooltip_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_seco
     assert!(report.passed(), "{:#?}", report.failures());
 }
 
+#[test]
+fn the_toast_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_second() {
+    // The gallery plays in a real window whose frames are as long as the display
+    // makes them, often shorter than 1/60 s, so a fixed number of frames can be
+    // less than a toast's second (#399).
+    let registry = Registry::default();
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/ron/toast_shows_stacks_and_goes.ron"
+    );
+    let scenario = load_ron_file(path, &registry).unwrap();
+    let mut app = widgets_app();
+    registry.install(app.world_mut());
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_micros(4_167),
+    ));
+    let report = scenario.run_in(&mut app);
+    assert!(report.passed(), "{:#?}", report.failures());
+}
+
 /// Fixed seeds for shuffling a schedule: never the clock, so a failure
 /// reproduces from the seed it names.
 const SHUFFLE_SEEDS: [u64; 4] = [1, 2, 3, 0x5eed_cafe];

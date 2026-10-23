@@ -1,5 +1,7 @@
 // A toast shows its text, stacks with others, does not repeat a text that is showing, and is
-// gone after its duration (1 s, 60 frames, for the screen's toasts).
+// gone after its duration (1 s for the screen's toasts). The duration is time, not frames, and
+// the gallery's frames are as long as the display makes them, so the checks that a toast has
+// gone wait with `Within` instead of a number of frames (#399).
 (
     format_version: 3,
     name: "a toast shows, stacks, restarts on the same text and goes after its duration",
@@ -23,12 +25,11 @@
         Click(Left),
         Wait(2),
         Check(Count(with: ["Toast"], is: Eq(2))),
-        // 40 frames on, "Deleted" (raised 34 frames ago) has 26 left of its 60 and "Saved" 60.
-        Wait(40),
-        Check(Not(Exists(Text("Deleted 3 pieces")))),
+        // "Deleted" was raised some time before "Saved" restarted, so it goes first,
+        // and "Saved" is still showing the moment it has gone.
+        Check(Within(600, Not(Exists(Text("Deleted 3 pieces"))))),
         Check(Visible(Text("Saved"))),
-        Wait(40),
-        Check(Not(Exists(Text("Saved")))),
+        Check(Within(600, Not(Exists(Text("Saved"))))),
         Check(Count(with: ["Toast"], is: Eq(0))),
     ],
     expect: [],
