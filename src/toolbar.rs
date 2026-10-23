@@ -12,7 +12,7 @@ use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
 use crate::select::{Item, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
-use crate::tooltip::Tooltip;
+use crate::tooltip::{OwnedTooltip, Tooltip};
 
 /// The width of a button of a [`ToolbarStyle::Filled`] toolbar, in logical pixels.
 const FILLED_WIDTH: f32 = 66.0;
@@ -649,23 +649,44 @@ fn sync_accessibility(
 }
 
 /// Gives the buttons of an underlined toolbar, whose labels are hidden, a [`Tooltip`] with the
-/// label of their tool.
+/// label of their tool, and takes it off again when the toolbar is not underlined. Only a tooltip
+/// the widget added (marked [`OwnedTooltip`]) is replaced or removed: one with other text is the
+/// app's. Limit: an app tooltip with exactly the tool's label, put on before the widget's, is
+/// not told apart from it.
 fn sync_tooltips(
-    buttons: Query<(Entity, &ToolbarButton, Option<&Tooltip>)>,
+    buttons: Query<(
+        Entity,
+        &ToolbarButton,
+        Option<&Tooltip>,
+        Option<&OwnedTooltip>,
+    )>,
     items: Query<&Item<Tool>>,
     mut commands: Commands,
 ) {
-    for (entity, button, tooltip) in &buttons {
+    for (entity, button, tooltip, owned) in &buttons {
+        // A tooltip whose text is not the one the widget added replaced it: it is the app's.
+        let owned = match (owned, tooltip) {
+            (Some(owned), Some(tooltip)) if owned.0 == tooltip.text => true,
+            (Some(_), _) => {
+                commands.entity(entity).remove::<OwnedTooltip>();
+                false
+            }
+            (None, _) => false,
+        };
         if button.style != ToolbarStyle::Underlined {
+            if owned {
+                commands.entity(entity).remove::<(Tooltip, OwnedTooltip)>();
+            }
             continue;
         }
         let Ok(item) = items.get(button.item) else {
             continue;
         };
-        if tooltip.is_none_or(|t| t.text != item.data.label) {
+        let label = &item.data.label;
+        if (tooltip.is_none() || owned) && tooltip.is_none_or(|t| t.text != *label) {
             commands
                 .entity(entity)
-                .insert(Tooltip::new(item.data.label.clone()));
+                .insert((Tooltip::new(label.clone()), OwnedTooltip(label.clone())));
         }
     }
 }
