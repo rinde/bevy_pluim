@@ -76,6 +76,14 @@ use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
 
+#[path = "../examples/overview.rs"]
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "the example's own `main` is not run by the test, and its plugin is `pub` for it"
+)]
+mod overview;
+
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
 /// `combo.rs`/`list.rs` need pointer input and picking resources; all
 /// normally inserted by the render/window plugins that this headless setup
@@ -5338,6 +5346,56 @@ fn the_hud_example_builds_and_runs() {
     assert_eq!(world.query::<&Slider>().iter(world).count(), 1);
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
+}
+
+#[test]
+fn the_overview_example_builds_and_every_page_runs() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins((WidgetsPlugin, overview::OverviewPlugin));
+    app.finish();
+    app.cleanup();
+    for _ in 0..6 {
+        app.update();
+    }
+    assert_eq!(ui_root_count(&mut app), 1);
+    let bar = single_entity_with::<TabBar>(&mut app);
+    // Showing each page in turn builds it: none of them panics or logs a missing widget.
+    for tab in [
+        "Buttons",
+        "Icon buttons",
+        "Labels",
+        "Tags",
+        "Lists",
+        "Combos",
+        "Colours",
+        "Segmented control",
+        "Filter chips",
+        "Tabs and trails",
+        "Slider and stepper",
+        "Text field",
+        "Toolbar",
+        "Gallery",
+        "Cards and panels",
+        "Setting rows",
+        "Scroll area",
+        "Tooltip and toast",
+    ] {
+        select_by_text(&mut app, bar, tab);
+        for _ in 0..4 {
+            app.update();
+        }
+    }
+    assert_eq!(ui_root_count(&mut app), 1);
 }
 
 #[test]
