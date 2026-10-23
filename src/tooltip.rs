@@ -51,6 +51,9 @@ impl Plugin for TooltipPlugin {
 /// [`IconButton`](crate::icon_button::IconButton) has one with its name, and so has the button
 /// of an underlined [`Toolbar`](crate::toolbar::Toolbar), whose labels are hidden.
 ///
+/// A `Tooltip` with empty text shows no popup (an empty bordered box would say nothing); a popup
+/// that is showing goes when the text is changed to empty.
+///
 /// Insert a `Tooltip` again to change the text.
 #[derive(Component, Clone, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
@@ -141,7 +144,10 @@ fn update_tooltips(
         } else if !clock.suppressed {
             clock.elapsed += time.delta_secs();
         }
-        let wanted = hovered.get() && !clock.suppressed && clock.elapsed >= TOOLTIP_DELAY_SECS;
+        let wanted = hovered.get()
+            && !clock.suppressed
+            && clock.elapsed >= TOOLTIP_DELAY_SECS
+            && !tooltip.text.is_empty();
         match (wanted, popup) {
             (true, None) => {
                 let popup = spawn_popup(&mut commands, &theme, entity, &tooltip.text);
@@ -240,7 +246,8 @@ fn place_popups(
         if let Some(window) = window {
             left = left.min(window.width() - MARGIN - popup_size.x).max(MARGIN);
             if below + popup_size.y + MARGIN > window.height() {
-                top = center.y - owner_size.y / 2.0 - GAP - popup_size.y;
+                // Not above the window's margin, whatever room there is.
+                top = (center.y - owner_size.y / 2.0 - GAP - popup_size.y).max(MARGIN);
             }
         }
         node.left = Val::Px(left);
