@@ -49,10 +49,23 @@ pub enum PillTone {
 ///
 /// The text is shown in uppercase, semibold, and never wraps. Insert a new
 /// `Pill` on a live entity to change its tone or text. For a screen reader it is a status named
-/// by the text as given.
+/// by the text as given. Empty text keeps the empty tinted pill (its padding) and an empty label;
+/// it is not hidden.
+///
+/// The component is immutable: build or clone a value, edit it outside the world and insert it
+/// again to update a live widget. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::pill::Pill;
+/// fn edit(mut widgets: Query<&mut Pill>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
-#[component(on_insert=Self::on_insert)]
+#[component(immutable, on_insert=Self::on_insert)]
 #[require(
     Name::new("Pill"),
     Node {

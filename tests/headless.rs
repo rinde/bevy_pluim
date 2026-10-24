@@ -6489,6 +6489,71 @@ fn a_badge_on_a_toolbar_item_describes_its_button_for_accessibility() {
     assert_eq!(description(&app, buttons[1]), None);
 }
 
+#[test]
+fn replacing_a_badge_on_a_toolbar_item_updates_its_button_without_a_second_pill() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().one(),
+    );
+    let button = toolbar_buttons(&app, toolbar)[1];
+    let item = app.world().get::<ToolbarButton>(button).unwrap().item();
+    let description = |app: &App| {
+        app.world()
+            .get::<AccessibilityNode>(button)
+            .and_then(|node| node.description().map(str::to_owned))
+    };
+    let pills = |app: &App| {
+        app.world().get::<Children>(button).map_or(0, |children| {
+            children
+                .iter()
+                .filter(|c| {
+                    app.world()
+                        .get::<Name>(*c)
+                        .is_some_and(|n| n.as_str() == "Badge")
+                })
+                .count()
+        })
+    };
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+
+    app.world_mut().entity_mut(item).insert(Badge::count(6));
+    settle(&mut app);
+    let (pill, text) = badge_under(&app, button).unwrap();
+    assert_eq!(text, "6");
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        colors.pill_background
+    );
+
+    // A replacement with another text and tone updates the same pill.
+    app.world_mut()
+        .entity_mut(item)
+        .insert(Badge::new("9+").with_tone(BadgeTone::Warning));
+    settle(&mut app);
+    let (same, text) = badge_under(&app, button).unwrap();
+    assert_eq!((same, text.as_str()), (pill, "9+"));
+    assert_eq!(pills(&app), 1);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        colors.warning_text
+    );
+    assert_eq!(description(&app).as_deref(), Some("9+"));
+
+    // An empty replacement removes the overlay and the description.
+    app.world_mut().entity_mut(item).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(pills(&app), 0);
+    assert_eq!(description(&app), None);
+
+    app.world_mut().entity_mut(item).insert(Badge::count(2));
+    settle(&mut app);
+    assert_eq!(pills(&app), 1);
+    assert_eq!(badge_under(&app, button).unwrap().1, "2");
+    assert_eq!(description(&app).as_deref(), Some("2"));
+}
+
 fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app
@@ -10706,6 +10771,421 @@ fn two_roots_each_get_their_own_toast_stack() {
     };
     assert_eq!(parent_of(&app, a), Some(first));
     assert_eq!(parent_of(&app, b), Some(second));
+}
+
+/// A headless app with a root node, for the toast tests below.
+fn toast_app() -> (App, Entity) {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    (app, root)
+}
+
+fn toast_stacks(app: &mut App) -> Vec<Entity> {
+    use rin_bevy_ui::toast::ToastStack;
+
+    let world = app.world_mut();
+    world
+        .query_filtered::<Entity, With<ToastStack>>()
+        .iter(world)
+        .collect()
+}
+
+#[test]
+fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
+    use rin_bevy_ui::toast::{Toast, ToastPlacement};
+
+    let (mut app, root) = toast_app();
+    assert_eq!(
+        app.world().get_resource::<ToastPlacement>().unwrap().bottom,
+        Val::Px(24.0),
+        "24 px by default"
+    );
+    app.world_mut().spawn((Toast::new("Saved"), ChildOf(root)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let stack = toast_stacks(&mut app)[0];
+    let bottom = |app: &App| app.world().get::<Node>(stack).unwrap().bottom;
+    assert_eq!(bottom(&app), Val::Px(24.0));
+
+    app.world_mut()
+        .get_resource_mut::<ToastPlacement>()
+        .unwrap()
+        .bottom = Val::Px(90.0);
+    app.update();
+    assert_eq!(bottom(&app), Val::Px(90.0), "the existing stack moved");
+
+    // A stack made later starts at the new distance.
+    let other = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((Toast::new("Other"), ChildOf(other)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let later = toast_stacks(&mut app)
+        .into_iter()
+        .find(|s| *s != stack)
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Node>(later).unwrap().bottom,
+        Val::Px(90.0)
+    );
+}
+
+#[test]
+fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let first = app
+        .world_mut()
+        .spawn((Toast::new("One").with_duration(0.0), ChildOf(root)))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(first).is_err(),
+        "the first toast went"
+    );
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 1, "the empty stack stays");
+    assert!(
+        app.world()
+            .get::<Children>(stacks[0])
+            .is_none_or(RelationshipTarget::is_empty)
+    );
+
+    let second = app
+        .world_mut()
+        .spawn((Toast::new("Two"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toast_stacks(&mut app), stacks, "no second stack was made");
+    assert_eq!(
+        app.world().get::<ChildOf>(second).unwrap().parent(),
+        stacks[0]
+    );
+}
+
+#[test]
+fn two_toasts_with_one_text_raised_in_the_same_frame_keep_one_entity() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let a = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    let b = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let alive = [a, b]
+        .into_iter()
+        .filter(|e| app.world().get_entity(*e).is_ok())
+        .count();
+    assert_eq!(alive, 1, "the later duplicate is despawned");
+    let world = app.world_mut();
+    assert_eq!(world.query::<&Toast>().iter(world).count(), 1);
+}
+
+#[test]
+fn the_toast_stack_is_absolute_above_everything_and_ignores_the_pointer() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let toast = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let stack = toast_stacks(&mut app)[0];
+    assert_eq!(app.world().get::<GlobalZIndex>(stack).unwrap().0, 1100);
+    assert_eq!(
+        app.world().get::<Node>(stack).unwrap().position_type,
+        PositionType::Absolute
+    );
+    assert_eq!(app.world().get::<Pickable>(stack), Some(&Pickable::IGNORE));
+    assert_eq!(app.world().get::<Pickable>(toast), Some(&Pickable::IGNORE));
+}
+
+/// The accessibility node of `entity`: role, label, value and description.
+fn access_of(
+    app: &App,
+    entity: Entity,
+) -> (
+    accesskit::Role,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    let node = app.world().get::<AccessibilityNode>(entity).unwrap();
+    (
+        node.role(),
+        node.label().map(str::to_owned),
+        node.value().map(str::to_owned),
+        node.description().map(str::to_owned),
+    )
+}
+
+#[test]
+fn replacing_a_kbd_pill_and_label_updates_text_and_accessibility_and_empty_text_keeps_the_node() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let kbd = app.world_mut().spawn((Kbd::new("Esc"), ChildOf(root))).id();
+    let pill = app
+        .world_mut()
+        .spawn((Pill::new("running"), ChildOf(root)))
+        .id();
+    let label = app
+        .world_mut()
+        .spawn((Label::regular("Row"), ChildOf(root)))
+        .id();
+    settle(&mut app);
+
+    let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
+    assert_eq!(access_of(&app, kbd).2.as_deref(), Some("Esc"));
+    assert_eq!(access_of(&app, pill).1.as_deref(), Some("running"));
+
+    app.world_mut().entity_mut(kbd).insert(Kbd::new("Tab"));
+    app.world_mut()
+        .entity_mut(pill)
+        .insert(Pill::new("waiting").with_tone(PillTone::Warning));
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::secondary("Other"));
+    settle(&mut app);
+    assert_eq!(text(&app, kbd), "Tab");
+    assert_eq!(access_of(&app, kbd).2.as_deref(), Some("Tab"));
+    assert_eq!(text(&app, pill), "WAITING");
+    assert_eq!(access_of(&app, pill).1.as_deref(), Some("waiting"));
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.wait_background
+    );
+    assert_eq!(text(&app, label), "Other");
+    assert_eq!(
+        app.world().get::<TextColor>(label).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.text_secondary
+    );
+
+    // Empty text keeps the entity, its container layout and its accessibility node.
+    app.world_mut().entity_mut(kbd).insert(Kbd::new(""));
+    app.world_mut().entity_mut(pill).insert(Pill::new(""));
+    app.world_mut().entity_mut(label).insert(Label::regular(""));
+    settle(&mut app);
+    for e in [kbd, pill, label] {
+        assert_eq!(text(&app, e), "");
+        assert_ne!(app.world().get::<Node>(e).unwrap().display, Display::None);
+    }
+    // The label's accessibility node is Bevy's, made by its accessibility plugin, which the
+    // headless app lacks.
+    assert_eq!(access_of(&app, kbd).2.as_deref(), Some(""));
+    assert_eq!(access_of(&app, pill).1.as_deref(), Some(""));
+
+    app.world_mut().entity_mut(kbd).insert(Kbd::new("Esc"));
+    app.world_mut().entity_mut(pill).insert(Pill::new("back"));
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::regular("Back"));
+    settle(&mut app);
+    assert_eq!(text(&app, kbd), "Esc");
+    assert_eq!(text(&app, pill), "BACK");
+    assert_eq!(text(&app, label), "Back");
+}
+
+#[test]
+fn replacing_a_badge_updates_text_tone_and_host_description_and_empty_text_clears_them() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Trains", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    let description = |app: &App| access_of(app, button).3;
+
+    app.world_mut().entity_mut(button).insert(Badge::count(4));
+    settle(&mut app);
+    assert_eq!(description(&app).as_deref(), Some("4"));
+    let (overlay, _) = badge_under(&app, button).unwrap();
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Badge::new("9+").with_tone(BadgeTone::Warning));
+    settle(&mut app);
+    assert_eq!(description(&app).as_deref(), Some("9+"));
+    assert_eq!(badge_under(&app, button).unwrap().0, overlay);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(overlay).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.warning_text
+    );
+
+    app.world_mut().entity_mut(button).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button), None);
+    assert_eq!(description(&app), None);
+
+    app.world_mut().entity_mut(button).insert(Badge::count(2));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button).unwrap().1, "2");
+    assert_eq!(description(&app).as_deref(), Some("2"));
+}
+
+#[test]
+fn replacing_a_toast_updates_its_text_and_label_and_keeps_one_entity_in_its_place() {
+    use bevy::time::TimeUpdateStrategy;
+    use std::time::Duration;
+
+    let mut app = headless_app();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        250,
+    )));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let first = app
+        .world_mut()
+        .spawn((Toast::new("One").with_duration(2.0), ChildOf(root)))
+        .id();
+    app.update();
+    let second = app
+        .world_mut()
+        .spawn((Toast::new("Two").with_duration(60.0), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let stack = app.world().get::<ChildOf>(first).unwrap().parent();
+    let order =
+        |app: &App| -> Vec<Entity> { app.world().get::<Children>(stack).unwrap().iter().collect() };
+    assert_eq!(order(&app), [first, second]);
+    for _ in 0..4 {
+        app.update();
+    }
+
+    // Replacing the older toast changes it in place and restarts its timer; it is not
+    // re-stacked.
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Toast::new("Uno").with_duration(2.0));
+    app.update();
+    assert_eq!(app.world().get::<Text>(first).unwrap().0, "Uno");
+    assert_eq!(access_of(&app, first).1.as_deref(), Some("Uno"));
+    assert_eq!(order(&app), [first, second]);
+    assert_eq!(count_toasts(&mut app), 2);
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(app.world().get_entity(first).is_ok(), "timer not restarted");
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(app.world().get_entity(first).is_err());
+    assert!(app.world().get_entity(second).is_ok());
+
+    // Empty text keeps the card and the normal lifetime, and nonempty text comes back.
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Toast::new("").with_duration(1.0));
+    app.update();
+    assert_eq!(app.world().get::<Text>(second).unwrap().0, "");
+    assert!(app.world().get::<Card>(second).is_some());
+    assert_eq!(access_of(&app, second).1.as_deref(), Some(""));
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Toast::new("Back").with_duration(1.0));
+    app.update();
+    assert_eq!(app.world().get::<Text>(second).unwrap().0, "Back");
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(app.world().get_entity(second).is_err());
+}
+
+#[test]
+fn a_badge_on_a_host_without_an_accessibility_node_describes_it_once_the_node_appears() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let host = app
+        .world_mut()
+        .spawn((Node::default(), Badge::count(5), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    assert!(app.world().get::<AccessibilityNode>(host).is_none());
+    assert_eq!(badge_under(&app, host).unwrap().1, "5");
+
+    app.world_mut()
+        .entity_mut(host)
+        .insert(AccessibilityNode::from(accesskit::Node::new(
+            accesskit::Role::Button,
+        )));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3.as_deref(), Some("5"));
+
+    // An empty badge then clears the description again.
+    app.world_mut().entity_mut(host).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3, None);
+}
+
+#[test]
+fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_back() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let label = app
+        .world_mut()
+        .spawn((Label::regular("Locomotives"), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let state = |app: &App| {
+        let e = app.world().entity(label);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            *e.get::<LetterSpacing>().unwrap(),
+            e.get::<TextFont>().unwrap().weight,
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::overline("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "LOCOMOTIVES".to_string(),
+            LetterSpacing::Px(0.5),
+            FontWeight::SEMIBOLD
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::regular("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
 }
 
 // ---- FilterCombo ----

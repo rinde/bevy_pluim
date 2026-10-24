@@ -138,7 +138,8 @@ pub struct TabBarTab {
 }
 
 /// Marks the text of a [`TabBarTab`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 struct TabBarTabLabel;
 
 /// Keeps the keys a focused tab moves the focus with (left, right, Home, End) from
