@@ -550,10 +550,10 @@ impl SelectionValue {
         }
     }
 
-    /// Deselects everything, or `None` when that is not allowed or changes nothing.
+    /// Deselects everything, where the variant allows an empty selection.
     ///
-    /// A `One` and a `OneOrMore` must keep an item, so they refuse; an already empty
-    /// `ZeroOrOne` or `ZeroOrMore` has nothing to deselect.
+    /// `One` and `OneOrMore` must keep an item, so they refuse (`None`), as does a
+    /// selection that is already empty.
     #[must_use]
     pub fn clear(&self) -> Option<Self> {
         match self {
@@ -877,15 +877,10 @@ where
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::indexing_slicing,
-    clippy::panic,
-    clippy::disallowed_methods,
-    reason = "tests may abort loudly"
-)]
 mod tests {
     use super::*;
     use bevy::ecs::relationship::RelationshipTarget;
+    use bevy::ecs::system::RunSystemOnce;
 
     fn entity(index: u32) -> Entity {
         Entity::from_raw_u32(index).unwrap_or(Entity::PLACEHOLDER)
@@ -1294,18 +1289,19 @@ mod tests {
         assert_eq!(value.iter().collect::<Vec<_>>(), vec![entity(1), entity(2)]);
     }
 
-    // set_selection
+    // set_selection and append, the gaps of the first tests
 
     #[test]
     fn setting_one_to_a_different_entity_replaces_it() {
+        let value = SelectionValue::One(entity(1));
         assert_eq!(
-            SelectionValue::One(entity(1)).set_selection([entity(2)]),
+            value.set_selection([entity(2)]),
             Some(SelectionValue::One(entity(2)))
         );
     }
 
     #[test]
-    fn setting_one_to_its_current_entity_is_a_no_op() {
+    fn setting_one_to_its_own_entity_is_a_no_op() {
         assert_eq!(
             SelectionValue::One(entity(1)).set_selection([entity(1)]),
             None
@@ -1315,20 +1311,21 @@ mod tests {
     #[test]
     fn setting_one_to_nothing_or_to_two_entities_is_refused() {
         let value = SelectionValue::One(entity(1));
-        assert_eq!(value.set_selection(std::iter::empty()), None);
+        assert_eq!(value.set_selection([]), None);
         assert_eq!(value.set_selection([entity(2), entity(3)]), None);
     }
 
     #[test]
-    fn setting_one_to_the_same_entity_twice_counts_it_once() {
+    fn setting_one_to_the_same_entity_twice_selects_it_once() {
+        let value = SelectionValue::One(entity(1));
         assert_eq!(
-            SelectionValue::One(entity(1)).set_selection([entity(2), entity(2)]),
+            value.set_selection([entity(2), entity(2)]),
             Some(SelectionValue::One(entity(2)))
         );
     }
 
     #[test]
-    fn setting_zero_or_one_to_an_entity_selects_it() {
+    fn setting_an_empty_zero_or_one_selects_the_entity() {
         assert_eq!(
             SelectionValue::ZeroOrOne(None).set_selection([entity(1)]),
             Some(SelectionValue::ZeroOrOne(Some(entity(1))))
@@ -1338,17 +1335,14 @@ mod tests {
     #[test]
     fn setting_zero_or_one_to_nothing_clears_it() {
         assert_eq!(
-            SelectionValue::ZeroOrOne(Some(entity(1))).set_selection(std::iter::empty()),
+            SelectionValue::ZeroOrOne(Some(entity(1))).set_selection([]),
             Some(SelectionValue::ZeroOrOne(None))
         );
     }
 
     #[test]
-    fn setting_zero_or_one_to_what_it_already_holds_is_a_no_op() {
-        assert_eq!(
-            SelectionValue::ZeroOrOne(None).set_selection(std::iter::empty()),
-            None
-        );
+    fn setting_zero_or_one_to_what_it_holds_is_a_no_op() {
+        assert_eq!(SelectionValue::ZeroOrOne(None).set_selection([]), None);
         assert_eq!(
             SelectionValue::ZeroOrOne(Some(entity(1))).set_selection([entity(1)]),
             None
@@ -1363,40 +1357,29 @@ mod tests {
         );
     }
 
-    // append
-
     #[test]
-    fn appending_a_duplicate_to_one_or_more_is_a_no_op() {
-        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
-        assert_eq!(value.append([entity(2)]), None);
-    }
-
-    #[test]
-    fn appending_skips_the_duplicates_in_one_or_more() {
+    fn appending_duplicates_to_one_or_more_adds_each_entity_once() {
         let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
         assert_eq!(
-            value.append([entity(1), entity(2), entity(2), entity(3)]),
-            Some(SelectionValue::OneOrMore(smallvec![
-                entity(1),
-                entity(2),
-                entity(3)
-            ]))
+            value.append([entity(2), entity(2), entity(1)]),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]))
         );
     }
 
     #[test]
-    fn appending_a_duplicate_to_zero_or_more_is_a_no_op() {
-        let value = SelectionValue::ZeroOrMore(smallvec![entity(1)]);
-        assert_eq!(value.append([entity(1)]), None);
+    fn appending_only_selected_entities_to_one_or_more_is_a_no_op() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(value.append([entity(2), entity(1)]), None);
     }
 
     #[test]
-    fn appending_skips_the_duplicates_in_zero_or_more() {
+    fn appending_duplicates_to_zero_or_more_adds_each_entity_once() {
         let value = SelectionValue::ZeroOrMore(smallvec![entity(1)]);
         assert_eq!(
-            value.append([entity(1), entity(2), entity(2)]),
+            value.append([entity(2), entity(2), entity(1)]),
             Some(SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]))
         );
+        assert_eq!(value.append([entity(1)]), None);
     }
 
     #[test]
@@ -1412,7 +1395,7 @@ mod tests {
         assert_eq!(SelectionValue::One(entity(1)).append([entity(2)]), None);
     }
 
-    // SelectionBuilder, ItemsChanged and ItemParam
+    // The builder, the items and `ItemParam`, in an app with the selection model
 
     fn items_app() -> App {
         let mut app = App::new();
@@ -1420,24 +1403,16 @@ mod tests {
         app
     }
 
-    fn labels(n: usize) -> Vec<Item<String>> {
-        ["a", "b", "c"]
-            .iter()
-            .take(n)
-            .map(|l| Item::new(*l))
-            .collect()
-    }
-
-    fn selection_of(app: &App, entity: Entity) -> SelectionValue {
+    fn selection_value(app: &App, entity: Entity) -> Option<SelectionValue> {
         match app.world().get::<Selection>(entity) {
-            Some(Selection::Value(value)) => value.clone(),
-            other => panic!("expected a selection value, got {other:?}"),
+            Some(Selection::Value(value)) => Some(value.clone()),
+            _ => None,
         }
     }
 
-    fn items_of(app: &App, entity: Entity) -> Vec<Entity> {
+    fn item_entities(app: &App, owner: Entity) -> Vec<Entity> {
         app.world()
-            .get::<ItemValues>(entity)
+            .get::<ItemValues>(owner)
             .map(|items| items.iter().collect())
             .unwrap_or_default()
     }
@@ -1447,27 +1422,73 @@ mod tests {
         let mut app = items_app();
         let id = app
             .world_mut()
-            .spawn(Selection::builder().one().build_with_items(labels(3)))
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
             .id();
         app.update();
-        let items = items_of(&app, id);
-        assert_eq!(items.len(), 3);
-        assert_eq!(selection_of(&app, id), SelectionValue::One(items[0]));
+        let items = item_entities(&app, id);
+        assert_eq!(items.len(), 2);
+        assert_eq!(
+            selection_value(&app, id),
+            items.first().map(|first| SelectionValue::One(*first))
+        );
     }
 
     #[test]
-    fn a_one_with_builder_keeps_the_given_item() {
+    fn a_one_with_builder_selects_the_given_entity() {
+        let mut app = items_app();
+        let chosen = app.world_mut().spawn_empty().id();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_with(chosen)
+                    .build_with_items(["a"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        assert_eq!(selection_value(&app, id), Some(SelectionValue::One(chosen)));
+    }
+
+    #[test]
+    fn a_zero_or_one_builder_starts_empty_with_its_items() {
         let mut app = items_app();
         let id = app
             .world_mut()
             .spawn(
                 Selection::builder()
-                    .one_with(entity(7))
-                    .build_with_items(labels(2)),
+                    .zero_or_one()
+                    .build_with_items(["a", "b"].map(Item::new)),
             )
             .id();
         app.update();
-        assert_eq!(selection_of(&app, id), SelectionValue::One(entity(7)));
+        assert_eq!(
+            selection_value(&app, id),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+        assert_eq!(item_entities(&app, id).len(), 2);
+    }
+
+    #[test]
+    fn a_zero_or_more_builder_starts_empty_with_its_items() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        assert_eq!(
+            selection_value(&app, id),
+            Some(SelectionValue::ZeroOrMore(smallvec![]))
+        );
+        assert_eq!(item_entities(&app, id).len(), 3);
     }
 
     #[test]
@@ -1478,168 +1499,139 @@ mod tests {
             .spawn(
                 Selection::builder()
                     .one_or_more()
-                    .build_with_items(labels(2)),
+                    .build_with_items(["a", "b"].map(Item::new)),
             )
             .id();
         app.update();
-        let items = items_of(&app, id);
+        let items = item_entities(&app, id);
         assert_eq!(
-            selection_of(&app, id),
-            SelectionValue::OneOrMore(smallvec![items[0]])
+            selection_value(&app, id),
+            items
+                .first()
+                .map(|first| SelectionValue::OneOrMore(smallvec![*first]))
         );
     }
 
     #[test]
-    fn zero_or_one_and_zero_or_more_builders_start_empty() {
+    fn a_builder_with_items_ref_chooses_from_the_items_of_another_entity() {
         let mut app = items_app();
-        let zero_or_one = app
+        let owner = app
             .world_mut()
             .spawn(
                 Selection::builder()
                     .zero_or_one()
-                    .build_with_items(labels(2)),
+                    .build_with_items(["a", "b"].map(Item::new)),
             )
             .id();
-        let zero_or_more = app
+        let sharing = app
             .world_mut()
-            .spawn(
-                Selection::builder()
-                    .zero_or_more()
-                    .build_with_items(labels(2)),
-            )
+            .spawn(Selection::builder().one().build_with_items_ref(owner))
             .id();
         app.update();
+        let items = item_entities(&app, owner);
+        assert!(app.world().get::<ItemValues>(sharing).is_none());
         assert_eq!(
-            selection_of(&app, zero_or_one),
-            SelectionValue::ZeroOrOne(None)
-        );
-        assert_eq!(
-            selection_of(&app, zero_or_more),
-            SelectionValue::ZeroOrMore(smallvec![])
-        );
-    }
-
-    #[test]
-    fn builders_without_items_leave_a_one_waiting_and_the_others_empty() {
-        let mut app = items_app();
-        let one = app
-            .world_mut()
-            .spawn(Selection::builder().one().build_with_items(labels(0)))
-            .id();
-        let zero_or_more = app
-            .world_mut()
-            .spawn(
-                Selection::builder()
-                    .zero_or_more()
-                    .build_with_items(labels(0)),
-            )
-            .id();
-        app.update();
-        assert_eq!(
-            selection_of(&app, one),
-            SelectionValue::One(Entity::PLACEHOLDER)
-        );
-        assert_eq!(
-            selection_of(&app, zero_or_more),
-            SelectionValue::ZeroOrMore(smallvec![])
-        );
-    }
-
-    #[test]
-    fn a_one_builder_picks_the_first_item_once_an_item_arrives() {
-        let mut app = items_app();
-        let id = app
-            .world_mut()
-            .spawn(Selection::builder().one().build_with_items(labels(0)))
-            .id();
-        app.update();
-        let item = app.world_mut().spawn((Item::new("late"), ItemOf(id))).id();
-        app.update();
-        app.update();
-        assert_eq!(selection_of(&app, id), SelectionValue::One(item));
-    }
-
-    #[test]
-    fn builders_with_an_items_ref_choose_from_the_shared_items() {
-        let mut app = items_app();
-        let items_id = app
-            .world_mut()
-            .spawn(ItemValues::spawn(SpawnIter(labels(2).into_iter())))
-            .id();
-        let one = app
-            .world_mut()
-            .spawn(Selection::builder().one().build_with_items_ref(items_id))
-            .id();
-        let zero_or_one = app
-            .world_mut()
-            .spawn(
-                Selection::builder()
-                    .zero_or_one()
-                    .build_with_items_ref(items_id),
-            )
-            .id();
-        app.update();
-        let items = items_of(&app, items_id);
-        assert_eq!(selection_of(&app, one), SelectionValue::One(items[0]));
-        assert_eq!(
-            selection_of(&app, zero_or_one),
-            SelectionValue::ZeroOrOne(None)
-        );
-        assert_eq!(
-            app.world().get::<ItemsRef>(one).map(|r| r.0),
-            Some(items_id)
+            app.world().get::<ItemsRef>(sharing).map(|r| r.0),
+            Some(owner)
         );
         assert_eq!(
             app.world()
-                .get::<ItemSelections>(items_id)
+                .get::<ItemSelections>(owner)
                 .map(RelationshipTarget::len),
-            Some(2)
+            Some(1)
         );
-        assert!(app.world().get::<ItemValues>(one).is_none());
+        assert_eq!(
+            selection_value(&app, sharing),
+            items.first().map(|first| SelectionValue::One(*first))
+        );
     }
 
-    #[derive(Resource, Default)]
-    struct Changes(Vec<(Entity, usize)>);
+    #[test]
+    fn a_one_selection_over_no_items_selects_the_first_item_added_later() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(Vec::<Item<String>>::new()),
+            )
+            .id();
+        app.update();
+        assert_eq!(
+            selection_value(&app, id),
+            Some(SelectionValue::One(Entity::PLACEHOLDER))
+        );
+        let added = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        app.update();
+        assert_eq!(selection_value(&app, id), Some(SelectionValue::One(added)));
+    }
 
     #[test]
-    fn items_changed_fires_with_the_new_items_when_an_item_is_added() {
+    fn changing_the_items_triggers_items_changed_with_the_new_items() {
+        #[derive(Resource, Default)]
+        struct Seen(Vec<(Entity, usize)>);
+
+        fn seen(app: &App) -> Vec<(Entity, usize)> {
+            app.world()
+                .get_resource::<Seen>()
+                .map(|seen| seen.0.clone())
+                .unwrap_or_default()
+        }
+
         let mut app = items_app();
-        app.init_resource::<Changes>();
-        app.add_observer(|t: On<ItemsChanged>, mut changes: ResMut<Changes>| {
-            changes.0.push((t.entity, t.items.len()));
+        app.init_resource::<Seen>();
+        app.add_observer(|changed: On<ItemsChanged>, mut seen: ResMut<Seen>| {
+            seen.0.push((changed.entity, changed.items.len()));
         });
         let id = app
             .world_mut()
-            .spawn(ItemValues::spawn(SpawnIter(labels(2).into_iter())))
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
             .id();
         app.update();
+        assert_eq!(seen(&app), vec![(id, 2)]);
+
         app.world_mut().spawn((Item::new("c"), ItemOf(id)));
         app.update();
+        assert_eq!(seen(&app), vec![(id, 2), (id, 3)]);
+
         app.update();
-        assert_eq!(app.world().resource::<Changes>().0, vec![(id, 2), (id, 3)]);
+        assert_eq!(seen(&app).len(), 2);
     }
 
     #[test]
     fn an_item_param_finds_the_first_item_matching_the_predicate() {
-        use bevy::ecs::system::RunSystemOnce;
         let mut app = items_app();
         let id = app
             .world_mut()
-            .spawn(ItemValues::spawn(SpawnIter(labels(3).into_iter())))
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
+            )
             .id();
-        let items = items_of(&app, id);
+        app.update();
+        let items = item_entities(&app, id);
         let found = app
             .world_mut()
             .run_system_once(|param: ItemParam<String>| {
                 (
                     param.find_item_ref(|item, ()| item.data == "b"),
-                    param.find_item_ref(|item, ()| item.data == "zzz"),
+                    param.find_item_ref(|item, ()| item.data == "z"),
                     param
                         .find_item(|item, ()| item.data == "c")
-                        .map(|(_, i, ())| i.data.clone()),
+                        .map(|(_, item, ())| item.data.clone()),
                 )
             })
             .ok();
-        assert_eq!(found, Some((Some(items[1]), None, Some("c".to_owned()))));
+        assert_eq!(
+            found,
+            Some((items.get(1).copied(), None, Some("c".to_owned())))
+        );
     }
 }
