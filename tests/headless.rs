@@ -6563,6 +6563,50 @@ fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
     );
 }
 
+#[test]
+fn toasts_with_unusual_durations_do_not_panic_and_the_zero_ones_go_after_a_tick() {
+    use rin_bevy_ui::toast::Toast;
+
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let mut spawn = |text: &str, duration: f32| {
+        app.world_mut()
+            .spawn((Toast::new(text).with_duration(duration), ChildOf(root)))
+            .id()
+    };
+    let long: Vec<Entity> = [("inf", f32::INFINITY), ("max", f32::MAX)]
+        .into_iter()
+        .map(|(text, duration)| spawn(text, duration))
+        .collect();
+    let short: Vec<Entity> = [("nan", f32::NAN), ("negative", -1.0), ("zero", 0.0)]
+        .into_iter()
+        .map(|(text, duration)| spawn(text, duration))
+        .collect();
+    for _ in 0..5 {
+        app.update();
+    }
+    for toast in short {
+        assert!(
+            app.world().get_entity(toast).is_err(),
+            "a zero toast stayed"
+        );
+    }
+    for toast in long {
+        assert!(app.world().get_entity(toast).is_ok(), "a capped toast went");
+    }
+    // Re-inserting a huge duration on a live entity must not panic either.
+    let again = app
+        .world_mut()
+        .spawn((Toast::new("again"), ChildOf(root)))
+        .id();
+    app.update();
+    app.world_mut()
+        .entity_mut(again)
+        .insert(Toast::new("again").with_duration(f32::INFINITY));
+    app.update();
+    app.update();
+}
+
 /// The option of the toggle that sets `preference`.
 fn light_dark_option(app: &mut App, preference: ThemePreference) -> Entity {
     let world = app.world_mut();
