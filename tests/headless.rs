@@ -2295,6 +2295,52 @@ fn a_color_palette_combo_gets_its_popup_when_the_app_has_two_ui_roots() {
 }
 
 #[test]
+fn a_color_palette_combo_popup_border_is_the_themes_highlight_when_spawned_and_after_a_change() {
+    let mut app = headless_app();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+    // No update since the spawn: the popup is themed when it is spawned.
+    assert_popup_borders_are_highlight(&mut app, 1);
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Light);
+    app.update();
+    app.update();
+    assert_popup_borders_are_highlight(&mut app, 1);
+
+    // A combo spawned after the theme changed is themed as well.
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+    assert_popup_borders_are_highlight(&mut app, 2);
+}
+
+/// Every palette combo popup has the active theme's `border_highlight` border.
+fn assert_popup_borders_are_highlight(app: &mut App, count: usize) {
+    let expected = BorderColor::all(
+        app.world()
+            .get_resource::<Theme>()
+            .unwrap()
+            .colors
+            .border_highlight,
+    );
+    let floats = palette_combo_floats(app);
+    assert_eq!(floats.len(), count);
+    for float in floats {
+        assert_eq!(
+            app.world().entity(float).get::<BorderColor>(),
+            Some(&expected)
+        );
+    }
+}
+
+#[test]
 fn a_color_palette_combo_popup_is_named_after_its_combo() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
