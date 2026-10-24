@@ -4601,24 +4601,24 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
     let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
     let display = |app: &App, e: Entity| app.world().get::<Node>(e).unwrap().display;
-    assert_eq!(text(&app, refs.title), "Trains");
-    assert_eq!(text(&app, refs.subtitle), "4 on the network");
-    assert_eq!(display(&app, refs.subtitle), Display::Flex);
-    assert_eq!(display(&app, refs.close), Display::Flex);
+    assert_eq!(text(&app, refs.title()), "Trains");
+    assert_eq!(text(&app, refs.subtitle()), "4 on the network");
+    assert_eq!(display(&app, refs.subtitle()), Display::Flex);
+    assert_eq!(display(&app, refs.close()), Display::Flex);
     let close_icon = app
         .world()
-        .get::<IconButtonRefs>(refs.close)
+        .get::<IconButtonRefs>(refs.close())
         .unwrap()
         .icon();
     assert_eq!(
         app.world().get::<ImageNode>(close_icon).unwrap().image,
         icon
     );
-    assert_eq!(display(&app, refs.strip), Display::None);
-    assert_eq!(display(&app, refs.footer), Display::None);
+    assert_eq!(display(&app, refs.strip()), Display::None);
+    assert_eq!(display(&app, refs.footer()), Display::None);
     assert_eq!(
         app.world()
-            .get::<Node>(refs.scroll_area)
+            .get::<Node>(refs.scroll_area())
             .unwrap()
             .max_height,
         // The 620 px of the body plus the 12 px corner radius it stops short of the bottom edge.
@@ -4627,20 +4627,20 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
 
     let footer_text = app
         .world_mut()
-        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer)))
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
         .id();
     app.update();
-    assert_eq!(display(&app, refs.footer), Display::Flex);
+    assert_eq!(display(&app, refs.footer()), Display::Flex);
     app.world_mut().despawn(footer_text);
     app.update();
-    assert_eq!(display(&app, refs.footer), Display::None);
+    assert_eq!(display(&app, refs.footer()), Display::None);
 
     let plain = app.world_mut().spawn(Panel::new("Stops")).id();
     app.update();
     app.update();
     let plain_refs = *app.world().get::<PanelRefs>(plain).unwrap();
-    assert_eq!(display(&app, plain_refs.subtitle), Display::None);
-    assert_eq!(display(&app, plain_refs.close), Display::None);
+    assert_eq!(display(&app, plain_refs.subtitle()), Display::None);
+    assert_eq!(display(&app, plain_refs.close()), Display::None);
 }
 
 #[test]
@@ -4653,7 +4653,7 @@ fn a_panel_body_stops_a_corner_radius_short_of_the_bottom_unless_a_footer_holds_
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
     let margin = |app: &App| {
         app.world()
-            .get::<Node>(refs.scroll_area)
+            .get::<Node>(refs.scroll_area())
             .unwrap()
             .margin
             .bottom
@@ -4663,7 +4663,7 @@ fn a_panel_body_stops_a_corner_radius_short_of_the_bottom_unless_a_footer_holds_
 
     let footer_text = app
         .world_mut()
-        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer)))
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
         .id();
     app.update();
     assert_eq!(margin(&app), Val::ZERO);
@@ -4690,7 +4690,7 @@ fn activating_the_close_button_of_a_panel_triggers_panel_closed_on_it() {
     app.update();
     app.update();
 
-    let close = app.world().get::<PanelRefs>(panel).unwrap().close;
+    let close = app.world().get::<PanelRefs>(panel).unwrap().close();
     app.world_mut().trigger(Activate { entity: close });
     app.update();
 
@@ -4712,17 +4712,17 @@ fn changing_the_subtitle_of_a_live_panel_updates_its_text() {
     app.update();
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
     let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
-    assert_eq!(text(&app, refs.subtitle), "3 open");
+    assert_eq!(text(&app, refs.subtitle()), "3 open");
 
     app.world_mut()
         .entity_mut(panel)
         .insert(Panel::new("Alerts").with_subtitle("2 open"));
     app.update();
     app.update();
-    assert_eq!(text(&app, refs.subtitle), "2 open");
-    assert_eq!(text(&app, refs.title), "Alerts");
+    assert_eq!(text(&app, refs.subtitle()), "2 open");
+    assert_eq!(text(&app, refs.title()), "Alerts");
     assert_eq!(
-        app.world().get::<Children>(refs.header).unwrap().len(),
+        app.world().get::<Children>(refs.header()).unwrap().len(),
         3,
         "the parts are spawned once"
     );
@@ -4733,8 +4733,110 @@ fn changing_the_subtitle_of_a_live_panel_updates_its_text() {
     app.update();
     app.update();
     assert_eq!(
-        app.world().get::<Node>(refs.subtitle).unwrap().display,
+        app.world().get::<Node>(refs.subtitle()).unwrap().display,
         Display::None
+    );
+}
+
+#[test]
+fn a_panels_close_button_is_named_close_unless_the_app_names_it() {
+    let mut app = headless_app();
+    let close_label = |app: &App, panel: Entity| {
+        let close = app.world().get::<PanelRefs>(panel).unwrap().close();
+        app.world()
+            .get::<AccessibilityNode>(close)
+            .unwrap()
+            .label()
+            .map(str::to_owned)
+    };
+    let plain = app
+        .world_mut()
+        .spawn(Panel::new("A").with_close_icon(Handle::default()))
+        .id();
+    let named = app
+        .world_mut()
+        .spawn(
+            Panel::new("B")
+                .with_close_icon(Handle::default())
+                .with_close_name("Sluiten"),
+        )
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(close_label(&app, plain).as_deref(), Some("Close"));
+    assert_eq!(close_label(&app, named).as_deref(), Some("Sluiten"));
+
+    app.world_mut().entity_mut(plain).insert(
+        Panel::new("A")
+            .with_close_icon(Handle::default())
+            .with_close_name("Fermer"),
+    );
+    app.update();
+    app.update();
+    assert_eq!(close_label(&app, plain).as_deref(), Some("Fermer"));
+
+    app.world_mut()
+        .entity_mut(plain)
+        .insert(Panel::new("A").with_close_icon(Handle::default()));
+    app.update();
+    app.update();
+    assert_eq!(close_label(&app, plain).as_deref(), Some("Close"));
+}
+
+#[test]
+fn inserting_a_panel_again_keeps_its_parts_content_and_one_close_notification() {
+    let mut app = headless_app();
+    app.init_resource::<PanelsClosed>();
+    app.add_observer(|t: On<PanelClosed>, mut closed: ResMut<PanelsClosed>| {
+        closed.0.push(t.event().event_target());
+    });
+    let panel = app
+        .world_mut()
+        .spawn(Panel::new("Trains").with_close_icon(Handle::default()))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let content = app
+        .world_mut()
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
+        .id();
+
+    app.world_mut().entity_mut(panel).insert(
+        Panel::new("Stops")
+            .with_subtitle("6 stops")
+            .with_close_icon(Handle::default())
+            .with_close_name("Sluiten")
+            .with_max_body_height(200.0)
+            .unwrap(),
+    );
+    app.update();
+    app.update();
+
+    assert_eq!(*app.world().get::<PanelRefs>(panel).unwrap(), refs);
+    assert_eq!(app.world().get::<Text>(refs.title()).unwrap().0, "Stops");
+    assert_eq!(
+        app.world().get::<Text>(refs.subtitle()).unwrap().0,
+        "6 stops"
+    );
+    assert!(
+        app.world()
+            .get::<Children>(refs.footer())
+            .unwrap()
+            .contains(&content)
+    );
+    assert!(matches!(
+        app.world().get::<Node>(refs.scroll_area()).unwrap().max_height,
+        Val::Px(px) if px >= 200.0 && px < 200.0 + 100.0
+    ));
+    app.world_mut().trigger(Activate {
+        entity: refs.close(),
+    });
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<PanelsClosed>().unwrap().0,
+        vec![panel],
+        "one notification per activation"
     );
 }
 
@@ -4802,7 +4904,7 @@ fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
     app.update();
     let node = |app: &App| {
         let node = app.world().get::<AccessibilityNode>(panel).unwrap();
-        let title = app.world().get::<PanelRefs>(panel).unwrap().title;
+        let title = app.world().get::<PanelRefs>(panel).unwrap().title();
         (
             node.role(),
             node.label().map(str::to_owned),

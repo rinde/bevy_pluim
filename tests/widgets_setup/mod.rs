@@ -1566,7 +1566,7 @@ fn panel(world: &mut World) {
     world.entity_mut(root).with_children(spawn_theme_button);
     world.flush();
     for (panel, lines) in [(closable, 3), (tall, 12)] {
-        let Some(body) = world.get::<PanelRefs>(panel).map(|refs| refs.body) else {
+        let Some(body) = world.get::<PanelRefs>(panel).map(PanelRefs::body) else {
             continue;
         };
         for line in 1..=lines {

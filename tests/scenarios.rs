@@ -1646,7 +1646,7 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
                 flex_shrink: 0.0,
                 ..default()
             },
-            ChildOf(refs.body),
+            ChildOf(refs.body()),
         ));
     }
     for _ in 0..6 {
@@ -1659,14 +1659,14 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
     let overflow = {
         let contents = *app
             .world()
-            .get::<Children>(refs.scroll_area)
+            .get::<Children>(refs.scroll_area())
             .unwrap()
             .first()
             .unwrap();
         let computed = app.world().get::<ComputedNode>(contents).unwrap();
         (computed.content_size().y - computed.size().y) * computed.inverse_scale_factor()
     };
-    (height(refs.scroll_area), overflow)
+    (height(refs.scroll_area()), overflow)
 }
 
 #[test]

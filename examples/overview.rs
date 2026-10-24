@@ -718,7 +718,7 @@ fn fill_panels(
     for (panel, refs, lines) in &panels {
         commands.entity(panel).insert(Filled);
         for line in 1..=lines.0 {
-            commands.spawn((Label::regular(format!("Line {line}")), ChildOf(refs.body)));
+            commands.spawn((Label::regular(format!("Line {line}")), ChildOf(refs.body())));
         }
     }
 }
