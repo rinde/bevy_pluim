@@ -1,0 +1,39 @@
+// A click on a card picks it: the picked card takes the selection ring border and the previous
+// one goes back to the plain border. The selection is a `One`, so a click on the picked card
+// keeps it. Cards of the other group are picked the same way.
+(
+    format_version: 3,
+    name: "clicking a gallery card picks it and the picked look follows",
+    setup: App(Gallery),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("gallery"), items: ["Steam"]))),
+        Capture(name: "plain border", value: Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BorderColor.top")),
+        Capture(name: "picked border", value: Component(target: Within(Name("gallery"), Role(role: Button, label: "Steam")), path: "BorderColor.top")),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BorderColor.top", is: Ne(Captured("picked border")))),
+        MoveTo(Within(Name("gallery"), Role(role: Button, label: "Diesel"))),
+        Click(Left),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(App(Selected(of: Name("gallery"), items: ["Diesel"]))),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BorderColor.top", is: Eq(Captured("picked border")))),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Steam")), path: "BorderColor.top", is: Eq(Captured("plain border")))),
+        Check(App(Accessible(of: Within(Name("gallery"), Role(role: Button, label: "Diesel")), role: Some("RadioButton"), label: Some("Diesel"), value: None, states: [Toggled]))),
+        Check(App(Accessible(of: Within(Name("gallery"), Role(role: Button, label: "Steam")), role: Some("RadioButton"), label: Some("Steam"), value: None, states: [NotToggled]))),
+        // A click on the picked card keeps it.
+        MoveTo(Within(Name("gallery"), Role(role: Button, label: "Diesel"))),
+        Click(Left),
+        Check(App(Selected(of: Name("gallery"), items: ["Diesel"]))),
+        // A card of the second group.
+        MoveTo(Within(Name("gallery"), Role(role: Button, label: "Passenger"))),
+        Click(Left),
+        Check(App(Selected(of: Name("gallery"), items: ["Passenger"]))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Passenger")), path: "BorderColor.top", is: Eq(Captured("picked border")))),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BorderColor.top", is: Eq(Captured("plain border")))),
+    ],
+    expect: [
+        App(Selected(of: Name("gallery"), items: ["Passenger"])),
+    ],
+)
