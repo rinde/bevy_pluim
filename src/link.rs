@@ -41,9 +41,12 @@ impl Plugin for LinkPlugin {
 /// instead, so it never activates and does not react to the pointer.
 ///
 /// To assistive technology it is a link ([`Role::Link`]), not a button.
+///
+/// Insert a `Link` again to change the label of a live link: its text is updated in place, so
+/// the text on screen always equals the accessible label.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_add = Self::on_add)]
+#[component(on_insert = Self::on_insert)]
 #[require(BoxShadow::default(),
     Node {
         align_self: AlignSelf::Center,
@@ -86,18 +89,39 @@ impl Link {
         }
     }
 
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let Some(link) = world.entity(context.entity).get::<Self>() else {
+    /// Spawns the text and registers the hover observer once; on every later insert sets the
+    /// text of the existing child. Runs as one queued command so two inserts before a flush
+    /// cannot both spawn a text.
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let entity = context.entity;
+        let Some(link) = world.get::<Self>(entity) else {
             return;
         };
-        let text = Text::new(&link.label);
+        let label = link.label.clone();
         let mut commands = world.commands();
-        let mut entity_commands = commands.entity(context.entity);
-        entity_commands.with_child((text, LinkText, Pickable::IGNORE));
-        entity_commands.observe(handle_hover);
-        world
-            .commands()
-            .run_system_cached_with(theme_link, Some(context.entity));
+        commands.queue(move |world: &mut World| {
+            let existing = world.get::<Children>(entity).and_then(|children| {
+                children
+                    .iter()
+                    .find(|child| world.get::<LinkText>(*child).is_some())
+            });
+            if let Some(text_id) = existing {
+                if let Some(mut text) = world.get_mut::<Text>(text_id)
+                    && text.0 != label
+                {
+                    text.0 = label;
+                }
+            } else if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
+                entity_mut.observe(handle_hover);
+                world.spawn((
+                    Text::new(label),
+                    LinkText,
+                    Pickable::IGNORE,
+                    ChildOf(entity),
+                ));
+            }
+        });
+        commands.run_system_cached_with(theme_link, Some(entity));
     }
 }
 
