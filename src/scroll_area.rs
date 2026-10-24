@@ -552,10 +552,12 @@ fn update_scroll_position(
 }
 
 /// Hides a scroll bar while the contents fit along its axis, and shows it again when
-/// they overflow. The thumb's size and place are the [`Scrollbar`]'s.
+/// they overflow. The thumb's size and place are the [`Scrollbar`]'s. A bar is looked at when
+/// its contents were laid out again or when its [`Scrollbar`] changed (a new orientation
+/// means another axis).
 fn show_scroll_bars(
-    scroll_contents: Query<(&ComputedNode, &ScrollAreaRefs), Changed<ComputedNode>>,
-    mut scroll_bars: Query<(&Scrollbar, &mut Visibility), With<ScrollBar>>,
+    scroll_contents: Query<(Ref<ComputedNode>, &ScrollAreaRefs)>,
+    mut scroll_bars: Query<(Ref<Scrollbar>, &mut Visibility), With<ScrollBar>>,
 ) {
     for (contents, refs) in scroll_contents {
         let axis = |orientation| match orientation {
@@ -569,6 +571,9 @@ fn show_scroll_bars(
             let Ok((scrollbar, mut visibility)) = scroll_bars.get_mut(bar) else {
                 continue;
             };
+            if !contents.is_changed() && !scrollbar.is_changed() {
+                continue;
+            }
             let (visible_length, contents_length) = axis(scrollbar.orientation);
             if visible_length < f32::EPSILON {
                 continue;

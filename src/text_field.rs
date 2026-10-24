@@ -66,8 +66,9 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 /// the keys go.
 ///
 /// A click anywhere on the box, its border included, gives the field the focus (it is a tab
-/// stop as well). `Enter` gives the focus up
+/// stop as well). `Enter` (also the numpad's) gives the focus up
 /// and so does `Escape`, which also puts back the text the field had when it took the focus;
+/// both keys stop there and do not bubble on to the field's ancestors;
 /// a press anywhere else gives it up too, as does Tab.
 ///
 /// [`TextFieldChange`] is triggered on the field whenever its text changes, and
@@ -96,7 +97,10 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 /// as its value and `name`, if any, as its label.
 ///
 /// `TextField` is an immutable component: it is configuration, replaced by inserting a new
-/// one, never edited in place, so a system cannot take it as `&mut`:
+/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut TextField>` becomes
+/// `commands.entity(e).insert(..)` of a prepared `TextField`. Inserting a new `TextField` sets its text without a `TextFieldChange`.
+///
+/// A `&mut` query does not compile:
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
@@ -396,6 +400,7 @@ fn on_key_input(
                 editable.queue_edit(TextEdit::TextEnd(false));
             }
             focus.clear();
+            trigger.propagate(false);
         }
         _ => {}
     }

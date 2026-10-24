@@ -32,6 +32,7 @@ impl Plugin for ItemsPlugin {
             .add_systems(Update, items_change)
             .add_observer(on_add_selection)
             .add_observer(repair_pending_selections)
+            .add_observer(on_replace_items_ref)
             .add_observer(forget_removed_selection)
             .register_type::<Item<String>>()
             .register_type::<ItemOf>()
@@ -222,7 +223,7 @@ fn on_add_selection(
                     .entity(selection_ref)
                     .insert(Selection::Value(SelectionValue::One(first_item)));
             } else {
-                r.pending.push(PendingSelection {
+                r.add_pending(PendingSelection {
                     selection: selection_ref,
                     items: items_entity,
                 });
@@ -246,7 +247,7 @@ fn on_add_selection(
                         first_item
                     ])));
             } else {
-                r.pending.push(PendingSelection {
+                r.add_pending(PendingSelection {
                     selection: selection_ref,
                     items: items_entity,
                 });
@@ -279,6 +280,65 @@ struct PendingSelection {
 #[derive(Resource, Default)]
 struct SelectionResource {
     pending: Vec<PendingSelection>,
+}
+
+impl SelectionResource {
+    /// Remembers `pending`, once per selection: a selection waits for one set of items only.
+    fn add_pending(&mut self, pending: PendingSelection) {
+        self.pending.retain(|p| p.selection != pending.selection);
+        self.pending.push(pending);
+    }
+}
+
+/// Starts a refresh of the selection on an entity whose [`ItemsRef`] was replaced.
+///
+/// `Discard` (before the old value goes) runs before the new value is in, so the refresh is queued to run after it; a removed
+/// [`ItemsRef`] has nothing to refresh to.
+fn on_replace_items_ref(t: On<Discard<ItemsRef>>, mut commands: Commands) {
+    commands.run_system_cached_with(refresh_selection_items, t.event_target());
+}
+
+/// Points the selection on `entity` at the items of its (new) [`ItemsRef`].
+///
+/// Selected items that are not items of the new source are dropped, as a selection of one item
+/// goes back to its first item (or to pending, when the source has none yet, see
+/// [`SelectionValue::is_pending`]). The selection is inserted again whatever the result, so the
+/// widgets that follow it draw the new items.
+fn refresh_selection_items(
+    In(entity): In<Entity>,
+    selections: Query<(&Selection, &ItemsRef)>,
+    item_values: Query<&ItemValues>,
+    mut r: ResMut<SelectionResource>,
+    mut commands: Commands,
+) {
+    let Ok((Selection::Value(value), ItemsRef(items_entity))) = selections.get(entity) else {
+        return;
+    };
+    let items: &[Entity] = item_values.get(*items_entity).map_or(&[], |v| &v.0);
+    let first = items.first().copied();
+    let kept = |selected: &Entity| items.contains(selected);
+    let new_value = match value {
+        SelectionValue::One(x) if items.contains(x) => SelectionValue::One(*x),
+        SelectionValue::One(_) => SelectionValue::One(first.unwrap_or(Entity::PLACEHOLDER)),
+        SelectionValue::ZeroOrOne(x) => SelectionValue::ZeroOrOne(x.filter(kept)),
+        SelectionValue::OneOrMore(selected) => {
+            let mut kept_items: SelectionVec = selected.iter().copied().filter(kept).collect();
+            if kept_items.is_empty() {
+                kept_items.extend(first);
+            }
+            SelectionValue::OneOrMore(kept_items)
+        }
+        SelectionValue::ZeroOrMore(selected) => {
+            SelectionValue::ZeroOrMore(selected.iter().copied().filter(kept).collect())
+        }
+    };
+    if new_value.is_pending() {
+        r.add_pending(PendingSelection {
+            selection: entity,
+            items: *items_entity,
+        });
+    }
+    commands.entity(entity).insert(new_value.into_component());
 }
 
 /// Gives the pending selections of the changed items their first item.
@@ -809,6 +869,11 @@ where
 }
 
 /// Marks an entity as an item of the [`ItemValues`] on the given entity.
+///
+/// Bevy's relationship input: insert it (again) to add the item to other items, which updates the
+/// [`ItemValues`] of both the old and the new entity through Bevy's relationship hooks. The
+/// `ItemValues` collection is derived and has no public mutable access. The entity is not
+/// checked: an `ItemOf` that points to a missing entity is Bevy's to report.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemValues)]
 pub struct ItemOf(pub Entity);
@@ -911,6 +976,22 @@ fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut comman
 }
 
 /// Lets a selection choose from the [`ItemValues`] on another entity.
+///
+/// Application-authored input, and immutable (as every Bevy relationship): replace it by
+/// inserting a new `ItemsRef` to change the item source. The selection on the entity is then
+/// refreshed from the new source: selected items that do not belong to it are dropped, a `One`
+/// or `OneOrMore` selection takes the new source's first item (waiting for it when the source
+/// has none yet) and the widgets that follow the selection draw the new items. It cannot be
+/// queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::select::ItemsRef;
+/// fn edit(mut refs: Query<&mut ItemsRef>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemSelections)]
 pub struct ItemsRef(pub Entity);

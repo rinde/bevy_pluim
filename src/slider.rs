@@ -120,7 +120,10 @@ const LABEL_GAP_PX: f32 = 12.0;
 /// valid: the slider then always holds that value.
 ///
 /// `Slider` is an immutable component: it is configuration, replaced by inserting a new
-/// one, never edited in place, so a system cannot take it as `&mut`:
+/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut Slider>` becomes
+/// `commands.entity(e).insert(..)` of a prepared `Slider`. Inserting a new `Slider` rebuilds the parts and resets the value to the new one without a `ValueChange`.
+///
+/// A `&mut` query does not compile:
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
