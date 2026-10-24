@@ -1,0 +1,35 @@
+// To a screen reader the button is a combo box with the selection as its value, and the
+// search box a combo box that controls the list, with the query as its value; excluded options
+// leave the accessibility tree, and the closed popup is out of it.
+(
+    format_version: 3,
+    name: "a filter combo is a pair of combo boxes whose state follows the popup",
+    setup: App(FilterCombos),
+    steps: [
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("ComboButton")), role: Some("ComboBox"), label: Some("City"), value: Some(""), states: [Collapsed, Enabled]))),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("TextInput")), role: Some("ComboBox"), label: Some("City"), value: None, states: [Hidden]))),
+        Check(App(Accessible(of: Nth(0, Within(Name("filter combo"), Component("ItemView"))), role: Some("ListItem"), label: None, value: None, states: [Hidden]))),
+        MoveTo(Within(Name("filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("ComboButton")), role: Some("ComboBox"), label: Some("City"), value: Some(""), states: [Expanded]))),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("TextInput")), role: Some("ComboBox"), label: Some("City"), value: Some(""), states: [Expanded, Shown]))),
+        Check(App(Accessible(of: Nth(0, Within(Name("filter combo"), Component("ItemView"))), role: Some("ListItem"), label: Some("Amsterdam"), value: None, states: [Shown]))),
+        Type(text: "del"),
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("TextInput")), role: Some("ComboBox"), label: Some("City"), value: Some("del"), states: [Expanded]))),
+        Check(App(Accessible(of: Nth(0, Within(Name("filter combo"), Component("ItemView"))), role: Some("ListItem"), label: None, value: None, states: [Hidden]))),
+        Check(App(Accessible(of: Nth(1, Within(Name("filter combo"), Component("ItemView"))), role: Some("ListItem"), label: Some("Delft"), value: None, states: [Shown, NotSelected]))),
+        Check(App(Active(of: Within(Name("filter combo"), Component("TextInput")), is: Nth(1, Within(Name("filter combo"), Component("ItemView")))))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("ComboButton")), role: Some("ComboBox"), label: Some("City"), value: Some("Delft"), states: [Collapsed]))),
+        Check(App(Accessible(of: Within(Name("filter combo"), Component("TextInput")), role: Some("ComboBox"), label: None, value: None, states: [Hidden, Collapsed]))),
+        MoveTo(Within(Name("filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Check(App(Accessible(of: Nth(1, Within(Name("filter combo"), Component("ItemView"))), role: Some("ListItem"), label: Some("Delft"), value: None, states: [Selected]))),
+    ],
+    expect: [],
+)
