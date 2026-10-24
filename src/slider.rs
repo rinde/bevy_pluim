@@ -405,7 +405,8 @@ impl Slider {
 }
 
 /// The parts of a [`Slider`].
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct SliderRefs {
     /// The track, the full width of the slider.
     pub track: Entity,

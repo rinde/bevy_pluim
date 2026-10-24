@@ -58,8 +58,9 @@ impl Plugin for NumericStepperPlugin {
 pub type ValueFormat = fn(&Value) -> String;
 
 /// The default width of the value label, in logical pixels, so that the buttons
-/// do not move as the text changes.
-pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
+/// do not move as the text changes. It is the one constant [`Slider`](crate::slider::Slider)
+/// shares for its own label.
+pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 
 /// A [`Value`] with a decrease and an increase button.
 ///
@@ -358,7 +359,8 @@ fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
 }
 
 /// Points a [`NumericStepper`] to the entity holding its [`Value`].
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub struct ValueRef(pub Entity);
 
 /// Why a [`Value`], [`UIntValue`] or [`FloatValue`] could not be built.
