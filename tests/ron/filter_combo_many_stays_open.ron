@@ -1,0 +1,31 @@
+// A selection of many stays open after Enter and keeps the query, so more matches can be
+// picked; Escape then closes it and the picks stay.
+(
+    format_version: 3,
+    name: "a filter combo over many items stays open with its query after Enter",
+    setup: App(FilterCombos),
+    steps: [
+        MoveTo(Within(Name("multi filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Type(text: "de"),
+        Wait(2),
+        Check(App(Selected(of: Name("multi filter combo"), items: []))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(App(Selected(of: Name("multi filter combo"), items: ["Delft"]))),
+        Check(Component(target: Name("multi filter combo"), path: "ComboState", is: Eq(Open))),
+        Check(TextOf(Within(Name("multi filter combo"), Component("TextInput")), Exact("de"))),
+        Tap(key: ArrowDown),
+        Tap(key: Enter),
+        Wait(2),
+        Check(App(Selected(of: Name("multi filter combo"), items: ["Delft", "Den Haag"]))),
+        Check(Component(target: Name("multi filter combo"), path: "ComboState", is: Eq(Open))),
+        Tap(key: Escape),
+        Wait(2),
+        Check(Component(target: Name("multi filter combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("multi filter combo"), items: ["Delft", "Den Haag"]))),
+        Check(App(Selected(of: Name("filter combo"), items: []))),
+    ],
+    expect: [],
+)

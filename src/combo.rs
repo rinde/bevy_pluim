@@ -171,13 +171,13 @@ impl ComboState {
     }
 }
 
-const PLACEHOLDER_TEXT: &str = "Select..";
+pub(crate) const PLACEHOLDER_TEXT: &str = "Select..";
 
 /// The side of the chevron image, in logical pixels.
-const CHEVRON_SIZE: f32 = 16.0;
+pub(crate) const CHEVRON_SIZE: f32 = 16.0;
 
 /// A white-on-transparent 16 px triangle pointing down, tinted by its [`Icon`].
-fn chevron() -> Image {
+pub(crate) fn chevron() -> Image {
     const SIZE: u32 = 16;
     let mut data = vec![0u8; (SIZE * SIZE * 4) as usize];
     for y in 5..11u32 {
@@ -454,7 +454,7 @@ fn update_selection(
 }
 
 /// The text of the items in `selection`, joined with ", ".
-fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> String {
+pub(crate) fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> String {
     selection
         .iter()
         .map(|item| items.get(item).map_or("", |item| item.data.as_str()))

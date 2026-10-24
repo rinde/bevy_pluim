@@ -351,11 +351,17 @@ fn on_focus_lost(
     }
 }
 
+/// Marks the input of a [`TextField`] whose `Enter` and `Escape` belong to the widget around it
+/// (a [`FilterCombo`](crate::filter_combo::FilterCombo)'s search box), so the field leaves them
+/// alone instead of giving the focus up.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub(crate) struct OwnKeys;
+
 /// `Enter` gives the focus up; `Escape` puts the text back as it was when the field took
 /// the focus and gives the focus up too.
 fn on_key_input(
     mut trigger: On<FocusedInput<KeyboardInput>>,
-    mut inputs: Query<(&mut TextFieldInput, &mut EditableText)>,
+    mut inputs: Query<(&mut TextFieldInput, &mut EditableText), Without<OwnKeys>>,
     mut focus: ResMut<InputFocus>,
 ) {
     let key = &trigger.event().input;

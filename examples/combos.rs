@@ -1,4 +1,5 @@
-//! `Combo` variants.
+//! `Combo` variants: shared and own selections, options with a note, and the `FilterCombo`s that
+//! filter their options as a person types.
 
 use bevy::DefaultPlugins;
 use bevy::app::{App, Startup};
@@ -8,6 +9,7 @@ use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::filter_combo::FilterCombo;
 use rin_bevy_ui::list::ItemNote;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::select::{Item, Selection};
@@ -67,6 +69,19 @@ fn setup(mut commands: Commands) {
             ~{Combo} ~{Selection::reference(selection_ref)}
             --
             ~{Combo} ~{Selection::reference(noted_ref)}
+            --
+            // Type to filter the options, Arrow Down / Up to move through the matches and Enter
+            // to pick one; it shares its selection and items with the combos above.
+            ~{FilterCombo::default().with_name("Country")} ~{Selection::reference(selection_ref)}
+            --
+            // A selection of many stays open after Enter, with the query, for the next pick.
+            ~{FilterCombo::default().with_name("Stations")}
+            @{Selection::builder().zero_or_more().scene_with_items([
+                Item::new("Amsterdam"),
+                Item::new("Delft"),
+                Item::new("Den Haag"),
+                Item::new("Utrecht"),
+            ])}
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())

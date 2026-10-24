@@ -1115,6 +1115,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::VirtualList,
         WidgetsSetup::SeparatedVirtualList,
         WidgetsSetup::ComboRows,
+        WidgetsSetup::FilterCombos,
     ];
     for screen in screens {
         let scenario = Scenario::new(format!("{screen:?}"))

@@ -1,0 +1,19 @@
+// The popup is a card in the theme's colours in both modes; the active option has the focus
+// ring colour.
+(
+    format_version: 3,
+    name: "a filter combo popup is themed in light and dark",
+    setup: App(FilterCombos),
+    steps: [
+        Wait(2),
+        Capture(name: "light", value: Component(target: Within(Name("ordinary combo"), Component("ComboList")), path: "BackgroundColor.0")),
+        Check(Component(target: Within(Name("filter combo"), Name("FilterComboPopup")), path: "BackgroundColor.0", is: Eq(Captured("light")))),
+        MoveTo(Text("Change theme")),
+        Click(Left),
+        Wait(2),
+        Capture(name: "dark", value: Component(target: Within(Name("ordinary combo"), Component("ComboList")), path: "BackgroundColor.0")),
+        Check(Component(target: Within(Name("filter combo"), Name("FilterComboPopup")), path: "BackgroundColor.0", is: Eq(Captured("dark")))),
+        Check(Component(target: Within(Name("filter combo"), Name("FilterComboPopup")), path: "BackgroundColor.0", is: Ne(Captured("light")))),
+    ],
+    expect: [],
+)
