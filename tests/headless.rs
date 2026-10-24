@@ -92,6 +92,9 @@ use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
 
+#[path = "../examples/theme_editor/ui.rs"]
+mod theme_editor_ui;
+
 #[path = "../examples/overview.rs"]
 #[expect(
     dead_code,
@@ -6666,6 +6669,115 @@ fn the_hud_example_builds_and_runs() {
     assert_eq!(world.query::<&Slider>().iter(world).count(), 1);
     // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
+}
+
+fn theme_editor_app() -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins((WidgetsPlugin, theme_editor_ui::ThemeEditorPlugin));
+    app.finish();
+    app.cleanup();
+    for _ in 0..6 {
+        app.update();
+    }
+    app
+}
+
+#[test]
+fn the_theme_editor_example_has_a_row_for_each_editable_slot() {
+    let mut app = theme_editor_app();
+    assert_eq!(ui_root_count(&mut app), 1);
+    let slots = theme_editor_ui::editable_slots();
+    assert!(slots.len() > 20);
+    let world = app.world_mut();
+    assert_eq!(
+        world
+            .query::<&theme_editor_ui::ThemeSlot>()
+            .iter(world)
+            .count(),
+        slots.len()
+    );
+    assert_eq!(
+        world
+            .query::<&theme_editor_ui::SlotSwatch>()
+            .iter(world)
+            .count(),
+        slots.len()
+    );
+}
+
+#[test]
+fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
+    let mut app = theme_editor_app();
+    let (combo, items) = {
+        let world = app.world_mut();
+        let combo = world
+            .query::<(Entity, &theme_editor_ui::ThemeSlot)>()
+            .iter(world)
+            .find(|(_, slot)| slot.0 == "accent")
+            .map(|(e, _)| e)
+            .unwrap();
+        let red = world
+            .query::<&Item<Color>>()
+            .iter(world)
+            .map(|i| i.data)
+            .nth(60)
+            .unwrap();
+        (combo, red)
+    };
+    let picked = {
+        let world = app.world_mut();
+        world
+            .query::<(Entity, &Item<Color>)>()
+            .iter(world)
+            .find(|(_, i)| i.data == items)
+            .map(|(e, _)| e)
+            .unwrap()
+    };
+    let dark_before = app
+        .world()
+        .get_resource::<Theme>()
+        .unwrap()
+        .colors_of(ThemeMode::Dark);
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(picked))));
+    for _ in 0..3 {
+        app.update();
+    }
+    let theme = app.world().get_resource::<Theme>().unwrap();
+    let mode = theme.mode();
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        Some(items)
+    );
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors_of(mode), "accent"),
+        Some(items)
+    );
+    if mode == ThemeMode::Light {
+        assert_eq!(theme.colors_of(ThemeMode::Dark), dark_before);
+    }
+}
+
+#[test]
+fn the_theme_editor_exports_every_colour_slot_as_rust_text() {
+    use bevy::reflect::structs::Struct as _;
+    let source = theme_editor_ui::colors_source("LIGHT", &DEFAULT_LIGHT_THEME_COLORS);
+    assert!(source.starts_with("const LIGHT: ThemeColors = ThemeColors {\n"));
+    assert!(source.ends_with("};\n"));
+    let lines = source.lines().count();
+    assert_eq!(lines, DEFAULT_LIGHT_THEME_COLORS.field_len() + 2);
+    assert!(source.contains("    accent: Color::srgba("));
 }
 
 #[test]
