@@ -10706,3 +10706,146 @@ fn two_roots_each_get_their_own_toast_stack() {
     assert_eq!(parent_of(&app, a), Some(first));
     assert_eq!(parent_of(&app, b), Some(second));
 }
+
+/// A headless app with a root node, for the toast tests below.
+fn toast_app() -> (App, Entity) {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    (app, root)
+}
+
+fn toast_stacks(app: &mut App) -> Vec<Entity> {
+    use rin_bevy_ui::toast::ToastStack;
+
+    let world = app.world_mut();
+    world
+        .query_filtered::<Entity, With<ToastStack>>()
+        .iter(world)
+        .collect()
+}
+
+#[test]
+fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
+    use rin_bevy_ui::toast::{Toast, ToastPlacement};
+
+    let (mut app, root) = toast_app();
+    assert_eq!(
+        app.world().get_resource::<ToastPlacement>().unwrap().bottom,
+        Val::Px(24.0),
+        "24 px by default"
+    );
+    app.world_mut().spawn((Toast::new("Saved"), ChildOf(root)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let stack = toast_stacks(&mut app)[0];
+    let bottom = |app: &App| app.world().get::<Node>(stack).unwrap().bottom;
+    assert_eq!(bottom(&app), Val::Px(24.0));
+
+    app.world_mut()
+        .get_resource_mut::<ToastPlacement>()
+        .unwrap()
+        .bottom = Val::Px(90.0);
+    app.update();
+    assert_eq!(bottom(&app), Val::Px(90.0), "the existing stack moved");
+
+    // A stack made later starts at the new distance.
+    let other = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((Toast::new("Other"), ChildOf(other)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let later = toast_stacks(&mut app)
+        .into_iter()
+        .find(|s| *s != stack)
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Node>(later).unwrap().bottom,
+        Val::Px(90.0)
+    );
+}
+
+#[test]
+fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let first = app
+        .world_mut()
+        .spawn((Toast::new("One").with_duration(0.0), ChildOf(root)))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(first).is_err(),
+        "the first toast went"
+    );
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 1, "the empty stack stays");
+    assert!(
+        app.world()
+            .get::<Children>(stacks[0])
+            .is_none_or(RelationshipTarget::is_empty)
+    );
+
+    let second = app
+        .world_mut()
+        .spawn((Toast::new("Two"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toast_stacks(&mut app), stacks, "no second stack was made");
+    assert_eq!(
+        app.world().get::<ChildOf>(second).unwrap().parent(),
+        stacks[0]
+    );
+}
+
+#[test]
+fn two_toasts_with_one_text_raised_in_the_same_frame_keep_one_entity() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let a = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    let b = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let alive = [a, b]
+        .into_iter()
+        .filter(|e| app.world().get_entity(*e).is_ok())
+        .count();
+    assert_eq!(alive, 1, "the later duplicate is despawned");
+    let world = app.world_mut();
+    assert_eq!(world.query::<&Toast>().iter(world).count(), 1);
+}
+
+#[test]
+fn the_toast_stack_is_absolute_above_everything_and_ignores_the_pointer() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let toast = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let stack = toast_stacks(&mut app)[0];
+    assert_eq!(app.world().get::<GlobalZIndex>(stack).unwrap().0, 1100);
+    assert_eq!(
+        app.world().get::<Node>(stack).unwrap().position_type,
+        PositionType::Absolute
+    );
+    assert_eq!(app.world().get::<Pickable>(stack), Some(&Pickable::IGNORE));
+    assert_eq!(app.world().get::<Pickable>(toast), Some(&Pickable::IGNORE));
+}
