@@ -245,8 +245,7 @@ fn run_state(icons: &Icons) -> impl Scene {
             --
             ~{Kbd::new("P")}
             --
-            ~{Slider::new(0.0, SPEED_MIN_OCTAVE, SPEED_MAX_OCTAVE)
-                .with_step(1.0)
+            ~{valid_slider(0.0, SPEED_MIN_OCTAVE, SPEED_MAX_OCTAVE, Some(1.0))
                 .with_format(speed_label)
                 .with_name("Speed")}
             Node { width: px(120.0) }
@@ -956,4 +955,14 @@ fn hotkeys(
             pick(index);
         }
     }
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

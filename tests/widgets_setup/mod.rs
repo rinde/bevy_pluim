@@ -123,7 +123,8 @@ pub enum WidgetsSetup {
     /// steps of 5, at 25, its value shown as "25 %", "Speed") and `disabled
     /// slider` (0 to 10 at 3, shown as "3", `InteractionDisabled`), then
     /// "Change theme". [`SliderChanges`] keeps the `ValueChange`s of `stepped
-    /// slider`.
+    /// slider`. `zero range slider` (320 px wide, 3 to 3 in steps of 1, at 3,
+    /// spawned last) has [`ZeroRangeChanges`] count its `ValueChange`s.
     Slider,
     /// Segmented controls, each with a `Name`: `own segmented control`
     /// (Auto, Manual, with a selection of its own) and `first shared
@@ -267,6 +268,17 @@ pub struct SliderChanges {
     pub last: f32,
     /// How many changes were final.
     pub finals: u32,
+}
+
+/// The `ValueChange<f32>`s of the `zero range slider` of the `Slider` screen:
+/// how many it sent and how many reported a value other than its bound of 3.
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct ZeroRangeChanges {
+    /// How many changes were sent.
+    pub count: u32,
+    /// How many of them reported a value other than 3.
+    pub off_bound: u32,
 }
 
 /// A [`Value`] of a constant range the screens know to be valid.
@@ -1294,6 +1306,39 @@ fn color_palette(world: &mut World) {
                 false,
             ),
         ));
+        // Combos over a selection of many, out of the flow and last for the same reasons:
+        // `zero or more palette combo` starts with nothing selected, `one or more palette
+        // combo` with slate-50, the first colour.
+        for (name, left, selection) in [
+            (
+                "zero or more palette combo",
+                1000,
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items_ref(selection_ref),
+            ),
+            (
+                "one or more palette combo",
+                1100,
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items_ref(selection_ref),
+            ),
+        ] {
+            root.spawn((
+                ColorPaletteCombo,
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    position_type: PositionType::Absolute,
+                    top: px(250),
+                    left: px(left),
+                    ..default()
+                },
+                ListLayout::VerticalGrid { columns: 11 },
+                selection,
+                Name::new(name),
+            ));
+        }
     });
 }
 
@@ -1351,10 +1396,11 @@ fn numeric_stepper(world: &mut World) {
 
 fn slider(world: &mut World) {
     world.init_resource::<SliderChanges>();
+    world.init_resource::<ZeroRangeChanges>();
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((
-            Slider::new(0.0, 0.0, 1.0).with_name("Continuous"),
+            valid_slider(0.0, 0.0, 1.0, None).with_name("Continuous"),
             Node {
                 width: px(320),
                 ..default()
@@ -1362,9 +1408,7 @@ fn slider(world: &mut World) {
             Name::new("continuous slider"),
         ));
         root.spawn((
-            Slider::new(0.0, 0.0, 10.0)
-                .with_step(1.0)
-                .with_name("Stepped"),
+            valid_slider(0.0, 0.0, 10.0, Some(1.0)).with_name("Stepped"),
             Name::new("stepped slider"),
         ))
         .observe(
@@ -1374,20 +1418,31 @@ fn slider(world: &mut World) {
             },
         );
         root.spawn((
-            Slider::new(25.0, 0.0, 100.0)
-                .with_step(5.0)
+            valid_slider(25.0, 0.0, 100.0, Some(5.0))
                 .with_format(|value| format!("{value:.0} %"))
                 .with_name("Speed"),
             Name::new("formatted slider"),
         ));
         root.spawn((
-            Slider::new(3.0, 0.0, 10.0)
-                .with_step(1.0)
-                .with_format(|value| format!("{value:.0}")),
+            valid_slider(3.0, 0.0, 10.0, Some(1.0)).with_format(|value| format!("{value:.0}")),
             InteractionDisabled,
             Name::new("disabled slider"),
         ));
         spawn_theme_button(root);
+        root.spawn((
+            valid_slider(3.0, 3.0, 3.0, Some(1.0)),
+            Node {
+                width: px(320),
+                ..default()
+            },
+            Name::new("zero range slider"),
+        ))
+        .observe(
+            |change: On<ValueChange<f32>>, mut changes: ResMut<ZeroRangeChanges>| {
+                changes.count += 1;
+                changes.off_bound += u32::from((change.value - 3.0).abs() > f32::EPSILON);
+            },
+        );
     });
 }
 
@@ -1914,4 +1969,14 @@ fn combo_rows(world: &mut World) {
         ));
         spawn_theme_button(root);
     });
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }
