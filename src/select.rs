@@ -879,6 +879,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::relationship::RelationshipTarget;
     use bevy::ecs::system::RunSystemOnce;
 
     fn entity(index: u32) -> Entity {
@@ -1532,6 +1533,12 @@ mod tests {
         assert_eq!(
             app.world().get::<ItemsRef>(sharing).map(|r| r.0),
             Some(owner)
+        );
+        assert_eq!(
+            app.world()
+                .get::<ItemSelections>(owner)
+                .map(RelationshipTarget::len),
+            Some(1)
         );
         assert_eq!(
             selection_value(&app, sharing),

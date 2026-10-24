@@ -46,6 +46,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
+use rin_bevy_ui::float::Float;
 use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
@@ -1810,6 +1811,30 @@ fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
 }
 
 #[test]
+fn a_combo_state_on_an_entity_that_is_not_a_combo_does_nothing() {
+    let mut app = headless_app();
+    let plain = app.world_mut().spawn(Node::default()).id();
+    let other = app.world_mut().spawn(Node::default()).id();
+    let before = app.world().entity(other).get::<Visibility>().copied();
+    app.world_mut().entity_mut(plain).insert(ComboState::Open);
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(plain).get::<ComboState>(),
+        Some(&ComboState::Open)
+    );
+    assert_eq!(
+        app.world().entity(other).get::<Visibility>().copied(),
+        before
+    );
+    assert!(
+        app.world()
+            .get_resource::<InputFocus>()
+            .is_none_or(|focus| focus.get().is_none())
+    );
+}
+
+#[test]
 fn a_combo_button_says_whether_its_popup_is_open() {
     let mut app = headless_app();
     let (combo, button) = spawn_combo(&mut app);
@@ -2647,6 +2672,90 @@ fn a_list_grid_with_zero_columns_does_not_panic_and_acts_as_one_column() {
         let node = app.world().entity(widget).get::<Node>().unwrap();
         assert_eq!(node.grid_template_columns.len(), 1, "one column track");
     }
+}
+
+#[test]
+fn a_list_keeps_the_node_fields_the_app_gave_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            Node {
+                width: Val::Px(120.0),
+                margin: UiRect::all(Val::Px(7.0)),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    // Inserting the zero-sized `List` again must not reset the node either.
+    app.world_mut().entity_mut(list).insert(List);
+    app.update();
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.width, Val::Px(120.0));
+    assert_eq!(node.margin, UiRect::all(Val::Px(7.0)));
+    assert_eq!(node.display, Display::Grid);
+    assert_eq!(node.position_type, PositionType::Relative);
+}
+
+#[test]
+fn changing_the_layout_of_a_live_list_updates_its_grid() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            Node {
+                width: Val::Px(120.0),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let reference = app
+        .world_mut()
+        .spawn((
+            List,
+            ListLayout::VerticalGrid { columns: 3 },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::VerticalGrid { columns: 3 });
+    app.update();
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    let expected = app.world().entity(reference).get::<Node>().unwrap();
+    assert_eq!(node.grid_auto_flow, expected.grid_auto_flow);
+    assert_eq!(node.grid_template_columns, expected.grid_template_columns);
+    assert_eq!(node.grid_template_columns.len(), 1);
+    assert_eq!(node.width, Val::Px(120.0), "the app's width survives");
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::Horizontal);
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
+    assert!(node.grid_template_columns.is_empty());
 }
 
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
@@ -7407,4 +7516,83 @@ fn a_palette_pointed_at_other_items_ignores_changes_to_the_old_ones() {
     app.update();
     app.update();
     assert_eq!(item_views(&app, palette).len(), 5);
+/// How many buttons, popups and palettes are descendants of the combo.
+fn palette_combo_parts(app: &mut App, combo: Entity) -> (usize, usize, usize) {
+    let world = app.world_mut();
+    let entities: Vec<Entity> = world.query::<Entity>().iter(world).collect();
+    let below = |has: fn(EntityRef) -> bool| {
+        entities
+            .iter()
+            .filter(|&&e| has(world.entity(e)) && is_below(world, e, combo))
+            .count()
+    };
+    (
+        below(|e| e.contains::<ColorPushButton>()),
+        below(|e| e.contains::<Float>()),
+        below(|e| e.contains::<ColorPalette>()),
+    )
+}
+
+/// Whether `entity` is a descendant of `ancestor`.
+fn is_below(world: &World, entity: Entity, ancestor: Entity) -> bool {
+    let mut current = entity;
+    while let Some(child_of) = world.entity(current).get::<ChildOf>() {
+        current = child_of.parent();
+        if current == ancestor {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn inserting_a_color_palette_combo_again_keeps_one_button_one_popup_and_one_palette() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    app.update();
+
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+}
+
+#[test]
+fn removing_a_color_palette_combo_removes_its_button_popup_and_palette() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+
+    app.world_mut()
+        .entity_mut(combo)
+        .remove::<ColorPaletteCombo>();
+    app.update();
+    app.update();
+
+    assert_eq!(palette_combo_parts(&mut app, combo), (0, 0, 0));
+    let has_children = app
+        .world()
+        .entity(combo)
+        .get::<Children>()
+        .is_some_and(|c| !c.is_empty());
+    assert!(!has_children, "no children left");
+
+    // And it can be inserted again.
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
 }

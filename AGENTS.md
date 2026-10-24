@@ -35,9 +35,8 @@ file or open-source framing.
 
 ## Issues and coordination
 
-Work is tracked in GitHub issues. Coordino handles issue coordination; this
-file covers repository guidance only. Issues ready for Coordino use the
-`ready for coordino` label. When working on an issue, follow its title and
+Work is tracked in GitHub issues. Issues ready for implementation use the
+`ready for agent` label. When working on an issue, follow its title and
 description; ask for clarification if its scope is genuinely ambiguous.
 Changes should be made through pull requests.
 
@@ -58,7 +57,7 @@ for merging a PR.
 | `combo.rs` | `Combo`: a button (a label-only `PushButton` with a `Chevron` `Icon` child, a 16 px triangle image the library draws and tints with `text_primary`) that opens a `List` in a `Float`, `ComboState` (open/closed), closes on an outside click. While open, `place_open_lists` (`PostUpdate`, before layout) puts the list right under the button, left edges aligned, so it follows the button when a scroll area around it scrolls; the list is kept 10 px inside the window's left and right edges and goes above the button when it would run off the bottom, like a palette combo's popup (`combo_keeps_list_inside_window.ron`) To a screen reader the `ComboButton` is a `Role::ComboBox` without a label, its value the text of the selected items joined with ", " (empty for none; not the placeholder or the chevron), `expanded` while open and `controls` its `ComboList` (`combo_accessible_combo_box.ron`) |
 | `float.rs` | `Float`: requires Bevy's `FixedNode`, so it is a child of its widget but placed by its `left` / `top` in the viewport (logical pixels) and takes no layout, clipping or transform from its ancestors: a `ScrollArea` around the widget does not clip it. `GlobalZIndex(1000)`, large shadow; the popup layer of `Combo`, `ColorPaletteCombo` and `Tooltip`, each of which places its own, `Combo` and `ColorPaletteCombo` through the crate-private `keep_in_window_x` and `below_or_above` of `float.rs` (10 px `WINDOW_MARGIN` from the window's side edges, above the button when it would run off the bottom; `fit_vertically` returns the `top` and a `max_height`: when the popup fits on neither side it goes on the side with more room and is capped to that room, never below `MIN_POPUP_HEIGHT` (100 px) except in a window shorter than that, and scrolls with the wheel (`overflow.y` is `Scroll`), staying inside the window's top and bottom margins; the cap is always the chosen side's room, so the next frame's measured height picks the same side; keys in a capped list do not scroll it, `scroll_into_view` skips a `FixedNode`; `combo_taller_than_window_stays_inside_window.ron` on the `long combo`) (`combo_in_scroll_area_popup_is_not_clipped.ron`, `color_palette_combo_in_scroll_area_popup_is_not_clipped.ron`) |
 | `scroll_area.rs` | `ScrollArea::bundle` (for code that spawns through `Commands`) and `ScrollArea::scene(contents, vertical, horizontal)`, the same area as a scene whose contents are a `SceneList` (`@ScrollArea::scene(bsn_list! { .. }, true, false)` in a `bsn!`; it inserts the bundle after the scene is applied), `ScrollContents`, `ScrollBar` / `Orientation` and the thumb, themed here; each bar is also a `bevy_ui_widgets` `Scrollbar` aimed at the contents and its thumb a `ScrollbarThumb` (no `Node`), so the widget sizes and places the thumb, scrolls the contents when it is dragged and pages them on a click on the track, while `show_scroll_bars` hides a bar whose axis fits; and the crate-private `update_scroll_position`, which scrolls any `ScrollPosition` under the pointer with the wheel (an area that scrolls sideways only takes a vertical turn, which is all a mouse wheel gives, for a horizontal one: `scroll_area_wheel_vertical_turn_scrolls_horizontal_area.ron`, the `image_gallery` example) Over a nested area only the innermost one scrolls (its `ScrollContents` blocks the pointer, so the outer area is not hovered and nothing is passed on at a limit): `scroll_area_wheel_nested_horizontal_in_vertical.ron`. An area clips to a rectangle (Bevy 0.20 has no rounded clip), so one at the bottom of a rounded `Card` shows contents sticking out of the card's corners: insert the opt-in `ClearOfCorners` with the area and it gets a bottom margin of `panel_radius`, kept in step with the `Theme`, and removing it sets the bottom margin back to `Val::ZERO` (an area cannot tell whether it touches the corners, so it is not automatic; `Panel` does the same for its own body, only without a footer; `scroll_area_in_card_stays_clear_of_rounded_corners.ron` on the `ScrollAreas` screen). Put a `List` or palette in one to scroll it. `ScrollContents` has 3 px of padding on every side (`FOCUS_RING_REACH`) so a focus ring at the edge is not clipped, and `scroll_into_view` counts it as part of the entity. The area is a `Role::ScrollView`; its bars and thumb have no accessibility node (`scroll_area_accessible_scroll_view.ron`) |
-| `list.rs` | `List` (and, through the shared `watch_items`, `ColorPalette`) follows the `ItemsChanged` of the items entity its `Selection` draws from with one observer, remembered in the crate-private `ItemsWatch` on the list: pointing the list at other items (a `Combo` does) despawns the old observer, so the old items no longer touch its views, and the record goes with the list (`a_list_pointed_at_other_items_ignores_changes_to_the_old_ones`); `List` with `ListLayout` (`VerticalGrid { columns: 0 }` is laid out as one column and logs an `error!` when the list is inserted; a `NonZeroU16` would be a public API change) and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`), and lets those of a focused descendant (a button in a row) past (`pass_first_presses_from_descendants`, see "Directional navigation is the app's") `ItemNote { text, tone }` (`NoteTone::{Secondary, Warning}`; `ItemNote::new` / `::warning`) on an `Item<String>` entity adds a note after the label of its default row, in the caption size and `text_secondary` / `warning_text`: a `Combo`'s popup shows it, its button shows the label only. The row's accessible name is the label followed by the note (`Delft < unreachable >`, kept by `sync_item_labels`); changing, inserting or removing a note, or giving it empty text, updates the row in place (`combo_option_notes.ron`). A custom view (`ItemViewCreator`) does not get it. |
+| `list.rs` | `List` (and, through the shared `watch_items`, `ColorPalette`) follows the `ItemsChanged` of the items entity its `Selection` draws from with one observer, remembered in the crate-private `ItemsWatch` on the list: pointing the list at other items (a `Combo` does) despawns the old observer, so the old items no longer touch its views, and the record goes with the list (`a_list_pointed_at_other_items_ignores_changes_to_the_old_ones`); `List` with `ListLayout` (`VerticalGrid { columns: 0 }` is laid out as one column and logs an `error!` when the list is inserted; a `NonZeroU16` would be a public API change) and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`), and lets those of a focused descendant (a button in a row) past (`pass_first_presses_from_descendants`, see "Directional navigation is the app's") `ItemNote { text, tone }` (`NoteTone::{Secondary, Warning}`; `ItemNote::new` / `::warning`) on an `Item<String>` entity adds a note after the label of its default row, in the caption size and `text_secondary` / `warning_text`: a `Combo`'s popup shows it, its button shows the label only. The row's accessible name is the label followed by the note (`Delft < unreachable >`, kept by `sync_item_labels`); changing, inserting or removing a note, or giving it empty text, updates the row in place (`combo_option_notes.ron`). A custom view (`ItemViewCreator`) does not get it. `List` with `ListLayout` (`VerticalGrid { columns: 0 }` is laid out as one column and logs an `error!` when the layout is inserted; `List` requires a grid `Node`, and its hook and an `on_insert` hook of `ListLayout` set only the fields the list owns on the existing `Node` (`display`, `position_type`, `grid_auto_flow`, `grid_template_columns`): a `width`, `margin` or `flex_grow` of the app survives, also when `List` is inserted again, and changing `ListLayout` on a live list updates the grid flow and columns; a `NonZeroU16` would be a public API change) and `CornerStyle` (`Separated` is the panel style: 6 px padding, 2 px gaps, rows rounded on all corners, the selected row with a 1 px `selection_ring` border), a plain grid that does not scroll: a `ListBox` that renders the items of its `Selection` as `ItemView`s (`ListItem`s) and keeps them in sync, `Selected` included; while focused it keeps its arrow, Home and End keys from bubbling on (`keep_navigation_keys`), and lets those of a focused descendant (a button in a row) past (`pass_first_presses_from_descendants`, see "Directional navigation is the app's") `ItemNote { text, tone }` (`NoteTone::{Secondary, Warning}`; `ItemNote::new` / `::warning`) on an `Item<String>` entity adds a note after the label of its default row, in the caption size and `text_secondary` / `warning_text`: a `Combo`'s popup shows it, its button shows the label only. The row's accessible name is the label followed by the note (`Delft < unreachable >`, kept by `sync_item_labels`); changing, inserting or removing a note, or giving it empty text, updates the row in place (`combo_option_notes.ron`). A custom view (`ItemViewCreator`) does not get it. |
 | `virtual_list.rs` | `VirtualList { row_height }`: a list of rows of one height for many thousands of items (rails' 10,000 trains) that renders only those in view. Its node is as tall as all rows, so the `ScrollArea` around it (the nearest ancestor whose `overflow.y` scrolls, else the window) scrolls the whole list; under it is a pool of absolutely placed `VirtualListRow { list, index, item }`s (immutable, `ListItem`s): the rows in view, one for a part row and `OVERSCAN_ROWS` (2) beyond each edge. When `ScrollPosition` moves, `show_rows` (`PostUpdate`, before layout) hands rows on to the items now in view (item `i` goes to row `i % pool`, so a scroll by one row re-points one row); a row is never spawned or despawned for a scroll, and the pool only grows, when the view does. A row shows the text of an `Item<String>` in an `ItemLabel`, or with `List`'s `ItemViewCreator` the app fills it: the creator runs again, on the row emptied of its children, when the row is handed to another item (or the app observes the `VirtualListRow` insert). Selection is as for a `List` (`Selected` on the rows of selected items, a click toggles as far as the selection allows) but it is not a `ListBox`, whose observers would only see the pooled rows: it is one tab stop with its own keyboard observer (arrows move the active row, wrapping, Page Up / Page Down by the rows that fit in the view, stopping at the ends, a first Page Down with no active row landing on the first item as Arrow Down does, Home / End, Enter / Space select; each scrolls the active row into view by setting the area's `ScrollPosition`), and `ActiveDescendant` names the row of the active item while it is in the pool; `show_rows` runs before `focus.rs`'s crate-private `DrawFocusRing` set, so the focus ring is on the row the frame it moves, and `activate_on_focus` runs before it as a system that reads `InputFocus` (set in `PreUpdate`), not as an observer of `FocusGained`, which Bevy sends after the layout, so a list focused by Tab or a click names and rings its active row the same frame (`virtual_list_keyboard_pages.ron`). A `Role::ListBox` whose `size_of_set` is the number of items, each shown row a list item with `position_in_set` (its item's index plus one) and the same `size_of_set`, kept by `sync_accessibility` in `AccessibilitySync`, so a pooled row reads as item 5,001 of 10,000. A `row_height` that is not positive and finite, or for `VirtualList::separated` not above the 22 px of a row's vertical padding and ring, shows nothing and logs an `error!` on insert (`a_separated_virtual_list_with_a_row_height_its_padding_and_ring_do_not_fit_shows_nothing`). `List` is untouched. `VirtualList::separated(row_height)` (the `separated` field) gives the rows the look of a `CornerStyle::Separated` `List`: 6 px in from the list's edges, 2 px gaps, rows rounded at the control radius with the separated item padding and a 1 px border that is the `selection_ring` on the selected row, which also gets `hovered_selected_item`. It uses `list.rs`'s own constants, `item_background` and `item_border`, so the two cannot drift, and the rows stay absolutely placed: row `i` is at `6 + i * (row_height + 2)`, the node is `2 * 6 + n * (row_height + 2) - 2` high, and the pool, `show_rows`, Page Up / Page Down (`rows_per_page`), `scroll_into_view` in `navigate` and the scroll limit all use that pitch (`VirtualList::pitch` / `row_top` / `content_height`); `position_in_set` is by index, so the gap does not touch it. `row_height` is then the whole row, padding and ring included (above 22 px). Still only pooled rows are styled each frame (`virtual_list_separated_ring_follows_selection.ron`, `virtual_list_separated_keyboard_pages.ron` on the `SeparatedVirtualList` screen) |
 | `color_palette.rs` | `ColorPalette`: a grid of colour swatches (`ListItem`s, `Selected` when in the selection) over a selection of `Item<Color>`; a swatch's accessible name (label of its `AccessibilityNode`, kept up to date) is the name of its colour, `tailwind::color_name`: the Tailwind name (`blue-500`) when it equals one of `COLORS`, else its lowercase sRGB hex (`#3b82f6`, alpha appended only when not 1) |
 | `color_palette_combo.rs` | `ColorPaletteCombo`: a `ColorPalette` inside a combo-style popup; the popup, a `Float` child of the combo, is centred under the button when it opens, 10 px inside the window, above the button when it would run off the bottom; its palette gets `Selection::Ref` to the combo's selection when it is spawned, and `SubRefs` keeps its entity. Its button is a `Role::ComboBox` like a `Combo`'s, without a label, its value the colour name of the selection (empty for none), `controls` the popup's palette |
@@ -202,8 +201,8 @@ of them (`just example gallery -- --run-all stack link`).
 | --- | --- |
 | `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
-| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and every `tests/ron/` file played again with the UI drawn to an image (`image_target_app`), and every `tests/ron/` file played under shuffled schedules, see [Determinism](#determinism) |
-| `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
+| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and generated per-file tests that play each `tests/ron/` file with the UI drawn to an image (`image_target_app`) and under shuffled schedules, see [Determinism](#determinism) |
+| `tests/ron_scenarios.rs` | Generated libtest cases for every `.ron` file and each of its default, scale 2 and text 1.5x variants, see [Scenario files](#scenario-files) |
 | `tests/recorded_scenarios_gpu.rs` | needs `--features record` and a GPU, and is `#[ignore]`d: records every `tests/ron/` file offscreen, see [Recording the scenarios](#recording-the-scenarios) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
 | `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per widget, each started from its example but a fixture of its own |
@@ -700,18 +699,37 @@ drives scripted pointer and keyboard scenarios against the widgets
   none of the four jobs can run for them; that is expected for a private
   project.
 - **In cloud sessions**, `.claude/hooks/session-start.sh` exports the same
-  variable and fetches the dependency with the container's git credentials.
+  variable and persists it through `CLAUDE_ENV_FILE` before setup can fail.
+  Git uses Claude's GitHub proxy. The hook checks live read access with
+  `git ls-remote` before installing tools, even if Cargo has cached the tester.
+  Access to this repository alone does not grant access to the tester:
+  configure the Claude GitHub App at
+  <https://github.com/settings/installations> to include both `rin-bevy-ui`
+  and `rin-bevy-ui-tester`. Alternatively, run `/web-setup` in local Claude
+  Code with a `gh` token that can read both repositories. See
+  [Claude's GitHub authentication options](https://code.claude.com/docs/en/claude-code-on-the-web#github-authentication-options).
+  `TESTER_REPO_TOKEN` is a GitHub Actions secret, not automatically available
+  in Claude Cloud; the cloud hook relies on the proxy's access instead.
+  To verify in a **cloud session**, run
+  `GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code https://github.com/rinde/rin-bevy-ui-tester HEAD`
+  and `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo fetch --locked`. Both must
+  succeed; a local success does not verify cloud permissions. After changing
+  access, rerun `.claude/hooks/session-start.sh` in the cloud session.
 
 ### Claude Code on the web
 
 `.claude/hooks/session-start.sh`, registered in `.claude/settings.json` under
-`SessionStart`, prepares a fresh cloud container: it installs the pinned
-toolchain with `clippy` and `rustfmt`, `just` and `cargo-machete` at pinned
-versions, the Bevy system headers `.github/workflows/ci.yml` also installs,
+`SessionStart`, prepares a fresh cloud container: it checks tester access,
+then installs the pinned toolchain with `clippy` and `rustfmt`, `just` and
+`cargo-machete` at pinned versions, the Bevy system headers
+`.github/workflows/ci.yml` also installs,
 then fetches the dependencies (the private tester included, see above) and
 warms the build cache with `cargo build --all-targets` so the first real
 build isn't a cold Bevy compile. It is a no-op unless `CLAUDE_CODE_REMOTE=true`
 or run with `--force`, and is idempotent, with progress on stderr.
+Repository hooks run in single-repository cloud sessions; Claude's project
+threads and sessions with multiple repositories do not load them (see
+[cloud hook limitations](https://code.claude.com/docs/en/cloud-environments#limitations-in-cloud-sessions)).
 `.claude/settings.json` also sets the auto-compact window to 200k tokens for
 Sonnet 5.5 and Opus 5.5 (`modelSettings.<model>.autoCompactWindow`).
 
@@ -811,13 +829,15 @@ person would see after using the UI.
 
 ### Scenario files
 
-A scenario can be data: `tests/ron/NAME.ron` is read by `tests/ron_scenarios.rs`,
-a `harness = false` target (`[[test]]` in `Cargo.toml`) that calls the tester's
-`run_ron_tests`, so every file is one test named after it and the output reads
-like libtest's. `cargo test --test ron_scenarios push_button` runs the files
-whose name contains `push_button`; `just test` runs them with everything else.
-Each file runs in a fresh `common::widgets_app()` after `Registry::install`, so
-a file can check any `Reflect` type of the app by short type path.
+A scenario can be data: `tests/ron/NAME.ron` is compiled into individual
+libtest cases by `build.rs`. Each file gets default, scale 2 and text 1.5x
+cases named with its file and variant, and standard Cargo filters select a
+single case (for example, `cargo test --test ron_scenarios scenario_push_button_scale_2`).
+`just test` runs them with everything else. Each case runs in a fresh
+`common::widgets_app()` after `Registry::install`, so a file can check any
+`Reflect` type of the app by short type path. `skip` and `fixme` scenarios are
+ignored by libtest, variant restrictions leave their out-of-scope cases
+unplayed, and `should_fail` passes only when the scenario fails as expected.
 
 - **The format** is the tester's RON script (`format_version: 3`); see its
   README and `tests/ron/*.ron` there. The same file also plays in the tester's
@@ -1044,13 +1064,9 @@ a file can check any `Reflect` type of the app by short type path.
   text) says `variants: ["default", "scale 2"]` with a comment saying why.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
-- **Every file is played more than once.**
-  - `ron_scenarios` plays it as three variants: `name`, `[scale 2]` and `[text 1.5x]`.
-  - `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in `tests/scenarios.rs`
-    plays it again headless with the camera rendering to an image as in a recording, so
-    a file must pass both ways (see [Recording the scenarios](#recording-the-scenarios)).
-  - `every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` plays it under
-    shuffled schedules (see [Determinism](#determinism)).
+- **Every file is played more than once.** Generated libtest cases play it as
+  three variants, draw it to an image, and run each schedule/seed combination
+  (see [Determinism](#determinism)). Standard test filters select each case.
 - **Targets on the `Combos` screen.** A row of `first combo`, `own combo` and
   `third combo` (`first` and `third` share one selection through
   `Selection::reference`, `own` has a selection of its own over the same
@@ -1174,18 +1190,17 @@ a file can check any `Reflect` type of the app by short type path.
 Since Bevy 0.20 many system sets (the UI's in `PostUpdate`) are ordered only
 where systems' data access conflicts, so a system that runs at the right
 moment only by luck would pass on one order and fail on another.
-`every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` in
-`tests/scenarios.rs` plays every `tests/ron/` file once for each of
-`PreUpdate`, `Update`, `PostUpdate` and `Last` and each of `SHUFFLE_SEEDS`
-(fixed, never the clock), with that schedule built with
+Generated tests in `tests/scenarios.rs` play every `tests/ron/` file once for
+each of `PreUpdate`, `Update`, `PostUpdate` and `Last` and each of the fixed
+seeds `[1, 2, 3, 0x5eed_cafe]` (never the clock), with that schedule built with
 `ScheduleBuildSettings::shuffle_seed` and the single-threaded executor, so the
 order is the seed's alone. The `debug` Bevy feature that provides the seed is
 in `[dev-dependencies]` only.
 
-- **Reproduce a failure** from the file, schedule and seed it names: call
-  `shuffle(&mut app, schedule, seed)` on a `widgets_app()` after
-  `Registry::install` and play that file with `scenario.run_in(&mut app)`, or
-  narrow the test's loops to that file, schedule and seed.
+- **Reproduce a failure** with the generated test filter, for example
+  `cargo test --test scenarios scenario_combo_opens_list_postupdate_seed_5eedcafe
+  -- --exact`. The test runs that file with `shuffle(&mut app, schedule,
+  seed)` after `Registry::install`, so its name is enough to replay the failure.
 - **Fix it by ordering** the system through the data it touches (`.after(..)`
   or a set). Never widen the seed list or skip the file.
 
@@ -1208,10 +1223,10 @@ recorded_scenarios_gpu --features record`.
   the widgets read hover from picking, which works for any target (see "Is the
   pointer on it?" above). Combos, palette combos and the hover colours of lists
   and palettes used to read `RelativeCursorPosition` and misbehaved in a
-  recording (#100). `every_scenario_file_passes_with_the_ui_drawn_to_an_image`
-  in `tests/scenarios.rs` plays every file headless with the camera aimed at an
-  image, as the recorder does but without a GPU, so this is caught by `just
-  test`. It fails on any file that does not pass; there is no allowlist, so a
+  recording (#100). Generated per-file tests in `tests/scenarios.rs` play each
+  file headless with the camera aimed at an image, as the recorder does but
+  without a GPU, so this is caught by `just test`. A failure names its file;
+  there is no allowlist, so a
   scenario that only fails with the UI drawn to an image is a bug to fix, not a
   name to list.
 - **CI.** The `record` job of `ci.yml` runs `just record` on lavapipe and uploads
