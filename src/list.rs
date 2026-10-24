@@ -110,7 +110,8 @@ pub enum ListLayout {
     Horizontal,
     /// A grid that fills row by row.
     VerticalGrid {
-        /// The number of columns.
+        /// The number of columns. `0` has no meaning: the list is laid out as one column
+        /// (`1`) and an `error!` is logged when the layout is inserted.
         columns: u16,
     },
 }
@@ -197,9 +198,17 @@ impl List {
             }
             ListLayout::Horizontal => GridAutoFlow::ColumnDense,
         };
+        if matches!(layout, ListLayout::VerticalGrid { columns: 0 }) {
+            error!(
+                "ListLayout::VerticalGrid {{ columns: 0 }} on {}: laying out as one column",
+                context.entity
+            );
+        }
         let grid_template_columns = match layout {
             ListLayout::Vertical | ListLayout::Horizontal => vec![],
-            ListLayout::VerticalGrid { columns } => vec![RepeatedGridTrack::auto(*columns)],
+            ListLayout::VerticalGrid { columns } => {
+                vec![RepeatedGridTrack::auto((*columns).max(1))]
+            }
         };
 
         let node = Node {
@@ -1092,7 +1101,7 @@ fn theme_item_border(
                     }
                 }
                 ListLayout::VerticalGrid { columns } => {
-                    let columns = columns as usize;
+                    let columns = usize::from(columns.max(1));
                     node.border_radius = match i {
                         0 => BorderRadius::top_left(theme.control_radius),
                         n if n == columns - 1 => BorderRadius::top_right(theme.control_radius),

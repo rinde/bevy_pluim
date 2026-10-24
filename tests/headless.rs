@@ -55,7 +55,9 @@ use rin_bevy_ui::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List};
+use rin_bevy_ui::list::{
+    CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
+};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
@@ -2604,6 +2606,47 @@ fn spawn_list_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
     app.update();
     app.update();
     list
+}
+
+#[test]
+fn a_list_grid_with_zero_columns_does_not_panic_and_acts_as_one_column() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            ListLayout::VerticalGrid { columns: 0 },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let palette = app
+        .world_mut()
+        .spawn((
+            ColorPalette,
+            ListLayout::VerticalGrid { columns: 0 },
+            Selection::builder().one().build_with_items(
+                [Color::WHITE, Color::BLACK, Color::NONE].map(|data| Item { data }),
+            ),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    app.update();
+    for widget in [list, palette] {
+        assert_eq!(item_views(&app, widget).len(), 3);
+        let node = app.world().entity(widget).get::<Node>().unwrap();
+        assert_eq!(node.grid_template_columns.len(), 1, "one column track");
+    }
 }
 
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
