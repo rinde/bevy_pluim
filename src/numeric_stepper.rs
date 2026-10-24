@@ -1033,6 +1033,101 @@ mod tests {
     }
 
     #[test]
+    fn a_value_shows_integers_whole_and_floats_with_one_decimal() {
+        assert_eq!(Value::new_u8(7, 0, 9, 1).unwrap().to_string(), "7");
+        assert_eq!(Value::new_u16(700, 0, 900, 1).unwrap().to_string(), "700");
+        assert_eq!(
+            Value::new_u32(70_000, 0, 90_000, 1).unwrap().to_string(),
+            "70000"
+        );
+        assert_eq!(
+            Value::new_f32(0.25, 0.0, 1.0, 0.25).unwrap().to_string(),
+            "0.2"
+        );
+        assert_eq!(
+            Value::new_f32(0.35, 0.0, 1.0, 0.25).unwrap().to_string(),
+            "0.3"
+        );
+        assert_eq!(
+            Value::new_f32(2.0, 0.0, 5.0, 1.0).unwrap().to_string(),
+            "2.0"
+        );
+        assert_eq!(
+            Value::new_f32(-1.46, -5.0, 5.0, 1.0).unwrap().to_string(),
+            "-1.5"
+        );
+    }
+
+    #[test]
+    fn repeated_tenth_steps_show_every_tenth_despite_accumulated_error() {
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.1).unwrap();
+        let mut shown = vec![value.to_string()];
+        while value.increment() {
+            shown.push(value.to_string());
+        }
+        // The display rounds the accumulated error away, whatever the step count.
+        let expected: Vec<String> = (0..shown.len())
+            .map(|i| format!("{:.1}", i as f32 / 10.0))
+            .collect();
+        assert_eq!(shown, expected);
+        // Rounding error may cost the last step, never more than that.
+        assert!(shown.len() >= 10, "{shown:?}");
+        let mut last = value;
+        while last.decrement() {}
+        assert!(last.as_f32().unwrap() <= 0.1 + 1e-6);
+    }
+
+    #[test]
+    fn stepping_up_and_down_a_float_stays_inside_the_range() {
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.1).unwrap();
+        for _ in 0..30 {
+            value.increment();
+            let now = value.as_f32().unwrap();
+            assert!((0.0..=1.0).contains(&now), "{now}");
+        }
+        for _ in 0..30 {
+            value.decrement();
+            let now = value.as_f32().unwrap();
+            assert!((0.0..=1.0).contains(&now), "{now}");
+        }
+    }
+
+    #[test]
+    fn a_step_larger_than_the_range_cannot_step_any_value_type() {
+        for mut value in [
+            Value::new_u8(2, 1, 3, 200).unwrap(),
+            Value::new_u16(2, 1, 3, 60_000).unwrap(),
+            Value::new_u32(2, 1, 3, 4_000_000_000).unwrap(),
+            Value::new_f32(2.0, 1.0, 3.0, 10.0).unwrap(),
+        ] {
+            assert!(!value.can_increment() && !value.can_decrement());
+            assert!(!value.increment() && !value.decrement());
+        }
+    }
+
+    #[test]
+    fn an_integer_value_steps_exactly_to_both_limits_and_back() {
+        let mut value = Value::new_u8(8, 5, 11, 3).unwrap();
+        assert!(value.increment() && value.as_u8() == Some(11));
+        assert!(!value.can_increment() && value.can_decrement());
+        assert!(value.decrement() && value.decrement() && value.as_u8() == Some(5));
+        assert!(!value.can_decrement() && value.can_increment());
+        // A step that does not reach the maximum stops short of it.
+        let mut short = Value::new_u8(5, 5, 10, 3).unwrap();
+        assert!(short.increment() && !short.increment() && short.as_u8() == Some(8));
+    }
+
+    #[test]
+    fn a_wide_integer_step_that_overflows_or_underflows_changes_nothing() {
+        let mut high = UIntValue::<u8>::new(250, 0, 255, 10).unwrap();
+        assert!(!high.increment() && high.value() == 250);
+        let mut low = UIntValue::<u8>::new(5, 0, 255, 10).unwrap();
+        assert!(!low.decrement() && low.value() == 5);
+        assert!(u8::MAX.checked_add(1).is_none() && 0_u32.checked_sub(1).is_none());
+        assert!(UInt::checked_add(250_u8, 10).is_none() && UInt::checked_sub(5_u8, 10).is_none());
+    }
+
+    #[test]
     fn a_value_error_has_a_message() {
         assert_eq!(ValueError::ZeroStep.to_string(), "the step is zero");
         let error: &dyn std::error::Error = &ValueError::MinAboveMax;
