@@ -29,6 +29,7 @@ pub mod list;
 pub mod numeric_stepper;
 pub mod panel;
 pub mod pill;
+pub(crate) mod popup;
 pub mod push_button;
 pub mod scroll_area;
 pub mod segmented_control;
