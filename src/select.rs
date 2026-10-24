@@ -30,8 +30,9 @@ impl Plugin for ItemsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectionResource>()
             .add_systems(Update, items_change)
-            .add_systems(Update, process_event_buffer.run_if(has_pending_selections))
             .add_observer(on_add_selection)
+            .add_observer(repair_pending_selections)
+            .add_observer(forget_removed_selection)
             .register_type::<Item<String>>()
             .register_type::<ItemOf>()
             .register_type::<ItemValues>()
@@ -208,6 +209,7 @@ fn on_add_selection(
         (Selection::Value(SelectionValue::One(one)), items_ref, item_values)
             if items_ref.is_some() != item_values.is_some() && one == &Entity::PLACEHOLDER =>
         {
+            let items_entity = items_ref.map_or(selection_ref, |ItemsRef(items_ref)| *items_ref);
             let Some(values) = items_ref
                 .and_then(|ItemsRef(items_ref)| item_values_query.get(*items_ref).ok())
                 .or(item_values)
@@ -220,12 +222,16 @@ fn on_add_selection(
                     .entity(selection_ref)
                     .insert(Selection::Value(SelectionValue::One(first_item)));
             } else {
-                r.buffer.push((selection_ref, selection_ref));
+                r.pending.push(PendingSelection {
+                    selection: selection_ref,
+                    items: items_entity,
+                });
             }
         }
         (Selection::Value(SelectionValue::OneOrMore(selected)), items_ref, item_values)
             if items_ref.is_some() != item_values.is_some() && selected.is_empty() =>
         {
+            let items_entity = items_ref.map_or(selection_ref, |ItemsRef(items_ref)| *items_ref);
             let Some(values) = items_ref
                 .and_then(|ItemsRef(items_ref)| item_values_query.get(*items_ref).ok())
                 .or(item_values)
@@ -240,7 +246,10 @@ fn on_add_selection(
                         first_item
                     ])));
             } else {
-                r.buffer.push((selection_ref, selection_ref));
+                r.pending.push(PendingSelection {
+                    selection: selection_ref,
+                    items: items_entity,
+                });
             }
         }
         (Selection::Ref(_), _, _)
@@ -255,67 +264,60 @@ fn on_add_selection(
     }
 }
 
-fn has_pending_selections(r: Res<SelectionResource>) -> bool {
-    !r.buffer.is_empty()
+/// A selection waiting for the first item of `items`.
+#[derive(Debug, Clone, Copy)]
+struct PendingSelection {
+    selection: Entity,
+    items: Entity,
 }
 
+/// The selections waiting for their first item.
+///
+/// Nothing polls it: [`repair_pending_selections`] runs on the [`ItemsChanged`] of an entry's
+/// items and [`forget_removed_selection`] drops an entry when its selection loses its
+/// [`Selection`] or is despawned.
 #[derive(Resource, Default)]
 struct SelectionResource {
-    buffer: Vec<(Entity, Entity)>,
+    pending: Vec<PendingSelection>,
 }
 
-/// Repairs the selections waiting for their first item.
-///
-/// An entry stays in the buffer until it is repaired (or its entity is gone), and the
-/// buffer is only borrowed mutably when something was removed, so the resource is not
-/// marked changed otherwise.
-fn process_event_buffer(
+/// Gives the pending selections of the changed items their first item.
+fn repair_pending_selections(
+    changed: On<ItemsChanged>,
     mut r: ResMut<SelectionResource>,
+    selections: Query<&Selection>,
     mut commands: Commands,
-    selections: SelectionParam,
 ) {
-    let mut done = Vec::new();
-    for (index, (target_ref, selection_ref)) in r.buffer.iter().enumerate() {
-        if commands.get_entity(*target_ref).is_err() {
-            done.push(index);
-            continue;
+    let event = changed.event();
+    let Some(first_item) = event.items.iter().next() else {
+        return;
+    };
+    r.pending.retain(|pending| {
+        if pending.items != event.entity {
+            return true;
         }
-        let Some((_, values)) = selections.get_item_values(*selection_ref) else {
-            continue;
-        };
-        let Some(selection_value) = selections.get(*selection_ref) else {
-            continue;
-        };
-        let Some(first_item) = values.iter().next() else {
-            continue;
-        };
-        let new_selection_value = match selection_value {
-            SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
+        let new_value = match selections.get(pending.selection) {
+            Ok(Selection::Value(SelectionValue::One(x))) if *x == Entity::PLACEHOLDER => {
                 Some(SelectionValue::One(first_item))
             }
-            SelectionValue::OneOrMore(selected) if selected.is_empty() => {
+            Ok(Selection::Value(SelectionValue::OneOrMore(selected))) if selected.is_empty() => {
                 Some(SelectionValue::OneOrMore(smallvec![first_item]))
             }
-            SelectionValue::One(_)
-            | SelectionValue::OneOrMore(_)
-            | SelectionValue::ZeroOrOne(_)
-            | SelectionValue::ZeroOrMore(_) => None,
+            _ => None,
         };
-        if let Some(new_selection_value) = new_selection_value {
+        if let Some(new_value) = new_value {
             commands
-                .entity(*target_ref)
-                .insert(Selection::Value(new_selection_value));
+                .entity(pending.selection)
+                .insert(Selection::Value(new_value));
         }
-        done.push(index);
-    }
-    if !done.is_empty() {
-        let mut index = 0;
-        r.buffer.retain(|_| {
-            let keep = !done.contains(&index);
-            index += 1;
-            keep
-        });
-    }
+        false
+    });
+}
+
+/// Drops the pending entry of a selection whose [`Selection`] is gone (also when it is despawned).
+fn forget_removed_selection(removed: On<Remove<Selection>>, mut r: ResMut<SelectionResource>) {
+    let entity = removed.event_target();
+    r.pending.retain(|pending| pending.selection != entity);
 }
 
 const DANGLING_SELECTION_REF: &str = "a `Selection::Ref` that points to a `Selection::Value`";
@@ -1466,6 +1468,65 @@ mod tests {
             .get::<ItemValues>(owner)
             .map(|items| items.iter().collect())
             .unwrap_or_default()
+    }
+
+    fn pending_count(app: &App) -> usize {
+        app.world()
+            .get_resource::<SelectionResource>()
+            .map_or(0, |r| r.pending.len())
+    }
+
+    #[test]
+    fn a_pending_one_is_repaired_by_the_first_item_and_then_forgotten() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert_eq!(pending_count(&app), 1);
+        let item = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        assert_eq!(selection_value(&app, id), Some(SelectionValue::One(item)));
+        assert_eq!(pending_count(&app), 0);
+    }
+
+    #[test]
+    fn a_pending_selection_that_is_despawned_is_dropped_without_polling() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert_eq!(pending_count(&app), 1);
+        app.world_mut().despawn(id);
+        assert_eq!(pending_count(&app), 0);
+        app.update();
+        assert_eq!(pending_count(&app), 0);
+    }
+
+    #[test]
+    fn a_pending_selection_whose_shared_items_are_despawned_goes_with_them() {
+        let mut app = items_app();
+        let items = app.world_mut().spawn(ItemValues::default()).id();
+        let sharing = app
+            .world_mut()
+            .spawn(Selection::builder().one().build_with_items_ref(items))
+            .id();
+        app.update();
+        assert_eq!(pending_count(&app), 1);
+        app.world_mut().despawn(items);
+        assert!(app.world().get_entity(sharing).is_err());
+        assert_eq!(pending_count(&app), 0);
     }
 
     #[test]
