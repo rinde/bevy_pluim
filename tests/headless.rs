@@ -59,7 +59,9 @@ use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemVi
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton, PushButtonRefs};
+use rin_bevy_ui::push_button::{
+    ButtonSize, IconPlacement, NoDefaultHover, PushButton, PushButtonRefs,
+};
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
@@ -7107,4 +7109,149 @@ fn resolve_marked(app: &mut App, entity: Entity) -> (Option<Entity>, bool, Optio
             )
         })
         .unwrap()
+}
+
+/// The string of the `Text` on `entity`.
+fn text_of(app: &App, entity: Entity) -> String {
+    app.world().entity(entity).get::<Text>().unwrap().0.clone()
+}
+
+/// The accessible label of `entity`.
+fn accessible_label(app: &App, entity: Entity) -> Option<String> {
+    app.world()
+        .entity(entity)
+        .get::<AccessibilityNode>()
+        .unwrap()
+        .label()
+        .map(str::to_owned)
+}
+
+#[test]
+fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_in_step() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::from_label("Stop"));
+    app.update();
+    app.update();
+
+    let after = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(after, refs, "no respawn, refs kept");
+    assert_eq!(text_of(&app, after.label_id), "Stop");
+    assert_eq!(accessible_label(&app, button).as_deref(), Some("Stop"));
+    assert_eq!(
+        app.world().entity(button).get::<Children>().unwrap().len(),
+        1,
+        "no second label"
+    );
+
+    // The observers were not registered twice.
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
+}
+
+#[test]
+fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let label_id = app
+        .world()
+        .entity(button)
+        .get::<PushButtonRefs>()
+        .unwrap()
+        .label_id;
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::new("Go", "+"));
+    app.update();
+    app.update();
+
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(refs.label_id, label_id);
+    let icon = refs.icon_id.unwrap();
+    assert_eq!(text_of(&app, icon), "+");
+    assert_eq!(accessible_label(&app, button).as_deref(), Some("Go"));
+    assert!(
+        app.world().entity(icon).get::<TextFont>().is_some(),
+        "the new icon is themed"
+    );
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::new("Go", "-"));
+    app.update();
+    app.update();
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(refs.icon_id, Some(icon));
+    assert_eq!(text_of(&app, icon), "-");
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::from_label("Go"));
+    app.update();
+    app.update();
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(refs.icon_id, None);
+    assert!(app.world().get_entity(icon).is_err(), "the icon is gone");
+    assert_eq!(
+        app.world().entity(button).get::<Children>().unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn inserting_a_link_again_changes_its_text_in_place_and_keeps_its_label_in_step() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+    let text = app.world().entity(link).get::<Children>().unwrap()[0];
+    assert_eq!(text_of(&app, text), "link");
+
+    app.world_mut().entity_mut(link).insert(Link::new("other"));
+    app.update();
+    app.update();
+
+    let children = app.world().entity(link).get::<Children>().unwrap();
+    assert_eq!(children.len(), 1, "no second text");
+    assert_eq!(children[0], text, "the text is kept");
+    assert_eq!(text_of(&app, text), "other");
+    assert_eq!(accessible_label(&app, link).as_deref(), Some("other"));
+}
+
+#[test]
+fn no_default_hover_inserted_after_spawn_stops_the_hover_colours() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    app.world_mut().entity_mut(button).insert(NoDefaultHover);
+    app.update();
+
+    press(&mut app, button);
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, button), colors.background_primary);
+}
+
+#[test]
+fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("Go"), NoDefaultHover, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<NoDefaultHover>();
+    app.update();
+
+    press(&mut app, button);
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, button), colors.selected_hovered_item);
 }
