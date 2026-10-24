@@ -58,7 +58,8 @@ impl Plugin for VirtualListPlugin {
         .add_observer(pick_on_click)
         .add_observer(deactivate_on_focus_lost)
         .register_type::<VirtualList>()
-        .register_type::<VirtualListRow>();
+        .register_type::<VirtualListRow>()
+        .register_type::<ShownItem>();
     }
 }
 
@@ -298,7 +299,7 @@ const SEPARATED_ROW_CHROME: f32 = px(SEPARATED_ITEM_PADDING.top)
 ///
 /// Immutable: when the row is handed to another item a new value is inserted, so an app can
 /// observe the change. A row that shows no item (the list has fewer items than rows) has
-/// `None` for both and is not displayed.
+/// `shown: None` and is not displayed.
 #[derive(Component, Debug, Copy, Clone, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
@@ -314,10 +315,18 @@ const SEPARATED_ROW_CHROME: f32 = px(SEPARATED_ITEM_PADDING.top)
 pub struct VirtualListRow {
     /// The list this row belongs to.
     pub list: Entity,
-    /// Where the item it shows is in the list's items.
-    pub index: Option<usize>,
-    /// The item it shows.
-    pub item: Option<Entity>,
+    /// The item it shows and where that is in the list's items; `None` when it shows no item.
+    pub shown: Option<ShownItem>,
+}
+
+/// What a [`VirtualListRow`] shows: an item and its place in the list's items, which only
+/// exist together.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Reflect)]
+pub struct ShownItem {
+    /// Where the item is in the list's items.
+    pub index: usize,
+    /// The item.
+    pub item: Entity,
 }
 
 /// The rows of a [`VirtualList`] and the index of the item the keyboard is on.
@@ -466,11 +475,7 @@ fn grow_pools(
         let needed = view.rows_needed(*virtual_list, count);
         while state.rows.len() < needed {
             let mut row = commands.spawn((
-                VirtualListRow {
-                    list,
-                    index: None,
-                    item: None,
-                },
+                VirtualListRow { list, shown: None },
                 {
                     let mut node = Node {
                         display: Display::None,
@@ -564,8 +569,10 @@ fn show_rows(
             else {
                 continue;
             };
-            let item = index.and_then(|index| items.get(index).copied());
-            let wanted = VirtualListRow { list, index, item };
+            let shown =
+                index.and_then(|index| items.get(index).map(|&item| ShownItem { index, item }));
+            let item = shown.map(|shown| shown.item);
+            let wanted = VirtualListRow { list, shown };
             let handed_on = *current != wanted;
             if handed_on {
                 commands.entity(row).insert(wanted);
@@ -646,7 +653,7 @@ fn pick_on_click(
         };
         current = child_of.parent();
     };
-    let (Some(index), Some(item)) = (row.index, row.item) else {
+    let Some(ShownItem { index, item }) = row.shown else {
         return;
     };
     if let Ok(mut state) = states.get_mut(row.list) {
@@ -842,7 +849,7 @@ fn sync_accessibility(
             let Ok((row, mut node)) = rows.get_mut(row) else {
                 continue;
             };
-            let position = row.index.map(|index| index + 1);
+            let position = row.shown.map(|shown| shown.index + 1);
             match position {
                 Some(position) if node.position_in_set() != Some(position) => {
                     node.set_position_in_set(position);

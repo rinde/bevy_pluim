@@ -51,7 +51,7 @@ use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, 
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::virtual_list::{
-    MIN_ROW_HEIGHT, RowHeight, RowHeightError, VirtualList, VirtualListRow,
+    MIN_ROW_HEIGHT, RowHeight, RowHeightError, ShownItem, VirtualList, VirtualListRow,
 };
 use rin_bevy_ui_tester::{
     AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
@@ -2002,7 +2002,7 @@ fn shown_rows(app: &mut App) -> Vec<String> {
         .filter(|(_, node, _)| node.display != Display::None)
         .filter_map(|(row, _, children)| {
             let text = children.iter().find_map(|child| world.get::<Text>(child))?;
-            Some((row.index?, text.0.clone()))
+            Some((row.shown?.index, text.0.clone()))
         })
         .collect();
     rows.sort_unstable();
@@ -2064,7 +2064,9 @@ fn shown_row_positions(app: &mut App) -> Vec<(usize, Option<usize>, Option<usize
         .query::<(&VirtualListRow, &Node, &AccessibilityNode)>()
         .iter(world)
         .filter(|(_, node, _)| node.display != Display::None)
-        .filter_map(|(row, _, node)| Some((row.index?, node.position_in_set(), node.size_of_set())))
+        .filter_map(|(row, _, node)| {
+            Some((row.shown?.index, node.position_in_set(), node.size_of_set()))
+        })
         .collect();
     rows.sort_unstable();
     rows
@@ -2178,7 +2180,13 @@ fn a_virtual_list_row_that_shows_no_item_has_no_position_among_the_items() {
     let rows: Vec<_> = world
         .query::<(&VirtualListRow, &AccessibilityNode)>()
         .iter(world)
-        .map(|(row, node)| (row.index, node.position_in_set(), node.size_of_set()))
+        .map(|(row, node)| {
+            (
+                row.shown.map(|shown| shown.index),
+                node.position_in_set(),
+                node.size_of_set(),
+            )
+        })
         .collect();
     assert_eq!(rows.len(), 13);
     let empty = rows.iter().filter(|(index, ..)| index.is_none()).count();
@@ -2236,7 +2244,7 @@ fn a_first_page_down_on_a_virtual_list_without_an_active_row_lands_on_the_first_
     assert_eq!(
         app.world()
             .get::<VirtualListRow>(row)
-            .and_then(|row| row.item),
+            .and_then(|row| row.shown.map(|shown| shown.item)),
         Some(first)
     );
 }
@@ -2303,20 +2311,62 @@ fn shown_rows_with_children(app: &mut App) -> Vec<(String, Vec<String>)> {
         .iter(world)
         .filter(|(_, node, _)| node.display != Display::None)
         .filter_map(|(row, _, children)| {
-            let item = world.get::<Item<String>>(row.item?)?.data.clone();
+            let item = world.get::<Item<String>>(row.shown?.item)?.data.clone();
             let names = children
                 .into_iter()
                 .flatten()
                 .filter_map(|child| world.get::<Name>(*child))
                 .map(|name| name.as_str().to_owned())
                 .collect();
-            Some((row.index?, item, names))
+            Some((row.shown?.index, item, names))
         })
         .collect();
     rows.sort_unstable();
     rows.into_iter()
         .map(|(_, item, names)| (item, names))
         .collect()
+}
+
+/// The `shown` of every `VirtualListRow` insert an observer saw.
+#[derive(Resource, Default)]
+struct InsertedRows(Vec<Option<ShownItem>>);
+
+#[test]
+fn a_virtual_list_row_shows_an_item_with_its_index_or_nothing_and_an_insert_observer_gets_both() {
+    let mut app = widgets_app();
+    app.init_resource::<InsertedRows>();
+    app.add_observer(
+        |t: On<Insert<VirtualListRow>>,
+         rows: Query<&VirtualListRow>,
+         mut seen: ResMut<InsertedRows>| {
+            if let Ok(row) = rows.get(t.event_target()) {
+                seen.0.push(row.shown);
+            }
+        },
+    );
+    spawn_virtual_list_with_creator(app.world_mut());
+    for _ in 0..4 {
+        app.update();
+    }
+
+    // Every shown row holds the index and the item together, and the item is the one at
+    // that index of the list's items.
+    let world = app.world_mut();
+    let shown: Vec<_> = world
+        .query::<&VirtualListRow>()
+        .iter(world)
+        .filter_map(|row| row.shown)
+        .collect();
+    assert!(!shown.is_empty());
+    for ShownItem { index, item } in shown {
+        let text = world.get::<Item<String>>(item).unwrap().data.clone();
+        assert_eq!(text, format!("Row {}", index + 1));
+    }
+
+    // The observer of the insert got a shown row with both, for the creator's rows.
+    let seen = &app.world().get_resource::<InsertedRows>().unwrap().0;
+    assert!(seen.iter().any(Option::is_some), "no insert showed an item");
+    assert!(seen.iter().flatten().all(|shown| shown.index < 100));
 }
 
 #[test]
@@ -2447,7 +2497,7 @@ fn a_virtual_list_over_a_selection_reference_shows_and_marks_the_referenced_sele
     let selected: Vec<Option<Entity>> = world
         .query_filtered::<&VirtualListRow, With<Selected>>()
         .iter(world)
-        .map(|row| row.item)
+        .map(|row| row.shown.map(|shown| shown.item))
         .collect();
     assert_eq!(selected, [Some(b)]);
 }
