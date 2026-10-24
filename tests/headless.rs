@@ -4827,7 +4827,7 @@ fn inserting_a_panel_again_keeps_its_parts_content_and_one_close_notification() 
     );
     assert!(matches!(
         app.world().get::<Node>(refs.scroll_area()).unwrap().max_height,
-        Val::Px(px) if px >= 200.0 && px < 200.0 + 100.0
+        Val::Px(px) if (200.0..200.0 + 100.0).contains(&px)
     ));
     app.world_mut().trigger(Activate {
         entity: refs.close(),
