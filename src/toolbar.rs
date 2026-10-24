@@ -214,7 +214,8 @@ impl ToolbarButton {
 
 /// The children of a [`ToolbarButton`]; the variant is the style the button was built for, so a
 /// child its style does not have cannot be named.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub enum ToolbarButtonRefs {
     /// A button of a [`ToolbarStyle::Filled`] toolbar.
     Filled {
