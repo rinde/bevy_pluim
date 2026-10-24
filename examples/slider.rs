@@ -48,14 +48,14 @@ fn setup(mut commands: Commands) -> Result {
             padding: UiRect::all(px(20.0)),
         }
         Children [
-            ~{Slider::new(0.5, 0.0, 1.0).with_name("Volume")}
+            ~{valid_slider(0.5, 0.0, 1.0, None).with_name("Volume")}
             --
-            ~{Slider::new(3.0, 0.0, 10.0).with_step(1.0).with_name("Cars")}
+            ~{valid_slider(3.0, 0.0, 10.0, Some(1.0)).with_name("Cars")}
             Node { width: px(320.0) }
             --
-            ~{Slider::new(60.0, 0.0, 120.0).with_step(10.0).with_format(kilometres_per_hour).with_name("Speed")}
+            ~{valid_slider(60.0, 0.0, 120.0, Some(10.0)).with_format(kilometres_per_hour).with_name("Speed")}
             --
-            ~{Slider::new(4.0, 0.0, 10.0).with_step(1.0).with_format(whole).with_name("Locked")}
+            ~{valid_slider(4.0, 0.0, 10.0, Some(1.0)).with_format(whole).with_name("Locked")}
             InteractionDisabled
             --
             Node {
@@ -64,7 +64,7 @@ fn setup(mut commands: Commands) -> Result {
                 column_gap: px(20.0),
             }
             Children [
-                ~{Slider::new(5.0, 0.0, 20.0).with_step(0.5).with_name("Shared")}
+                ~{valid_slider(5.0, 0.0, 20.0, Some(0.5)).with_name("Shared")}
                 ~{SharedSlider}
                 on(slider_moved)
                 --
@@ -117,4 +117,14 @@ fn stepper_stepped(
     if let Some(value) = change.value.as_f32() {
         commands.entity(*slider).insert(SliderValue(value));
     }
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

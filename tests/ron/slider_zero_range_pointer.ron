@@ -1,0 +1,25 @@
+// A slider whose bounds are equal has a track with nothing to travel: a press
+// on it and a drag of its thumb (past either end) must leave the value at the
+// bound, report no other value, and keep the thumb and fill on finite
+// positions (Bevy's pointer maths divides by the span, which is zero here).
+(
+    format_version: 3,
+    name: "a press and a drag on a zero range slider leave its value at the bound",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        MoveTo(Name("zero range slider")),
+        Click(Left),
+        Check(Component(target: Name("zero range slider"), path: "SliderValue.0", is: Eq(3.0))),
+        Drag(from: Within(Name("zero range slider"), Name("SliderThumb")), to: Screen((300.0, 70.0)), frames: 5),
+        Check(Component(target: Name("zero range slider"), path: "SliderValue.0", is: Eq(3.0))),
+        Drag(from: Within(Name("zero range slider"), Name("SliderThumb")), to: Screen((0.0, 70.0)), frames: 5),
+        Check(Component(target: Name("zero range slider"), path: "SliderValue.0", is: Eq(3.0))),
+        Wait(2),
+        Check(Resource(path: "ZeroRangeChanges.off_bound", is: Eq(0))),
+        Check(Component(target: Within(Name("zero range slider"), Name("SliderThumb")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(0.0, 400.0))),
+        Check(Component(target: Name("zero range slider"), path: "SliderValue.0", is: Eq(3.0))),
+        Check(App(Accessible(of: Name("zero range slider"), role: Some("Slider"), label: None, value: None, states: []))),
+    ],
+    expect: [],
+)
