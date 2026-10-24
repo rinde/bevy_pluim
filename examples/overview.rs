@@ -534,7 +534,10 @@ fn navigation(spawner: In<StackChildSpawner>, mut commands: Commands) {
     );
 }
 
+#[expect(clippy::expect_used, reason = "the constant ranges are valid")]
 fn values(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    let float_value = Value::new_f32(10.0, 5.0, 15.0, 0.5).expect("a valid float range");
+    let level_value = Value::new_u8(0, 0, 56, 7).expect("a valid level range");
     spawner.spawn_scene(
         &mut commands,
         bsn! {
@@ -556,10 +559,10 @@ fn values(spawner: In<StackChildSpawner>, mut commands: Commands) {
                     NumericStepper
                     --
                     NumericStepper
-                    ~{Value::new_f32(10.0, 5.0, 15.0, 0.5)}
+                    ~{float_value}
                     --
                     NumericStepper
-                    ~{Value::new_u8(0, 0, 56, 7)}
+                    ~{level_value}
                 ]
             ]
         },
@@ -750,7 +753,7 @@ fn setting_rows(spawner: In<StackChildSpawner>, mut commands: Commands) {
 fn fill_setting_rows(
     mut commands: Commands,
     rows: Query<(Entity, &SettingRowRefs, &Control), Without<Filled>>,
-) {
+) -> Result {
     for (row, refs, control) in &rows {
         commands.entity(row).insert(Filled);
         let slot = refs.control_slot;
@@ -767,7 +770,7 @@ fn fill_setting_rows(
             Control::TextSize => {
                 commands.spawn((
                     NumericStepper::default(),
-                    Value::new_u8(12, 8, 20, 1),
+                    Value::new_u8(12, 8, 20, 1)?,
                     ChildOf(slot),
                 ));
             }
@@ -776,6 +779,7 @@ fn fill_setting_rows(
             }
         }
     }
+    Ok(())
 }
 
 fn scroll_areas(spawner: In<StackChildSpawner>, mut commands: Commands) {

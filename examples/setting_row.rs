@@ -27,7 +27,8 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands) -> Result {
+    let text_size = Value::new_u8(12, 8, 20, 1)?;
     commands.spawn(Camera2d);
     commands.spawn_scene(bsn! {
         Node {
@@ -53,7 +54,7 @@ fn setup(mut commands: Commands) {
         ]
     });
     // The rows name their control slots once spawned; the app fills them.
-    commands.queue(|world: &mut World| {
+    commands.queue(move |world: &mut World| {
         world.flush();
         let rows: Vec<(Entity, Control)> = world
             .query::<(&SettingRowRefs, &Control)>()
@@ -72,11 +73,7 @@ fn setup(mut commands: Commands) {
                     ));
                 }
                 Control::TextSize => {
-                    world.spawn((
-                        NumericStepper::default(),
-                        Value::new_u8(12, 8, 20, 1),
-                        ChildOf(slot),
-                    ));
+                    world.spawn((NumericStepper::default(), text_size, ChildOf(slot)));
                 }
                 Control::Reset => {
                     world.spawn((PushButton::from_label("Reset"), ChildOf(slot)));
@@ -84,6 +81,7 @@ fn setup(mut commands: Commands) {
             }
         }
     });
+    Ok(())
 }
 
 /// The control a row gets in its slot.

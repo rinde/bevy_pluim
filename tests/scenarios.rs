@@ -263,7 +263,7 @@ fn directional_navigation_screen(world: &mut World) {
         root.spawn((
             Name::new("nav stepper"),
             NumericStepper::default(),
-            Value::new_u16(10, 5, 15, 1),
+            Value::new_u16(10, 5, 15, 1).unwrap(),
         ));
     });
     let window = world

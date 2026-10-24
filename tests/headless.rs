@@ -59,7 +59,7 @@ use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{
@@ -2474,7 +2474,7 @@ fn spawn_stepper(app: &mut App, initial: u8) -> (Entity, Entity, Entity) {
         .world_mut()
         .spawn((
             NumericStepper::default(),
-            Value::new_u8(initial, 0, 3, 1),
+            Value::new_u8(initial, 0, 3, 1).unwrap(),
             ChildOf(root),
         ))
         .id();
@@ -2535,7 +2535,7 @@ fn a_numeric_stepper_shows_its_custom_format_and_updates_it_on_a_change() {
                 increase_name: "Raise the level".into(),
                 ..default()
             },
-            Value::new_u8(0, 0, 14, 7),
+            Value::new_u8(0, 0, 14, 7).unwrap(),
         ))
         .id();
     app.update();
@@ -6301,6 +6301,89 @@ fn a_numeric_stepper_is_a_spin_button_with_numeric_bounds_and_step() {
         .get::<AccessibilityNode>()
         .unwrap();
     assert_eq!(node.numeric_value(), Some(2.0));
+    assert_eq!(node.value(), Some("2"));
+}
+
+/// A stepper over `value`, returning it and its decrease and increase buttons.
+fn spawn_stepper_of(app: &mut App, value: Value) -> (Entity, Entity, Entity) {
+    let stepper = app
+        .world_mut()
+        .spawn((NumericStepper::default(), value))
+        .id();
+    app.update();
+    app.update();
+    let children = app.world().entity(stepper).get::<Children>().unwrap();
+    (stepper, children[0], children[2])
+}
+
+#[test]
+fn a_stepper_with_equal_bounds_disables_both_buttons_and_reports_its_numbers() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) =
+        spawn_stepper_of(&mut app, Value::new_u8(5, 5, 5, 1).unwrap());
+
+    assert!(is_disabled(&app, decrease));
+    assert!(is_disabled(&app, increase));
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(5.0));
+    assert_eq!(node.min_numeric_value(), Some(5.0));
+    assert_eq!(node.max_numeric_value(), Some(5.0));
+    assert_eq!(node.numeric_value_step(), Some(1.0));
+    assert_eq!(node.value(), Some("5"));
+}
+
+#[test]
+fn a_stepper_with_a_step_larger_than_its_range_disables_both_buttons() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) =
+        spawn_stepper_of(&mut app, Value::new_u16(2, 0, 3, 10).unwrap());
+
+    assert!(is_disabled(&app, decrease));
+    assert!(is_disabled(&app, increase));
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(2.0));
+    assert_eq!(node.min_numeric_value(), Some(0.0));
+    assert_eq!(node.max_numeric_value(), Some(3.0));
+    assert_eq!(node.numeric_value_step(), Some(10.0));
+
+    let (_, decrease, increase) =
+        spawn_stepper_of(&mut app, Value::new_f32(0.5, 0.0, 1.0, 2.0).unwrap());
+    assert!(is_disabled(&app, decrease));
+    assert!(is_disabled(&app, increase));
+}
+
+#[test]
+fn mirrors_of_a_shared_stepper_value_follow_it_and_disable_at_its_limits() {
+    let mut app = headless_app();
+    let (shared, _, _) = spawn_stepper_of(&mut app, Value::new_u8(1, 0, 2, 1).unwrap());
+    let mirror = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(shared)))
+        .id();
+    app.update();
+    app.update();
+    let children = app.world().entity(mirror).get::<Children>().unwrap();
+    let (decrease, increase) = (children[0], children[2]);
+
+    activate(&mut app, increase);
+    assert_eq!(stepper_value(&app, shared), 2);
+    assert!(is_disabled(&app, increase));
+    assert!(!is_disabled(&app, decrease));
+    let node = app
+        .world()
+        .entity(mirror)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(2.0));
+    assert_eq!(node.max_numeric_value(), Some(2.0));
     assert_eq!(node.value(), Some("2"));
 }
 
