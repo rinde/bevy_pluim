@@ -3,13 +3,12 @@
 //! The popup closes again on a click outside of it. From the keyboard, opening it puts the
 //! focus on its list and Escape closes it again.
 
-use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
+use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
@@ -18,17 +17,15 @@ use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use itertools::Itertools;
 
+use crate::MouseEvent;
 use crate::float::{Float, fit_vertically, keep_in_window_x};
-use crate::focus::{
-    AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
-    sync_role, sync_value,
-};
+use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
+use crate::popup::{self, ButtonLook};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
-use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Combo`].
 ///
@@ -55,7 +52,7 @@ impl Plugin for ComboPlugin {
 /// The popup closes again on a click outside of it. The button toggles it when
 /// it is [`Activate`]d (a click, or Enter or Space on a focused button).
 ///
-/// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a
+/// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a
 /// label: its value is the text of the selected items joined with ", " (empty for none),
 /// it is expanded while the popup is open, and it controls the popup's list.
 ///
@@ -145,30 +142,13 @@ impl ComboState {
             return;
         };
 
-        let visibility = match state {
-            Self::Open => Visibility::Visible,
-            Self::Closed => Visibility::Hidden,
-        };
-        world.commands().entity(list_id).insert(visibility);
-        // A closed popup's list is not a tab stop.
-        match state {
-            Self::Open => world.commands().entity(list_id).remove::<Unreachable>(),
-            Self::Closed => world.commands().entity(list_id).insert(Unreachable),
-        };
+        let open = state == Self::Open;
+        popup::show_popup(&mut world.commands(), open, list_id, list_id);
         if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
-            match state {
-                Self::Open => {
-                    focus.set(list_id, FocusCause::Navigated);
-                }
-                // Whoever closed the popup, the focus does not stay on a hidden list.
-                Self::Closed if focus.get() == Some(list_id) => {
-                    focus.set(button_id, FocusCause::Navigated);
-                }
-                Self::Closed => {}
-            }
+            popup::move_focus(&mut focus, open, list_id, button_id);
         }
         if let Some(mut node) = world.get_mut::<AccessibilityNode>(button_id) {
-            node.set_expanded(state == Self::Open);
+            popup::set_expanded(&mut node, open);
         }
     }
 }
@@ -462,10 +442,7 @@ fn sync_accessibility(
         let value = selections
             .get(combo)
             .map_or_else(String::new, |selection| selected_text(selection, &items));
-        sync_role(&mut node, Role::ComboBox);
-        clear_label(&mut node);
-        sync_value(&mut node, &value);
-        sync_controls(&mut node, sub_refs.list_id);
+        popup::sync_combo_box(&mut node, &value, sub_refs.list_id);
     }
 }
 
@@ -496,12 +473,18 @@ fn close_combos_on_outside_click(
                 continue;
             };
             let over_list = combo_lists.get(subs.list_id).is_ok_and(Hovered::get);
-            if combo_state == ComboState::Open
-                && !over_button.get()
-                && !(selection_value.allow_multiple() && over_list)
-            {
-                *background_color = BackgroundColor(theme.colors.background_primary);
-                *border_color = BorderColor::all(theme.colors.border);
+            // A pick in the list of a selection of many keeps the popup open.
+            if popup::closes_on_outside_release(
+                combo_state == ComboState::Open,
+                over_button.get(),
+                selection_value.allow_multiple() && over_list,
+            ) {
+                popup::apply_look(
+                    ButtonLook::Resting,
+                    &theme,
+                    &mut background_color,
+                    &mut border_color,
+                );
                 commands.entity(combo_ref).insert(ComboState::Closed);
             }
         }
@@ -522,19 +505,7 @@ fn handle_combo_button_mouse_events(
         return;
     };
 
-    match (trigger.event().kind, combo_state) {
-        // A drag says nothing new about the pointer being on the button, and can arrive
-        // after the pointer left it, so it does not restyle the button. A release or a
-        // click on a closed combo does not either, so all three share one empty arm.
-        (MouseKind::Drag, _) | (MouseKind::Released | MouseKind::Click(_), ComboState::Closed) => {}
-        (MouseKind::Over | MouseKind::Pressed, _) | (_, ComboState::Open) => {
-            *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor::all(theme.colors.border_highlight);
-        }
-
-        (MouseKind::Out, ComboState::Closed) => {
-            *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor::all(theme.colors.border);
-        }
+    if let Some(look) = popup::button_look(trigger.event().kind, *combo_state == ComboState::Open) {
+        popup::apply_look(look, &theme, &mut background_color, &mut border_color);
     }
 }
