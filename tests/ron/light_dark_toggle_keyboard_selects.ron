@@ -1,5 +1,5 @@
-// Each option is a tab stop: Tab walks Light, System, Dark, and Enter on the
-// focused option fixes the preference to it.
+// The options are one tab stop that enters at the current preference (System): the arrows move
+// the focus and pick, Enter on the focused option keeps it.
 (
     format_version: 3,
     name: "a light dark toggle is driven from the keyboard",
@@ -7,8 +7,8 @@
     steps: [
         Wait(2),
         Tap(key: Tab),
-        Tap(key: Tab),
-        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("light dark toggle"), Role(role: Button, label: "System"))))),
+        Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))))),
         Tap(key: Enter),
         Wait(2),

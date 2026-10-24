@@ -18,8 +18,8 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusVisible};
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, UiSystems};
-use bevy::ui_widgets::{ActiveDescendant, ListItem, ScrollIntoView, Tab};
+use bevy::ui::{InteractionDisabled, Selected, UiSystems};
+use bevy::ui_widgets::{Activate, ActiveDescendant, ListItem, ScrollIntoView, Tab};
 
 use crate::select::{SelectionParam, SelectionValue};
 use crate::theme::Theme;
@@ -177,8 +177,11 @@ impl RovingItem {
 /// Which item a [`RovingGroup`] offers to Tab when the focus is not in it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RovingEntry {
-    /// The selected eligible item, else the first eligible one (a radio group).
+    /// The eligible item of the group's `Selection`, else the first eligible one (a radio group).
     Selected,
+    /// The eligible item that has Bevy's `Selected` marker, else the first eligible one (a radio
+    /// group whose state is not a `Selection`, the `LightDarkToggle`).
+    Marked,
     /// The item that had the focus last while it is eligible, else the first one (a toolbar).
     Last,
 }
@@ -192,14 +195,25 @@ pub(crate) enum RovingKeys {
     Horizontal,
 }
 
+/// What moving the focus inside a [`RovingGroup`] does to the item it lands on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RovingPick {
+    /// Nothing: the focus only moves.
+    Nothing,
+    /// Selects it in the group's `Selection`, for a selection of at most one.
+    Selection,
+    /// Triggers `Activate` on it, as a click would.
+    Activate,
+}
+
 /// A composite widget with one tab stop and arrow keys between its [`RovingItem`]s, like a
 /// `TabBar`'s tabs: a `SegmentedControl`, `FilterChips`, `Gallery` or `Toolbar`.
 #[derive(Component, Clone, Debug)]
 pub(crate) struct RovingGroup {
     entry: RovingEntry,
     keys: RovingKeys,
-    /// Whether moving the focus selects the item it lands on (for a selection of at most one).
-    select_on_move: bool,
+    /// What moving the focus does to the item it lands on.
+    pick: RovingPick,
     /// The last item of this group that had the focus.
     last: Option<Entity>,
     /// Whether the focus was on one of the items when this was last looked at.
@@ -211,19 +225,33 @@ pub(crate) struct RovingGroup {
 impl RovingGroup {
     /// A radio group: the arrows move the focus and select, for a selection of at most one.
     pub(crate) const fn radio() -> Self {
-        Self::new(RovingEntry::Selected, RovingKeys::Radio, true)
+        Self::new(
+            RovingEntry::Selected,
+            RovingKeys::Radio,
+            RovingPick::Selection,
+        )
+    }
+
+    /// A radio group whose state is the `Selected` marker of its items, not a `Selection`: the
+    /// arrows move the focus and activate the item they land on.
+    pub(crate) const fn marked_radio() -> Self {
+        Self::new(RovingEntry::Marked, RovingKeys::Radio, RovingPick::Activate)
     }
 
     /// A toolbar: left and right move the focus only.
     pub(crate) const fn toolbar() -> Self {
-        Self::new(RovingEntry::Last, RovingKeys::Horizontal, false)
+        Self::new(
+            RovingEntry::Last,
+            RovingKeys::Horizontal,
+            RovingPick::Nothing,
+        )
     }
 
-    const fn new(entry: RovingEntry, keys: RovingKeys, select_on_move: bool) -> Self {
+    const fn new(entry: RovingEntry, keys: RovingKeys, pick: RovingPick) -> Self {
         Self {
             entry,
             keys,
-            select_on_move,
+            pick,
             last: None,
             holds_focus: false,
             order: Vec::new(),
@@ -583,6 +611,8 @@ struct RovingChanges<'w, 's> {
     items_removed: RemovedComponents<'w, 's, RovingItem>,
     changed_children: Query<'w, 's, Entity, (Changed<Children>, With<RovingGroup>)>,
     changed_selections: Query<'w, 's, (), Changed<crate::select::Selection>>,
+    marked_added: Query<'w, 's, &'static RovingItem, Added<Selected>>,
+    marked_removed: RemovedComponents<'w, 's, Selected>,
 }
 
 /// Keeps the one reachable item of every [`RovingGroup`] valid, and the focus too.
@@ -603,6 +633,7 @@ fn sync_roving_groups(
     items: Query<(&RovingItem, Has<InteractionDisabled>, Has<Unreachable>)>,
     mut indices: Query<&mut TabIndex, With<RovingItem>>,
     selections: SelectionParam,
+    marked: Query<(), With<Selected>>,
     mut focus: ResMut<InputFocus>,
     children: Query<&Children>,
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
@@ -622,6 +653,12 @@ fn sync_roving_groups(
     dirty_groups.extend(roving.disabled_added.iter().map(|item| item.owner));
     dirty_groups.extend(roving.unreachable_added.iter().map(|item| item.owner));
     dirty_groups.extend(roving.changed_children.iter());
+    dirty_groups.extend(roving.marked_added.iter().map(|item| item.owner));
+    for entity in roving.marked_removed.read() {
+        if let Ok((item, _, _)) = items.get(entity) {
+            dirty_groups.insert(item.owner);
+        }
+    }
     let focus_moved = focus.is_changed();
     let selection_changed = !roving.changed_selections.is_empty();
     for (entity, group) in &groups {
@@ -710,6 +747,11 @@ fn sync_roving_groups(
                         .or_else(|| order.iter().find(|(_, ok)| *ok))
                         .map(|(entity, _)| *entity)
                 }
+                RovingEntry::Marked => order
+                    .iter()
+                    .find(|(entity, ok)| *ok && marked.contains(*entity))
+                    .or_else(|| order.iter().find(|(_, ok)| *ok))
+                    .map(|(entity, _)| *entity),
                 RovingEntry::Last => group
                     .last
                     .filter(|last| eligible_of(*last) == Some(true))
@@ -811,13 +853,19 @@ fn navigate_roving_group(
     };
     focus.set(destination, FocusCause::Navigated);
     visible.0 = true;
-    if group.select_on_move
-        && let Ok(destination_item) = items.get(destination)
-    {
-        let picked = destination_item.item;
-        selections.update_selection(item.owner, |selection| {
-            (!selection.allow_multiple()).then(|| selection.set_selection([picked]))?
-        });
+    if let Ok(destination_item) = items.get(destination) {
+        match group.pick {
+            RovingPick::Nothing => {}
+            RovingPick::Selection => {
+                let picked = destination_item.item;
+                selections.update_selection(item.owner, |selection| {
+                    (!selection.allow_multiple()).then(|| selection.set_selection([picked]))?
+                });
+            }
+            RovingPick::Activate => commands.trigger(Activate {
+                entity: destination,
+            }),
+        }
     }
     commands.trigger(ScrollIntoView {
         entity: destination,

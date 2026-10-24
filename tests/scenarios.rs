@@ -41,6 +41,7 @@ use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
+use rin_bevy_ui::light_dark_toggle::{LightDarkToggle, ThemePreference};
 use rin_bevy_ui::list::{ItemViewCreator, ItemViewSpawner, List};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelRefs};
@@ -51,7 +52,9 @@ use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
-use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
+use rin_bevy_ui::theme::{
+    DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeColors, ThemeMode,
+};
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::virtual_list::{
@@ -3589,5 +3592,148 @@ fn reinserting_a_text_field_updates_value_placeholder_name_and_widths_without_ev
         world.get_resource::<Events>().unwrap().0,
         0,
         "no change or commit"
+    );
+}
+
+// ---- LightDarkToggle: one tab stop whose arrows pick ----
+
+/// A "Before" button, the `toggle` and an "After" button, with the arrow keys moving the focus
+/// between widgets as an app's directional navigation would. `preference` is inserted first, as
+/// an app that fixes it would.
+fn toggle_app(preference: Option<ThemePreference>) -> App {
+    let mut app = directional_navigation_app();
+    if let Some(preference) = preference {
+        app.insert_resource(preference);
+    }
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((Name::new("Before"), PushButton::from_label("Before")));
+        root.spawn((Name::new("toggle"), LightDarkToggle));
+        root.spawn((Name::new("After"), PushButton::from_label("After")));
+    });
+    settle(&mut app);
+    app
+}
+
+fn preference_of(app: &App) -> ThemePreference {
+    *app.world().get_resource::<ThemePreference>().unwrap()
+}
+
+#[test]
+fn a_light_dark_toggle_is_one_tab_stop_at_the_option_of_the_preference() {
+    for (index, preference) in [
+        ThemePreference::Light,
+        ThemePreference::System,
+        ThemePreference::Dark,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut app = toggle_app(Some(preference));
+        let toggle = named(&mut app, "toggle");
+        let options = item_buttons(&app, toggle);
+        assert_eq!(options.len(), 3);
+        assert_eq!(
+            tab_stops(&app, toggle),
+            vec![options[index]],
+            "{preference:?}"
+        );
+        assert!(
+            app.world().get::<TabIndex>(toggle).is_none(),
+            "no stop for the container"
+        );
+    }
+}
+
+#[test]
+fn the_entry_option_of_a_light_dark_toggle_follows_the_preference_when_it_changes_elsewhere() {
+    let mut app = toggle_app(None);
+    let toggle = named(&mut app, "toggle");
+    let options = item_buttons(&app, toggle);
+    assert_eq!(tab_stops(&app, toggle), vec![options[1]]);
+    app.insert_resource(ThemePreference::Dark);
+    settle(&mut app);
+    assert_eq!(tab_stops(&app, toggle), vec![options[2]]);
+    app.insert_resource(ThemePreference::Light);
+    settle(&mut app);
+    assert_eq!(tab_stops(&app, toggle), vec![options[0]]);
+}
+
+#[test]
+fn arrows_move_wrap_and_set_the_preference_in_a_light_dark_toggle() {
+    let mut app = toggle_app(None);
+    let toggle = named(&mut app, "toggle");
+    let options = item_buttons(&app, toggle);
+    focus_on(&mut app, options[1]);
+
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(options[2]));
+    assert_eq!(preference_of(&app), ThemePreference::Dark);
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Dark
+    );
+    press(&mut app, KeyCode::ArrowDown);
+    assert_eq!(focus_of(&app), Some(options[0]), "wraps to the first");
+    assert_eq!(preference_of(&app), ThemePreference::Light);
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Light
+    );
+    press(&mut app, KeyCode::ArrowLeft);
+    assert_eq!(focus_of(&app), Some(options[2]), "wraps to the last");
+    press(&mut app, KeyCode::ArrowUp);
+    assert_eq!(focus_of(&app), Some(options[1]));
+    assert_eq!(preference_of(&app), ThemePreference::System);
+    press(&mut app, KeyCode::End);
+    assert_eq!(focus_of(&app), Some(options[2]));
+    assert_eq!(preference_of(&app), ThemePreference::Dark);
+    press(&mut app, KeyCode::Home);
+    assert_eq!(focus_of(&app), Some(options[0]));
+    assert_eq!(preference_of(&app), ThemePreference::Light);
+    assert_eq!(tab_stops(&app, toggle), vec![options[0]]);
+
+    // Enter and Space still pick the focused option.
+    app.insert_resource(ThemePreference::Dark);
+    settle(&mut app);
+    focus_on(&mut app, options[0]);
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(preference_of(&app), ThemePreference::Light);
+}
+
+#[test]
+fn a_held_arrow_key_does_not_move_the_focus_out_of_a_light_dark_toggle() {
+    let mut app = toggle_app(None);
+    let toggle = named(&mut app, "toggle");
+    let options = item_buttons(&app, toggle);
+    focus_on(&mut app, options[2]);
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, false);
+    assert_eq!(
+        focus_of(&app),
+        Some(options[0]),
+        "the first press wraps round"
+    );
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowRight, ButtonState::Released, false);
+    assert_eq!(
+        focus_of(&app),
+        Some(options[1]),
+        "the repeat moves on inside the toggle and the release moves nothing"
+    );
+}
+
+#[test]
+fn a_light_dark_toggle_does_not_take_the_focus_from_another_widget() {
+    let mut app = toggle_app(None);
+    let after = named(&mut app, "After");
+    focus_on(&mut app, after);
+    app.insert_resource(ThemePreference::Dark);
+    settle(&mut app);
+    assert_eq!(focus_of(&app), Some(after));
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(
+        preference_of(&app),
+        ThemePreference::Dark,
+        "an arrow elsewhere picks nothing"
     );
 }
