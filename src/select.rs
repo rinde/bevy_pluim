@@ -812,6 +812,29 @@ impl<T: Into<String>> From<T> for Item<String> {
     }
 }
 
+/// A run condition for a system that builds one child per item of a widget `W` over items of
+/// type `T`: true in a frame where something it builds from may have changed (a widget added or
+/// changed, an item added, removed or changed, a selection or its [`ItemsRef`] changed), and
+/// false in every other frame, so the system does no per-item work then.
+pub(crate) fn structure_may_have_changed<W: Component, T: Send + Sync + 'static>(
+    widgets: Query<(), Changed<W>>,
+    values: Query<(), Changed<ItemValues>>,
+    items: Query<(), Changed<Item<T>>>,
+    selections: Query<(), Changed<Selection>>,
+    items_refs: Query<(), Changed<ItemsRef>>,
+    mut removed_items: RemovedComponents<Item<T>>,
+    mut removed_item_of: RemovedComponents<ItemOf>,
+) -> bool {
+    // Both readers are drained, so neither keeps the condition true in the next frame.
+    let removed = removed_items.read().count() + removed_item_of.read().count() > 0;
+    removed
+        || !widgets.is_empty()
+        || !values.is_empty()
+        || !items.is_empty()
+        || !selections.is_empty()
+        || !items_refs.is_empty()
+}
+
 /// Triggered on an [`ItemValues`] entity when its items change; holds the new items.
 #[derive(EntityEvent, Debug, Clone)]
 pub struct ItemsChanged {
@@ -932,6 +955,62 @@ mod tests {
     use super::*;
     use bevy::ecs::relationship::RelationshipTarget;
     use bevy::ecs::system::RunSystemOnce;
+
+    #[derive(Component)]
+    struct Widget;
+
+    #[derive(Resource, Default)]
+    struct Runs(u32);
+
+    fn structure_app() -> App {
+        let mut app = App::new();
+        app.init_resource::<Runs>().add_systems(
+            Update,
+            (|mut runs: ResMut<Runs>| runs.0 += 1)
+                .run_if(structure_may_have_changed::<Widget, String>),
+        );
+        app
+    }
+
+    fn runs_in_next_frame(app: &mut App) -> u32 {
+        let before = app.world().resource::<Runs>().0;
+        app.update();
+        app.world().resource::<Runs>().0 - before
+    }
+
+    #[test]
+    fn the_structure_condition_is_false_in_a_frame_without_a_change_and_true_after_one() {
+        let mut app = structure_app();
+        let widget = app.world_mut().spawn(Widget).id();
+        let values = app.world_mut().spawn_empty().id();
+        let item = app.world_mut().spawn((Item::new("a"), ItemOf(values))).id();
+        assert_eq!(runs_in_next_frame(&mut app), 1, "new entities are changes");
+        for _ in 0..3 {
+            assert_eq!(runs_in_next_frame(&mut app), 0);
+        }
+
+        app.world_mut()
+            .get_mut::<Widget>(widget)
+            .unwrap()
+            .set_changed();
+        assert_eq!(runs_in_next_frame(&mut app), 1);
+        assert_eq!(runs_in_next_frame(&mut app), 0);
+
+        app.world_mut()
+            .get_mut::<Item<String>>(item)
+            .unwrap()
+            .set_changed();
+        assert_eq!(runs_in_next_frame(&mut app), 1);
+        assert_eq!(runs_in_next_frame(&mut app), 0);
+
+        app.world_mut().entity_mut(item).despawn();
+        assert_eq!(
+            runs_in_next_frame(&mut app),
+            1,
+            "a removed item is a change"
+        );
+        assert_eq!(runs_in_next_frame(&mut app), 0);
+    }
 
     fn entity(index: u32) -> Entity {
         Entity::from_raw_u32(index).unwrap_or(Entity::PLACEHOLDER)
