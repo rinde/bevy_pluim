@@ -83,6 +83,7 @@ use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
+use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
@@ -6809,6 +6810,161 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     if mode == ThemeMode::Light {
         assert_eq!(theme.colors_of(ThemeMode::Dark), dark_before);
     }
+}
+
+/// Picks the colour at index 60 of the palette (red-500) for the "accent" row of the theme
+/// editor and returns it.
+fn pick_accent_in_the_theme_editor(app: &mut App) -> Color {
+    let combo = {
+        let world = app.world_mut();
+        world
+            .query::<(Entity, &theme_editor_ui::ThemeSlot)>()
+            .iter(world)
+            .find(|(_, slot)| slot.0 == "accent")
+            .map(|(e, _)| e)
+            .unwrap()
+    };
+    let (picked, color) = {
+        let world = app.world_mut();
+        let color = world
+            .query::<&Item<Color>>()
+            .iter(world)
+            .map(|i| i.data)
+            .nth(60)
+            .unwrap();
+        let picked = world
+            .query::<(Entity, &Item<Color>)>()
+            .iter(world)
+            .find(|(_, i)| i.data == color)
+            .map(|(e, _)| e)
+            .unwrap();
+        (picked, color)
+    };
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(picked))));
+    for _ in 0..3 {
+        app.update();
+    }
+    color
+}
+
+#[test]
+fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
+    let mut app = theme_editor_app();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    app.update();
+    app.update();
+    let before = app.world().get_resource::<Theme>().unwrap().clone();
+    assert_eq!(before.mode(), ThemeMode::Dark);
+
+    let red = pick_accent_in_the_theme_editor(&mut app);
+
+    let theme = app.world().get_resource::<Theme>().unwrap();
+    assert_eq!(theme.mode(), ThemeMode::Dark);
+    assert_ne!(
+        theme_editor_ui::slot_color(&before.colors_of(ThemeMode::Dark), "accent"),
+        Some(red),
+        "the pick is a change"
+    );
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors_of(ThemeMode::Dark), "accent"),
+        Some(red)
+    );
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        Some(red)
+    );
+    assert_eq!(
+        theme.colors_of(ThemeMode::Light),
+        before.colors_of(ThemeMode::Light)
+    );
+}
+
+#[test]
+fn the_theme_editor_pair_source_has_both_blocks_and_follows_an_edit_to_the_dark_half() {
+    let mut theme = Theme::default();
+    let source = theme_editor_ui::pair_source(&theme);
+    assert!(source.contains("const LIGHT: ThemeColors = ThemeColors {\n"));
+    assert!(source.contains("const DARK: ThemeColors = ThemeColors {\n"));
+
+    let mut dark = theme.colors_of(ThemeMode::Dark);
+    assert!(theme_editor_ui::set_slot_color(
+        &mut dark,
+        "accent",
+        Color::srgba(0.25, 0.5, 0.75, 1.0)
+    ));
+    theme.set_colors(ThemeMode::Dark, dark);
+    let edited = theme_editor_ui::pair_source(&theme);
+    let (light_block, dark_block) = edited.split_once("const DARK").unwrap();
+    assert!(dark_block.contains("    accent: Color::srgba(0.25, 0.5, 0.75, 1"));
+    assert!(!light_block.contains("0.25, 0.5, 0.75"));
+    assert_eq!(
+        light_block,
+        theme_editor_ui::pair_source(&Theme::default())
+            .split_once("const DARK")
+            .unwrap()
+            .0,
+        "the light block is untouched"
+    );
+}
+
+#[test]
+fn activating_the_theme_editors_export_button_spawns_a_toast_under_the_ui_root() {
+    let mut app = theme_editor_app();
+    let export = {
+        let world = app.world_mut();
+        let label = world
+            .query::<(&Text, &ChildOf)>()
+            .iter(world)
+            .find(|(text, _)| text.0 == "Export")
+            .map(|(_, child_of)| child_of.parent())
+            .unwrap();
+        assert!(
+            world.get::<PushButton>(label).is_some(),
+            "the label is in a PushButton"
+        );
+        label
+    };
+    let root = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<UiRoot>>()
+            .single(world)
+            .unwrap()
+    };
+    assert_eq!(count_toasts(&mut app), 0);
+
+    app.world_mut().trigger(Activate { entity: export });
+    app.update();
+    app.update();
+
+    let world = app.world_mut();
+    let toasts: Vec<Entity> = world
+        .query_filtered::<Entity, With<Toast>>()
+        .iter(world)
+        .collect();
+    assert_eq!(toasts.len(), 1);
+    assert!(
+        world
+            .get::<ChildOf>(toasts[0])
+            .is_some_and(|child_of| child_of.parent() == root
+                || world
+                    .get::<ChildOf>(child_of.parent())
+                    .is_some_and(|stack| stack.parent() == root)),
+        "the toast is under the UI root (directly or in its stack)"
+    );
+}
+
+fn count_toasts(app: &mut App) -> usize {
+    let world = app.world_mut();
+    world
+        .query_filtered::<(), With<Toast>>()
+        .iter(world)
+        .count()
 }
 
 #[test]
