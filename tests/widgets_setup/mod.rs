@@ -1546,16 +1546,16 @@ fn panel(world: &mut World) {
             commands.entity(closed.entity).despawn();
         })
         .id();
+    let tall_panel = Panel::new("Stops").with_close_icon(Handle::default());
+    let tall_panel = match tall_panel.with_max_body_height(100.0) {
+        Ok(panel) => panel,
+        Err(error) => {
+            error!("the tall panel keeps its default maximum body height: {error}");
+            Panel::new("Stops").with_close_icon(Handle::default())
+        }
+    };
     let tall = world
-        .spawn((
-            Panel::new("Stops")
-                .with_close_icon(Handle::default())
-                .with_max_body_height(100.0)
-                .unwrap(),
-            Name::new("tall panel"),
-            top,
-            ChildOf(root),
-        ))
+        .spawn((tall_panel, Name::new("tall panel"), top, ChildOf(root)))
         .id();
     world.entity_mut(root).with_children(spawn_theme_button);
     world.flush();
