@@ -458,7 +458,7 @@ fn theme_text_fields(
         Either::Right(fields.iter_mut())
     };
 
-    let colors = &theme.colors;
+    let colors = theme.colors();
     let font = TextFont {
         font: theme.body_font.clone().into(),
         font_size: Theme::font_size(theme.font_size_body),

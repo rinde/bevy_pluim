@@ -223,7 +223,7 @@ fn theme_setting_rows(
         let Ok((mut color, mut font)) = titles.get_mut(title_id) else {
             continue;
         };
-        *color = TextColor(theme.colors.text_primary);
+        *color = TextColor(theme.colors().text_primary);
         *font = TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_body),

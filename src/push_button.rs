@@ -374,7 +374,7 @@ fn handle_hover(
     if let Ok((mut background, toggle)) = query.get_mut(trigger.event().event_target()) {
         let on = toggle.is_some_and(|t| t.0);
         *background = BackgroundColor(background_for(
-            &theme.colors,
+            theme.colors(),
             ButtonState {
                 disabled: false,
                 pressed,
@@ -484,7 +484,7 @@ fn theme_push_button(
         let on = toggle.is_some_and(|t| t.0);
         // A button with `NoDefaultHover` is coloured by its owner, so it rests here.
         background_color.0 = background_for(
-            &theme.colors,
+            theme.colors(),
             ButtonState {
                 disabled,
                 pressed: pressed && !no_default_hover,
@@ -492,7 +492,7 @@ fn theme_push_button(
                 on,
             },
         );
-        border_color.set_all(theme.colors.border);
+        border_color.set_all(theme.colors().border);
         node.border = UiRect::all(theme.border_thickness);
         node.flex_direction = placement.flex_direction();
         let compact = *size == ButtonSize::Compact;
@@ -516,11 +516,11 @@ fn theme_push_button(
         // label
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
             *text_color = TextColor(if disabled {
-                theme.colors.text_disabled
+                theme.colors().text_disabled
             } else if on {
-                theme.colors.accent_subtle_text
+                theme.colors().accent_subtle_text
             } else {
-                theme.colors.text_primary
+                theme.colors().text_primary
             });
             *text_font = TextFont {
                 font: theme.body_font.clone().into(),
@@ -535,11 +535,11 @@ fn theme_push_button(
             && let Ok((mut text_color, mut text_font)) = icons.get_mut(icon_id)
         {
             *text_color = TextColor(if disabled {
-                theme.colors.text_disabled
+                theme.colors().text_disabled
             } else if on {
-                theme.colors.accent_subtle_text
+                theme.colors().accent_subtle_text
             } else {
-                theme.colors.text_primary
+                theme.colors().text_primary
             });
             *text_font = TextFont {
                 font: theme.body_font.clone().into(),

@@ -196,7 +196,7 @@ fn handle_hover(
     }
     // The pointer is on the link for every event but `Out`, a release included.
     let (bg_color, link_color) = colors_for(
-        &theme.colors,
+        theme.colors(),
         LinkLook {
             disabled: false,
             pressed: matches!(kind, MouseKind::Pressed),
@@ -240,7 +240,7 @@ fn theme_link(
     };
     for (mut link_bg, children, interaction_disabled, pressed, hovered) in it {
         let (bg_color, link_color) = colors_for(
-            &theme.colors,
+            theme.colors(),
             LinkLook {
                 disabled: interaction_disabled,
                 pressed,

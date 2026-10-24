@@ -126,7 +126,7 @@ fn theme_pills(
     };
 
     for (pill, mut background, mut text_color, mut text_font) in iter {
-        let colors = &theme.colors;
+        let colors = theme.colors();
         let (bg, text) = match pill.tone {
             PillTone::Neutral => (colors.pill_background, colors.pill_text),
             PillTone::Info => (colors.info_background, colors.info_text),

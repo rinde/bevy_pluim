@@ -268,7 +268,7 @@ fn theme_items(
             outer_node.border_radius = BorderRadius::all(Val::Px(5.0));
             outer_node.padding = UiRect::all(Val::Px(0.5));
             outer_node.border = UiRect::all(Val::Px(1.0));
-            outer_background_color.0 = theme.colors.background_primary;
+            outer_background_color.0 = theme.colors().background_primary;
 
             let Some(mut inner_node) = children
                 .first()
@@ -346,7 +346,7 @@ fn set_highlight(
         return;
     };
 
-    let background_color = theme.colors.background_primary;
+    let background_color = theme.colors().background_primary;
     let (inner, outer) = match hover_state {
         HoverState::SelectedHover => highlight_color(item_color, background_color, 0.8),
         HoverState::Selected => highlight_color(item_color, background_color, 0.6),

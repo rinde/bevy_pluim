@@ -437,7 +437,7 @@ fn theme_toggles(
             continue;
         }
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors.segmented_track;
+        background.0 = theme.colors().segmented_track;
     }
 
     let preference = preference.map(|p| *p);
@@ -456,7 +456,7 @@ fn theme_toggles(
         node.align_items = AlignItems::Center;
         node.justify_content = JustifyContent::Center;
         node.border_radius = BorderRadius::all(theme.control_radius);
-        let (fill, ink) = segment_colors(&theme.colors, is_selected, hovered.get());
+        let (fill, ink) = segment_colors(theme.colors(), is_selected, hovered.get());
         background.0 = if is_selected { fill } else { Color::NONE };
         colours.push((option_id, ink));
     }

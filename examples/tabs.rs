@@ -38,7 +38,7 @@ fn main() {
 fn setup(mut commands: Commands, theme: Res<Theme>) {
     commands.spawn(Camera2d);
 
-    let theme_border_color = theme.colors.border;
+    let theme_border_color = theme.colors().border;
 
     let items = [
         (
@@ -176,7 +176,7 @@ static LIGHT_COLORS: LazyLock<Vec<TailwindColor>> = LazyLock::new(|| {
 });
 
 fn create_card_demo(spawner: In<StackChildSpawner>, theme: Res<Theme>, mut commands: Commands) {
-    let background_color = theme.colors.background_primary;
+    let background_color = theme.colors().background_primary;
     spawner.spawn_scene(
         &mut commands,
         bsn! {
@@ -289,7 +289,7 @@ fn update_theme(
     mut card_background: Query<&mut BackgroundColor, With<CardBackground>>,
 ) {
     for mut card_background_color in &mut card_background {
-        card_background_color.0 = theme.colors.background_primary;
+        card_background_color.0 = theme.colors().background_primary;
     }
 }
 
