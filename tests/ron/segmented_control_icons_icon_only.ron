@@ -1,6 +1,6 @@
 // With `SegmentLabels::Hidden` a segment with an icon shows the icon alone: its text has
 // `Display::None`, but the segment is still a radio button named after the item, and a click or
-// Tab and Enter picks it.
+// the arrow keys pick it.
 (
     format_version: 3,
     name: "an icon only segment is a named radio button that a click or the keyboard picks",
@@ -31,9 +31,10 @@
         MoveTo(Within(Name("icon only segmented control"), Role(role: Button, label: "Map"))),
         Click(Left),
         Check(App(Selected(of: Name("icon only segmented control"), items: ["Map"]))),
-        // The click left the focus on "Map"; Tab moves to "Table".
-        Tap(key: Tab),
+        // The click left the focus on "Map"; the right arrow moves it to "Table" and picks it.
+        Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("icon only segmented control"), Role(role: Button, label: "Table"))))),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Table"]))),
         Tap(key: Enter),
         Check(App(Selected(of: Name("icon only segmented control"), items: ["Table"]))),
     ],

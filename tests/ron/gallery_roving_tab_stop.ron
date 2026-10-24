@@ -1,0 +1,38 @@
+// A gallery is one tab stop: Tab enters at the picked card and the next Tab leaves. The arrows
+// move through the cards in the order shown, on into the next group and round, picking each
+// card they land on.
+(
+    format_version: 3,
+    name: "a gallery is one tab stop with arrow keys through its cards in order",
+    setup: App(Gallery),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Steam"))))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Diesel"))))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Passenger"))))),
+        Check(App(Accessible(
+            of: Within(Name("gallery"), Role(role: Button, label: "Passenger")),
+            role: Some("RadioButton"),
+            label: Some("Passenger"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Steam"))))),
+        Tap(key: ArrowUp),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Passenger"))))),
+        Tap(key: Home),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Steam"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Steam"))))),
+    ],
+    expect: [],
+)

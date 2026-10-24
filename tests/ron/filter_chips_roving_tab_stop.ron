@@ -1,0 +1,38 @@
+// Filter chips are one tab stop each: Tab enters at the active chip, the next Tab leaves for the
+// next row, and Shift+Tab comes back. The arrows move the focus and pick, wrap round, and Home
+// and End go to the ends.
+(
+    format_version: 3,
+    name: "a chip row is one tab stop with arrow keys between its chips",
+    setup: App(FilterChips),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "All 4"))))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("mirror chips"), Role(role: Button, label: "All 4"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Alpha "))))),
+        Tap(key: ArrowLeft),
+        Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Delta "))))),
+        Check(App(Selected(of: Name("narrow chips"), items: ["Delta"]))),
+        Tap(key: Home),
+        Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Alpha "))))),
+        Check(App(Selected(of: Name("narrow chips"), items: ["Alpha"]))),
+        Tap(key: End),
+        Tap(key: ArrowDown),
+        Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Alpha "))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Alpha "))))),
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("mirror chips"), Role(role: Button, label: "All 4"))))),
+    ],
+    expect: [],
+)

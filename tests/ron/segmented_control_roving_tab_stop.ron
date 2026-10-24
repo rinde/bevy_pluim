@@ -1,0 +1,50 @@
+// A segmented control is one tab stop: Tab enters at the selected segment, the next Tab leaves
+// for the next control and Shift+Tab comes back to the selected one. The arrows move the focus
+// (with the ring) and pick, wrap round, and Home and End go to the ends.
+(
+    format_version: 3,
+    name: "a segmented control is one tab stop with arrow keys between its segments",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Check(Component(
+            target: Within(Name("own segmented control"), Role(role: Button, label: "Auto")),
+            path: "Outline.width",
+            is: Eq(Px(2.0)),
+        )),
+        Tap(key: ArrowLeft),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Manual"))))),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Auto"]))),
+        Tap(key: End),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Manual"))))),
+        Tap(key: Home),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+        // One Tab per control: the first and the second shared control, then "Change theme".
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("first shared segmented control"), Role(role: Button, label: "Dark"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("second shared segmented control"), Role(role: Button, label: "Dark"))))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        // Shift+Tab goes back to the second shared control's selected segment.
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("second shared segmented control"), Role(role: Button, label: "Dark"))))),
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+    ],
+    expect: [],
+)

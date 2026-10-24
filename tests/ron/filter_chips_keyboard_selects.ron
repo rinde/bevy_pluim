@@ -1,19 +1,21 @@
-// Every chip is a tab stop: Tab reaches "All", then "Running"; Enter or Space on a focused chip
-// selects it, like a click.
+// Filter chips are one tab stop, at the active chip: Tab reaches "All 4" and the arrow keys
+// move the focus between chips and pick the one they land on; Enter or Space on a focused chip
+// keeps it picked.
 (
     format_version: 3,
-    name: "Enter and Space on a focused chip select it",
+    name: "Tab enters the chips once and the arrow keys then move and pick",
     setup: App(FilterChips),
     steps: [
         Wait(2),
         Tap(key: Tab),
         Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "All 4"))))),
-        Tap(key: Tab),
+        Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "Running 2"))))),
+        Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
         Tap(key: Enter),
         Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
-        Tap(key: Tab),
-        Tap(key: Tab),
+        Tap(key: ArrowRight),
+        Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("status chips"), Role(role: Button, label: "Problems 1"))))),
         Tap(key: Space),
         Check(App(Selected(of: Name("status chips"), items: ["Problems"]))),

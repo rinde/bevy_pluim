@@ -4,6 +4,7 @@
 #![expect(
     clippy::unwrap_used,
     clippy::expect_used,
+    clippy::indexing_slicing,
     reason = "tests may abort loudly with a case-specific diagnostic"
 )]
 
@@ -21,6 +22,7 @@ use bevy::camera::{CameraUpdateSystems, NormalizedRenderTarget, RenderTarget};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input_focus::directional_navigation::{AutoNavigationConfig, DirectionalNavigationMap};
+use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusVisible};
 use bevy::math::CompassOctant;
 use bevy::picking::input::PointerInputSettings;
@@ -28,7 +30,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator};
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, Selected, UiSystems};
-use bevy::ui_widgets::{ActiveDescendant, Button, Tab};
+use bevy::ui_widgets::{Activate, ActiveDescendant, Button, Tab};
 use bevy::window::PrimaryWindow;
 use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
@@ -45,6 +47,7 @@ use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
+use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldRefs};
@@ -577,6 +580,508 @@ fn a_held_arrow_key_does_not_move_the_focus_out_of_a_tab_bar() {
     send_key(&mut app, KeyCode::ArrowRight, ButtonState::Released, false);
 
     assert_eq!(focus_of(&app), Some(a));
+}
+
+// ---- Composite widgets: one tab stop and arrow keys ----
+
+/// A column of "Before", the `seg` segmented control (A, B, C), "Between", the `chips` (X, Y, Z),
+/// the `gallery` (P, Q in one group, R in another), the `bar` toolbar (Select, Build, Bulldoze)
+/// and "After", with the arrow keys moving the focus between widgets as an app's directional
+/// navigation would.
+fn composite_screen(world: &mut World) {
+    let root = spawn_camera_and_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn((Name::new("Before"), PushButton::from_label("Before")));
+        root.spawn((
+            Name::new("seg"),
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["A", "B", "C"].map(Item::new)),
+        ));
+        root.spawn((Name::new("Between"), PushButton::from_label("Between")));
+        root.spawn((
+            Name::new("chips"),
+            FilterChips,
+            Selection::builder()
+                .one()
+                .build_with_items(["X", "Y", "Z"].map(|label| Item {
+                    data: Chip::new(label),
+                })),
+        ));
+        root.spawn((
+            Name::new("gallery"),
+            Gallery,
+            Selection::builder().one().build_with_items(
+                [("P", "one"), ("Q", "one"), ("R", "two")].map(|(label, group)| Item {
+                    data: GalleryCard::new(Handle::default(), label, group),
+                }),
+            ),
+        ));
+        root.spawn((
+            Name::new("bar"),
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::builder()
+                .one()
+                .build_with_items(["Select", "Build", "Bulldoze"].map(|label| Item {
+                    data: Tool::new(Handle::default(), label),
+                })),
+        ));
+        root.spawn((Name::new("After"), PushButton::from_label("After")));
+    });
+    let window = world
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(world)
+        .unwrap();
+    world.entity_mut(window).observe(navigate_with_arrow_keys);
+}
+
+fn composite_app() -> App {
+    let mut app = directional_navigation_app();
+    composite_screen(app.world_mut());
+    settle(&mut app);
+    app
+}
+
+fn settle(app: &mut App) {
+    for _ in 0..4 {
+        app.update();
+    }
+}
+
+/// The item buttons of the widget `owner`, in the order they are shown.
+fn item_buttons(app: &App, owner: Entity) -> Vec<Entity> {
+    fn walk(world: &World, entity: Entity, found: &mut Vec<Entity>) {
+        let Some(children) = world.get::<Children>(entity) else {
+            return;
+        };
+        for child in children {
+            if world.get::<Button>(*child).is_some() {
+                found.push(*child);
+            }
+            walk(world, *child, found);
+        }
+    }
+    let mut found = Vec::new();
+    walk(app.world(), owner, &mut found);
+    found
+}
+
+/// The item buttons of `owner` that Tab can reach (a `TabIndex` of 0 or more).
+fn tab_stops(app: &App, owner: Entity) -> Vec<Entity> {
+    let buttons = item_buttons(app, owner);
+    buttons
+        .into_iter()
+        .filter(|button| {
+            app.world()
+                .get::<TabIndex>(*button)
+                .is_some_and(|index| index.0 >= 0)
+        })
+        .collect()
+}
+
+fn focus_on(app: &mut App, entity: Entity) {
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(entity, FocusCause::Navigated);
+    settle(app);
+}
+
+fn press(app: &mut App, key: KeyCode) {
+    send_key(app, key, ButtonState::Pressed, false);
+    send_key(app, key, ButtonState::Released, false);
+}
+
+fn selected_texts(app: &App, owner: Entity) -> Vec<String> {
+    let selection = app.world().get::<Selection>(owner).unwrap();
+    let Selection::Value(value) = selection else {
+        return Vec::new();
+    };
+    value
+        .iter()
+        .filter_map(|item| {
+            let world = app.world();
+            world
+                .get::<Item<String>>(item)
+                .map(|i| i.data.clone())
+                .or_else(|| world.get::<Item<Chip>>(item).map(|i| i.data.label.clone()))
+                .or_else(|| world.get::<Item<Tool>>(item).map(|i| i.data.label.clone()))
+                .or_else(|| {
+                    world
+                        .get::<Item<GalleryCard>>(item)
+                        .map(|i| i.data.label.clone())
+                })
+        })
+        .collect()
+}
+
+#[test]
+fn each_composite_widget_is_one_tab_stop_at_its_selected_item_or_its_first_tool() {
+    let mut app = composite_app();
+    for (name, selected_at) in [("seg", 0), ("chips", 0), ("gallery", 0), ("bar", 0)] {
+        let owner = named(&mut app, name);
+        let buttons = item_buttons(&app, owner);
+        assert_eq!(buttons.len(), 3, "{name}");
+        assert_eq!(tab_stops(&app, owner), vec![buttons[selected_at]], "{name}");
+    }
+    // The selected item, not the first, is the stop of a radio group.
+    let seg = named(&mut app, "seg");
+    let buttons = item_buttons(&app, seg);
+    press_on(&mut app, buttons[2]);
+    assert_eq!(tab_stops(&app, seg), vec![buttons[2]]);
+}
+
+/// Clicks `entity` as the pointer would: its `Activate`, with the focus on it.
+fn press_on(app: &mut App, entity: Entity) {
+    focus_on(app, entity);
+    app.world_mut().trigger(Activate { entity });
+    settle(app);
+}
+
+#[test]
+fn arrows_move_wrap_and_pick_in_a_segmented_control_and_home_and_end_go_to_the_ends() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let buttons = item_buttons(&app, seg);
+    focus_on(&mut app, buttons[0]);
+
+    press(&mut app, KeyCode::ArrowLeft);
+    assert_eq!(focus_of(&app), Some(buttons[2]), "left wraps to the last");
+    assert_eq!(selected_texts(&app, seg), ["C"]);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(buttons[0]), "right wraps to the first");
+    assert_eq!(selected_texts(&app, seg), ["A"]);
+    press(&mut app, KeyCode::ArrowDown);
+    assert_eq!(focus_of(&app), Some(buttons[1]));
+    press(&mut app, KeyCode::ArrowUp);
+    assert_eq!(focus_of(&app), Some(buttons[0]));
+    press(&mut app, KeyCode::End);
+    assert_eq!(focus_of(&app), Some(buttons[2]));
+    assert_eq!(selected_texts(&app, seg), ["C"]);
+    press(&mut app, KeyCode::Home);
+    assert_eq!(focus_of(&app), Some(buttons[0]));
+    assert_eq!(selected_texts(&app, seg), ["A"]);
+    assert_eq!(tab_stops(&app, seg), vec![buttons[0]]);
+}
+
+#[test]
+fn the_arrows_of_a_group_with_several_selected_items_move_the_focus_only() {
+    let mut app = directional_navigation_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("multi"),
+            FilterChips,
+            Selection::builder()
+                .zero_or_more()
+                .build_with_items(["X", "Y", "Z"].map(|label| Item {
+                    data: Chip::new(label),
+                })),
+        ));
+    });
+    settle(&mut app);
+    let multi = named(&mut app, "multi");
+    let buttons = item_buttons(&app, multi);
+    focus_on(&mut app, buttons[0]);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(buttons[1]));
+    press(&mut app, KeyCode::ArrowLeft);
+    press(&mut app, KeyCode::ArrowLeft);
+    assert_eq!(focus_of(&app), Some(buttons[2]));
+    assert!(selected_texts(&app, multi).is_empty(), "no pick by moving");
+    press(&mut app, KeyCode::Space);
+    assert_eq!(selected_texts(&app, multi), ["Z"], "Space still toggles");
+}
+
+#[test]
+fn a_held_arrow_never_leaves_a_composite_widget_but_a_toolbars_up_and_down_reach_the_app() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let bar = named(&mut app, "bar");
+    let between = named(&mut app, "Between");
+    let after = named(&mut app, "After");
+    let seg_buttons = item_buttons(&app, seg);
+    let bar_buttons = item_buttons(&app, bar);
+
+    // A held arrow (a press, repeats, a release) stays in the control.
+    focus_on(&mut app, seg_buttons[2]);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, false);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, true);
+    send_key(&mut app, KeyCode::ArrowDown, ButtonState::Released, false);
+    assert!(seg_buttons.contains(&focus_of(&app).unwrap()));
+    assert_ne!(focus_of(&app), Some(between));
+
+    // The toolbar keeps left and right, Home and End ...
+    focus_on(&mut app, bar_buttons[2]);
+    for key in [
+        KeyCode::ArrowRight,
+        KeyCode::ArrowLeft,
+        KeyCode::Home,
+        KeyCode::End,
+    ] {
+        send_key(&mut app, key, ButtonState::Pressed, false);
+        send_key(&mut app, key, ButtonState::Pressed, true);
+        send_key(&mut app, key, ButtonState::Released, false);
+        assert!(bar_buttons.contains(&focus_of(&app).unwrap()), "{key:?}");
+    }
+    // ... and focus alone: a tool is picked by Enter or Space, not by arriving.
+    assert_eq!(selected_texts(&app, bar), ["Select"]);
+
+    // Up and down go to the app, whose navigation moves the focus off the toolbar.
+    focus_on(&mut app, bar_buttons[2]);
+    press(&mut app, KeyCode::ArrowDown);
+    assert_eq!(focus_of(&app), Some(after));
+    press(&mut app, KeyCode::ArrowUp);
+    assert!(bar_buttons.contains(&focus_of(&app).unwrap()));
+}
+
+#[test]
+fn disabled_and_hidden_items_are_skipped_and_a_group_without_an_eligible_item_has_no_stop() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let [a, b, c] = item_buttons(&app, seg).try_into().unwrap();
+    app.world_mut().entity_mut(b).insert(InteractionDisabled);
+    settle(&mut app);
+    assert_eq!(tab_stops(&app, seg), vec![a]);
+    focus_on(&mut app, a);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(c), "the disabled segment is skipped");
+    press(&mut app, KeyCode::ArrowLeft);
+    assert_eq!(focus_of(&app), Some(a));
+
+    // The entry item may not be the stop when it is hidden or disabled itself.
+    app.world_mut().entity_mut(a).insert(InteractionDisabled);
+    settle(&mut app);
+    assert_eq!(
+        tab_stops(&app, seg),
+        vec![c],
+        "A went, so the stop moved on"
+    );
+    app.world_mut().entity_mut(c).insert(InteractionDisabled);
+    settle(&mut app);
+    assert!(tab_stops(&app, seg).is_empty(), "nothing eligible, no stop");
+
+    // Hidden items: the whole toolbar under a `Display::None`.
+    let bar = named(&mut app, "bar");
+    assert_eq!(tab_stops(&app, bar).len(), 1);
+    app.world_mut()
+        .entity_mut(bar)
+        .get_mut::<Node>()
+        .unwrap()
+        .display = Display::None;
+    settle(&mut app);
+    assert!(
+        tab_stops(&app, bar).is_empty(),
+        "a hidden toolbar has no stop"
+    );
+    app.world_mut()
+        .entity_mut(bar)
+        .get_mut::<Node>()
+        .unwrap()
+        .display = Display::Flex;
+    settle(&mut app);
+    assert_eq!(
+        tab_stops(&app, bar).len(),
+        1,
+        "and has one again when shown"
+    );
+}
+
+#[test]
+fn an_empty_composite_widget_contributes_no_stop_and_one_with_items_added_later_does() {
+    let mut app = directional_navigation_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<Item<String>>::new()),
+        )
+        .id();
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("empty"),
+            SegmentedControl,
+            Selection::reference(items),
+        ));
+    });
+    settle(&mut app);
+    let empty = named(&mut app, "empty");
+    assert!(item_buttons(&app, empty).is_empty());
+    assert!(tab_stops(&app, empty).is_empty());
+
+    app.world_mut().spawn((Item::new("A"), ItemOf(items)));
+    app.world_mut().spawn((Item::new("B"), ItemOf(items)));
+    settle(&mut app);
+    let buttons = item_buttons(&app, empty);
+    assert_eq!(buttons.len(), 2);
+    assert_eq!(tab_stops(&app, empty), vec![buttons[0]]);
+}
+
+#[test]
+fn focus_on_a_removed_item_moves_to_the_next_then_the_previous_and_is_cleared_when_none_is_left() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let items = items_of(&app, seg);
+    let buttons = item_buttons(&app, seg);
+    focus_on(&mut app, buttons[1]);
+    app.world_mut().entity_mut(items[1]).despawn();
+    settle(&mut app);
+    let after_first = item_buttons(&app, seg);
+    assert_eq!(after_first.len(), 2);
+    assert_eq!(
+        focus_of(&app),
+        Some(after_first[1]),
+        "the next one takes the focus"
+    );
+    assert_eq!(tab_stops(&app, seg), vec![after_first[1]]);
+
+    // The last one went: the previous takes it.
+    app.world_mut().entity_mut(items[2]).despawn();
+    settle(&mut app);
+    let after_second = item_buttons(&app, seg);
+    assert_eq!(after_second.len(), 1);
+    assert_eq!(focus_of(&app), Some(after_second[0]));
+
+    // None eligible: the stale focus is cleared.
+    app.world_mut()
+        .entity_mut(after_second[0])
+        .insert(InteractionDisabled);
+    settle(&mut app);
+    assert_eq!(focus_of(&app), None);
+    assert!(tab_stops(&app, seg).is_empty());
+}
+
+#[test]
+fn removing_an_item_or_changing_a_selection_does_not_take_the_focus_from_another_widget() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let between = named(&mut app, "Between");
+    let items = items_of(&app, seg);
+    let buttons = item_buttons(&app, seg);
+    focus_on(&mut app, buttons[1]);
+    focus_on(&mut app, between);
+
+    app.world_mut().entity_mut(items[1]).despawn();
+    settle(&mut app);
+    assert_eq!(focus_of(&app), Some(between));
+
+    let remaining = item_buttons(&app, seg);
+    app.world_mut()
+        .entity_mut(seg)
+        .insert(Selection::Value(SelectionValue::One(items[2])));
+    settle(&mut app);
+    assert_eq!(focus_of(&app), Some(between));
+    assert_eq!(
+        tab_stops(&app, seg),
+        vec![remaining[1]],
+        "the stop follows the selection"
+    );
+}
+
+#[test]
+fn shared_selections_keep_one_stop_per_control_at_the_shared_selected_item() {
+    let mut app = directional_navigation_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let shared = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    app.world_mut().entity_mut(root).with_children(|root| {
+        for name in ["one", "two"] {
+            root.spawn((
+                Name::new(name),
+                SegmentedControl,
+                Selection::reference(shared),
+            ));
+        }
+    });
+    settle(&mut app);
+    let one = named(&mut app, "one");
+    let two = named(&mut app, "two");
+    let one_buttons = item_buttons(&app, one);
+    let two_buttons = item_buttons(&app, two);
+    assert_eq!(tab_stops(&app, one), vec![one_buttons[0]]);
+    assert_eq!(tab_stops(&app, two), vec![two_buttons[0]]);
+
+    focus_on(&mut app, one_buttons[0]);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(selected_texts(&app, shared), ["Light"]);
+    assert_eq!(tab_stops(&app, one), vec![one_buttons[1]]);
+    assert_eq!(
+        tab_stops(&app, two),
+        vec![two_buttons[1]],
+        "the other control follows"
+    );
+    assert_eq!(focus_of(&app), Some(one_buttons[1]));
+}
+
+#[test]
+fn a_gallery_moves_linearly_through_its_cards_across_groups_and_wraps() {
+    let mut app = composite_app();
+    let gallery = named(&mut app, "gallery");
+    let cards = item_buttons(&app, gallery);
+    assert_eq!(cards.len(), 3);
+    focus_on(&mut app, cards[1]);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(cards[2]), "on into the next group");
+    assert_eq!(selected_texts(&app, gallery), ["R"]);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(cards[0]), "round to the first");
+    press(&mut app, KeyCode::End);
+    assert_eq!(focus_of(&app), Some(cards[2]));
+}
+
+#[test]
+fn a_toolbar_re_enters_at_the_tool_that_had_the_focus_last() {
+    let mut app = composite_app();
+    let bar = named(&mut app, "bar");
+    let after = named(&mut app, "After");
+    let tools = item_buttons(&app, bar);
+    focus_on(&mut app, tools[0]);
+    press(&mut app, KeyCode::ArrowRight);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(focus_of(&app), Some(tools[2]));
+    assert_eq!(
+        selected_texts(&app, bar),
+        ["Select"],
+        "moving picks nothing"
+    );
+    focus_on(&mut app, after);
+    assert_eq!(
+        tab_stops(&app, bar),
+        vec![tools[2]],
+        "Tab comes back to Bulldoze"
+    );
+    press(&mut app, KeyCode::ArrowLeft);
+    focus_on(&mut app, tools[2]);
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(selected_texts(&app, bar), ["Bulldoze"]);
+}
+
+#[test]
+fn keys_pressed_with_the_focus_outside_a_composite_widget_are_not_taken_by_it() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let between = named(&mut app, "Between");
+    focus_on(&mut app, between);
+    for key in [
+        KeyCode::Home,
+        KeyCode::End,
+        KeyCode::ArrowLeft,
+        KeyCode::ArrowRight,
+    ] {
+        press(&mut app, key);
+    }
+    // Home and End reach nobody; the arrows are the app's, which moves the focus about.
+    assert_eq!(selected_texts(&app, seg), ["A"], "no segment was picked");
 }
 
 #[test]
