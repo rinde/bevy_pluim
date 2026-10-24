@@ -51,10 +51,10 @@ const PADDING: UiRect = UiRect {
     bottom: Val::Px(7.0),
 };
 
-/// The default [`TextField::min_width`], in logical pixels.
+/// The default [`TextField::min_width`], as `Val::Px` (logical pixels).
 pub const DEFAULT_MIN_WIDTH_PX: f32 = 160.0;
 
-/// The default [`TextField::max_width`], in logical pixels.
+/// The default [`TextField::max_width`], as `Val::Px` (logical pixels).
 pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 
 /// A single-line text input: a bordered box that a person clicks to type in.
@@ -66,8 +66,9 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 /// the keys go.
 ///
 /// A click anywhere on the box, its border included, gives the field the focus (it is a tab
-/// stop as well). `Enter` gives the focus up
+/// stop as well). `Enter` (also the numpad's) gives the focus up
 /// and so does `Escape`, which also puts back the text the field had when it took the focus;
+/// both keys stop there and do not bubble on to the field's ancestors;
 /// a press anywhere else gives it up too, as does Tab.
 ///
 /// [`TextFieldChange`] is triggered on the field whenever its text changes, and
@@ -77,6 +78,15 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 /// The box is at least `min_width` and at most `max_width` wide; within those it takes the
 /// width its parent gives it, never the width of its text, which scrolls inside the box
 /// instead.
+///
+/// The two widths are Bevy layout constraints, not a validated pair of pixel measurements:
+/// each is a [`Val`] passed unchanged to the field's `Node` as `min_width` / `max_width`, so
+/// `Val::Auto`, percentages (of the parent's width), viewport units and the rest work, and
+/// are resolved by layout. Only `Val::Px` is in logical pixels. Nothing is converted or
+/// compared before layout. When both resolve and the minimum is above the maximum, the
+/// minimum wins, as in Bevy's layout: a field with a 400 px minimum and the default 320 px
+/// maximum is 400 px wide. That is a layout rule, not an error; neither bound is clamped and
+/// nothing is logged.
 ///
 /// The fields are read when the component is inserted: insert a new `TextField` to set the
 /// text, placeholder, name or widths. That sets the text without a [`TextFieldChange`].
@@ -106,9 +116,12 @@ pub struct TextField {
     pub placeholder: Option<String>,
     /// The accessible name of the field, the label a screen reader reads.
     pub name: Option<String>,
-    /// The least width of the box.
+    /// The least width of the box, a layout constraint for the field's `Node::min_width`
+    /// ([`DEFAULT_MIN_WIDTH_PX`] logical pixels by default). It wins over `max_width` when
+    /// both resolve and it is the greater.
     pub min_width: Val,
-    /// The greatest width of the box.
+    /// The greatest width of the box, a layout constraint for the field's `Node::max_width`
+    /// ([`DEFAULT_MAX_WIDTH_PX`] logical pixels by default).
     pub max_width: Val,
 }
 
@@ -139,14 +152,16 @@ impl TextField {
         self
     }
 
-    /// The same field, at least `min_width` wide.
+    /// The same field, at least `min_width` wide: any [`Val`], passed to the `Node` as is
+    /// (logical pixels only for `Val::Px`). It takes precedence over a smaller `max_width`.
     #[must_use]
     pub const fn with_min_width(mut self, min_width: Val) -> Self {
         self.min_width = min_width;
         self
     }
 
-    /// The same field, at most `max_width` wide.
+    /// The same field, at most `max_width` wide: any [`Val`], passed to the `Node` as is
+    /// (logical pixels only for `Val::Px`). A greater `min_width` takes precedence over it.
     #[must_use]
     pub const fn with_max_width(mut self, max_width: Val) -> Self {
         self.max_width = max_width;
@@ -368,6 +383,7 @@ fn on_key_input(
                 editable.queue_edit(TextEdit::TextEnd(false));
             }
             focus.clear();
+            trigger.propagate(false);
         }
         _ => {}
     }

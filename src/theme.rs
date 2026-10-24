@@ -177,6 +177,30 @@ impl Theme {
         };
     }
 
+    /// The colour set of `mode`, whether or not it is the one in use.
+    #[must_use]
+    pub const fn colors_of(&self, mode: ThemeMode) -> ThemeColors {
+        match mode {
+            ThemeMode::Light => self.light_colors,
+            ThemeMode::Dark => self.dark_colors,
+        }
+    }
+
+    /// Replaces the colour set of `mode`; [`colors`](Self::colors) follows when it is the mode
+    /// in use. This is how a theme editor changes one half of the pair live.
+    pub const fn set_colors(&mut self, mode: ThemeMode, colors: ThemeColors) {
+        match mode {
+            ThemeMode::Light => self.light_colors = colors,
+            ThemeMode::Dark => self.dark_colors = colors,
+        }
+        if matches!(
+            (self.mode, mode),
+            (ThemeMode::Light, ThemeMode::Light) | (ThemeMode::Dark, ThemeMode::Dark)
+        ) {
+            self.colors = colors;
+        }
+    }
+
     /// Switches between the light and the dark mode, keeping the application's own colour pair.
     pub const fn light_dark_toggle(&mut self) {
         self.set_mode(match self.mode {
@@ -548,6 +572,26 @@ mod tests {
         assert_eq!(theme.colors, dark);
         theme.set_mode(ThemeMode::Light);
         assert_eq!((theme.mode(), theme.colors), (ThemeMode::Light, light));
+    }
+
+    #[test]
+    fn setting_the_colours_of_a_mode_changes_that_half_of_the_pair() {
+        let (light, dark) = custom_pair();
+        let mut theme = Theme::with_colors(light, dark);
+        let mut edited = dark;
+        edited.border = Color::WHITE;
+        // The mode in use is not the edited one: `colors` stays, the dark half changes.
+        theme.set_colors(ThemeMode::Dark, edited);
+        assert_eq!(theme.colors, light);
+        assert_eq!(theme.colors_of(ThemeMode::Dark), edited);
+        assert_eq!(theme.colors_of(ThemeMode::Light), light);
+        theme.light_dark_toggle();
+        assert_eq!(theme.colors, edited);
+        // The mode in use is the edited one: `colors` follows at once.
+        let mut edited_again = edited;
+        edited_again.border = Color::BLACK;
+        theme.set_colors(ThemeMode::Dark, edited_again);
+        assert_eq!(theme.colors, edited_again);
     }
 
     #[test]

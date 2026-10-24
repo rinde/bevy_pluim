@@ -245,8 +245,7 @@ fn run_state(icons: &Icons) -> impl Scene {
             --
             ~{Kbd::new("P")}
             --
-            ~{Slider::new(0.0, SPEED_MIN_OCTAVE, SPEED_MAX_OCTAVE)
-                .with_step(1.0)
+            ~{valid_slider(0.0, SPEED_MIN_OCTAVE, SPEED_MAX_OCTAVE, Some(1.0))
                 .with_format(speed_label)
                 .with_name("Speed")}
             Node { width: px(120.0) }
@@ -538,9 +537,11 @@ fn vehicle_bar(icons: &Icons) -> impl Scene {
             width: px(520.0),
         }
         @ScrollArea::scene(
-            bsn_list! {
-                Gallery
-                @{Selection::builder().one().scene_with_items(cards)}
+            move || {
+                bsn_list! {
+                    Gallery
+                    @{Selection::builder().one().scene_with_items(cards.clone())}
+                }
             },
             false,
             true,
@@ -627,7 +628,7 @@ fn fill_panels(
                     .spawn((
                         FilterChips,
                         Selection::builder().one().build_with_items(chips),
-                        ChildOf(refs.strip),
+                        ChildOf(refs.strip()),
                     ))
                     .id();
                 commands.spawn((
@@ -638,17 +639,17 @@ fn fill_panels(
                         .zero_or_one()
                         .build_with_items(TRAINS.map(|train| Item { data: train })),
                     TrainFilter(filter),
-                    ChildOf(refs.body),
+                    ChildOf(refs.body()),
                 ));
                 commands.spawn((
                     Label::caption("Select a train to follow it"),
-                    ChildOf(refs.footer),
+                    ChildOf(refs.footer()),
                 ));
             }
-            PanelKind::Stops => spawn_show_rows(&mut commands, refs.body, &STOPS),
-            PanelKind::Warnings => spawn_show_rows(&mut commands, refs.body, &WARNINGS),
+            PanelKind::Stops => spawn_show_rows(&mut commands, refs.body(), &STOPS),
+            PanelKind::Warnings => spawn_show_rows(&mut commands, refs.body(), &WARNINGS),
             PanelKind::Schedules => {
-                commands.spawn((Label::secondary("No schedules yet."), ChildOf(refs.body)));
+                commands.spawn((Label::secondary("No schedules yet."), ChildOf(refs.body())));
             }
             PanelKind::Preferences => {
                 let rows = [
@@ -676,7 +677,7 @@ fn fill_panels(
                 .collect::<Vec<_>>();
                 commands
                     // Parented before the scene adds its `Node`, or it would be taken for a `UiRoot`.
-                    .spawn(ChildOf(refs.body))
+                    .spawn(ChildOf(refs.body()))
                     .apply_scene(bsn! {
                         SettingRows
                         Children [ {rows} ]
@@ -956,4 +957,14 @@ fn hotkeys(
             pick(index);
         }
     }
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

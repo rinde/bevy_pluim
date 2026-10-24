@@ -1,0 +1,67 @@
+// The thumb of a scroll bar is one function of its state: `scroll_thumb_background`
+// at rest (gray-400 in the light theme), `hovered_item` (blue-200) under the pointer,
+// `selected_hovered_item` (blue-400) while held, and again `hovered_item` once let go
+// with the pointer still on it. A theme change under a resting pointer (made with
+// the keyboard, as the pointer stays on the thumb) shows the new theme's hovered
+// colour at once (dark: gray-600 at rest, blue-900 hovered, blue-700 held), and a drag
+// that ends away from the thumb leaves it at rest.
+(
+    format_version: 3,
+    name: "the scroll thumb shows rest, hover and press colours and keeps them across a theme change",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.6117647,green:0.6392157,blue:0.6862745,alpha:1.0))),
+        )),
+        MoveTo(Within(Name("vertical scroll area"), Name("ScrollThumb"))),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+        Press(Left),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        Release(Left),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.7490196,green:0.85882354,blue:0.99607843,alpha:1.0))),
+        )),
+        // The theme changes with the pointer resting on the thumb.
+        Tap(key: Tab),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Resource(path: "Theme.colors.hovered_item", is: Eq(Srgba((red:0.11764706,green:0.22745098,blue:0.5411765,alpha:1.0))))),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.11764706,green:0.22745098,blue:0.5411765,alpha:1.0))),
+        )),
+        // Away from the thumb it rests in the new theme.
+        MoveTo(Screen((900.0, 500.0))),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.29411766,green:0.33333334,blue:0.3882353,alpha:1.0))),
+        )),
+        // A drag that ends away from the thumb leaves it at rest, not held.
+        Drag(
+            from: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            to: Screen((900.0, 500.0)),
+            frames: 5,
+        ),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("vertical scroll area"), Name("ScrollThumb")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.29411766,green:0.33333334,blue:0.3882353,alpha:1.0))),
+        )),
+    ],
+)

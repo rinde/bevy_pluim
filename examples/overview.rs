@@ -378,9 +378,11 @@ fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
 /// A scroll area over a `VirtualList` of ten thousand rows.
 fn virtual_list_scroll_area() -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            ~{VirtualList::new(row_height(28.0))}
-            @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+        || {
+            bsn_list! {
+                ~{VirtualList::new(row_height(28.0))}
+                @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+            }
         },
         true,
         false,
@@ -547,11 +549,11 @@ fn values(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 row_gap: px(16.0),
             }
             Children [
-                ~{Slider::new(0.5, 0.0, 1.0).with_name("Volume")}
+                ~{valid_slider(0.5, 0.0, 1.0, None).with_name("Volume")}
                 --
-                ~{Slider::new(60.0, 0.0, 120.0).with_step(10.0).with_format(kilometres_per_hour).with_name("Speed")}
+                ~{valid_slider(60.0, 0.0, 120.0, Some(10.0)).with_format(kilometres_per_hour).with_name("Speed")}
                 --
-                ~{Slider::new(4.0, 0.0, 10.0).with_step(1.0).with_name("Locked")}
+                ~{valid_slider(4.0, 0.0, 10.0, Some(1.0)).with_name("Locked")}
                 InteractionDisabled
                 --
                 Node { column_gap: px(16.0), align_items: AlignItems::Center }
@@ -656,9 +658,11 @@ fn galleries(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Comm
 /// A horizontal scroll area over the gallery of `cards`.
 fn gallery_scroll_area(cards: [Item<GalleryCard>; 6]) -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            Gallery
-            @{Selection::builder().one().scene_with_items(cards)}
+        move || {
+            bsn_list! {
+                Gallery
+                @{Selection::builder().one().scene_with_items(cards.clone())}
+            }
         },
         false,
         true,
@@ -718,7 +722,7 @@ fn fill_panels(
     for (panel, refs, lines) in &panels {
         commands.entity(panel).insert(Filled);
         for line in 1..=lines.0 {
-            commands.spawn((Label::regular(format!("Line {line}")), ChildOf(refs.body)));
+            commands.spawn((Label::regular(format!("Line {line}")), ChildOf(refs.body())));
         }
     }
 }
@@ -804,11 +808,13 @@ fn scroll_areas(spawner: In<StackChildSpawner>, mut commands: Commands) {
 
 /// A scroll area over a list of many countries.
 fn list_scroll_area(vertical: bool, horizontal: bool) -> impl Scene {
-    let items = (1..=20).map(|i| Item::new(format!("A rather long country name {i}")));
     ScrollArea::scene(
-        bsn_list! {
-            List
-            @{Selection::builder().zero_or_one().scene_with_items(items)}
+        || {
+            let items = (1..=20).map(|i| Item::new(format!("A rather long country name {i}")));
+            bsn_list! {
+                List
+                @{Selection::builder().zero_or_one().scene_with_items(items)}
+            }
         },
         vertical,
         horizontal,
@@ -835,4 +841,14 @@ fn feedback(spawner: In<StackChildSpawner>, mut commands: Commands) {
             ]
         },
     );
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

@@ -19,9 +19,11 @@ use rin_bevy_ui::badge::Badge;
 use rin_bevy_ui::breadcrumbs::{BreadCrumb, BreadCrumbs};
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::{self, ColorPaletteCombo};
+use rin_bevy_ui::color_palette_combo::{
+    self, ColorPaletteCombo, ColorPaletteComboButton, ColorPaletteComboFloat, ColorPaletteComboRefs,
+};
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
-use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboState};
+use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
@@ -33,9 +35,9 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
-use rin_bevy_ui::link::{Link, LinkState};
+use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef};
 use rin_bevy_ui::panel::Panel;
 use rin_bevy_ui::pill::Pill;
 use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
@@ -44,7 +46,7 @@ use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentLabels, SegmentedControl,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
-use rin_bevy_ui::slider::Slider;
+use rin_bevy_ui::slider::{Slider, SliderRefs};
 use rin_bevy_ui::stack::{Stack, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
@@ -82,6 +84,14 @@ fn assert_component<T: Component>(registry: &TypeRegistry) {
     );
 }
 
+fn assert_registered<T: 'static>(registry: &TypeRegistry) {
+    let name = core::any::type_name::<T>();
+    assert!(
+        registry.get(TypeId::of::<T>()).is_some(),
+        "{name} is not in the type registry"
+    );
+}
+
 #[test]
 fn the_widget_components_are_in_the_type_registry() {
     with_registry(|registry| {
@@ -105,6 +115,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ColorSquare>(registry);
         assert_component::<NumericStepper>(registry);
         assert_component::<Slider>(registry);
+        assert_component::<SliderRefs>(registry);
+        assert_component::<ValueRef>(registry);
         assert_component::<ScrollArea>(registry);
         assert_component::<ClearOfCorners>(registry);
         assert_component::<ScrollContents>(registry);
@@ -155,9 +167,16 @@ fn the_widget_components_are_in_the_type_registry() {
 fn the_widget_states_are_in_the_type_registry() {
     with_registry(|registry| {
         assert_component::<ComboState>(registry);
-        assert_component::<LinkState>(registry);
-        assert_component::<color_palette_combo::State>(registry);
+        assert_component::<ComboPlaceholder>(registry);
+        assert_component::<ComboRefs>(registry);
+        assert_component::<ColorPaletteComboRefs>(registry);
+        assert_component::<ColorPaletteComboButton>(registry);
+        assert_component::<ColorPaletteComboFloat>(registry);
+        assert_component::<color_palette_combo::ColorPaletteComboState>(registry);
         assert_component::<Value>(registry);
+        assert_registered::<UIntValue<u8>>(registry);
+        assert_registered::<UIntValue<u16>>(registry);
+        assert_registered::<UIntValue<u32>>(registry);
     });
 }
 

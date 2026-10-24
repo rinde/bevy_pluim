@@ -47,6 +47,7 @@ use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
+use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
@@ -1632,7 +1633,7 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
     let panel = app
         .world_mut()
         .spawn((
-            Panel::new("Trains").with_max_body_height(200.0),
+            Panel::new("Trains").with_max_body_height(200.0).unwrap(),
             ChildOf(root),
         ))
         .id();
@@ -1645,7 +1646,7 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
                 flex_shrink: 0.0,
                 ..default()
             },
-            ChildOf(refs.body),
+            ChildOf(refs.body()),
         ));
     }
     for _ in 0..6 {
@@ -1658,14 +1659,14 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
     let overflow = {
         let contents = *app
             .world()
-            .get::<Children>(refs.scroll_area)
+            .get::<Children>(refs.scroll_area())
             .unwrap()
             .first()
             .unwrap();
         let computed = app.world().get::<ComputedNode>(contents).unwrap();
         (computed.content_size().y - computed.size().y) * computed.inverse_scale_factor()
     };
-    (height(refs.scroll_area), overflow)
+    (height(refs.scroll_area()), overflow)
 }
 
 #[test]
@@ -1681,6 +1682,59 @@ fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
         (tall_overflow - 306.0).abs() < 1.5,
         "the rest scrolls: {tall_overflow}"
     );
+}
+
+/// The height of a scroll area with a `max_height` of 200 around a list of `rows` rows, and how
+/// far its contents overflow it (logical pixels).
+fn list_scroll_area_height(rows: usize) -> (f32, f32) {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let area = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: px(200),
+                max_height: px(200),
+                ..default()
+            },
+            ScrollArea::bundle(
+                move |parent: &mut ChildSpawner| {
+                    parent.spawn((
+                        List,
+                        Selection::builder()
+                            .one()
+                            .build_with_items((1..=rows).map(|n| Item::new(format!("Row {n}")))),
+                    ));
+                },
+                true,
+                false,
+            ),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..6 {
+        app.update();
+    }
+    let height = {
+        let computed = app.world().get::<ComputedNode>(area).unwrap();
+        computed.size().y * computed.inverse_scale_factor()
+    };
+    let contents = *app.world().get::<Children>(area).unwrap().first().unwrap();
+    let computed = app.world().get::<ComputedNode>(contents).unwrap();
+    let overflow =
+        (computed.content_size().y - computed.size().y) * computed.inverse_scale_factor();
+    (height, overflow)
+}
+
+#[test]
+fn a_list_in_a_scroll_area_with_a_maximum_height_grows_with_its_rows_and_then_scrolls() {
+    let (short, short_overflow) = list_scroll_area_height(2);
+    assert!(short < 200.0, "grows to its rows: {short}");
+    assert!(short_overflow < 1.0, "nothing to scroll: {short_overflow}");
+
+    let (tall, tall_overflow) = list_scroll_area_height(30);
+    assert!((tall - 200.0).abs() < 1.5, "stops at the maximum: {tall}");
+    assert!(tall_overflow > 100.0, "the rest scrolls: {tall_overflow}");
 }
 
 // ---- Text widgets in the accessibility tree ----
@@ -2644,4 +2698,154 @@ fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
     }
     let (left, goal) = indicator_left_and_goal(&app, control, last);
     assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
+}
+
+// ---- `TextField` width constraints are layout units (#472) ----
+
+/// The width, in logical pixels, a `TextField` built by `field` is laid out at in a parent
+/// of `parent` (`Val::Auto` for none), whose children are not stretched
+/// unless `stretch` says so.
+fn text_field_width(field: TextField, parent_width: Val, stretch: bool) -> f32 {
+    let mut app = widgets_app();
+    app.world_mut().spawn(Camera2d);
+    let parent = app
+        .world_mut()
+        .spawn(Node {
+            width: parent_width,
+            flex_direction: FlexDirection::Column,
+            align_items: if stretch {
+                AlignItems::Stretch
+            } else {
+                AlignItems::FlexStart
+            },
+            ..default()
+        })
+        .id();
+    let field = app.world_mut().spawn((field, ChildOf(parent))).id();
+    for _ in 0..6 {
+        app.update();
+    }
+    logical_width(&app, field)
+}
+
+fn logical_width(app: &App, entity: Entity) -> f32 {
+    let computed = app.world().get::<ComputedNode>(entity).unwrap();
+    computed.size().x * computed.inverse_scale_factor()
+}
+
+fn assert_width(actual: f32, expected: f32) {
+    assert!(
+        (actual - expected).abs() < 1.0,
+        "width {actual}, expected {expected}"
+    );
+}
+
+#[test]
+fn a_text_field_with_a_minimum_above_its_maximum_is_as_wide_as_the_minimum() {
+    // Parent without a width constraint: the field is as wide as its constraints make it.
+    let default_max = TextField::new("").with_min_width(px(400));
+    assert_width(text_field_width(default_max, Val::Auto, false), 400.0);
+
+    let min_first = TextField::new("")
+        .with_min_width(px(400))
+        .with_max_width(px(320));
+    assert_width(text_field_width(min_first, Val::Auto, false), 400.0);
+
+    let max_first = TextField::new("")
+        .with_max_width(px(320))
+        .with_min_width(px(400));
+    assert_width(text_field_width(max_first, Val::Auto, false), 400.0);
+
+    // Also when the parent would stretch it, and the bounds are not clamped.
+    let stretched = TextField::new("")
+        .with_max_width(px(320))
+        .with_min_width(px(400));
+    assert_eq!(stretched.min_width, px(400));
+    assert_eq!(stretched.max_width, px(320));
+    assert_width(text_field_width(stretched, px(1000), true), 400.0);
+}
+
+#[test]
+fn text_field_percentage_bounds_are_relative_to_the_parent() {
+    // A 1000 px parent stretches the field, which stops at 60 %.
+    let max = TextField::new("")
+        .with_min_width(percent(30))
+        .with_max_width(percent(60));
+    assert_width(text_field_width(max, px(1000), true), 600.0);
+
+    // Not stretched, an empty field is as narrow as its minimum, 50 % of 400 px.
+    let min = TextField::new("")
+        .with_min_width(percent(50))
+        .with_max_width(Val::Auto);
+    assert_width(text_field_width(min, px(400), false), 200.0);
+}
+
+#[test]
+fn text_field_auto_bounds_do_not_constrain_the_width() {
+    let auto = || {
+        TextField::new("")
+            .with_min_width(Val::Auto)
+            .with_max_width(Val::Auto)
+    };
+    // The parent's width wins over the default 320 px maximum when stretched.
+    assert_width(text_field_width(auto(), px(700), true), 700.0);
+    // Not stretched, an empty field is as wide as its padding and border.
+    let narrow = text_field_width(auto(), Val::Auto, false);
+    assert!(narrow < 160.0, "no default minimum: {narrow}");
+}
+
+#[test]
+fn a_text_field_viewport_bound_follows_the_window() {
+    let (window_width, _) = DEFAULT_WINDOW_SIZE;
+    let expected = window_width as f32 / 2.0;
+    let min = TextField::new("")
+        .with_min_width(vw(50))
+        .with_max_width(Val::Auto);
+    assert_width(text_field_width(min, Val::Auto, false), expected);
+}
+
+#[test]
+fn replacing_a_text_field_changes_its_widths_without_respawning_or_a_change_event() {
+    #[derive(Resource, Default)]
+    struct Changes(usize);
+
+    let mut app = widgets_app();
+    app.init_resource::<Changes>();
+    app.world_mut().spawn(Camera2d);
+    let parent = app
+        .world_mut()
+        .spawn(Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::FlexStart,
+            ..default()
+        })
+        .id();
+    let field = app
+        .world_mut()
+        .spawn((TextField::new("Alpha"), ChildOf(parent)))
+        .observe(|_: On<TextFieldChange>, mut changes: ResMut<Changes>| changes.0 += 1)
+        .id();
+    for _ in 0..6 {
+        app.update();
+    }
+    let refs = *app.world().get::<TextFieldRefs>(field).unwrap();
+    let children: Vec<Entity> = app.world().get::<Children>(field).unwrap().iter().collect();
+    let before = logical_width(&app, field);
+    assert_width(before, 160.0);
+
+    app.world_mut()
+        .entity_mut(field)
+        .insert(TextField::new("Alpha").with_min_width(px(400)));
+    for _ in 0..6 {
+        app.update();
+    }
+
+    assert_width(logical_width(&app, field), 400.0);
+    assert_eq!(
+        app.world().get::<TextFieldRefs>(field).unwrap().input,
+        refs.input
+    );
+    let after: Vec<Entity> = app.world().get::<Children>(field).unwrap().iter().collect();
+    assert_eq!(after, children, "the parts are not respawned");
+    assert_eq!(app.world().get_resource::<Changes>().unwrap().0, 0);
 }
