@@ -12,6 +12,8 @@
 use accesskit::Role;
 use bevy::a11y::{AccessibilityNode, AccessibilitySystems};
 use bevy::camera::visibility::VisibilitySystems;
+use bevy::ecs::entity::EntityHashSet;
+use bevy::ecs::system::SystemParam;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
@@ -173,22 +175,85 @@ pub(crate) fn is_hidden(
     }
 }
 
+/// What changed this frame that can change whether something is hidden, shared by
+/// `sync_tab_index` and `sync_accessibility_hidden` so that neither walks every entity each
+/// frame.
+///
+/// Hidden is a function of an entity's [`InheritedVisibility`] and of `Display::None` on it or
+/// an ancestor. [`InheritedVisibility`] propagates by itself (a change reaches the
+/// descendants as changes of their own), but `Display::None` does not touch it, so when the
+/// display of a node flips or a node is reparented the whole subtree is dirty too.
+#[derive(SystemParam)]
+struct HiddenChanges<'w, 's> {
+    visibility: Query<'w, 's, Entity, Changed<InheritedVisibility>>,
+    nodes: Query<'w, 's, (Entity, &'static Node), Changed<Node>>,
+    reparented: Query<'w, 's, Entity, Changed<ChildOf>>,
+    children: Query<'w, 's, &'static Children>,
+    removed_nodes: RemovedComponents<'w, 's, Node>,
+    removed_parents: RemovedComponents<'w, 's, ChildOf>,
+    /// The entities known to have `Display::None`, to tell a flip from another edit.
+    display_none: Local<'s, EntityHashSet>,
+}
+
+impl HiddenChanges<'_, '_> {
+    /// The entities whose hidden state may have changed since the last call.
+    fn dirty(&mut self) -> EntityHashSet {
+        let mut dirty = EntityHashSet::default();
+        let mut subtrees = Vec::new();
+        dirty.extend(self.visibility.iter());
+        for (entity, node) in &self.nodes {
+            let none = node.display == Display::None;
+            if none != self.display_none.contains(&entity) {
+                if none {
+                    self.display_none.insert(entity);
+                } else {
+                    self.display_none.remove(&entity);
+                }
+                subtrees.push(entity);
+            }
+        }
+        for entity in self.removed_nodes.read() {
+            if self.display_none.remove(&entity) {
+                subtrees.push(entity);
+            }
+        }
+        subtrees.extend(self.reparented.iter());
+        subtrees.extend(self.removed_parents.read());
+        for root in subtrees {
+            dirty.insert(root);
+            dirty.extend(self.children.iter_descendants(root));
+        }
+        dirty
+    }
+}
+
 /// Keeps the [`TabIndex`] of every [`TabStop`] in step with whether it is disabled,
 /// [`Unreachable`] or hidden.
+///
+/// It looks only at what changed: a new stop, a change of its [`InteractionDisabled`] or
+/// [`Unreachable`] marker, and the stops whose visibility, `Display::None` (on them or an
+/// ancestor) or parent changed.
 fn sync_tab_index(
-    mut stops: Query<
-        (
-            Entity,
-            &mut TabIndex,
-            Has<InteractionDisabled>,
-            Has<Unreachable>,
-        ),
-        With<TabStop>,
-    >,
+    mut changes: HiddenChanges,
+    mut stops: Query<(&mut TabIndex, Has<InteractionDisabled>, Has<Unreachable>), With<TabStop>>,
+    new_stops: Query<Entity, Added<TabStop>>,
+    disabled_added: Query<Entity, Added<InteractionDisabled>>,
+    unreachable_added: Query<Entity, Added<Unreachable>>,
+    mut disabled_removed: RemovedComponents<InteractionDisabled>,
+    mut unreachable_removed: RemovedComponents<Unreachable>,
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    for (entity, mut index, disabled, unreachable) in &mut stops {
+    let mut dirty = changes.dirty();
+    dirty.extend(new_stops.iter());
+    dirty.extend(disabled_added.iter());
+    dirty.extend(unreachable_added.iter());
+    dirty.extend(disabled_removed.read());
+    dirty.extend(unreachable_removed.read());
+    for entity in dirty {
+        let Ok((mut index, disabled, unreachable)) = stops.get_mut(entity) else {
+            continue;
+        };
         let hidden = is_hidden(entity, &shown, &parents);
         let wanted = if disabled || unreachable || hidden {
             -1
@@ -203,13 +268,25 @@ fn sync_tab_index(
 
 /// Marks the [`AccessibilityNode`] of everything that is hidden (by the same rule as a
 /// [`TabStop`]'s) as hidden, and clears it when it shows again, so the platform's
-/// accessibility tree leaves it out. A node is written only when its flag changes.
+/// accessibility tree leaves it out. A node is written only when its flag changes, and only
+/// those whose node was added or changed, or whose visibility, `Display::None` (on them or
+/// an ancestor) or parent changed, are looked at.
 fn sync_accessibility_hidden(
-    mut nodes: Query<(Entity, &mut AccessibilityNode)>,
+    mut changes: HiddenChanges,
+    mut nodes: ParamSet<(
+        Query<Entity, Changed<AccessibilityNode>>,
+        Query<&mut AccessibilityNode>,
+    )>,
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    for (entity, mut node) in &mut nodes {
+    let mut dirty = changes.dirty();
+    dirty.extend(nodes.p0().iter());
+    let mut accessible = nodes.p1();
+    for entity in dirty {
+        let Ok(mut node) = accessible.get_mut(entity) else {
+            continue;
+        };
         let hidden = is_hidden(entity, &shown, &parents);
         if node.is_hidden() != hidden {
             if hidden {
@@ -266,6 +343,7 @@ fn draw_focus_ring(
     >,
     active: Query<&ActiveDescendant>,
     ring_on: Query<&RingOn>,
+    mut ringed_before: Local<Option<Entity>>,
     mut commands: Commands,
 ) {
     let ringed = focus.get().and_then(|entity| {
@@ -280,31 +358,42 @@ fn draw_focus_ring(
             Err(_) => Some(entity),
         }
     });
-    for (entity, outline, is_ring, saved) in &stops {
-        if ringed == Some(entity) {
-            let ring = Outline {
-                width: Val::Px(2.0),
-                offset: Val::Px(1.0),
-                color: theme.colors.focus_ring,
-            };
-            if is_ring {
-                if outline != Some(&ring) {
-                    commands.entity(entity).insert(ring);
-                }
-            } else {
-                let mut entity_commands = commands.entity(entity);
-                if let Some(own) = outline {
-                    entity_commands.insert(OutlineUnderRing(*own));
-                }
-                entity_commands.insert((ring, FocusRingOutline));
-            }
-        } else if is_ring {
-            let mut entity_commands = commands.entity(entity);
+    // Only the entity that had the ring and the one that has it now are touched, so the work
+    // does not grow with the number of candidates (every row of every list).
+    if let Some(previous) = *ringed_before
+        && ringed != Some(previous)
+    {
+        if let Ok((_, _, true, saved)) = stops.get(previous) {
+            let mut entity_commands = commands.entity(previous);
             entity_commands.remove::<(Outline, FocusRingOutline, OutlineUnderRing)>();
             if let Some(OutlineUnderRing(own)) = saved {
                 entity_commands.insert(*own);
             }
         }
+        *ringed_before = None;
+    }
+    let Some(entity) = ringed else {
+        return;
+    };
+    let Ok((_, outline, is_ring, _)) = stops.get(entity) else {
+        return;
+    };
+    *ringed_before = Some(entity);
+    let ring = Outline {
+        width: Val::Px(2.0),
+        offset: Val::Px(1.0),
+        color: theme.colors.focus_ring,
+    };
+    if is_ring {
+        if outline != Some(&ring) {
+            commands.entity(entity).insert(ring);
+        }
+    } else {
+        let mut entity_commands = commands.entity(entity);
+        if let Some(own) = outline {
+            entity_commands.insert(OutlineUnderRing(*own));
+        }
+        entity_commands.insert((ring, FocusRingOutline));
     }
 }
 

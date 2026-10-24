@@ -1,7 +1,5 @@
 //! `List`: renders the items of a [`Selection`] as views and keeps them in sync.
 
-use std::collections::HashMap;
-
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
@@ -91,6 +89,11 @@ impl Plugin for ListPlugin {
     Name::new("List"),
     ListBox,
     TabStop,
+    Node {
+        position_type: PositionType::Relative,
+        display: Display::Grid,
+        ..default()
+    },
     ListLayout::Vertical,
     CornerStyle::FollowLayout,
     Pickable {
@@ -101,8 +104,11 @@ impl Plugin for ListPlugin {
 pub struct List;
 
 /// How the item views of a [`List`] are arranged.
+///
+/// Changing it on a live list updates the grid of its [`Node`] (flow and columns) in place.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(on_insert = Self::on_insert)]
 pub enum ListLayout {
     /// One item per row.
     Vertical,
@@ -114,6 +120,21 @@ pub enum ListLayout {
         /// (`1`) and an `error!` is logged when the layout is inserted.
         columns: u16,
     },
+}
+
+impl ListLayout {
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        if matches!(
+            world.entity(context.entity).get::<Self>(),
+            Some(Self::VerticalGrid { columns: 0 })
+        ) {
+            error!(
+                "ListLayout::VerticalGrid {{ columns: 0 }} on {}: laying out as one column",
+                context.entity
+            );
+        }
+        apply_layout(&mut world, context.entity);
+    }
 }
 
 /// Which corners of a [`List`] and its item views are rounded.
@@ -183,47 +204,39 @@ pub struct NoDefaultItems;
 
 impl List {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        // TODO change this assert
-        // assert!(
-        //     world.entity(context.entity).get::<Node>().is_none(),
-        //     "Cannot override Node for List"
-        // );
-
-        let Some(layout) = world.entity(context.entity).get::<ListLayout>() else {
-            return;
-        };
-        let grid_auto_flow = match layout {
-            ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => {
-                GridAutoFlow::RowDense
-            }
-            ListLayout::Horizontal => GridAutoFlow::ColumnDense,
-        };
-        if matches!(layout, ListLayout::VerticalGrid { columns: 0 }) {
-            error!(
-                "ListLayout::VerticalGrid {{ columns: 0 }} on {}: laying out as one column",
-                context.entity
-            );
-        }
-        let grid_template_columns = match layout {
-            ListLayout::Vertical | ListLayout::Horizontal => vec![],
-            ListLayout::VerticalGrid { columns } => {
-                vec![RepeatedGridTrack::auto((*columns).max(1))]
-            }
-        };
-
-        let node = Node {
-            position_type: PositionType::Relative,
-            display: Display::Grid,
-            grid_auto_flow,
-            grid_template_columns,
-            ..default()
-        };
-        world.commands().entity(context.entity).insert(node);
-
+        apply_layout(&mut world, context.entity);
         world
             .commands()
             .run_system_cached_with(theme_lists, Some(context.entity));
     }
+}
+
+/// Sets the grid fields of the [`Node`] of `entity` from its [`ListLayout`], in place: the
+/// fields a [`List`] owns (`display`, `position_type`, `grid_auto_flow` and
+/// `grid_template_columns`) and nothing else, so a width or margin of the app survives.
+/// Does nothing for an entity that is not a [`List`] or has no [`Node`] yet.
+fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
+    let Some(layout) = world.entity(entity).get::<ListLayout>().copied() else {
+        return;
+    };
+    if !world.entity(entity).contains::<List>() {
+        return;
+    }
+    let grid_auto_flow = match layout {
+        ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => GridAutoFlow::RowDense,
+        ListLayout::Horizontal => GridAutoFlow::ColumnDense,
+    };
+    let grid_template_columns = match layout {
+        ListLayout::Vertical | ListLayout::Horizontal => vec![],
+        ListLayout::VerticalGrid { columns } => vec![RepeatedGridTrack::auto(columns.max(1))],
+    };
+    let Some(mut node) = world.get_mut::<Node>(entity) else {
+        return;
+    };
+    node.position_type = PositionType::Relative;
+    node.display = Display::Grid;
+    node.grid_auto_flow = grid_auto_flow;
+    node.grid_template_columns = grid_template_columns;
 }
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
@@ -895,39 +908,76 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
+/// The `ItemsChanged` observer that keeps a list or palette in step with the
+/// items entity its selection draws from.
+///
+/// Kept on the list, so it goes with it and a list pointed at other items can
+/// drop the observer of the old ones.
+#[derive(Component, Debug, Clone, Copy)]
+#[component(immutable)]
+pub(crate) struct ItemsWatch {
+    /// The items entity being watched.
+    values: Entity,
+    /// The observer on `values`.
+    observer: Entity,
+}
+
 fn on_insert_selection(
     t: On<Insert<Selection>>,
-    lists: Query<(), (With<List>, With<Selection>, Without<NoDefaultItems>)>,
+    lists: Query<Option<&ItemsWatch>, (With<List>, With<Selection>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
-    mut commands: Commands,
-    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
+    commands: Commands,
 ) {
     let list_ref = t.event().event_target();
-    if lists.get(list_ref).is_err() {
+    let Ok(watch) = lists.get(list_ref) else {
         return;
-    }
+    };
+    watch_items(list_ref, watch, &selections, commands, on_items_changed);
+}
 
+/// Makes `on_items_changed` run for `list_ref` whenever the items of its
+/// selection change, and once now. Used by [`List`] and the colour palette, so
+/// their copies cannot drift.
+///
+/// Does nothing when the list already watches those items. When it was
+/// pointed at other items, the observer on the old ones is despawned.
+pub(crate) fn watch_items<M: 'static>(
+    list_ref: Entity,
+    watch: Option<&ItemsWatch>,
+    selections: &SelectionParam,
+    mut commands: Commands,
+    on_items_changed: impl IntoSystem<In<ItemsChangedInput>, (), M> + Copy + Send + Sync + 'static,
+) {
     let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
         return;
     };
-    if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
+    if watch.is_some_and(|watch| watch.values == values_ref) {
         // no change in items ref
         return;
     }
-    existing_values_ref_map.insert(list_ref, values_ref);
+    if let Some(old) = watch {
+        commands.entity(old.observer).despawn();
+    }
 
     // register observer for items change event
-    commands
-        .entity(values_ref)
-        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
-            commands.run_system_cached_with(
-                on_items_changed,
-                ItemsChangedInput {
-                    list_ref,
-                    items: t.event().items.iter().collect(),
-                },
-            );
-        });
+    let observer = commands
+        .spawn(
+            Observer::new(move |t: On<ItemsChanged>, mut commands: Commands| {
+                commands.run_system_cached_with(
+                    on_items_changed,
+                    ItemsChangedInput {
+                        list_ref,
+                        items: t.event().items.iter().collect(),
+                    },
+                );
+            })
+            .with_entity(values_ref),
+        )
+        .id();
+    commands.entity(list_ref).insert(ItemsWatch {
+        values: values_ref,
+        observer,
+    });
 
     // update all items now
     commands.run_system_cached_with(
