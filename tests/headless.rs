@@ -5179,6 +5179,121 @@ fn inserting_a_panel_again_keeps_its_parts_content_and_one_close_notification() 
 }
 
 #[test]
+fn inserting_a_panel_again_sets_the_body_maximum_height_and_keeps_the_corner_margin() {
+    let mut app = headless_app();
+    let radius = app.world().get_resource::<Theme>().unwrap().panel_radius;
+    let radius_px = 12.0;
+    assert_eq!(radius, Val::Px(radius_px));
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let area = |app: &App| {
+        let node = app.world().get::<Node>(refs.scroll_area()).unwrap();
+        (node.max_height, node.margin.bottom)
+    };
+    assert_eq!(area(&app), (Val::Px(620.0 + radius_px), radius));
+
+    // A new maximum reaches the scroll area, with the margin of the corners added to it.
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(150.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(150.0 + radius_px), radius));
+
+    // With a footer holding the corners there is no margin to add.
+    let footer_text = app
+        .world_mut()
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
+        .id();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(150.0), Val::ZERO));
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(90.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(90.0), Val::ZERO));
+
+    // Without the footer again, a re-insert does not drop the margin.
+    app.world_mut().despawn(footer_text);
+    app.update();
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(70.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(70.0 + radius_px), radius));
+}
+
+#[test]
+fn inserting_a_panel_again_adds_and_removes_its_close_button() {
+    let mut app = headless_app();
+    let icon: Handle<Image> = bevy::asset::uuid_handle!("2d8e3f40-5162-4c73-8da4-9fa5fb607a18");
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let display = |app: &App| app.world().get::<Node>(refs.close()).unwrap().display;
+    assert_eq!(display(&app), Display::None);
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_close_icon(icon.clone()));
+    app.update();
+    app.update();
+    assert_eq!(display(&app), Display::Flex);
+    let close_icon = app
+        .world()
+        .get::<IconButtonRefs>(refs.close())
+        .unwrap()
+        .icon();
+    assert_eq!(
+        app.world().get::<ImageNode>(close_icon).unwrap().image,
+        icon
+    );
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains"));
+    app.update();
+    app.update();
+    assert_eq!(display(&app), Display::None);
+    assert_eq!(*app.world().get::<PanelRefs>(panel).unwrap(), refs);
+}
+
+#[test]
+fn a_panel_stays_labelled_by_its_title_after_it_is_inserted_again_with_other_parts() {
+    let mut app = headless_app();
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let title = app.world().get::<PanelRefs>(panel).unwrap().title();
+
+    app.world_mut().entity_mut(panel).insert(
+        Panel::new("Stops")
+            .with_subtitle("6 stops")
+            .with_close_icon(Handle::default())
+            .with_max_body_height(200.0)
+            .unwrap(),
+    );
+    app.update();
+    app.update();
+
+    let node = app.world().get::<AccessibilityNode>(panel).unwrap();
+    assert_eq!(node.role(), accesskit::Role::Group);
+    assert_eq!(node.label(), None);
+    assert_eq!(node.labelled_by(), [accesskit::NodeId(title.to_bits())]);
+    assert_eq!(
+        app.world().get::<PanelRefs>(panel).unwrap().title(),
+        title,
+        "the title is the same entity"
+    );
+    assert_eq!(app.world().get::<Text>(title).unwrap().0, "Stops");
+}
+
+#[test]
 fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
