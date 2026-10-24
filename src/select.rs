@@ -30,8 +30,10 @@ impl Plugin for ItemsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectionResource>()
             .add_systems(Update, items_change)
-            .add_systems(Update, process_event_buffer.run_if(has_pending_selections))
             .add_observer(on_add_selection)
+            .add_observer(repair_pending_selections)
+            .add_observer(on_replace_items_ref)
+            .add_observer(forget_removed_selection)
             .register_type::<Item<String>>()
             .register_type::<ItemOf>()
             .register_type::<ItemValues>()
@@ -208,6 +210,7 @@ fn on_add_selection(
         (Selection::Value(SelectionValue::One(one)), items_ref, item_values)
             if items_ref.is_some() != item_values.is_some() && one == &Entity::PLACEHOLDER =>
         {
+            let items_entity = items_ref.map_or(selection_ref, |ItemsRef(items_ref)| *items_ref);
             let Some(values) = items_ref
                 .and_then(|ItemsRef(items_ref)| item_values_query.get(*items_ref).ok())
                 .or(item_values)
@@ -220,12 +223,16 @@ fn on_add_selection(
                     .entity(selection_ref)
                     .insert(Selection::Value(SelectionValue::One(first_item)));
             } else {
-                r.buffer.push((selection_ref, selection_ref));
+                r.add_pending(PendingSelection {
+                    selection: selection_ref,
+                    items: items_entity,
+                });
             }
         }
         (Selection::Value(SelectionValue::OneOrMore(selected)), items_ref, item_values)
             if items_ref.is_some() != item_values.is_some() && selected.is_empty() =>
         {
+            let items_entity = items_ref.map_or(selection_ref, |ItemsRef(items_ref)| *items_ref);
             let Some(values) = items_ref
                 .and_then(|ItemsRef(items_ref)| item_values_query.get(*items_ref).ok())
                 .or(item_values)
@@ -240,7 +247,10 @@ fn on_add_selection(
                         first_item
                     ])));
             } else {
-                r.buffer.push((selection_ref, selection_ref));
+                r.add_pending(PendingSelection {
+                    selection: selection_ref,
+                    items: items_entity,
+                });
             }
         }
         (Selection::Ref(_), _, _)
@@ -255,67 +265,119 @@ fn on_add_selection(
     }
 }
 
-fn has_pending_selections(r: Res<SelectionResource>) -> bool {
-    !r.buffer.is_empty()
+/// A selection waiting for the first item of `items`.
+#[derive(Debug, Clone, Copy)]
+struct PendingSelection {
+    selection: Entity,
+    items: Entity,
 }
 
+/// The selections waiting for their first item.
+///
+/// Nothing polls it: [`repair_pending_selections`] runs on the [`ItemsChanged`] of an entry's
+/// items and [`forget_removed_selection`] drops an entry when its selection loses its
+/// [`Selection`] or is despawned.
 #[derive(Resource, Default)]
 struct SelectionResource {
-    buffer: Vec<(Entity, Entity)>,
+    pending: Vec<PendingSelection>,
 }
 
-/// Repairs the selections waiting for their first item.
+impl SelectionResource {
+    /// Remembers `pending`, once per selection: a selection waits for one set of items only.
+    fn add_pending(&mut self, pending: PendingSelection) {
+        self.pending.retain(|p| p.selection != pending.selection);
+        self.pending.push(pending);
+    }
+}
+
+/// Starts a refresh of the selection on an entity whose [`ItemsRef`] was replaced.
 ///
-/// An entry stays in the buffer until it is repaired (or its entity is gone), and the
-/// buffer is only borrowed mutably when something was removed, so the resource is not
-/// marked changed otherwise.
-fn process_event_buffer(
+/// `Discard` (before the old value goes) runs before the new value is in, so the refresh is queued to run after it; a removed
+/// [`ItemsRef`] has nothing to refresh to.
+fn on_replace_items_ref(t: On<Discard<ItemsRef>>, mut commands: Commands) {
+    commands.run_system_cached_with(refresh_selection_items, t.event_target());
+}
+
+/// Points the selection on `entity` at the items of its (new) [`ItemsRef`].
+///
+/// Selected items that are not items of the new source are dropped, as a selection of one item
+/// goes back to its first item (or to pending, when the source has none yet, see
+/// [`SelectionValue::is_pending`]). The selection is inserted again whatever the result, so the
+/// widgets that follow it draw the new items.
+fn refresh_selection_items(
+    In(entity): In<Entity>,
+    selections: Query<(&Selection, &ItemsRef)>,
+    item_values: Query<&ItemValues>,
     mut r: ResMut<SelectionResource>,
     mut commands: Commands,
-    selections: SelectionParam,
 ) {
-    let mut done = Vec::new();
-    for (index, (target_ref, selection_ref)) in r.buffer.iter().enumerate() {
-        if commands.get_entity(*target_ref).is_err() {
-            done.push(index);
-            continue;
-        }
-        let Some((_, values)) = selections.get_item_values(*selection_ref) else {
-            continue;
-        };
-        let Some(selection_value) = selections.get(*selection_ref) else {
-            continue;
-        };
-        let Some(first_item) = values.iter().next() else {
-            continue;
-        };
-        let new_selection_value = match selection_value {
-            SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
-                Some(SelectionValue::One(first_item))
+    let Ok((Selection::Value(value), ItemsRef(items_entity))) = selections.get(entity) else {
+        return;
+    };
+    let items: &[Entity] = item_values.get(*items_entity).map_or(&[], |v| &v.0);
+    let first = items.first().copied();
+    let kept = |selected: &Entity| items.contains(selected);
+    let new_value = match value {
+        SelectionValue::One(x) if items.contains(x) => SelectionValue::One(*x),
+        SelectionValue::One(_) => SelectionValue::One(first.unwrap_or(Entity::PLACEHOLDER)),
+        SelectionValue::ZeroOrOne(x) => SelectionValue::ZeroOrOne(x.filter(kept)),
+        SelectionValue::OneOrMore(selected) => {
+            let mut kept_items: SelectionVec = selected.iter().copied().filter(kept).collect();
+            if kept_items.is_empty() {
+                kept_items.extend(first);
             }
-            SelectionValue::OneOrMore(selected) if selected.is_empty() => {
-                Some(SelectionValue::OneOrMore(smallvec![first_item]))
-            }
-            SelectionValue::One(_)
-            | SelectionValue::OneOrMore(_)
-            | SelectionValue::ZeroOrOne(_)
-            | SelectionValue::ZeroOrMore(_) => None,
-        };
-        if let Some(new_selection_value) = new_selection_value {
-            commands
-                .entity(*target_ref)
-                .insert(Selection::Value(new_selection_value));
+            SelectionValue::OneOrMore(kept_items)
         }
-        done.push(index);
-    }
-    if !done.is_empty() {
-        let mut index = 0;
-        r.buffer.retain(|_| {
-            let keep = !done.contains(&index);
-            index += 1;
-            keep
+        SelectionValue::ZeroOrMore(selected) => {
+            SelectionValue::ZeroOrMore(selected.iter().copied().filter(kept).collect())
+        }
+    };
+    if new_value.is_pending() {
+        r.add_pending(PendingSelection {
+            selection: entity,
+            items: *items_entity,
         });
     }
+    commands.entity(entity).insert(new_value.into_component());
+}
+
+/// Gives the pending selections of the changed items their first item.
+fn repair_pending_selections(
+    changed: On<ItemsChanged>,
+    mut r: ResMut<SelectionResource>,
+    selections: Query<&Selection>,
+    mut commands: Commands,
+) {
+    let event = changed.event();
+    let Some(first_item) = event.items.iter().next() else {
+        return;
+    };
+    r.pending.retain(|pending| {
+        if pending.items != event.entity {
+            return true;
+        }
+        let new_value = match selections.get(pending.selection) {
+            Ok(Selection::Value(SelectionValue::One(x))) if *x == Entity::PLACEHOLDER => {
+                Some(SelectionValue::One(first_item))
+            }
+            Ok(Selection::Value(SelectionValue::OneOrMore(selected))) if selected.is_empty() => {
+                Some(SelectionValue::OneOrMore(smallvec![first_item]))
+            }
+            _ => None,
+        };
+        if let Some(new_value) = new_value {
+            commands
+                .entity(pending.selection)
+                .insert(Selection::Value(new_value));
+        }
+        false
+    });
+}
+
+/// Drops the pending entry of a selection whose [`Selection`] is gone (also when it is despawned).
+fn forget_removed_selection(removed: On<Remove<Selection>>, mut r: ResMut<SelectionResource>) {
+    let entity = removed.event_target();
+    r.pending.retain(|pending| pending.selection != entity);
 }
 
 const DANGLING_SELECTION_REF: &str = "a `Selection::Ref` that points to a `Selection::Value`";
@@ -329,11 +391,17 @@ type SelectionVec = SmallVec<[Entity; 4]>;
 #[educe(Default)]
 pub enum SelectionValue {
     /// Exactly one item.
+    ///
+    /// `One(Entity::PLACEHOLDER)` is the *pending* state of a selection whose item source has no
+    /// first item yet (see [`SelectionValue::is_pending`]); it selects nothing.
     One(Entity),
     /// At most one item.
     #[educe(Default)]
     ZeroOrOne(Option<Entity>),
     /// At least one item.
+    ///
+    /// An empty `OneOrMore` is the *pending* state of a selection whose item source has no first
+    /// item yet (see [`SelectionValue::is_pending`]); it selects nothing.
     OneOrMore(SelectionVec),
     /// Any number of items.
     ZeroOrMore(SelectionVec),
@@ -355,11 +423,30 @@ impl SelectionValue {
         }
     }
 
+    /// Whether this is a mandatory selection ([`SelectionValue::One`] or
+    /// [`SelectionValue::OneOrMore`]) still waiting for its first item: `One(Entity::PLACEHOLDER)`
+    /// or an empty `OneOrMore`.
+    ///
+    /// Pending is not an error: it is how a selection over items that are spawned later starts.
+    /// A pending selection has no selected items (`iter` yields nothing, `len` is 0, `is_empty`
+    /// is true, `single` and `last` are `None`, nothing `is_selected`), and consumers treat it
+    /// as empty and never look up a view for the placeholder. The first `ItemsChanged` that
+    /// brings an item selects it, keeping the variant, and the normal update methods never
+    /// return to pending: `One` and `OneOrMore` refuse to clear an initialised selection.
+    #[must_use]
+    pub fn is_pending(&self) -> bool {
+        match self {
+            Self::One(selected) => *selected == Entity::PLACEHOLDER,
+            Self::OneOrMore(items) => items.is_empty(),
+            Self::ZeroOrOne(_) | Self::ZeroOrMore(_) => false,
+        }
+    }
+
     /// Whether `item` is selected.
     #[must_use]
     pub fn is_selected(&self, item: Entity) -> bool {
         match self {
-            Self::One(selected) => selected == &item,
+            Self::One(selected) => *selected != Entity::PLACEHOLDER && selected == &item,
             Self::ZeroOrOne(selected) => selected.is_some_and(|s| s == item),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.contains(&item),
         }
@@ -368,7 +455,11 @@ impl SelectionValue {
     /// The selected items, in selection order.
     pub fn iter(&self) -> impl Iterator<Item = Entity> {
         match self {
-            Self::One(selected) => Either::Left(Some(*selected).into_iter()),
+            Self::One(selected) => Either::Left(
+                Some(*selected)
+                    .filter(|selected| *selected != Entity::PLACEHOLDER)
+                    .into_iter(),
+            ),
             Self::ZeroOrOne(selected) => Either::Left((*selected).into_iter()),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => {
                 Either::Right(items.iter().copied())
@@ -380,7 +471,7 @@ impl SelectionValue {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
-            Self::One(_) => false,
+            Self::One(selected) => *selected == Entity::PLACEHOLDER,
             Self::ZeroOrOne(selected) => selected.is_none(),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.is_empty(),
         }
@@ -390,7 +481,7 @@ impl SelectionValue {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
-            Self::One(_) => 1,
+            Self::One(selected) => usize::from(*selected != Entity::PLACEHOLDER),
             Self::ZeroOrOne(selected) => usize::from(selected.is_some()),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.len(),
         }
@@ -400,7 +491,7 @@ impl SelectionValue {
     #[must_use]
     pub fn single(&self) -> Option<Entity> {
         match self {
-            Self::One(selected) => Some(*selected),
+            Self::One(selected) => Some(*selected).filter(|s| *s != Entity::PLACEHOLDER),
             Self::ZeroOrOne(selected) => *selected,
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => match items.as_slice() {
                 [only] => Some(*only),
@@ -413,7 +504,7 @@ impl SelectionValue {
     #[must_use]
     pub fn last(&self) -> Option<Entity> {
         match self {
-            Self::One(selected) => Some(*selected),
+            Self::One(selected) => Some(*selected).filter(|s| *s != Entity::PLACEHOLDER),
             Self::ZeroOrOne(selected) => *selected,
             Self::OneOrMore(items) | Self::ZeroOrMore(items) if items.is_empty() => None,
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.last().copied(),
@@ -778,6 +869,11 @@ where
 }
 
 /// Marks an entity as an item of the [`ItemValues`] on the given entity.
+///
+/// Bevy's relationship input: insert it (again) to add the item to other items, which updates the
+/// [`ItemValues`] of both the old and the new entity through Bevy's relationship hooks. The
+/// `ItemValues` collection is derived and has no public mutable access. The entity is not
+/// checked: an `ItemOf` that points to a missing entity is Bevy's to report.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemValues)]
 pub struct ItemOf(pub Entity);
@@ -903,6 +999,22 @@ fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut comman
 }
 
 /// Lets a selection choose from the [`ItemValues`] on another entity.
+///
+/// Application-authored input, and immutable (as every Bevy relationship): replace it by
+/// inserting a new `ItemsRef` to change the item source. The selection on the entity is then
+/// refreshed from the new source: selected items that do not belong to it are dropped, a `One`
+/// or `OneOrMore` selection takes the new source's first item (waiting for it when the source
+/// has none yet) and the widgets that follow the selection draw the new items. It cannot be
+/// queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::select::ItemsRef;
+/// fn edit(mut refs: Query<&mut ItemsRef>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemSelections)]
 pub struct ItemsRef(pub Entity);
@@ -973,9 +1085,10 @@ mod tests {
     }
 
     fn runs_in_next_frame(app: &mut App) -> u32 {
-        let before = app.world().resource::<Runs>().0;
+        let runs = |app: &App| app.world().get_resource::<Runs>().map_or(0, |r| r.0);
+        let before = runs(app);
         app.update();
-        app.world().resource::<Runs>().0 - before
+        runs(app) - before
     }
 
     #[test]
@@ -989,17 +1102,15 @@ mod tests {
             assert_eq!(runs_in_next_frame(&mut app), 0);
         }
 
-        app.world_mut()
-            .get_mut::<Widget>(widget)
-            .unwrap()
-            .set_changed();
+        if let Some(mut changed) = app.world_mut().get_mut::<Widget>(widget) {
+            changed.set_changed();
+        }
         assert_eq!(runs_in_next_frame(&mut app), 1);
         assert_eq!(runs_in_next_frame(&mut app), 0);
 
-        app.world_mut()
-            .get_mut::<Item<String>>(item)
-            .unwrap()
-            .set_changed();
+        if let Some(mut changed) = app.world_mut().get_mut::<Item<String>>(item) {
+            changed.set_changed();
+        }
         assert_eq!(runs_in_next_frame(&mut app), 1);
         assert_eq!(runs_in_next_frame(&mut app), 0);
 
@@ -1525,6 +1636,114 @@ mod tests {
         assert_eq!(SelectionValue::One(entity(1)).append([entity(2)]), None);
     }
 
+    // Pending selections
+
+    fn pending_values() -> [SelectionValue; 2] {
+        [
+            SelectionValue::One(Entity::PLACEHOLDER),
+            SelectionValue::OneOrMore(smallvec![]),
+        ]
+    }
+
+    #[test]
+    fn pending_selections_have_no_selected_items() {
+        for value in pending_values() {
+            assert!(value.is_pending(), "{value:?}");
+            assert_eq!(value.iter().count(), 0, "{value:?}");
+            assert_eq!(value.len(), 0, "{value:?}");
+            assert!(value.is_empty(), "{value:?}");
+            assert_eq!(value.single(), None, "{value:?}");
+            assert_eq!(value.last(), None, "{value:?}");
+            assert!(!value.is_selected(Entity::PLACEHOLDER), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn initialised_selections_are_not_pending() {
+        for value in [
+            SelectionValue::One(entity(1)),
+            SelectionValue::OneOrMore(smallvec![entity(1)]),
+            SelectionValue::ZeroOrOne(None),
+            SelectionValue::ZeroOrMore(smallvec![]),
+        ] {
+            assert!(!value.is_pending(), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_pending_selection_cannot_be_cleared_back_to_pending_by_the_update_methods() {
+        let initialised = [
+            SelectionValue::One(entity(1)),
+            SelectionValue::OneOrMore(smallvec![entity(1)]),
+        ];
+        for value in initialised {
+            assert_eq!(value.clear(), None);
+            assert_eq!(value.pop(), None);
+            assert_eq!(value.trim_to_length(0), None);
+            assert_eq!(value.set_selection([]), None);
+            assert_eq!(value.toggle_selected(entity(1)), None);
+        }
+    }
+
+    #[test]
+    fn a_pending_selection_is_given_an_item_of_the_same_variant() {
+        assert_eq!(
+            SelectionValue::One(Entity::PLACEHOLDER).toggle_selected(entity(1)),
+            Some(SelectionValue::One(entity(1)))
+        );
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![]).push(entity(1)),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    fn a_pending_one_or_more_is_repaired_by_the_first_item_and_keeps_its_cardinality() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert!(selection_value(&app, id).is_some_and(|v| v.is_pending() && v.is_empty()));
+
+        let first = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        let repaired = SelectionValue::OneOrMore(smallvec![first]);
+        assert_eq!(selection_value(&app, id), Some(repaired.clone()));
+        assert!(!repaired.is_pending());
+        // Still a `OneOrMore`: it refuses to clear.
+        assert_eq!(repaired.clear(), None);
+        assert_eq!(repaired.pop(), None);
+        assert!(repaired.allow_multiple());
+    }
+
+    #[test]
+    fn a_pending_one_repaired_by_the_first_item_stays_a_one() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert!(selection_value(&app, id).is_some_and(|v| v.is_pending()));
+        let first = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        let repaired = SelectionValue::One(first);
+        assert_eq!(selection_value(&app, id), Some(repaired.clone()));
+        assert_eq!(repaired.single(), Some(first));
+        assert!(!repaired.allow_multiple());
+        assert_eq!(repaired.clear(), None);
+    }
+
     // The builder, the items and `ItemParam`, in an app with the selection model
 
     fn items_app() -> App {
@@ -1545,6 +1764,65 @@ mod tests {
             .get::<ItemValues>(owner)
             .map(|items| items.iter().collect())
             .unwrap_or_default()
+    }
+
+    fn pending_count(app: &App) -> usize {
+        app.world()
+            .get_resource::<SelectionResource>()
+            .map_or(0, |r| r.pending.len())
+    }
+
+    #[test]
+    fn a_pending_one_is_repaired_by_the_first_item_and_then_forgotten() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert_eq!(pending_count(&app), 1);
+        let item = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        assert_eq!(selection_value(&app, id), Some(SelectionValue::One(item)));
+        assert_eq!(pending_count(&app), 0);
+    }
+
+    #[test]
+    fn a_pending_selection_that_is_despawned_is_dropped_without_polling() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert_eq!(pending_count(&app), 1);
+        app.world_mut().despawn(id);
+        assert_eq!(pending_count(&app), 0);
+        app.update();
+        assert_eq!(pending_count(&app), 0);
+    }
+
+    #[test]
+    fn a_pending_selection_whose_shared_items_are_despawned_goes_with_them() {
+        let mut app = items_app();
+        let items = app.world_mut().spawn(ItemValues::default()).id();
+        let sharing = app
+            .world_mut()
+            .spawn(Selection::builder().one().build_with_items_ref(items))
+            .id();
+        app.update();
+        assert_eq!(pending_count(&app), 1);
+        app.world_mut().despawn(items);
+        assert!(app.world().get_entity(sharing).is_err());
+        assert_eq!(pending_count(&app), 0);
     }
 
     #[test]

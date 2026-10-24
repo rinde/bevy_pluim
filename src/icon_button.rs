@@ -103,9 +103,21 @@ impl IconButtonSize {
 ///
 /// Insert an `IconButton` again to change the icon (play and pause) or the name
 /// of a live button.
+///
+/// The component is immutable: clone or build a value, edit it outside the world and insert it.
+/// It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::icon_button::IconButton;
+/// fn edit(mut buttons: Query<&mut IconButton>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, PartialEq, Eq, Reflect, FromTemplate)]
 #[reflect(Component)]
-#[component(on_insert = Self::on_insert)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[require(
     Node {
         justify_content: JustifyContent::Center,
@@ -160,11 +172,26 @@ struct ToggleBar;
 /// The height of the bar of an on toggle button, in logical pixels.
 const BAR_HEIGHT_PX: f32 = 2.0;
 
-/// The [`Icon`] child of an [`IconButton`].
+/// The [`Icon`] child of an [`IconButton`], for reading. Only the widget builds it; the component
+/// is immutable and its field is private.
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::icon_button::IconButtonRefs;
+/// let _ = IconButtonRefs { icon_id: Entity::PLACEHOLDER };
+/// ```
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[component(immutable)]
 pub struct IconButtonRefs {
+    icon_id: Entity,
+}
+
+impl IconButtonRefs {
     /// The icon.
-    pub icon_id: Entity,
+    #[must_use]
+    pub const fn icon(&self) -> Entity {
+        self.icon_id
+    }
 }
 
 impl IconButton {

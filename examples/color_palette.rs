@@ -115,13 +115,15 @@ fn setup(mut commands: Commands) {
 /// A scroll area over a palette that shares the selection `selection_ref`.
 fn palette_scroll_area(selection_ref: Entity) -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            Pickable {
-                should_block_lower: false,
+        move || {
+            bsn_list! {
+                Pickable {
+                    should_block_lower: false,
+                }
+                ~{ColorPalette}
+                ~{ListLayout::VerticalGrid { columns: 11 }}
+                ~{Selection::reference(selection_ref)}
             }
-            ~{ColorPalette}
-            ~{ListLayout::VerticalGrid { columns: 11 }}
-            ~{Selection::reference(selection_ref)}
         },
         true,
         true,
@@ -131,13 +133,15 @@ fn palette_scroll_area(selection_ref: Entity) -> impl Scene {
 /// A scroll area over a palette with a selection of its own over the items of `selection_ref`.
 fn zero_or_one_palette_scroll_area(selection_ref: Entity) -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            Pickable {
-                should_block_lower: false,
+        move || {
+            bsn_list! {
+                Pickable {
+                    should_block_lower: false,
+                }
+                ~{ColorPalette}
+                ~{ListLayout::VerticalGrid { columns: 11 }}
+                @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
             }
-            ~{ColorPalette}
-            ~{ListLayout::VerticalGrid { columns: 11 }}
-            @{Selection::builder().zero_or_one().scene_with_items_ref(selection_ref)}
         },
         true,
         true,
@@ -147,24 +151,26 @@ fn zero_or_one_palette_scroll_area(selection_ref: Entity) -> impl Scene {
 /// A scroll area over a palette combo and a card, to see the popup is not clipped.
 fn combo_scroll_area(selection_ref: Entity) -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            Pickable {
-                should_block_lower: false,
-            }
-            ColorPaletteCombo
-            ~{ListLayout::VerticalGrid { columns: 11 }}
-            ~{Selection::reference(selection_ref)}
-            --
-            Node {
-                min_width: px(50.0),
-                width: px(100.0),
-                height: px(100.0),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-            }
-            ~{Card}
-            Pickable {
-                should_block_lower: false,
+        move || {
+            bsn_list! {
+                Pickable {
+                    should_block_lower: false,
+                }
+                ColorPaletteCombo
+                ~{ListLayout::VerticalGrid { columns: 11 }}
+                ~{Selection::reference(selection_ref)}
+                --
+                Node {
+                    min_width: px(50.0),
+                    width: px(100.0),
+                    height: px(100.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                }
+                ~{Card}
+                Pickable {
+                    should_block_lower: false,
+                }
             }
         },
         true,

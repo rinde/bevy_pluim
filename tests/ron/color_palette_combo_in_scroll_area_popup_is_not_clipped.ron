@@ -10,7 +10,7 @@
         Wait(2),
         MoveTo(Within(Name("scrolled palette combo"), Component("ColorPushButton"))),
         Click(Left),
-        Check(Component(target: Name("scrolled palette combo"), path: "State", is: Eq(Open))),
+        Check(Component(target: Name("scrolled palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         Wait(1),
         Check(Visible(Name("scrolled palette combo popup"))),
         Check(Component(
@@ -22,7 +22,7 @@
         MoveTo(Nth(60, Within(Name("scrolled palette combo popup"), Component("ItemView")))),
         Click(Left),
         Check(App(Selected(of: Name("scrolled palette combo"), items: ["red-500"]))),
-        Check(Component(target: Name("scrolled palette combo"), path: "State", is: Eq(Closed))),
+        Check(Component(target: Name("scrolled palette combo"), path: "ColorPaletteComboState", is: Eq(Closed))),
     ],
     expect: [App(Selected(of: Name("scrolled palette combo"), items: ["red-500"]))],
 )

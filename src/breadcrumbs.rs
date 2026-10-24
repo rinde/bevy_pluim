@@ -3,10 +3,11 @@
 //! Clicking a crumb trims the selection back to it.
 
 use bevy::prelude::*;
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 
 use crate::label::Label;
-use crate::link::{Link, LinkState};
+use crate::link::Link;
 use crate::select::{Item, Selection, SelectionParam};
 
 /// Registers the systems and observers of [`BreadCrumbs`].
@@ -23,7 +24,9 @@ impl Plugin for BreadCrumbsPlugin {
 
 /// A trail of links for the `OneOrMore` selection on this entity (or the one it refers to).
 ///
-/// Clicking a crumb trims the selection back to it.
+/// Clicking a crumb trims the selection back to it. The current (last) crumb is a [`Link`] with
+/// [`InteractionDisabled`], so it shows plain text and never activates; a crumb that stops being
+/// the last is built again without the marker.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("BreadCrumbs"), Node)]
@@ -95,15 +98,13 @@ fn selection_change(
                 let link = Link::new(item.data.clone());
 
                 // The current crumb is a disabled button: it never activates.
-                let link = if index + 1 == selected.len() {
-                    (link, LinkState::Disabled)
-                } else {
-                    (link, LinkState::Enabled)
-                };
+                // A crumb is respawned when it stops being the last, so it is enabled again.
+                let current = index + 1 == selected.len();
                 if index == 0 {
                     commands.entity(bread_crumbs_ref).with_children(|parent| {
                         parent
                             .spawn((*bc, link))
+                            .insert_if(InteractionDisabled, || current)
                             .observe(create_observer(bread_crumbs_ref, position + 1));
                     });
                 } else {
@@ -115,6 +116,7 @@ fn selection_change(
                                 sub_parent.spawn(separator);
                                 sub_parent
                                     .spawn(link)
+                                    .insert_if(InteractionDisabled, || current)
                                     .observe(create_observer(bread_crumbs_ref, position + 1));
                             });
                     });

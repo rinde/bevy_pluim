@@ -1,6 +1,6 @@
 // The last crumb is the current panel: a disabled button, which a `Tree(..)`
 // snapshot says with `[disabled]` (`InteractionDisabled` on a `bevy_ui_widgets`
-// `Button`, kept when `LinkState` is `Disabled`). The crumbs before it are plain
+// `Button`, put on the current crumb by `BreadCrumbs`). The crumbs before it are plain
 // buttons. A click forced onto the disabled crumb does not activate it, and when
 // the trail grows the old last crumb becomes a button again and the new one is
 // disabled.
