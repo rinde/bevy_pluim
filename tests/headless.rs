@@ -42,9 +42,12 @@ use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
+use rin_bevy_ui::color_palette_combo::{
+    ColorPaletteCombo, ColorPaletteComboButton, ColorPaletteComboFloat, ColorPaletteComboRefs,
+    ColorPaletteComboState as PaletteComboState,
+};
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
-use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
+use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
@@ -1995,9 +1998,9 @@ fn spawn_combo(app: &mut App) -> (Entity, Entity) {
     let button = app
         .world()
         .entity(combo)
-        .get::<ComboSubRefs>()
+        .get::<ComboRefs>()
         .unwrap()
-        .button_id;
+        .button();
     (combo, button)
 }
 
@@ -2017,17 +2020,11 @@ fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
         .id();
     app.update();
     app.update();
-    let refs = *app.world().entity(combo).get::<ComboSubRefs>().unwrap();
-    click(&mut app, refs.button_id);
+    let refs = *app.world().entity(combo).get::<ComboRefs>().unwrap();
+    click(&mut app, refs.button());
     app.update();
     app.update();
-    let list_index = |app: &App| {
-        app.world()
-            .entity(refs.list_id)
-            .get::<TabIndex>()
-            .unwrap()
-            .0
-    };
+    let list_index = |app: &App| app.world().entity(refs.list()).get::<TabIndex>().unwrap().0;
     assert_eq!(
         app.world().entity(combo).get::<ComboState>(),
         Some(&ComboState::Open)
@@ -2066,6 +2063,66 @@ fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
     app.update();
     app.update();
     (combo, single_entity_with::<ColorPushButton>(app))
+}
+
+#[test]
+fn the_root_refs_of_a_combo_point_at_its_live_parts() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    let refs = *app.world().get::<ComboRefs>(combo).unwrap();
+    assert_eq!(refs.button(), button);
+    assert!(app.world().entity(button).contains::<ComboButton>());
+    assert!(app.world().entity(refs.list()).contains::<ComboList>());
+
+    // Inserting the component again keeps one parts tree.
+    app.world_mut().entity_mut(combo).insert(Combo);
+    app.update();
+    assert_eq!(
+        app.world().get::<ComboRefs>(combo).unwrap().button(),
+        button
+    );
+    let mut buttons = app.world_mut().query::<&ComboButton>();
+    assert_eq!(buttons.iter(app.world()).count(), 1);
+
+    app.world_mut().entity_mut(combo).despawn();
+    app.update();
+    assert_eq!(buttons.iter(app.world()).count(), 0);
+    let mut lists = app.world_mut().query::<&ComboList>();
+    assert_eq!(lists.iter(app.world()).count(), 0);
+}
+
+#[test]
+fn the_root_refs_of_a_palette_combo_point_at_its_live_parts() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_palette_combo(&mut app);
+    let refs = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
+    assert_eq!(refs.button(), button);
+    let world = app.world();
+    assert!(world.entity(button).contains::<ColorPaletteComboButton>());
+    assert_eq!(
+        world.get::<Name>(button).map(Name::as_str),
+        Some("ColorPaletteComboButton")
+    );
+    assert!(
+        world
+            .entity(refs.popup())
+            .contains::<ColorPaletteComboFloat>()
+    );
+    assert!(world.entity(refs.palette()).contains::<ColorPalette>());
+
+    // Inserting the component again keeps one parts tree.
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    let again = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
+    assert_eq!(again.popup(), refs.popup());
+    let mut popups = app.world_mut().query::<&ColorPaletteComboFloat>();
+    assert_eq!(popups.iter(app.world()).count(), 1);
+
+    app.world_mut().entity_mut(combo).despawn();
+    app.update();
+    assert_eq!(popups.iter(app.world()).count(), 0);
+    let mut palettes = app.world_mut().query::<&ColorPalette>();
+    assert_eq!(palettes.iter(app.world()).count(), 0);
 }
 
 #[test]
@@ -2150,7 +2207,7 @@ fn controls(app: &App, entity: Entity) -> Vec<u64> {
 fn a_combo_button_controls_its_list() {
     let mut app = headless_app();
     let (combo, button) = spawn_combo(&mut app);
-    let list = app.world().get::<ComboSubRefs>(combo).unwrap().list_id;
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
     assert_eq!(controls(&app, button), vec![list.to_bits()]);
 }
 
