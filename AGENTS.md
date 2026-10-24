@@ -35,9 +35,8 @@ file or open-source framing.
 
 ## Issues and coordination
 
-Work is tracked in GitHub issues. Coordino handles issue coordination; this
-file covers repository guidance only. Issues ready for Coordino use the
-`ready for coordino` label. When working on an issue, follow its title and
+Work is tracked in GitHub issues. Issues ready for implementation use the
+`ready for agent` label. When working on an issue, follow its title and
 description; ask for clarification if its scope is genuinely ambiguous.
 Changes should be made through pull requests.
 
