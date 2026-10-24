@@ -47,7 +47,7 @@ use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
 use rin_bevy_ui::tab_bar::TabBar;
-use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldRefs};
+use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
@@ -2849,4 +2849,70 @@ fn replacing_a_text_field_changes_its_widths_without_respawning_or_a_change_even
     let after: Vec<Entity> = app.world().get::<Children>(field).unwrap().iter().collect();
     assert_eq!(after, children, "the parts are not respawned");
     assert_eq!(app.world().get_resource::<Changes>().unwrap().0, 0);
+}
+
+#[test]
+fn reinserting_a_text_field_updates_value_placeholder_name_and_widths_without_events() {
+    #[derive(Resource, Default)]
+    struct Events(usize);
+
+    let mut app = widgets_app();
+    app.init_resource::<Events>();
+    app.world_mut().spawn(Camera2d);
+    let parent = app
+        .world_mut()
+        .spawn(Node {
+            align_items: AlignItems::FlexStart,
+            ..default()
+        })
+        .id();
+    let field = app
+        .world_mut()
+        .spawn((
+            TextField::new("Alpha")
+                .with_placeholder("Old")
+                .with_name("Old name"),
+            ChildOf(parent),
+        ))
+        .observe(|_: On<TextFieldChange>, mut events: ResMut<Events>| events.0 += 1)
+        .observe(|_: On<TextFieldCommit>, mut events: ResMut<Events>| events.0 += 1)
+        .id();
+    for _ in 0..6 {
+        app.update();
+    }
+    let refs = *app.world().get::<TextFieldRefs>(field).unwrap();
+
+    app.world_mut().entity_mut(field).insert(
+        TextField::new("")
+            .with_placeholder("New")
+            .with_name("New name")
+            .with_min_width(px(300)),
+    );
+    for _ in 0..6 {
+        app.update();
+    }
+
+    let world = app.world();
+    assert_eq!(world.get::<TextFieldRefs>(field).unwrap().input, refs.input);
+    assert_eq!(
+        world
+            .get::<bevy::text::EditableText>(refs.input)
+            .unwrap()
+            .value()
+            .to_string(),
+        ""
+    );
+    assert_eq!(world.get::<Text>(refs.placeholder).unwrap().0, "New");
+    assert_eq!(
+        world.get::<Node>(refs.placeholder).unwrap().display,
+        Display::Flex
+    );
+    assert_eq!(world.get::<Node>(field).unwrap().min_width, px(300));
+    let node = world.get::<AccessibilityNode>(refs.input).unwrap();
+    assert_eq!(node.label(), Some("New name"));
+    assert_eq!(
+        world.get_resource::<Events>().unwrap().0,
+        0,
+        "no change or commit"
+    );
 }

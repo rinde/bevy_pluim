@@ -630,6 +630,16 @@ of them (`just example gallery -- --run-all stack link`).
   `PushButtonRefs::label()` / `icon()`, `IconButtonRefs::icon()` and `ColorSquareRef::entity()`.
   `compile_fail` doctests on the types guard both.
 - **Input is owned by the app, derived state by the widget.** `Item<T>::data` is edited in place; `ItemOf` is reparented through Bevy's relationship API; `ItemsRef` and `Stack` are immutable, so changing them means inserting a new value, which refreshes their consumers. Nothing hands out `&mut ItemValues`.
+- **Configuration is immutable; live state is not.** `Slider`, `NumericStepper` and
+  `TextField` are `#[component(immutable)]`: their fields are read by the insert hook, and
+  changing a setting (range, format, names, icons, widths, placeholder, initial text) means
+  inserting a new component, which rebuilds the parts and syncs the accessibility node (the
+  stepper keeps its `ValueRef`, a `TextField` sets its text without a `TextFieldChange`). The
+  live data stays mutable where it already is: the stepper's `Value` / `UIntValue` (through
+  its validated operations, observed by `on_change`), Bevy's `SliderValue`, and the
+  `EditableText` of `TextFieldRefs::input`. A system never takes the three as `&mut` (a
+  `compile_fail` doctest on each guards it) and none syncs them with a per-frame `Changed`
+  query. A new configuration component follows the same split.
 - **Display widgets are configured by replacement.** `Label`, `Kbd`, `Pill`, `Toast` and `Badge` are immutable components with public fields: construct or clone a value, edit it outside the world and insert it. A mutable query (`Query<&mut Pill>`) does not compile, so migrate such code to `commands.entity(e).insert(pill.clone().with_tone(..))` (read with `&Pill`). Live data such as `Item<T>::data` and `NumericStepper`'s `Value` is not configuration and stays outside this rule.
 - **State is an immutable component**; a transition inserts a new value
   (`ComboState`, `Selection`, the palette combo's `ColorPaletteComboState`).

@@ -95,9 +95,26 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 ///
 /// To a screen reader the field is a text input (on [`TextFieldRefs::input`]) with its text
 /// as its value and `name`, if any, as its label.
+///
+/// `TextField` is an immutable component: it is configuration, replaced by inserting a new
+/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut TextField>` becomes
+/// `commands.entity(e).insert(..)` of a prepared `TextField`. Inserting a new `TextField` sets its text without a `TextFieldChange`.
+///
+/// A `&mut` query does not compile:
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::text_field::TextField;
+///
+/// fn edit(mut widgets: Query<&mut TextField>) {
+///     for mut widget in &mut widgets {
+///         let _ = &mut *widget;
+///     }
+/// }
+/// ```
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
-#[component(on_add = Self::on_add, on_insert = Self::on_insert)]
+#[component(immutable, on_add = Self::on_add, on_insert = Self::on_insert)]
 #[require(
     Name::new("TextField"),
     Node {

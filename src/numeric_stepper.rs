@@ -87,9 +87,26 @@ pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 /// its buttons (the keys bubble up to the stepper): the up and right arrows increase it,
 /// the down and left arrows decrease it, within the same bounds. The stepper is not a
 /// tab stop itself; its buttons are.
+///
+/// `NumericStepper` is an immutable component: it is configuration, replaced by inserting a new
+/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut NumericStepper>` becomes
+/// `commands.entity(e).insert(..)` of a prepared `NumericStepper`. The stepper owns its children: inserting again despawns them and builds new ones, so do not add children of your own. Its `Value` stays mutable and keeps its `ValueRef`.
+///
+/// A `&mut` query does not compile:
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::numeric_stepper::NumericStepper;
+///
+/// fn edit(mut widgets: Query<&mut NumericStepper>) {
+///     for mut widget in &mut widgets {
+///         let _ = &mut *widget;
+///     }
+/// }
+/// ```
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component, from_reflect = false)]
-#[component(on_insert=Self::on_insert)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[require(Node::default())]
 pub struct NumericStepper {
     /// Turns the value into the text between the buttons.
@@ -281,6 +298,15 @@ impl NumericStepper {
             .entity(context.entity)
             .insert(AccessibilityNode::from(access_node));
 
+        // Inserting again replaces the parts: the old ones would be left behind as orphans.
+        let old_parts: Vec<Entity> = world
+            .entity(context.entity)
+            .get::<Children>()
+            .map(|children| children.iter().collect())
+            .unwrap_or_default();
+        for part in old_parts {
+            world.commands().entity(part).despawn();
+        }
         world
             .commands()
             .entity(context.entity)
