@@ -13,6 +13,7 @@ use bevy::asset::{AssetPlugin, HandleTemplate};
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::camera::visibility::VisibilityPlugin;
+use bevy::ecs::event::PropagateEntityTrigger;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::input::InputPlugin;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -10300,6 +10301,29 @@ fn only_the_innermost_scroll_area_takes_a_scroll_into_view() {
     let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
     let target = target_at(&mut app, Some(inner), Vec2::new(150.0, 150.0), 1.0);
     scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, inner), Vec2::splat(73.0));
+    assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
+}
+
+#[test]
+fn a_scroll_into_view_that_propagates_stops_at_the_innermost_scroll_area() {
+    // `World::trigger` runs the observers of the first hop only, so it cannot tell whether the
+    // observer stops the event. Trigger it with propagation switched on, so it climbs from
+    // the target's area to the outer one unless `scroll_into_view` stops it.
+    let mut app = headless_app();
+    let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
+    // The inner area lies 300 px down and right in the outer one, outside its 100 px view, so
+    // an outer area that took the event would scroll to show it.
+    app.world_mut()
+        .entity_mut(inner)
+        .insert(UiGlobalTransform::from_translation(Vec2::splat(350.0)));
+    let target = target_at(&mut app, Some(inner), Vec2::splat(450.0), 1.0);
+    let mut trigger = PropagateEntityTrigger::<false, ScrollIntoView, &ChildOf>::default();
+    trigger.propagate = true;
+    app.world_mut()
+        .trigger_with(ScrollIntoView { entity: target }, trigger);
+    tick(&mut app);
     assert_eq!(scroll_of(&app, inner), Vec2::splat(73.0));
     assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
 }
