@@ -31,8 +31,9 @@ use bevy::ui::{
     ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
 };
 use bevy::ui_widgets::{
-    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab,
-    SetSliderValue, SliderValueChange, Tab, TabList, ValueChange,
+    Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
+    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValueChange, Tab, TabList,
+    ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
@@ -6915,6 +6916,129 @@ fn a_light_dark_toggle_is_a_radio_group_whose_toggle_follows_the_preference() {
         assert_eq!(node.label(), Some(label));
         assert_eq!(node.toggled(), Some(accesskit::Toggled::from(toggled)));
     }
+}
+
+fn two_axis_scroll_area(app: &mut App) -> (Entity, Entity) {
+    app.world_mut().spawn((
+        Node::default(),
+        ScrollArea::bundle(|_: &mut ChildSpawner| {}, true, true),
+    ));
+    app.update();
+    app.update();
+    let bar = |app: &mut App, orientation| {
+        let world = app.world_mut();
+        world
+            .query_filtered::<(Entity, &Scrollbar), With<ScrollBar>>()
+            .iter(world)
+            .find(|(_, scrollbar)| scrollbar.orientation == orientation)
+            .map(|(entity, _)| entity)
+            .unwrap()
+    };
+    let vertical = bar(app, ControlOrientation::Vertical);
+    (vertical, bar(app, ControlOrientation::Horizontal))
+}
+
+fn thumbs_of(app: &mut App, bar: Entity) -> usize {
+    let world = app.world_mut();
+    world
+        .get::<Children>(bar)
+        .map(|children| children.iter().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|child| world.get::<ScrollbarThumb>(*child).is_some())
+        .count()
+}
+
+fn cell(app: &App, bar: Entity) -> (GridPlacement, GridPlacement) {
+    let node = app.world().get::<Node>(bar).unwrap();
+    (node.grid_row, node.grid_column)
+}
+
+#[test]
+fn scroll_bars_sit_in_the_grid_cell_of_their_headless_orientation_with_one_thumb_each() {
+    let mut app = headless_app();
+    let (vertical, horizontal) = two_axis_scroll_area(&mut app);
+    assert_eq!(
+        cell(&app, vertical),
+        (GridPlacement::start(1), GridPlacement::start(2))
+    );
+    assert_eq!(
+        cell(&app, horizontal),
+        (GridPlacement::start(2), GridPlacement::start(1))
+    );
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+    assert_eq!(thumbs_of(&mut app, horizontal), 1);
+}
+
+#[test]
+fn reinserting_the_scroll_bar_marker_keeps_exactly_one_thumb() {
+    let mut app = headless_app();
+    let (vertical, _) = two_axis_scroll_area(&mut app);
+
+    // Across frames.
+    app.world_mut().entity_mut(vertical).insert(ScrollBar);
+    app.update();
+    app.update();
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+
+    // Twice before the commands are applied.
+    app.world_mut()
+        .entity_mut(vertical)
+        .insert(ScrollBar)
+        .insert(ScrollBar);
+    app.update();
+    app.update();
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+    assert_eq!(app.world().get::<Children>(vertical).unwrap().len(), 1);
+}
+
+#[test]
+fn a_bar_without_a_thumb_gets_exactly_one_when_the_marker_is_inserted_twice_at_once() {
+    let mut app = headless_app();
+    let target = app.world_mut().spawn(Node::default()).id();
+    let bar = app
+        .world_mut()
+        .spawn(Scrollbar::new(target, ControlOrientation::Horizontal, 0.0))
+        .id();
+    app.world_mut()
+        .entity_mut(bar)
+        .insert(ScrollBar)
+        .insert(ScrollBar);
+    app.update();
+    app.update();
+    assert_eq!(thumbs_of(&mut app, bar), 1);
+    assert_eq!(
+        cell(&app, bar),
+        (GridPlacement::start(2), GridPlacement::start(1))
+    );
+}
+
+#[test]
+fn changing_the_headless_orientation_moves_and_resizes_the_bar_and_keeps_its_thumb() {
+    let mut app = headless_app();
+    let (vertical, _) = two_axis_scroll_area(&mut app);
+    let thickness = app
+        .world()
+        .get_resource::<Theme>()
+        .unwrap()
+        .scroll_bar_width;
+    assert_eq!(app.world().get::<Node>(vertical).unwrap().width, thickness);
+
+    app.world_mut()
+        .get_mut::<Scrollbar>(vertical)
+        .unwrap()
+        .orientation = ControlOrientation::Horizontal;
+    app.update();
+    app.update();
+
+    let node = app.world().get::<Node>(vertical).unwrap();
+    assert_eq!(node.height, thickness);
+    assert_eq!(node.width, Val::Auto);
+    assert_eq!(
+        cell(&app, vertical),
+        (GridPlacement::start(2), GridPlacement::start(1))
+    );
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
 }
 
 #[test]
