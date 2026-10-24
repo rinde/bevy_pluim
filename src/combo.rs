@@ -84,13 +84,27 @@ pub struct Combo;
 #[require(Name::new("ComboButton"), Hovered)]
 pub struct ComboButton;
 
-/// The children of a [`Combo`].
-#[derive(Component, Debug, Copy, Clone)]
-pub struct ComboSubRefs {
+/// The parts of a [`Combo`], on the combo itself. Only the widget builds it.
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct ComboRefs {
+    button_id: Entity,
+    list_id: Entity,
+}
+
+impl ComboRefs {
     /// The button that opens and closes the popup.
-    pub button_id: Entity,
+    #[must_use]
+    pub const fn button(&self) -> Entity {
+        self.button_id
+    }
+
     /// The list inside the popup.
-    pub list_id: Entity,
+    #[must_use]
+    pub const fn list(&self) -> Entity {
+        self.list_id
+    }
 }
 
 /// Marks the list inside the popup of a [`Combo`].
@@ -124,9 +138,9 @@ impl ComboState {
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = world.entity(context.entity);
-        // Not a live `Combo` (no `ComboSubRefs`): there is no popup to show or hide.
-        let (Some(&state), Some(&ComboSubRefs { list_id, button_id })) =
-            (entity.get::<Self>(), entity.get::<ComboSubRefs>())
+        // Not a live `Combo` (no `ComboRefs`): there is no popup to show or hide.
+        let (Some(&state), Some(&ComboRefs { list_id, button_id })) =
+            (entity.get::<Self>(), entity.get::<ComboRefs>())
         else {
             return;
         };
@@ -243,7 +257,7 @@ impl Combo {
         world
             .commands()
             .entity(combo_id)
-            .insert((ComboState::Closed, ComboSubRefs { button_id, list_id }))
+            .insert((ComboState::Closed, ComboRefs { button_id, list_id }))
             .observe(handle_combo_button_mouse_events);
         world.commands().entity(button_id).observe(
             move |_: On<Activate>, states: Query<&ComboState>, mut commands: Commands| {
@@ -273,7 +287,7 @@ fn close_on_focus_lost(
     combo_id: Entity,
 ) -> impl Fn(
     On<FocusLost>,
-    Query<(&ComboState, &ComboSubRefs)>,
+    Query<(&ComboState, &ComboRefs)>,
     Query<&Hovered, With<ComboList>>,
     ResMut<InputFocus>,
     Commands,
@@ -309,7 +323,7 @@ fn close_on_focus_lost(
 /// around the combo scrolling, say).
 fn place_open_lists(
     window: Single<&Window, With<PrimaryWindow>>,
-    combos: Query<(&ComboState, &ComboSubRefs)>,
+    combos: Query<(&ComboState, &ComboRefs)>,
     buttons: Query<(&ComputedNode, &UiGlobalTransform), With<ComboButton>>,
     mut lists: Query<(&mut Node, &ComputedNode), With<ComboList>>,
 ) {
@@ -386,7 +400,7 @@ fn selection_change(
 fn update_selection(
     input: In<(Entity, Entity)>,
     selections: SelectionParam,
-    combo_sub_refs: Query<&ComboSubRefs>,
+    combo_sub_refs: Query<&ComboRefs>,
     pblr: Query<&PushButtonRefs>,
     items: Query<&Item<String>>,
     mut labels: Query<&mut Text, With<PushButtonLabel>>,
@@ -436,7 +450,7 @@ fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> St
 /// nor the placeholder is part of it: with nothing selected the value is empty. Bevy makes a
 /// node a button again when its `Button` changes, so this runs after it.
 fn sync_accessibility(
-    combos: Query<(Entity, &ComboSubRefs), With<Combo>>,
+    combos: Query<(Entity, &ComboRefs), With<Combo>>,
     selections: SelectionParam,
     items: Query<&Item<String>>,
     mut nodes: Query<&mut AccessibilityNode>,
@@ -464,7 +478,7 @@ fn sync_accessibility(
 /// to, a window or an image.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combos: Query<(Entity, &ComboState, &ComboSubRefs), With<Combo>>,
+    combos: Query<(Entity, &ComboState, &ComboRefs), With<Combo>>,
     selections: SelectionParam,
     mut combo_buttons: Query<(&Hovered, &mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     combo_lists: Query<&Hovered, With<ComboList>>,
@@ -496,12 +510,11 @@ fn close_combos_on_outside_click(
 
 fn handle_combo_button_mouse_events(
     trigger: On<MouseEvent>,
-    combos: Query<(&ComboSubRefs, &ComboState), With<Combo>>,
+    combos: Query<(&ComboRefs, &ComboState), With<Combo>>,
     mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
 ) {
-    let Ok((ComboSubRefs { button_id, .. }, combo_state)) =
-        combos.get(trigger.event().event_target())
+    let Ok((ComboRefs { button_id, .. }, combo_state)) = combos.get(trigger.event().event_target())
     else {
         return;
     };
