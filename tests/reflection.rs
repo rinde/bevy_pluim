@@ -25,9 +25,9 @@ use rin_bevy_ui::color_palette_combo::{
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
-use rin_bevy_ui::filter_chips::{ChipView, FilterChips};
+use rin_bevy_ui::filter_chips::{ChipCount, ChipLabel, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
-use rin_bevy_ui::gallery::{Gallery, GalleryCardView};
+use rin_bevy_ui::gallery::{Gallery, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::Icon;
 use rin_bevy_ui::icon_button::{IconButton, ToggleState};
 use rin_bevy_ui::kbd::Kbd;
@@ -52,7 +52,7 @@ use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toast::{Toast, ToastStack};
-use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
+use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels};
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 
@@ -145,10 +145,15 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Badge>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
+        assert_component::<ChipRefs>(registry);
+        assert_component::<ChipLabel>(registry);
+        assert_component::<ChipCount>(registry);
         assert_component::<Gallery>(registry);
         assert_component::<GalleryCardView>(registry);
+        assert_component::<GalleryCardRefs>(registry);
         assert_component::<Toolbar>(registry);
         assert_component::<ToolbarButton>(registry);
+        assert_component::<ToolbarButtonRefs>(registry);
         assert_component::<ToolbarLabels>(registry);
         assert_component::<VirtualList>(registry);
         assert_component::<VirtualListRow>(registry);

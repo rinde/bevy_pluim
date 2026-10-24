@@ -1113,7 +1113,7 @@ fn tabs(world: &mut World) {
     ];
     let border = world
         .get_resource::<Theme>()
-        .map_or(Color::NONE, |theme| theme.colors.border);
+        .map_or(Color::NONE, |theme| theme.colors().border);
     let root = spawn_camera_and_root(world);
     // The tab bar, a filler and "Change theme" on top, the stack below.
     world.entity_mut(root).insert(Node {

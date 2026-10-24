@@ -214,7 +214,8 @@ impl ToolbarButton {
 
 /// The children of a [`ToolbarButton`]; the variant is the style the button was built for, so a
 /// child its style does not have cannot be named.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub enum ToolbarButtonRefs {
     /// A button of a [`ToolbarStyle::Filled`] toolbar.
     Filled {
@@ -440,7 +441,7 @@ fn spawn_button(
                     display: Display::None,
                     ..default()
                 },
-                BackgroundColor(theme.colors.accent_subtle_bar),
+                BackgroundColor(theme.colors().accent_subtle_bar),
                 Pickable::IGNORE,
                 ChildOf(button),
             ))
@@ -601,7 +602,7 @@ fn update_buttons(
         let active = selections
             .get(button.toolbar())
             .is_some_and(|selection| selection.is_selected(button.item()));
-        let look = button_look(&theme.colors, style, item.data.tone, active, hovered.get());
+        let look = button_look(theme.colors(), style, item.data.tone, active, hovered.get());
         let labels_shown = *toolbar_labels == ToolbarLabels::Shown;
         if style == ToolbarStyle::Filled {
             let (width, height) = if labels_shown {
@@ -645,7 +646,7 @@ fn update_buttons(
             if text.0 != item.data.label {
                 item.data.label.clone_into(&mut text.0);
             }
-            color.set_if_neq(TextColor(look.icon.color(&theme.colors)));
+            color.set_if_neq(TextColor(look.icon.color(theme.colors())));
             if theme.is_changed() || refs.is_added() {
                 *font = label_font(&theme);
             }
@@ -658,7 +659,7 @@ fn update_buttons(
                 key.clone_into(&mut text.0);
             }
             color.set_if_neq(TextColor(
-                look.icon.color(&theme.colors).with_alpha(HINT_OPACITY),
+                look.icon.color(theme.colors()).with_alpha(HINT_OPACITY),
             ));
             if theme.is_changed() || refs.is_added() {
                 font.font = theme.body_font.clone().into();
@@ -678,7 +679,7 @@ fn update_buttons(
             if theme.is_changed() {
                 bar_node.left = theme.control_radius;
                 bar_node.right = theme.control_radius;
-                bar_color.0 = theme.colors.accent_subtle_bar;
+                bar_color.0 = theme.colors().accent_subtle_bar;
             }
         }
     }

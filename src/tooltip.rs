@@ -181,8 +181,8 @@ fn spawn_popup(commands: &mut Commands, theme: &Theme, owner: Entity, text: &str
             TooltipPopup { owner },
             Float,
             popup_node(theme),
-            BackgroundColor(theme.colors.card_surface),
-            BorderColor::all(theme.colors.border),
+            BackgroundColor(theme.colors().card_surface),
+            BorderColor::all(theme.colors().border),
             // Hidden until `place_popups` has the laid-out size to place it with.
             Visibility::Hidden,
             Pickable::IGNORE,
@@ -193,7 +193,7 @@ fn spawn_popup(commands: &mut Commands, theme: &Theme, owner: Entity, text: &str
         TooltipText,
         Text::new(text),
         text_font(theme),
-        TextColor(theme.colors.text_primary),
+        TextColor(theme.colors().text_primary),
         Pickable::IGNORE,
         ChildOf(popup),
     ));
@@ -269,12 +269,12 @@ fn restyle_popups(
 ) {
     for (mut node, mut background, mut border, children) in &mut popups {
         node.border = UiRect::all(theme.border_thickness);
-        background.0 = theme.colors.card_surface;
-        *border = BorderColor::all(theme.colors.border);
+        background.0 = theme.colors().card_surface;
+        *border = BorderColor::all(theme.colors().border);
         for child in children {
             if let Ok((mut font, mut color)) = texts.get_mut(*child) {
                 *font = text_font(&theme);
-                color.0 = theme.colors.text_primary;
+                color.0 = theme.colors().text_primary;
             }
         }
     }

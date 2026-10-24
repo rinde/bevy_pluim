@@ -50,12 +50,12 @@ pub(crate) fn apply_look(
 ) {
     match look {
         ButtonLook::Highlighted => {
-            *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor::all(theme.colors.border_highlight);
+            *background_color = BackgroundColor(theme.colors().background_secondary);
+            *border_color = BorderColor::all(theme.colors().border_highlight);
         }
         ButtonLook::Resting => {
-            *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor::all(theme.colors.border);
+            *background_color = BackgroundColor(theme.colors().background_primary);
+            *border_color = BorderColor::all(theme.colors().border);
         }
     }
 }

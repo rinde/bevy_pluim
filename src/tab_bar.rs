@@ -138,7 +138,8 @@ pub struct TabBarTab {
 }
 
 /// Marks the text of a [`TabBarTab`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 struct TabBarTabLabel;
 
 /// Keeps the keys a focused tab moves the focus with (left, right, Home, End) from
@@ -200,7 +201,7 @@ fn theme_tab_bars(
             continue;
         }
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors.segmented_track;
+        background.0 = theme.colors().segmented_track;
     }
 
     for (tab, hovered, mut node, mut background) in &mut tabs {
@@ -216,7 +217,7 @@ fn theme_tab_bars(
         node.align_items = AlignItems::Center;
         node.justify_content = JustifyContent::Center;
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = segment_colors(&theme.colors, selected, hovered.get()).0;
+        background.0 = segment_colors(theme.colors(), selected, hovered.get()).0;
     }
 
     for (child_of, mut text_color, mut text_font) in &mut labels {
@@ -229,7 +230,7 @@ fn theme_tab_bars(
         let selected = selections
             .get(tab.bar_ref)
             .is_some_and(|selection| selection.is_selected(tab.item_ref));
-        text_color.0 = segment_colors(&theme.colors, selected, hovered.get()).1;
+        text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(TAB_FONT_SIZE),

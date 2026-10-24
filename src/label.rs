@@ -29,9 +29,23 @@ impl Plugin for LabelPlugin {
 ///
 /// It is also Bevy's [`Label`](bevy::ui::widget::Label), so it has an accessibility node with
 /// the role `Label` and its text as the value, kept in step when a `Label` is inserted again.
+/// Inserting a `Label` of another role restyles it; empty text keeps the node (an empty line of
+/// the role's size) and does not hide it.
+///
+/// The component is immutable: build or clone a value, edit it outside the world and insert it
+/// again to update a live widget. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::label::Label;
+/// fn edit(mut widgets: Query<&mut Label>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
-#[component(on_insert=Self::on_insert)]
+#[component(immutable, on_insert=Self::on_insert)]
 #[require(
     Name::new("Label"),
     UiLabel,
@@ -127,27 +141,27 @@ fn theme_labels(
             Label::Title(_) => (
                 &theme.display_font,
                 theme.font_size_title,
-                theme.colors.text_primary,
+                theme.colors().text_primary,
             ),
             Label::Regular(_) => (
                 &theme.body_font,
                 theme.font_size_secondary,
-                theme.colors.text_primary,
+                theme.colors().text_primary,
             ),
             Label::Secondary(_) => (
                 &theme.body_font,
                 theme.font_size_secondary,
-                theme.colors.text_secondary,
+                theme.colors().text_secondary,
             ),
             Label::Caption(_) => (
                 &theme.body_font,
                 theme.font_size_small,
-                theme.colors.text_tertiary,
+                theme.colors().text_tertiary,
             ),
             Label::Overline(_) => (
                 &theme.body_font,
                 theme.font_size_overline,
-                theme.colors.text_secondary,
+                theme.colors().text_secondary,
             ),
         };
         let overline = matches!(label, Label::Overline(_));

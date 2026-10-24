@@ -392,7 +392,7 @@ fn draw_focus_ring(
     let ring = Outline {
         width: Val::Px(FOCUS_RING_WIDTH),
         offset: Val::Px(FOCUS_RING_OFFSET),
-        color: theme.colors.focus_ring,
+        color: theme.colors().focus_ring,
     };
     if is_ring {
         if outline != Some(&ring) {

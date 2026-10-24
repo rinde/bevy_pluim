@@ -182,11 +182,11 @@ pub(crate) fn update_theme(
         disabled,
     ) in it
     {
-        background_color.0 = theme.colors.background_primary;
+        background_color.0 = theme.colors().background_primary;
         border_color.set_all(if disabled {
-            theme.colors.text_disabled
+            theme.colors().text_disabled
         } else {
-            theme.colors.border
+            theme.colors().border
         });
         node.border_radius = BorderRadius::all(theme.control_radius);
         *box_shadow = theme.small_shadow().into();

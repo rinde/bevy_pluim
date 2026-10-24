@@ -1207,7 +1207,7 @@ fn a_press_on_a_link_restyles_it() {
         .world()
         .get_resource::<Theme>()
         .unwrap()
-        .colors
+        .colors()
         .background_secondary;
     assert_ne!(before.0, expected);
     assert_eq!(after.0, expected);
@@ -1339,7 +1339,7 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
         app.world()
             .get_resource::<Theme>()
             .unwrap()
-            .colors
+            .colors()
             .text_primary
     );
 }
@@ -1349,7 +1349,7 @@ fn inserting_and_removing_the_marker_on_a_live_link_restyles_it_under_the_pointe
     let mut app = headless_app();
     let link = spawn_link(&mut app, false);
     app.world_mut().entity_mut(link).insert(Hovered(true));
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     app.world_mut().entity_mut(link).insert(InteractionDisabled);
     app.world_mut().run_schedule(Update);
@@ -1368,7 +1368,7 @@ fn inserting_and_removing_the_marker_on_a_live_link_restyles_it_under_the_pointe
 fn a_link_enabled_again_reacts_to_the_pointer_again() {
     let mut app = headless_app();
     let link = spawn_link(&mut app, true);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     press(&mut app, link);
     assert_eq!(background(&app, link), colors.background_primary);
 
@@ -1487,7 +1487,7 @@ fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
 
     press(&mut app, button);
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert!(app.world().entity(button).contains::<Pressed>());
     assert_eq!(
         background(&app, button),
@@ -1595,7 +1595,7 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let label = app
         .world()
         .entity(button)
@@ -1746,7 +1746,7 @@ fn a_disabled_color_push_button_shows_the_disabled_border_and_does_not_activate(
         .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 1);
     app.update();
     app.update();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let border = |app: &App| app.world().entity(button).get::<BorderColor>().unwrap().top;
     assert_eq!(border(&app), colors.border);
 
@@ -1789,7 +1789,7 @@ fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
     app.update();
 
     let ring = app.world().entity(focused).get::<Outline>().unwrap();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(ring.color, colors.focus_ring);
     assert_eq!(ring.width, Val::Px(2.0));
     assert_eq!(ring.offset, Val::Px(1.0));
@@ -1827,7 +1827,7 @@ fn the_focus_ring_keeps_an_outline_the_app_set_and_gives_it_back() {
     app.world_mut().insert_resource(InputFocusVisible(true));
     app.update();
     app.update();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let ring = app.world().entity(with_outline).get::<Outline>().unwrap();
     assert_eq!(ring.color, colors.focus_ring);
 
@@ -1867,7 +1867,7 @@ fn the_focus_ring_keeps_an_outline_on_a_lists_active_row() {
     app.world_mut().insert_resource(InputFocusVisible(true));
     app.update();
     app.update();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(
         app.world().entity(row).get::<Outline>().unwrap().color,
         colors.focus_ring
@@ -2434,7 +2434,7 @@ fn assert_popup_borders_are_highlight(app: &mut App, count: usize) {
         app.world()
             .get_resource::<Theme>()
             .unwrap()
-            .colors
+            .colors()
             .border_highlight,
     );
     let floats = palette_combo_floats(app);
@@ -3915,7 +3915,7 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
     };
     let check = |app: &App| {
         let theme = app.world().get_resource::<Theme>().unwrap();
-        let c = theme.colors;
+        let c = theme.colors();
         assert_eq!(
             look(app, title),
             (
@@ -4098,7 +4098,7 @@ fn selecting_a_custom_view_restyles_it_like_a_default_one() {
     let mut app = headless_app();
     let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
     let views = item_views(&app, list);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert!(app.world().entity(views[0]).contains::<Selected>());
     assert_eq!(background(&app, views[0]), colors.selected_item);
     assert_eq!(background(&app, views[1]), colors.background_primary);
@@ -4116,7 +4116,7 @@ fn a_press_on_a_nested_button_leaves_the_custom_view_and_the_selection_alone() {
     let mut app = headless_app();
     let (list, selection_ref) = spawn_custom_list(&mut app, Selection::builder().one());
     let views = item_views(&app, list);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let (_, button) = nested(&app, views[1]);
 
     press(&mut app, button);
@@ -4133,7 +4133,7 @@ fn a_press_on_the_text_of_a_custom_view_presses_the_row() {
     let mut app = headless_app();
     let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
     let views = item_views(&app, list);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let (text, _) = nested(&app, views[1]);
 
     press(&mut app, text);
@@ -4814,7 +4814,7 @@ fn filter_chips_show_a_chip_per_item_with_label_and_count_and_the_first_active()
         ("Problems".into(), String::new())
     );
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, views[0]), colors.chip_on);
     assert_eq!(background(&app, views[1]), Color::NONE);
     let label = app
@@ -4832,7 +4832,7 @@ fn activating_a_chip_selects_it_and_fills_it() {
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
     let views = chip_views(&app, chips);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     activate(&mut app, views[1]);
 
@@ -5357,7 +5357,7 @@ fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
     assert_eq!(text(refs.description_id), "Light or dark");
     assert!(app.world().get::<Node>(refs.control_slot).is_some());
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(
         app.world().get::<TextColor>(refs.title_id).unwrap().0,
         colors.text_primary
@@ -5641,7 +5641,7 @@ fn a_toolbar_has_a_button_per_item_with_a_divider_between_groups() {
         [false, true, false, false, true, false]
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, buttons[0]), colors.accent);
     assert_eq!(background(&app, buttons[1]), Color::NONE);
     let node = app.world().entity(buttons[0]).get::<Node>().unwrap();
@@ -5653,7 +5653,7 @@ fn clicking_a_tool_of_a_one_toolbar_selects_it_and_fills_it() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     activate(&mut app, buttons[2]);
     assert_eq!(selected_label(&app, toolbar).as_deref(), Some("Signal"));
@@ -5671,7 +5671,7 @@ fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_colour_whe
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let label = |app: &App, b: Entity| {
         let refs = app.world().entity(b).get::<ToolbarButtonRefs>().unwrap();
         let e = app.world().entity(refs.label().unwrap());
@@ -5699,7 +5699,7 @@ fn clicking_the_open_panel_of_a_zero_or_one_toolbar_closes_it() {
         Selection::builder().zero_or_one(),
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(selected_label(&app, toolbar), None);
 
     activate(&mut app, buttons[1]);
@@ -5723,7 +5723,7 @@ fn a_selection_changed_through_the_selection_param_restyles_the_buttons() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let target = app
         .world()
         .entity(buttons[3])
@@ -5772,7 +5772,7 @@ fn a_toolbar_shares_a_selection_by_reference() {
     activate(&mut app, buttons[3]);
 
     assert_eq!(selected_label(&app, selection).as_deref(), Some("Train"));
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, buttons[3]), colors.accent);
 }
 
@@ -5926,7 +5926,7 @@ fn clicking_a_card_in_the_second_group_deselects_the_one_in_the_first() {
     let groups = gallery_groups(&app, gallery);
     let first = groups[0].1[0];
     let wagon = groups[1].1[1];
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(picked_card_label(&app, gallery).as_deref(), Some("Steam"));
     assert_eq!(border_top(&app, first), colors.selection_ring);
 
@@ -5953,7 +5953,7 @@ fn a_selection_changed_through_selection_param_moves_the_ring() {
         .get::<GalleryCardView>()
         .unwrap()
         .item;
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     app.world_mut()
         .run_system_once(move |mut selections: SelectionParam| {
@@ -6801,7 +6801,7 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let theme = app.world().get_resource::<Theme>().unwrap();
     let mode = theme.mode();
     assert_eq!(
-        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        theme_editor_ui::slot_color(theme.colors(), "accent"),
         Some(items)
     );
     assert_eq!(
@@ -6876,7 +6876,7 @@ fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
         Some(red)
     );
     assert_eq!(
-        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        theme_editor_ui::slot_color(theme.colors(), "accent"),
         Some(red)
     );
     assert_eq!(
@@ -9078,7 +9078,7 @@ fn no_default_hover_inserted_after_spawn_stops_the_hover_colours() {
 
     press(&mut app, button);
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, button), colors.background_primary);
 }
 
@@ -9099,7 +9099,7 @@ fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
 
     press(&mut app, button);
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, button), colors.selected_hovered_item);
 }
 
@@ -10848,4 +10848,276 @@ fn the_toast_stack_is_absolute_above_everything_and_ignores_the_pointer() {
     );
     assert_eq!(app.world().get::<Pickable>(stack), Some(&Pickable::IGNORE));
     assert_eq!(app.world().get::<Pickable>(toast), Some(&Pickable::IGNORE));
+}
+
+/// The accessibility node of `entity`: role, label, value and description.
+fn access_of(
+    app: &App,
+    entity: Entity,
+) -> (
+    accesskit::Role,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    let node = app.world().get::<AccessibilityNode>(entity).unwrap();
+    (
+        node.role(),
+        node.label().map(str::to_owned),
+        node.value().map(str::to_owned),
+        node.description().map(str::to_owned),
+    )
+}
+
+#[test]
+fn replacing_a_kbd_pill_and_label_updates_text_and_accessibility_and_empty_text_keeps_the_node() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let kbd = app.world_mut().spawn((Kbd::new("Esc"), ChildOf(root))).id();
+    let pill = app
+        .world_mut()
+        .spawn((Pill::new("running"), ChildOf(root)))
+        .id();
+    let label = app
+        .world_mut()
+        .spawn((Label::regular("Row"), ChildOf(root)))
+        .id();
+    settle(&mut app);
+
+    let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
+    assert_eq!(access_of(&app, kbd).2.as_deref(), Some("Esc"));
+    assert_eq!(access_of(&app, pill).1.as_deref(), Some("running"));
+
+    app.world_mut().entity_mut(kbd).insert(Kbd::new("Tab"));
+    app.world_mut()
+        .entity_mut(pill)
+        .insert(Pill::new("waiting").with_tone(PillTone::Warning));
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::secondary("Other"));
+    settle(&mut app);
+    assert_eq!(text(&app, kbd), "Tab");
+    assert_eq!(access_of(&app, kbd).2.as_deref(), Some("Tab"));
+    assert_eq!(text(&app, pill), "WAITING");
+    assert_eq!(access_of(&app, pill).1.as_deref(), Some("waiting"));
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.wait_background
+    );
+    assert_eq!(text(&app, label), "Other");
+    assert_eq!(
+        app.world().get::<TextColor>(label).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.text_secondary
+    );
+
+    // Empty text keeps the entity, its container layout and its accessibility node.
+    app.world_mut().entity_mut(kbd).insert(Kbd::new(""));
+    app.world_mut().entity_mut(pill).insert(Pill::new(""));
+    app.world_mut().entity_mut(label).insert(Label::regular(""));
+    settle(&mut app);
+    for e in [kbd, pill, label] {
+        assert_eq!(text(&app, e), "");
+        assert_ne!(app.world().get::<Node>(e).unwrap().display, Display::None);
+    }
+    // The label's accessibility node is Bevy's, made by its accessibility plugin, which the
+    // headless app lacks.
+    assert_eq!(access_of(&app, kbd).2.as_deref(), Some(""));
+    assert_eq!(access_of(&app, pill).1.as_deref(), Some(""));
+
+    app.world_mut().entity_mut(kbd).insert(Kbd::new("Esc"));
+    app.world_mut().entity_mut(pill).insert(Pill::new("back"));
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::regular("Back"));
+    settle(&mut app);
+    assert_eq!(text(&app, kbd), "Esc");
+    assert_eq!(text(&app, pill), "BACK");
+    assert_eq!(text(&app, label), "Back");
+}
+
+#[test]
+fn replacing_a_badge_updates_text_tone_and_host_description_and_empty_text_clears_them() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Trains", IconButtonSize::Regular),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    let description = |app: &App| access_of(app, button).3;
+
+    app.world_mut().entity_mut(button).insert(Badge::count(4));
+    settle(&mut app);
+    assert_eq!(description(&app).as_deref(), Some("4"));
+    let (overlay, _) = badge_under(&app, button).unwrap();
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Badge::new("9+").with_tone(BadgeTone::Warning));
+    settle(&mut app);
+    assert_eq!(description(&app).as_deref(), Some("9+"));
+    assert_eq!(badge_under(&app, button).unwrap().0, overlay);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(overlay).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.warning_text
+    );
+
+    app.world_mut().entity_mut(button).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button), None);
+    assert_eq!(description(&app), None);
+
+    app.world_mut().entity_mut(button).insert(Badge::count(2));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, button).unwrap().1, "2");
+    assert_eq!(description(&app).as_deref(), Some("2"));
+}
+
+#[test]
+fn replacing_a_toast_updates_its_text_and_label_and_keeps_one_entity_in_its_place() {
+    use bevy::time::TimeUpdateStrategy;
+    use std::time::Duration;
+
+    let mut app = headless_app();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        250,
+    )));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let first = app
+        .world_mut()
+        .spawn((Toast::new("One").with_duration(2.0), ChildOf(root)))
+        .id();
+    app.update();
+    let second = app
+        .world_mut()
+        .spawn((Toast::new("Two").with_duration(60.0), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let stack = app.world().get::<ChildOf>(first).unwrap().parent();
+    let order =
+        |app: &App| -> Vec<Entity> { app.world().get::<Children>(stack).unwrap().iter().collect() };
+    assert_eq!(order(&app), [first, second]);
+    for _ in 0..4 {
+        app.update();
+    }
+
+    // Replacing the older toast changes it in place and restarts its timer; it is not
+    // re-stacked.
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Toast::new("Uno").with_duration(2.0));
+    app.update();
+    assert_eq!(app.world().get::<Text>(first).unwrap().0, "Uno");
+    assert_eq!(access_of(&app, first).1.as_deref(), Some("Uno"));
+    assert_eq!(order(&app), [first, second]);
+    assert_eq!(count_toasts(&mut app), 2);
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(app.world().get_entity(first).is_ok(), "timer not restarted");
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(app.world().get_entity(first).is_err());
+    assert!(app.world().get_entity(second).is_ok());
+
+    // Empty text keeps the card and the normal lifetime, and nonempty text comes back.
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Toast::new("").with_duration(1.0));
+    app.update();
+    assert_eq!(app.world().get::<Text>(second).unwrap().0, "");
+    assert!(app.world().get::<Card>(second).is_some());
+    assert_eq!(access_of(&app, second).1.as_deref(), Some(""));
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Toast::new("Back").with_duration(1.0));
+    app.update();
+    assert_eq!(app.world().get::<Text>(second).unwrap().0, "Back");
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(app.world().get_entity(second).is_err());
+}
+
+#[test]
+fn a_badge_on_a_host_without_an_accessibility_node_describes_it_once_the_node_appears() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let host = app
+        .world_mut()
+        .spawn((Node::default(), Badge::count(5), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    assert!(app.world().get::<AccessibilityNode>(host).is_none());
+    assert_eq!(badge_under(&app, host).unwrap().1, "5");
+
+    app.world_mut()
+        .entity_mut(host)
+        .insert(AccessibilityNode::from(accesskit::Node::new(
+            accesskit::Role::Button,
+        )));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3.as_deref(), Some("5"));
+
+    // An empty badge then clears the description again.
+    app.world_mut().entity_mut(host).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3, None);
+}
+
+#[test]
+fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_back() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let label = app
+        .world_mut()
+        .spawn((Label::regular("Locomotives"), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let state = |app: &App| {
+        let e = app.world().entity(label);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            *e.get::<LetterSpacing>().unwrap(),
+            e.get::<TextFont>().unwrap().weight,
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::overline("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "LOCOMOTIVES".to_string(),
+            LetterSpacing::Px(0.5),
+            FontWeight::SEMIBOLD
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::regular("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
 }
