@@ -7298,3 +7298,113 @@ fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
     let colors = app.world().get_resource::<Theme>().unwrap().colors;
     assert_eq!(background(&app, button), colors.selected_hovered_item);
 }
+
+// ---- Re-pointing a `Selection::Ref` stops the list following the old items ----
+
+#[test]
+fn a_list_pointed_at_other_items_ignores_changes_to_the_old_ones() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let old = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(Item::new)),
+        )
+        .id();
+    let new = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["x", "y", "z"].map(Item::new)),
+        )
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((List, Selection::reference(old), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, list).len(), 2);
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(Selection::reference(new));
+    app.update();
+    app.update();
+    let labels = |app: &App| {
+        item_views(app, list)
+            .into_iter()
+            .map(|view| item_label(app, app.world().get::<ItemView>(view).unwrap().item_ref))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(labels(&app), ["x", "y", "z"]);
+
+    app.world_mut().spawn((Item::new("c"), ItemOf(old)));
+    app.update();
+    app.update();
+    assert_eq!(
+        labels(&app),
+        ["x", "y", "z"],
+        "old items no longer drive the list"
+    );
+
+    app.world_mut().spawn((Item::new("w"), ItemOf(new)));
+    app.update();
+    app.update();
+    assert_eq!(labels(&app), ["x", "y", "z", "w"]);
+
+    // Back to the old items: still one set of views, no duplicate observer effects.
+    app.world_mut()
+        .entity_mut(list)
+        .insert(Selection::reference(old));
+    app.update();
+    app.update();
+    assert_eq!(labels(&app), ["a", "b", "c"]);
+}
+
+#[test]
+fn a_palette_pointed_at_other_items_ignores_changes_to_the_old_ones() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let palette_items = |data: Vec<Color>| {
+        Selection::builder()
+            .one()
+            .build_with_items(data.into_iter().map(|data| Item { data }))
+    };
+    let old = app.world_mut().spawn(palette_items(vec![RED, GREEN])).id();
+    let new = app
+        .world_mut()
+        .spawn(palette_items(vec![BLUE, RED, GREEN, Color::WHITE]))
+        .id();
+    let palette = app
+        .world_mut()
+        .spawn((ColorPalette, Selection::reference(old), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, palette).len(), 2);
+
+    app.world_mut()
+        .entity_mut(palette)
+        .insert(Selection::reference(new));
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, palette).len(), 4);
+
+    app.world_mut().spawn((Item { data: BLUE }, ItemOf(old)));
+    app.update();
+    app.update();
+    assert_eq!(
+        item_views(&app, palette).len(),
+        4,
+        "old items no longer drive the palette"
+    );
+
+    app.world_mut().spawn((Item { data: BLUE }, ItemOf(new)));
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, palette).len(), 5);
+}

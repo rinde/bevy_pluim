@@ -1,7 +1,5 @@
 //! `ColorPalette`: a grid of colour swatches over a selection of [`Item<Color>`](crate::select::Item).
 
-use std::collections::HashMap;
-
 use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -10,10 +8,10 @@ use bevy::ui_widgets::ListBoxMultiSelect;
 use itertools::Either;
 
 use crate::list::{
-    CornerStyle, ItemView, ItemsChangedInput, List, ListLayout, NoDefaultItems, sync_multi_select,
-    sync_selected,
+    CornerStyle, ItemView, ItemsChangedInput, ItemsWatch, List, ListLayout, NoDefaultItems,
+    sync_multi_select, sync_selected, watch_items,
 };
-use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
+use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::tailwind::color_name;
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
@@ -172,45 +170,15 @@ fn sync_accessible_names(
 
 fn on_insert_selection(
     t: On<Insert<Selection>>,
-    color_palettes: Query<&Selection, With<ColorPalette>>,
+    color_palettes: Query<Option<&ItemsWatch>, (With<ColorPalette>, With<Selection>)>,
     selections: SelectionParam,
-    mut commands: Commands,
-    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
+    commands: Commands,
 ) {
     let list_ref = t.event().event_target();
-    if color_palettes.get(list_ref).is_err() {
-        return;
-    }
-    let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
+    let Ok(watch) = color_palettes.get(list_ref) else {
         return;
     };
-    if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
-        // no change in items ref
-        return;
-    }
-    existing_values_ref_map.insert(list_ref, values_ref);
-
-    // register observer for items change event
-    commands
-        .entity(values_ref)
-        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
-            commands.run_system_cached_with(
-                on_items_changed,
-                ItemsChangedInput {
-                    list_ref,
-                    items: t.event().items.iter().collect(),
-                },
-            );
-        });
-
-    // update all items now
-    commands.run_system_cached_with(
-        on_items_changed,
-        ItemsChangedInput {
-            list_ref,
-            items: all_items.iter().collect(),
-        },
-    );
+    watch_items(list_ref, watch, &selections, commands, on_items_changed);
 }
 
 fn handle_mouse_events(
