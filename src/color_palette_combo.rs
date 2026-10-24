@@ -113,6 +113,7 @@ fn on_insert_combo(
     selections: SelectionParam,
     names: Query<&Name>,
     built: Query<(), With<SubRefs>>,
+    theme: Res<Theme>,
 ) {
     let combo = t.event().event_target();
     // Inserting the component again on a live combo keeps what it already built.
@@ -154,7 +155,7 @@ fn on_insert_combo(
                     border: UiRect::all(Val::Px(1.0)),
                     ..default()
                 },
-                BorderColor::all(Color::BLACK),
+                BorderColor::all(theme.colors.border_highlight),
                 Visibility::Hidden,
                 ScrollArea::bundle(
                     move |parent| {

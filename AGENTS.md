@@ -566,8 +566,7 @@ of them (`just example gallery -- --run-all stack link`).
   its corners are `CornerRadius`es and its constructors (`BorderRadius::all`,
   `top`, ..) are not `const`, so a function that builds one cannot be either.
 - **No hard-coded colours outside `theme.rs` and `tailwind.rs`.** Add a slot
-  to `ThemeColors` (both default themes) rather than inlining a colour. One
-  `Color::BLACK` border in `color_palette_combo.rs` predates this rule.
+  to `ThemeColors` (both default themes) rather than inlining a colour.
 - **Setup lives in component hooks and `#[require(…)]`.** `on_add` for
   one-time setup (`PushButton`, `Combo`, `Link`, `ColorPushButton`),
   `on_insert` where re-inserting should re-run it (`Card`, `Label`, `List`,
