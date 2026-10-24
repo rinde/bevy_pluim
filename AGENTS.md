@@ -955,6 +955,11 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
   The label and the track let the pointer through, so a file cannot `MoveTo` the label.
   A press on the thumb alone does not make the slider `Pressed`, only one on the track or a
   drag does, so `slider_thumb_colours.ron` presses the track for the `accent` thumb.
+  `zero range slider` (320 px, 3 to 3 in steps of 1, spawned last) has the `ZeroRangeChanges`
+  resource count its `ValueChange<f32>`s (`count`) and those not at 3 (`off_bound`);
+  `slider_zero_range_pointer.ron` presses its track and drags the thumb past both ends and
+  checks the value stays 3, `off_bound` is 0, the thumb stays at a finite position and the
+  accessibility node is a `Slider`.
 - **The `TextFields` screen.** `name field` ("Alpha", named "Name"), `seed field`
   (empty, placeholder "Seed", named "Seed"), an "Other" button and "Change theme". The
   `FieldEvents` resource counts the fields' `TextFieldChange`s and `TextFieldCommit`s and keeps

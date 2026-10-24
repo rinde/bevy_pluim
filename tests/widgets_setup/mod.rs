@@ -123,7 +123,8 @@ pub enum WidgetsSetup {
     /// steps of 5, at 25, its value shown as "25 %", "Speed") and `disabled
     /// slider` (0 to 10 at 3, shown as "3", `InteractionDisabled`), then
     /// "Change theme". [`SliderChanges`] keeps the `ValueChange`s of `stepped
-    /// slider`.
+    /// slider`. `zero range slider` (320 px wide, 3 to 3 in steps of 1, at 3,
+    /// spawned last) has [`ZeroRangeChanges`] count its `ValueChange`s.
     Slider,
     /// Segmented controls, each with a `Name`: `own segmented control`
     /// (Auto, Manual, with a selection of its own) and `first shared
@@ -267,6 +268,17 @@ pub struct SliderChanges {
     pub last: f32,
     /// How many changes were final.
     pub finals: u32,
+}
+
+/// The `ValueChange<f32>`s of the `zero range slider` of the `Slider` screen:
+/// how many it sent and how many reported a value other than its bound of 3.
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct ZeroRangeChanges {
+    /// How many changes were sent.
+    pub count: u32,
+    /// How many of them reported a value other than 3.
+    pub off_bound: u32,
 }
 
 /// A [`Value`] of a constant range the screens know to be valid.
@@ -1351,6 +1363,7 @@ fn numeric_stepper(world: &mut World) {
 
 fn slider(world: &mut World) {
     world.init_resource::<SliderChanges>();
+    world.init_resource::<ZeroRangeChanges>();
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((
@@ -1383,6 +1396,20 @@ fn slider(world: &mut World) {
             Name::new("disabled slider"),
         ));
         spawn_theme_button(root);
+        root.spawn((
+            valid_slider(3.0, 3.0, 3.0, Some(1.0)),
+            Node {
+                width: px(320),
+                ..default()
+            },
+            Name::new("zero range slider"),
+        ))
+        .observe(
+            |change: On<ValueChange<f32>>, mut changes: ResMut<ZeroRangeChanges>| {
+                changes.count += 1;
+                changes.off_bound += u32::from((change.value - 3.0).abs() > f32::EPSILON);
+            },
+        );
     });
 }
 
