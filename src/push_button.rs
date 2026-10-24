@@ -34,6 +34,7 @@ impl Plugin for PushButtonPlugin {
                     .run_if(resource_changed::<Theme>),
                 restyle_on_disabled_change,
                 restyle_on_size_change,
+                restyle_on_hover_marker_change,
             ),
         )
         .add_observer(restyle_on_toggle)
@@ -84,9 +85,13 @@ fn sync_accessibility(
 /// (observe `On<Insert<ToggleState>>` to react), and an on button has the `accent_subtle`
 /// background and `accent_subtle_text` text. To a screen reader it is `toggled` with the state;
 /// without a `ToggleState` it has no toggled state.
+///
+/// Insert a `PushButton` again to change the label or add or remove the icon of a live button:
+/// the existing text children are updated in place (the icon child is spawned or despawned and
+/// [`PushButtonRefs`] follows), so the text on screen always equals the accessible label.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_add = Self::on_add)]
+#[component(on_insert = Self::on_insert)]
 #[require(BoxShadow::default(),
     Node {
         justify_content: JustifyContent::SpaceBetween,
@@ -172,6 +177,9 @@ pub struct PushButtonRefs {
 pub struct PushButtonIcon;
 
 /// Marker component that disables the default hover effect for `PushButton`s.
+///
+/// Inserting or removing it on a live button takes effect at once: the button rests at `background_primary`
+/// for its owner to colour, or follows the pointer again.
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NoDefaultHover;
 
@@ -192,45 +200,86 @@ impl PushButton {
         }
     }
 
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let entity = world.entity(context.entity);
-        let Some(button) = entity.get::<Self>() else {
+    /// Builds the children and observers once, and on every later insert brings the label and the
+    /// icon of the existing children in line with the new value. Runs as one queued command so
+    /// two inserts before a flush cannot both spawn children.
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let entity = context.entity;
+        let Some(button) = world.get::<Self>(entity) else {
             return;
         };
-        let icon = button
-            .icon
-            .as_ref()
-            .map(|s| (Text::new(s), PushButtonIcon, Pickable::IGNORE));
-        let label = (Text::new(&button.label), PushButtonLabel, Pickable::IGNORE);
-
-        let default_hover = !entity.contains::<NoDefaultHover>();
-
+        let (label, icon) = (button.label.clone(), button.icon.clone());
         let mut commands = world.commands();
-        let mut entity_commands = commands.entity(context.entity);
-
-        entity_commands.observe(toggle_on_activate);
-        if default_hover {
-            entity_commands.observe(handle_hover);
-        }
-        let mut label_id = Entity::PLACEHOLDER;
-        let mut icon_id = None;
-        world
-            .commands()
-            .entity(context.entity)
-            .with_children(|spawner| {
-                label_id = spawner.spawn(label).id();
-                if let Some(icon) = icon {
-                    icon_id = Some(spawner.spawn(icon).id());
+        commands.queue(move |world: &mut World| {
+            let Ok(mut entity_mut) = world.get_entity_mut(entity) else {
+                return;
+            };
+            let refs = entity_mut.get::<PushButtonRefs>().copied();
+            let Some(refs) = refs else {
+                entity_mut.observe(toggle_on_activate);
+                entity_mut.observe(handle_hover);
+                let label_id = world
+                    .spawn((
+                        Text::new(label),
+                        PushButtonLabel,
+                        Pickable::IGNORE,
+                        ChildOf(entity),
+                    ))
+                    .id();
+                let icon_id = icon.map(|icon| {
+                    world
+                        .spawn((
+                            Text::new(icon),
+                            PushButtonIcon,
+                            Pickable::IGNORE,
+                            ChildOf(entity),
+                        ))
+                        .id()
+                });
+                world
+                    .entity_mut(entity)
+                    .insert(PushButtonRefs { label_id, icon_id });
+                return;
+            };
+            set_text(world, refs.label_id, &label);
+            let icon_id = match (refs.icon_id, icon) {
+                (Some(icon_id), Some(icon)) => {
+                    set_text(world, icon_id, &icon);
+                    Some(icon_id)
                 }
-            });
-        world
-            .commands()
-            .entity(context.entity)
-            .insert(PushButtonRefs { label_id, icon_id });
+                (Some(icon_id), None) => {
+                    world.despawn(icon_id);
+                    None
+                }
+                (None, Some(icon)) => Some(
+                    world
+                        .spawn((
+                            Text::new(icon),
+                            PushButtonIcon,
+                            Pickable::IGNORE,
+                            ChildOf(entity),
+                        ))
+                        .id(),
+                ),
+                (None, None) => None,
+            };
+            if icon_id != refs.icon_id {
+                world.entity_mut(entity).insert(PushButtonRefs {
+                    label_id: refs.label_id,
+                    icon_id,
+                });
+            }
+        });
+        commands.run_system_cached_with(theme_push_button, Some(entity));
+    }
+}
 
-        world
-            .commands()
-            .run_system_cached_with(theme_push_button, Some(context.entity));
+/// Sets the string of the `Text` on `entity`, only when it differs.
+fn set_text(world: &mut World, entity: Entity, value: &str) {
+    if let Some(mut text) = world.get_mut::<Text>(entity)
+        && text.0 != value
+    {
+        value.clone_into(&mut text.0);
     }
 }
 
@@ -274,7 +323,10 @@ const fn background_for(colors: &ThemeColors, state: ButtonState) -> Color {
 
 fn handle_hover(
     trigger: On<MouseEvent>,
-    mut query: Query<(&mut BackgroundColor, Option<&ToggleState>), Without<InteractionDisabled>>,
+    mut query: Query<
+        (&mut BackgroundColor, Option<&ToggleState>),
+        (Without<InteractionDisabled>, Without<NoDefaultHover>),
+    >,
     theme: Res<Theme>,
 ) {
     // A click and a drag say nothing new about the pointer being on the button: the over,
@@ -329,6 +381,21 @@ fn restyle_on_size_change(
     mut commands: Commands,
 ) {
     for entity in &changed {
+        commands.run_system_cached_with(theme_push_button, Some(entity));
+    }
+}
+
+/// Restyles a [`PushButton`] that gained or lost [`NoDefaultHover`].
+fn restyle_on_hover_marker_change(
+    added: Query<Entity, (With<PushButton>, Added<NoDefaultHover>)>,
+    mut removed: RemovedComponents<NoDefaultHover>,
+    push_buttons: Query<(), With<PushButton>>,
+    mut commands: Commands,
+) {
+    for entity in added
+        .iter()
+        .chain(removed.read().filter(|e| push_buttons.contains(*e)))
+    {
         commands.run_system_cached_with(theme_push_button, Some(entity));
     }
 }
