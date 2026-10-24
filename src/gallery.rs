@@ -11,7 +11,7 @@ use crate::divider::Divider;
 use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::icon::Icon;
 use crate::label::Label;
-use crate::select::{Item, SelectionParam};
+use crate::select::{Item, SelectionParam, structure_may_have_changed};
 use crate::theme::{Theme, ThemeColors};
 
 /// The width of a card, in logical pixels.
@@ -47,7 +47,14 @@ impl Plugin for GalleryPlugin {
             .register_type::<GalleryCard>()
             .register_type::<Gallery>()
             .register_type::<GalleryCardView>()
-            .add_systems(Update, (sync_cards, update_cards).chain())
+            .add_systems(
+                Update,
+                (
+                    sync_cards.run_if(structure_may_have_changed::<Gallery, GalleryCard>),
+                    update_cards,
+                )
+                    .chain(),
+            )
             .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
     }

@@ -10,7 +10,7 @@ use crate::divider::Divider;
 use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
-use crate::select::{Item, SelectionParam};
+use crate::select::{Item, SelectionParam, structure_may_have_changed};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
@@ -56,7 +56,12 @@ impl Plugin for ToolbarPlugin {
             .register_type::<ToolbarButton>()
             .add_systems(
                 Update,
-                (sync_buttons, update_buttons, sync_tooltips).chain(),
+                (
+                    sync_buttons.run_if(structure_may_have_changed::<Toolbar, Tool>),
+                    update_buttons,
+                    sync_tooltips,
+                )
+                    .chain(),
             )
             .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
