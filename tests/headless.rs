@@ -6488,6 +6488,71 @@ fn a_badge_on_a_toolbar_item_describes_its_button_for_accessibility() {
     assert_eq!(description(&app, buttons[1]), None);
 }
 
+#[test]
+fn replacing_a_badge_on_a_toolbar_item_updates_its_button_without_a_second_pill() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().one(),
+    );
+    let button = toolbar_buttons(&app, toolbar)[1];
+    let item = app.world().get::<ToolbarButton>(button).unwrap().item();
+    let description = |app: &App| {
+        app.world()
+            .get::<AccessibilityNode>(button)
+            .and_then(|node| node.description().map(str::to_owned))
+    };
+    let pills = |app: &App| {
+        app.world().get::<Children>(button).map_or(0, |children| {
+            children
+                .iter()
+                .filter(|c| {
+                    app.world()
+                        .get::<Name>(*c)
+                        .is_some_and(|n| n.as_str() == "Badge")
+                })
+                .count()
+        })
+    };
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+
+    app.world_mut().entity_mut(item).insert(Badge::count(6));
+    settle(&mut app);
+    let (pill, text) = badge_under(&app, button).unwrap();
+    assert_eq!(text, "6");
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        colors.pill_background
+    );
+
+    // A replacement with another text and tone updates the same pill.
+    app.world_mut()
+        .entity_mut(item)
+        .insert(Badge::new("9+").with_tone(BadgeTone::Warning));
+    settle(&mut app);
+    let (same, text) = badge_under(&app, button).unwrap();
+    assert_eq!((same, text.as_str()), (pill, "9+"));
+    assert_eq!(pills(&app), 1);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        colors.warning_text
+    );
+    assert_eq!(description(&app).as_deref(), Some("9+"));
+
+    // An empty replacement removes the overlay and the description.
+    app.world_mut().entity_mut(item).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(pills(&app), 0);
+    assert_eq!(description(&app), None);
+
+    app.world_mut().entity_mut(item).insert(Badge::count(2));
+    settle(&mut app);
+    assert_eq!(pills(&app), 1);
+    assert_eq!(badge_under(&app, button).unwrap().1, "2");
+    assert_eq!(description(&app).as_deref(), Some("2"));
+}
+
 fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app
