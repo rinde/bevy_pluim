@@ -2,6 +2,8 @@
 //!
 //! Children are created lazily by a registered system and hidden, not despawned,
 //! when they are deselected.
+//!
+//! A [`Stack`] is immutable: replace it to point it at another selection.
 
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
@@ -17,7 +19,7 @@ pub struct StackPlugin;
 
 impl Plugin for StackPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_add_stack)
+        app.add_observer(on_insert_stack)
             .add_observer(on_selection_insert)
             .register_type::<Stack>()
             .register_type::<StackItem>()
@@ -26,8 +28,23 @@ impl Plugin for StackPlugin {
 }
 
 /// Shows the one [`StackItem`] child that matches the selection on `selection_ref`.
+///
+/// Immutable: `selection_ref` is read when the component is inserted, so build the value,
+/// editing it before it is inserted, and insert a new one to change it. Replacing a live stack
+/// shows the child of the new selection and hides the children of the former one; they are kept
+/// and shown again if the stack points back at that selection. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::stack::Stack;
+/// fn edit(mut stacks: Query<&mut Stack>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, FromTemplate, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 #[require(Name::new("Stack"), Node::default())]
 pub struct Stack {
     /// The entity holding the selection that picks the visible child.
@@ -39,20 +56,14 @@ pub struct Stack {
 #[reflect(Component)]
 struct PrevDisplay(Display);
 
-fn on_add_stack(
-    t: On<Add<Stack>>,
-    stacks: Query<&Stack>,
-    selections: SelectionParam,
-    mut commands: Commands,
-) {
+/// Shows the child of the selection of a stack that was just inserted or replaced.
+fn on_insert_stack(t: On<Insert<Stack>>, stacks: Query<&Stack>, mut commands: Commands) {
     let stack_ref = t.event().event_target();
     let Ok(stack) = stacks.get(stack_ref).copied() else {
         return;
     };
 
-    if selections.get(stack.selection_ref).is_some() {
-        commands.run_system_cached_with(switch_view, (stack_ref, stack));
-    }
+    commands.run_system_cached_with(switch_view, (stack_ref, stack));
 }
 
 /// Switches every live stack showing the selection that was just inserted.
@@ -88,10 +99,6 @@ fn switch_view(
         SelectSame,
     }
     let (stack_ref, stack) = *stack_and_ref;
-    let Some(selection) = selections.get(stack.selection_ref) else {
-        return;
-    };
-
     let currently_visible_entity = children.get(stack_ref).ok().and_then(|children| {
         children.iter().find(|c| {
             nodes
@@ -118,6 +125,12 @@ fn switch_view(
         {
             node.display = prev.0;
         }
+    };
+
+    let Some(selection) = selections.get(stack.selection_ref) else {
+        // No selection (yet) to show: nothing of a former source stays visible.
+        show(None);
+        return;
     };
 
     let action = (|| -> Option<Action> {

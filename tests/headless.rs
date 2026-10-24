@@ -74,7 +74,7 @@ use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
 };
 use rin_bevy_ui::select::{
-    Item, ItemOf, ItemValues, Selection, SelectionBuilder, SelectionBuilderWithValue,
+    Item, ItemOf, ItemValues, ItemsRef, Selection, SelectionBuilder, SelectionBuilderWithValue,
     SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
@@ -8994,6 +8994,243 @@ fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_
         app.update();
     }
     assert_eq!(observers_of(&mut app, selection), before);
+}
+
+/// An entity with the given items, to draw a selection from through `ItemsRef`.
+fn spawn_item_source(app: &mut App, texts: &[&'static str]) -> Entity {
+    let source = app.world_mut().spawn_empty().id();
+    for text in texts {
+        app.world_mut().spawn((Item::new(*text), ItemOf(source)));
+    }
+    app.update();
+    source
+}
+
+fn source_texts(app: &App, source: Entity) -> Vec<String> {
+    app.world()
+        .get::<ItemValues>(source)
+        .map(|values| values.iter().map(|item| item_label(app, item)).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_changed_item_data_still_updates_an_existing_view() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let first = item_entities_of(&app, control)[0];
+
+    app.world_mut()
+        .entity_mut(first)
+        .get_mut::<Item<String>>()
+        .unwrap()
+        .data = "Changed".to_string();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let texts: Vec<_> = segments_of(&app, control)
+        .iter()
+        .map(|s| segment_text(&app, *s))
+        .collect();
+    assert_eq!(texts, ["Changed", "Manual", "Off"]);
+}
+
+#[test]
+fn reinserting_item_of_moves_an_item_between_item_values() {
+    let mut app = headless_app();
+    let old = spawn_item_source(&mut app, &["a", "b"]);
+    let new = spawn_item_source(&mut app, &["c"]);
+    let moved = item_entities_of(&app, old)[0];
+
+    app.world_mut().entity_mut(moved).insert(ItemOf(new));
+    app.update();
+
+    assert_eq!(source_texts(&app, old), ["b"]);
+    assert_eq!(source_texts(&app, new), ["c", "a"]);
+
+    // The last item leaving removes the collection, as Bevy's relationships do.
+    let last = item_entities_of(&app, old)[0];
+    app.world_mut().entity_mut(last).insert(ItemOf(new));
+    app.update();
+    assert!(source_texts(&app, old).is_empty());
+    assert_eq!(source_texts(&app, new), ["c", "a", "b"]);
+}
+
+fn spawn_control_over(app: &mut App, source: Entity) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::builder().one().build_with_items_ref(source),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    control
+}
+
+fn segment_texts(app: &App, control: Entity) -> Vec<String> {
+    segments_of(app, control)
+        .iter()
+        .map(|s| segment_text(app, *s))
+        .collect()
+}
+
+#[test]
+fn replacing_items_ref_refreshes_the_selection_and_the_widget() {
+    let mut app = headless_app();
+    let old = spawn_item_source(&mut app, &["a", "b"]);
+    let new = spawn_item_source(&mut app, &["c", "d"]);
+    let control = spawn_control_over(&mut app, old);
+    assert_eq!(segment_texts(&app, control), ["a", "b"]);
+    select_by_text(&mut app, control, "b");
+    assert_eq!(selected_segments(&app, control), ["b"]);
+
+    app.world_mut().entity_mut(control).insert(ItemsRef(new));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(segment_texts(&app, control), ["c", "d"]);
+    assert_eq!(selection_labels(&app, control), ["c"]);
+    assert_eq!(selected_segments(&app, control), ["c"]);
+
+    // Items of the former source no longer touch the control.
+    app.world_mut().spawn((Item::new("e"), ItemOf(old)));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(segment_texts(&app, control), ["c", "d"]);
+    // And items of the new one do.
+    app.world_mut().spawn((Item::new("f"), ItemOf(new)));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(segment_texts(&app, control), ["c", "d", "f"]);
+}
+
+#[test]
+fn replacing_items_ref_with_a_source_whose_items_arrive_later_selects_the_first_of_them() {
+    let mut app = headless_app();
+    let old = spawn_item_source(&mut app, &["a", "b"]);
+    let empty = app.world_mut().spawn_empty().id();
+    let control = spawn_control_over(&mut app, old);
+
+    app.world_mut().entity_mut(control).insert(ItemsRef(empty));
+    for _ in 0..3 {
+        app.update();
+    }
+    // Nothing is selected while the source has no items (the selection waits for its first).
+    assert!(selection_labels(&app, control).is_empty());
+    assert!(selected_segments(&app, control).is_empty());
+
+    app.world_mut().spawn((Item::new("x"), ItemOf(empty)));
+    app.world_mut().spawn((Item::new("y"), ItemOf(empty)));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(segment_texts(&app, control), ["x", "y"]);
+    assert_eq!(selection_labels(&app, control), ["x"]);
+    assert_eq!(selected_segments(&app, control), ["x"]);
+}
+
+fn stack_over(app: &mut App, selection_ref: Entity) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stack = app
+        .world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    stack
+}
+
+#[test]
+fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the_old() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let first = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), StackItem::new(create_a))]),
+        )
+        .id();
+    let second = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("b"), StackItem::new(create_b))]),
+        )
+        .id();
+    let stack = stack_over(&mut app, first);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert!(no_entity_with::<PanelB>(&mut app));
+
+    app.world_mut().entity_mut(stack).insert(Stack {
+        selection_ref: second,
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+    assert_eq!(node_display(&app, panel_b), Display::Flex);
+
+    // The former source no longer switches the stack.
+    let item_a = item_entities_of(&app, first)[0];
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(None)));
+    select_one(&mut app, first, item_a);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+    assert_eq!(node_display(&app, panel_b), Display::Flex);
+
+    // Pointing back shows the kept child again, without creating another.
+    app.world_mut().entity_mut(stack).insert(Stack {
+        selection_ref: first,
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    assert_eq!(node_display(&app, panel_b), Display::None);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+}
+
+#[test]
+fn replacing_a_stacks_selection_ref_with_an_entity_without_a_selection_hides_the_children() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let first = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), StackItem::new(create_a))]),
+        )
+        .id();
+    let stack = stack_over(&mut app, first);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    let nothing = app.world_mut().spawn_empty().id();
+
+    app.world_mut().entity_mut(stack).insert(Stack {
+        selection_ref: nothing,
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(node_display(&app, panel_a), Display::None);
 }
 
 // ---- ColorPaletteCombo over a selection of many ----
