@@ -1811,6 +1811,30 @@ fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
 }
 
 #[test]
+fn a_combo_state_on_an_entity_that_is_not_a_combo_does_nothing() {
+    let mut app = headless_app();
+    let plain = app.world_mut().spawn(Node::default()).id();
+    let other = app.world_mut().spawn(Node::default()).id();
+    let before = app.world().entity(other).get::<Visibility>().copied();
+    app.world_mut().entity_mut(plain).insert(ComboState::Open);
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(plain).get::<ComboState>(),
+        Some(&ComboState::Open)
+    );
+    assert_eq!(
+        app.world().entity(other).get::<Visibility>().copied(),
+        before
+    );
+    assert!(
+        app.world()
+            .get_resource::<InputFocus>()
+            .is_none_or(|focus| focus.get().is_none())
+    );
+}
+
+#[test]
 fn a_combo_button_says_whether_its_popup_is_open() {
     let mut app = headless_app();
     let (combo, button) = spawn_combo(&mut app);
