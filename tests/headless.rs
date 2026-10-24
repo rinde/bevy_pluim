@@ -46,6 +46,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
+use rin_bevy_ui::float::Float;
 use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
@@ -7297,4 +7298,85 @@ fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
 
     let colors = app.world().get_resource::<Theme>().unwrap().colors;
     assert_eq!(background(&app, button), colors.selected_hovered_item);
+}
+
+/// How many buttons, popups and palettes are descendants of the combo.
+fn palette_combo_parts(app: &mut App, combo: Entity) -> (usize, usize, usize) {
+    let world = app.world_mut();
+    let entities: Vec<Entity> = world.query::<Entity>().iter(world).collect();
+    let below = |has: fn(EntityRef) -> bool| {
+        entities
+            .iter()
+            .filter(|&&e| has(world.entity(e)) && is_below(world, e, combo))
+            .count()
+    };
+    (
+        below(|e| e.contains::<ColorPushButton>()),
+        below(|e| e.contains::<Float>()),
+        below(|e| e.contains::<ColorPalette>()),
+    )
+}
+
+/// Whether `entity` is a descendant of `ancestor`.
+fn is_below(world: &World, entity: Entity, ancestor: Entity) -> bool {
+    let mut current = entity;
+    while let Some(child_of) = world.entity(current).get::<ChildOf>() {
+        current = child_of.parent();
+        if current == ancestor {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn inserting_a_color_palette_combo_again_keeps_one_button_one_popup_and_one_palette() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    app.update();
+
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+}
+
+#[test]
+fn removing_a_color_palette_combo_removes_its_button_popup_and_palette() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+
+    app.world_mut()
+        .entity_mut(combo)
+        .remove::<ColorPaletteCombo>();
+    app.update();
+    app.update();
+
+    assert_eq!(palette_combo_parts(&mut app, combo), (0, 0, 0));
+    let has_children = app
+        .world()
+        .entity(combo)
+        .get::<Children>()
+        .is_some_and(|c| !c.is_empty());
+    assert!(!has_children, "no children left");
+
+    // And it can be inserted again.
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
 }
