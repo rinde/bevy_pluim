@@ -24,6 +24,16 @@ use bevy::ui_widgets::{ActiveDescendant, ListItem, Tab};
 use crate::select::SelectionValue;
 use crate::theme::Theme;
 
+/// Width of the focus ring, in logical pixels.
+pub(crate) const FOCUS_RING_WIDTH: f32 = 2.0;
+
+/// Gap between a node and its focus ring, in logical pixels.
+pub(crate) const FOCUS_RING_OFFSET: f32 = 1.0;
+
+/// How far a focus ring reaches beyond its node, in logical pixels: its offset and width. A
+/// scroll area pads its contents by this much so the ring is not clipped.
+pub(crate) const FOCUS_RING_REACH: f32 = FOCUS_RING_OFFSET + FOCUS_RING_WIDTH;
+
 /// Registers the systems of the keyboard focus.
 ///
 /// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
@@ -380,8 +390,8 @@ fn draw_focus_ring(
     };
     *ringed_before = Some(entity);
     let ring = Outline {
-        width: Val::Px(2.0),
-        offset: Val::Px(1.0),
+        width: Val::Px(FOCUS_RING_WIDTH),
+        offset: Val::Px(FOCUS_RING_OFFSET),
         color: theme.colors.focus_ring,
     };
     if is_ring {
