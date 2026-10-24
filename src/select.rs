@@ -941,10 +941,11 @@ pub struct ItemsChanged {
 }
 
 /// Records the observer a widget put on its [`ItemValues`] entity to hear [`ItemsChanged`], on
-/// the widget itself, so the observer goes when the widget does (removing this component
-/// despawns it) and goes with the values entity when that is despawned first.
+/// the widget itself, so the observer goes when the widget does (removing or replacing this
+/// component despawns it, so two watches set up before the first is applied leave one
+/// observer) and goes with the values entity when that is despawned first.
 #[derive(Component, Debug)]
-#[component(on_remove = despawn_items_observer)]
+#[component(on_discard = despawn_items_observer)]
 pub(crate) struct ItemsObserver {
     values: Entity,
     observer: Entity,

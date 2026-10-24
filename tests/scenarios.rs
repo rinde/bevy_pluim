@@ -1067,6 +1067,176 @@ fn a_toolbar_re_enters_at_the_tool_that_had_the_focus_last() {
 }
 
 #[test]
+fn an_arrow_that_lands_on_the_selected_item_keeps_it_selected() {
+    // With the other segments disabled the right arrow wraps round to the item that is picked
+    // already, and a toggle would clear a `ZeroOrOne` selection (or be refused by a `One`).
+    let mut app = directional_navigation_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((
+            Name::new("one"),
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["A", "B", "C"].map(Item::new)),
+        ));
+        root.spawn((
+            Name::new("optional"),
+            FilterChips,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["X", "Y"].map(|label| Item {
+                    data: Chip::new(label),
+                })),
+        ));
+        root.spawn((
+            Name::new("single"),
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Only"].map(Item::new)),
+        ));
+    });
+    settle(&mut app);
+    let one = named(&mut app, "one");
+    let optional = named(&mut app, "optional");
+    let single = named(&mut app, "single");
+
+    let one_buttons = item_buttons(&app, one);
+    for button in &one_buttons[1..] {
+        app.world_mut()
+            .entity_mut(*button)
+            .insert(InteractionDisabled);
+    }
+    settle(&mut app);
+    focus_on(&mut app, one_buttons[0]);
+    for key in [
+        KeyCode::ArrowRight,
+        KeyCode::ArrowLeft,
+        KeyCode::Home,
+        KeyCode::End,
+    ] {
+        press(&mut app, key);
+        assert_eq!(selected_texts(&app, one), ["A"], "{key:?}");
+        assert_eq!(focus_of(&app), Some(one_buttons[0]), "{key:?}");
+    }
+
+    // A `ZeroOrOne` chip row: pick X, disable Y, and the arrows land on X again.
+    let chips = item_buttons(&app, optional);
+    let items = items_of_two(&app, optional);
+    app.world_mut()
+        .entity_mut(optional)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(items[0]))));
+    app.world_mut()
+        .entity_mut(chips[1])
+        .insert(InteractionDisabled);
+    settle(&mut app);
+    focus_on(&mut app, chips[0]);
+    for key in [KeyCode::ArrowRight, KeyCode::ArrowLeft, KeyCode::End] {
+        press(&mut app, key);
+        assert_eq!(selected_texts(&app, optional), ["X"], "{key:?}");
+    }
+
+    // A control with one item at all.
+    let only = item_buttons(&app, single);
+    focus_on(&mut app, only[0]);
+    press(&mut app, KeyCode::ArrowRight);
+    assert_eq!(selected_texts(&app, single), ["Only"]);
+    assert_eq!(focus_of(&app), Some(only[0]));
+}
+
+/// The two item entities `selection` chooses from, in order.
+fn items_of_two(app: &App, selection: Entity) -> [Entity; 2] {
+    let items: Vec<Entity> = app
+        .world()
+        .get::<ItemValues>(selection)
+        .unwrap()
+        .iter()
+        .collect();
+    items.try_into().unwrap()
+}
+
+/// The accessible labels of `buttons`, in order.
+fn labels_of(app: &App, buttons: &[Entity]) -> Vec<String> {
+    buttons
+        .iter()
+        .map(|button| {
+            app.world()
+                .get::<AccessibilityNode>(*button)
+                .and_then(|node| node.label().map(str::to_owned))
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+#[test]
+fn after_a_reorder_the_one_stop_stays_valid_and_the_arrows_follow_the_new_order() {
+    // A segmented control reorders its segments in place; chips, galleries and toolbars
+    // respawn their buttons. Either way the order shown is the order the keys follow.
+    let mut app = composite_app();
+    for (name, expected_after) in [
+        ("seg", ["C", "A", "B"]),
+        ("chips", ["Z", "X", "Y"]),
+        ("bar", ["Bulldoze", "Select", "Build"]),
+    ] {
+        let owner = named(&mut app, name);
+        let before = item_buttons(&app, owner);
+        let last_item = items_of(&app, owner)[2];
+        app.world_mut()
+            .entity_mut(owner)
+            .insert_related::<ItemOf>(0, &[last_item]);
+        settle(&mut app);
+
+        let buttons = item_buttons(&app, owner);
+        assert_eq!(buttons.len(), 3, "{name}");
+        let labels = labels_of(&app, &buttons);
+        let trimmed: Vec<&str> = labels.iter().map(|l| l.trim()).collect();
+        assert_eq!(
+            trimmed, expected_after,
+            "{name}: the buttons follow the items"
+        );
+        assert_eq!(tab_stops(&app, owner).len(), 1, "{name}: one stop");
+
+        focus_on(&mut app, buttons[0]);
+        press(&mut app, KeyCode::ArrowRight);
+        assert_eq!(focus_of(&app), Some(buttons[1]), "{name}: right");
+        press(&mut app, KeyCode::End);
+        assert_eq!(focus_of(&app), Some(buttons[2]), "{name}: End");
+        press(&mut app, KeyCode::ArrowRight);
+        assert_eq!(focus_of(&app), Some(buttons[0]), "{name}: wrap");
+        press(&mut app, KeyCode::ArrowLeft);
+        assert_eq!(focus_of(&app), Some(buttons[2]), "{name}: left wraps back");
+        press(&mut app, KeyCode::Home);
+        assert_eq!(focus_of(&app), Some(buttons[0]), "{name}: Home");
+        assert_eq!(tab_stops(&app, owner).len(), 1, "{name}: still one stop");
+        let _ = before;
+    }
+}
+
+#[test]
+fn a_focus_cleared_elsewhere_in_the_frame_an_item_goes_is_not_put_back() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let items = items_of(&app, seg);
+    let buttons = item_buttons(&app, seg);
+    focus_on(&mut app, buttons[1]);
+
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .clear();
+    app.world_mut().entity_mut(items[1]).despawn();
+    settle(&mut app);
+
+    assert_eq!(focus_of(&app), None, "nobody asked for the focus back");
+    assert_eq!(
+        tab_stops(&app, seg).len(),
+        1,
+        "the control still has its stop"
+    );
+}
+
+#[test]
 fn keys_pressed_with_the_focus_outside_a_composite_widget_are_not_taken_by_it() {
     let mut app = composite_app();
     let seg = named(&mut app, "seg");

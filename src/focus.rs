@@ -627,7 +627,7 @@ fn sync_roving_groups(
     for (entity, group) in &groups {
         if focus_moved
             || (selection_changed && group.entry == RovingEntry::Selected)
-            || group.order.iter().any(|(item, _)| gone.contains(item))
+            || (!gone.is_empty() && group.order.iter().any(|(item, _)| gone.contains(item)))
         {
             dirty_groups.insert(entity);
         }
@@ -673,7 +673,10 @@ fn sync_roving_groups(
         } else if group.holds_focus {
             let last = group.last;
             let last_eligible = last.is_some_and(|last| eligible_of(last) == Some(true));
-            let focus_is_stale = focused.is_none() || focused == last;
+            // A despawned item keeps the `InputFocus` until the next key, so a focus that is
+            // still on it is stale; one that was cleared (`None`) or moved was taken by
+            // somebody, and is not ours to put back.
+            let focus_is_stale = focused.is_some() && focused == last;
             if last_eligible || !focus_is_stale {
                 // The focus left (a click elsewhere, another widget took it).
                 group.holds_focus = false;
@@ -682,11 +685,7 @@ fn sync_roving_groups(
                 let replacement = replacement_for(&group.order, last, &order);
                 match replacement {
                     Some(next) => focus.set(next, FocusCause::Navigated),
-                    None => {
-                        if focused.is_some() {
-                            focus.clear();
-                        }
-                    }
+                    None => focus.clear(),
                 }
                 group.last = replacement;
                 group.holds_focus = replacement.is_some();
