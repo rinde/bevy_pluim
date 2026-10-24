@@ -172,8 +172,27 @@ pub enum SegmentLabels {
 pub struct SegmentIcon;
 
 /// One segment of a [`SegmentedControl`]: a button showing one item.
+///
+/// Only the widget builds one, and the component is immutable: the item and the control are
+/// fixed for the life of the segment and are read with [`item`](Self::item) and
+/// [`owner`](Self::owner). A segment's accessible name is its item's text, so callers supply
+/// meaningful item labels.
+///
+/// ```compile_fail
+/// use rin_bevy_ui::segmented_control::Segment;
+/// # let (item, control) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
+/// let _ = Segment { item, owner: control };
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::segmented_control::Segment;
+/// fn change(mut segments: Query<&mut Segment>) {}
+/// bevy::ecs::system::assert_is_system(change);
+/// ```
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 #[require(
     Name::new("Segment"),
     Button,
@@ -182,10 +201,26 @@ pub struct SegmentIcon;
     BackgroundColor::default()
 )]
 pub struct Segment {
+    item: Entity,
+    owner: Entity,
+}
+
+impl Segment {
+    pub(crate) const fn new(item: Entity, owner: Entity) -> Self {
+        Self { item, owner }
+    }
+
     /// The item this segment shows and selects.
-    pub item_ref: Entity,
-    /// The control this segment belongs to.
-    pub control_ref: Entity,
+    #[must_use]
+    pub const fn item(&self) -> Entity {
+        self.item
+    }
+
+    /// The [`SegmentedControl`] this segment belongs to.
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// The highlight behind the selected [`Segment`] of a [`SegmentedControl`].
@@ -194,10 +229,18 @@ pub struct Segment {
 /// selected segment when the selection changes; the segments themselves are transparent.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 #[require(Name::new("SegmentIndicator"), Node, BackgroundColor::default())]
 pub struct SegmentIndicator {
-    /// The control this indicator belongs to.
-    pub control_ref: Entity,
+    owner: Entity,
+}
+
+impl SegmentIndicator {
+    /// The [`SegmentedControl`] this indicator belongs to.
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// Marks the text of a [`Segment`].
@@ -224,8 +267,8 @@ fn on_activate(t: On<Activate>, segments: Query<&Segment>, mut selections: Selec
     let Ok(segment) = segments.get(t.event().entity) else {
         return;
     };
-    selections.update_selection(segment.control_ref, |selection| {
-        selection.set_selection([segment.item_ref])
+    selections.update_selection(segment.owner(), |selection| {
+        selection.set_selection([segment.item()])
     });
 }
 
@@ -262,7 +305,7 @@ fn theme_segmented_controls(
     }
 
     for (segment, mut node, mut background) in &mut segments {
-        if control_id.0.is_some_and(|id| id != segment.control_ref) {
+        if control_id.0.is_some_and(|id| id != segment.owner()) {
             continue;
         }
         node.height = Val::Px(SEGMENT_HEIGHT);
@@ -276,7 +319,7 @@ fn theme_segmented_controls(
     }
 
     for (indicator, mut node, mut background) in &mut indicators {
-        if control_id.0.is_some_and(|id| id != indicator.control_ref) {
+        if control_id.0.is_some_and(|id| id != indicator.owner()) {
             continue;
         }
         node.border_radius = BorderRadius::all(theme.control_radius);
@@ -287,12 +330,12 @@ fn theme_segmented_controls(
         let Ok((segment, hovered)) = states.get(child_of.parent()) else {
             continue;
         };
-        if control_id.0.is_some_and(|id| id != segment.control_ref) {
+        if control_id.0.is_some_and(|id| id != segment.owner()) {
             continue;
         }
         let selected = selections
-            .get(segment.control_ref)
-            .is_some_and(|selection| selection.is_selected(segment.item_ref));
+            .get(segment.owner())
+            .is_some_and(|selection| selection.is_selected(segment.item()));
         text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
@@ -306,12 +349,12 @@ fn theme_segmented_controls(
         let Ok((segment, hovered)) = states.get(child_of.parent()) else {
             continue;
         };
-        if control_id.0.is_some_and(|id| id != segment.control_ref) {
+        if control_id.0.is_some_and(|id| id != segment.owner()) {
             continue;
         }
         let selected = selections
-            .get(segment.control_ref)
-            .is_some_and(|selection| selection.is_selected(segment.item_ref));
+            .get(segment.owner())
+            .is_some_and(|selection| selection.is_selected(segment.item()));
         let color = segment_colors(theme.colors(), selected, hovered.get()).1;
         if image.color != color {
             image.color = color;
@@ -346,9 +389,9 @@ fn sync_icons(
     }
     let mut restyle = Vec::new();
     for (segment_id, segment, tooltip, owned) in &segments {
-        let icon = item_icons.get(segment.item_ref).ok();
+        let icon = item_icons.get(segment.item()).ok();
         let hidden = controls
-            .get(segment.control_ref)
+            .get(segment.owner())
             .is_ok_and(|labels| *labels == SegmentLabels::Hidden)
             && icon.is_some();
         let existing = icons.iter_mut().find(|(_, c, _)| c.parent() == segment_id);
@@ -373,7 +416,7 @@ fn sync_icons(
                     ))
                     .id();
                 commands.entity(segment_id).insert_children(0, &[id]);
-                restyle.push(segment.control_ref);
+                restyle.push(segment.owner());
             }
             (None, Some((id, _, _))) => {
                 commands.entity(id).despawn();
@@ -398,7 +441,7 @@ fn sync_icons(
             (None, _) => false,
         };
         if hidden {
-            if let Ok(item) = items.get(segment.item_ref)
+            if let Ok(item) = items.get(segment.item())
                 && (tooltip.is_none() || owned)
                 && tooltip.is_none_or(|t| t.text != item.data)
             {
@@ -433,7 +476,7 @@ fn sync_label_text(
         let Ok(segment) = segments.get(child_of.parent()) else {
             continue;
         };
-        if let Ok(item) = items.get(segment.item_ref)
+        if let Ok(item) = items.get(segment.item())
             && text.0 != item.data
         {
             text.0.clone_from(&item.data);
@@ -449,13 +492,11 @@ fn spawn_indicators(
     mut commands: Commands,
 ) {
     for control in &controls {
-        if indicators.iter().any(|i| i.control_ref == control) {
+        if indicators.iter().any(|i| i.owner() == control) {
             continue;
         }
         commands.entity(control).with_child((
-            SegmentIndicator {
-                control_ref: control,
-            },
+            SegmentIndicator { owner: control },
             Node {
                 position_type: PositionType::Absolute,
                 display: Display::None,
@@ -478,7 +519,7 @@ fn animate_indicators(
 ) {
     let blend = 1.0 - (-time.delta_secs() * INDICATOR_RATE).exp();
     for (indicator, mut node) in &mut indicators {
-        let Ok((control, control_at, children)) = controls.get(indicator.control_ref) else {
+        let Ok((control, control_at, children)) = controls.get(indicator.owner()) else {
             continue;
         };
         let target = children.iter().find_map(|c| selected.get(c).ok());
@@ -552,7 +593,7 @@ fn sync_accessibility(
         sync_role(&mut node, Role::RadioGroup);
     }
     for (segment, mut node, selected) in &mut segments {
-        if let Ok(item) = items.get(segment.item_ref) {
+        if let Ok(item) = items.get(segment.item()) {
             sync_label(&mut node, &item.data);
         }
         sync_role(&mut node, Role::RadioButton);
@@ -563,7 +604,7 @@ fn sync_accessibility(
 /// Restyles the segments of a control when a segment gains or loses the pointer.
 fn hover_change(segments: Query<&Segment, Changed<Hovered>>, mut commands: Commands) {
     for segment in &segments {
-        commands.run_system_cached_with(theme_segmented_controls, Some(segment.control_ref));
+        commands.run_system_cached_with(theme_segmented_controls, Some(segment.owner()));
     }
 }
 
@@ -590,7 +631,7 @@ fn selection_change(
                 &mut commands,
                 child,
                 was_selected,
-                selection.is_selected(segment.item_ref),
+                selection.is_selected(segment.item()),
             );
         }
         commands.run_system_cached_with(theme_segmented_controls, Some(control));
@@ -623,7 +664,7 @@ fn on_items_changed(
         .filter_map(|c| segments.get(c).ok())
     {
         let before = missing.len();
-        missing.retain(|item| *item != segment.item_ref);
+        missing.retain(|item| *item != segment.item());
         if before == missing.len() {
             // a segment without a corresponding item
             commands.entity(segment_id).despawn();
@@ -636,13 +677,8 @@ fn on_items_changed(
         };
         let is_selected = selection.is_some_and(|selection| selection.is_selected(item_ref));
         commands.entity(*control_ref).with_children(|spawner| {
-            let mut segment = spawner.spawn((
-                Segment {
-                    item_ref,
-                    control_ref: *control_ref,
-                },
-                Node::default(),
-            ));
+            let mut segment =
+                spawner.spawn((Segment::new(item_ref, *control_ref), Node::default()));
             segment.observe(on_activate).with_children(|parent| {
                 parent.spawn((Text::new(item.data.clone()), SegmentLabel, Pickable::IGNORE));
             });
@@ -678,7 +714,7 @@ fn order_segments(
         .filter_map(|item| {
             children
                 .iter()
-                .find(|c| segments.get(*c).is_ok_and(|s| s.item_ref == *item))
+                .find(|c| segments.get(*c).is_ok_and(|s| s.item() == *item))
         })
         .collect();
     let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();

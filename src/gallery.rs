@@ -118,13 +118,48 @@ impl GalleryCard {
 }
 
 /// One card of a [`Gallery`]: picks its item when it is activated.
+///
+/// Only the widget builds one, and the component is immutable: the item and the gallery are
+/// fixed for the life of the card and are read with [`item`](Self::item) and
+/// [`owner`](Self::owner). A card's accessible name is its [`GalleryCard::label`], so callers
+/// supply meaningful labels.
+///
+/// ```compile_fail
+/// use rin_bevy_ui::gallery::GalleryCardView;
+/// # let (item, gallery) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
+/// let _ = GalleryCardView { item, owner: gallery };
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::gallery::GalleryCardView;
+/// fn change(mut cards: Query<&mut GalleryCardView>) {}
+/// bevy::ecs::system::assert_is_system(change);
+/// ```
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 pub struct GalleryCardView {
+    item: Entity,
+    owner: Entity,
+}
+
+impl GalleryCardView {
+    pub(crate) const fn new(item: Entity, owner: Entity) -> Self {
+        Self { item, owner }
+    }
+
     /// The [`Item<GalleryCard>`] this card shows.
-    pub item: Entity,
+    #[must_use]
+    pub const fn item(&self) -> Entity {
+        self.item
+    }
+
     /// The [`Gallery`] this card belongs to.
-    pub gallery: Entity,
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// The children of a [`GalleryCardView`].
@@ -248,7 +283,7 @@ fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Enti
         .id();
     commands.entity(card).insert((
         Name::new("GalleryCard"),
-        GalleryCardView { item, gallery },
+        GalleryCardView::new(item, gallery),
         GalleryCardRefs { image, label },
         Button,
         Hovered::default(),
@@ -324,7 +359,7 @@ fn update_cards(
             continue;
         };
         let picked = selections
-            .get(view.gallery)
+            .get(view.owner())
             .is_some_and(|selection| selection.is_selected(view.item));
         let look = card_look(theme.colors(), picked, hovered.get());
         background.set_if_neq(BackgroundColor(look.background));
@@ -389,7 +424,7 @@ fn sync_accessibility(
             continue;
         };
         let picked = selections
-            .get(view.gallery)
+            .get(view.owner())
             .is_some_and(|selection| selection.is_selected(view.item));
         sync_role(&mut node, Role::RadioButton);
         sync_label(&mut node, &item.data.label);
@@ -402,7 +437,7 @@ fn on_activate(t: On<Activate>, views: Query<&GalleryCardView>, mut selections: 
     let Ok(view) = views.get(t.event().event_target()) else {
         return;
     };
-    selections.update_selection(view.gallery, |selection| {
+    selections.update_selection(view.owner(), |selection| {
         selection.toggle_selected(view.item)
     });
 }

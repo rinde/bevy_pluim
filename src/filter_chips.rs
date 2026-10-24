@@ -112,14 +112,48 @@ impl Chip {
 }
 
 /// One chip of a [`FilterChips`]: a pill that picks its item when it is activated.
+///
+/// Only the widget builds one, and the component is immutable: the item and the row are fixed
+/// for the life of the chip and are read with [`item`](Self::item) and [`owner`](Self::owner).
+/// A chip's accessible name is its [`Chip::label`] (and count), so callers supply meaningful
+/// labels.
+///
+/// ```compile_fail
+/// use rin_bevy_ui::filter_chips::ChipView;
+/// # let (item, chips) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
+/// let _ = ChipView { item, owner: chips };
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::filter_chips::ChipView;
+/// fn change(mut chips: Query<&mut ChipView>) {}
+/// bevy::ecs::system::assert_is_system(change);
+/// ```
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[component(on_add = Self::on_add)]
+#[component(on_add = Self::on_add, immutable)]
 pub struct ChipView {
+    item: Entity,
+    owner: Entity,
+}
+
+impl ChipView {
+    pub(crate) const fn new(item: Entity, owner: Entity) -> Self {
+        Self { item, owner }
+    }
+
     /// The [`Item<Chip>`] this chip shows.
-    pub item: Entity,
+    #[must_use]
+    pub const fn item(&self) -> Entity {
+        self.item
+    }
+
     /// The [`FilterChips`] this chip belongs to.
-    pub chips: Entity,
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 impl ChipView {
@@ -221,7 +255,7 @@ fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entit
         .id();
     commands.entity(chip).insert((
         Name::new("Chip"),
-        ChipView { item, chips },
+        ChipView::new(item, chips),
         ChipRefs { label, count },
         Button,
         Hovered::default(),
@@ -298,7 +332,7 @@ fn theme_chips(
             continue;
         };
         let active = selections
-            .get(view.chips)
+            .get(view.owner())
             .is_some_and(|selection| selection.is_selected(view.item));
         let style = chip_style(theme.colors(), active, hovered.get());
         background.set_if_neq(BackgroundColor(style.background));
@@ -394,7 +428,7 @@ fn sync_accessibility(
             continue;
         };
         let active = selections
-            .get(view.chips)
+            .get(view.owner())
             .is_some_and(|selection| selection.is_selected(view.item));
         sync_role(&mut node, Role::RadioButton);
         sync_label(&mut node, &accessible_name(&item.data));
@@ -410,7 +444,9 @@ fn on_activate(t: On<Activate>, views: Query<&ChipView>, mut selections: Selecti
     let Ok(view) = views.get(t.event().event_target()) else {
         return;
     };
-    selections.update_selection(view.chips, |selection| selection.toggle_selected(view.item));
+    selections.update_selection(view.owner(), |selection| {
+        selection.toggle_selected(view.item)
+    });
 }
 
 #[cfg(test)]

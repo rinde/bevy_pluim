@@ -27,6 +27,7 @@ use bevy::picking::events::{
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
+use bevy::reflect::structs::Struct;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{
     ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
@@ -4385,7 +4386,7 @@ fn adding_and_removing_items_adds_and_removes_segments() {
     let mut app = headless_app();
     let control = spawn_segmented_control(&mut app);
     let removed = app.world().entity(segments_of(&app, control)[1]);
-    let removed_item = removed.get::<Segment>().unwrap().item_ref;
+    let removed_item = removed.get::<Segment>().unwrap().item();
     // The control's own selection holds its items.
     let items_ref = control;
 
@@ -4837,7 +4838,12 @@ fn activating_a_chip_selects_it_and_fills_it() {
     activate(&mut app, views[1]);
 
     let selection = app.world().entity(chips).get::<Selection>().unwrap();
-    let item = app.world().entity(views[1]).get::<ChipView>().unwrap().item;
+    let item = app
+        .world()
+        .entity(views[1])
+        .get::<ChipView>()
+        .unwrap()
+        .item();
     assert_eq!(selection.as_selection().unwrap().single(), Some(item));
     assert_eq!(background(&app, views[1]), colors.chip_on);
     assert_eq!(background(&app, views[0]), Color::NONE);
@@ -4870,7 +4876,12 @@ fn updating_the_count_of_an_item_changes_the_text_of_its_chip_without_respawning
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
     let views = chip_views(&app, chips);
-    let item = app.world().entity(views[2]).get::<ChipView>().unwrap().item;
+    let item = app
+        .world()
+        .entity(views[2])
+        .get::<ChipView>()
+        .unwrap()
+        .item();
 
     app.world_mut()
         .entity_mut(item)
@@ -4943,7 +4954,12 @@ fn filter_chips_share_a_selection_by_reference() {
 
     activate(&mut app, views[2]);
 
-    let item = app.world().entity(views[2]).get::<ChipView>().unwrap().item;
+    let item = app
+        .world()
+        .entity(views[2])
+        .get::<ChipView>()
+        .unwrap()
+        .item();
     let selected = app.world().entity(selection).get::<Selection>().unwrap();
     assert_eq!(selected.as_selection().unwrap().single(), Some(item));
 }
@@ -5574,7 +5590,7 @@ fn toolbar_buttons_always_have_the_children_of_their_toolbars_style() {
             assert_eq!(refs.label().is_some(), style == ToolbarStyle::Filled);
             assert_eq!(refs.bar().is_some(), style == ToolbarStyle::Underlined);
             assert_eq!(
-                app.world().get::<ToolbarButton>(button).unwrap().toolbar(),
+                app.world().get::<ToolbarButton>(button).unwrap().owner(),
                 toolbar
             );
         }
@@ -5952,7 +5968,7 @@ fn a_selection_changed_through_selection_param_moves_the_ring() {
         .entity(target)
         .get::<GalleryCardView>()
         .unwrap()
-        .item;
+        .item();
     let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     app.world_mut()
@@ -6002,7 +6018,7 @@ fn a_gallery_shares_a_selection_by_reference_and_names_its_cards() {
         .entity(cards[1])
         .get::<GalleryCardView>()
         .unwrap()
-        .item;
+        .item();
     let selected = app.world().entity(selection).get::<Selection>().unwrap();
     assert_eq!(selected.as_selection().unwrap().single(), Some(item));
     let node = app
@@ -8496,7 +8512,7 @@ fn changing_an_items_text_updates_its_segment_in_place() {
         .entity(segments[1])
         .get::<Segment>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(item)
@@ -8544,7 +8560,7 @@ fn reordering_items_reorders_their_segments() {
         .entity(before[2])
         .get::<Segment>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(control)
@@ -8572,7 +8588,7 @@ fn changing_an_items_text_updates_its_tab_in_place() {
         .entity(tabs[1])
         .get::<TabBarTab>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(item)
@@ -8631,7 +8647,7 @@ fn reordering_items_reorders_their_tabs() {
         .entity(before[2])
         .get::<TabBarTab>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(bar)
@@ -9356,7 +9372,7 @@ fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
     let views = chip_views(&app, chips);
-    let item = app.world().get::<ChipView>(views[1]).unwrap().item;
+    let item = app.world().get::<ChipView>(views[1]).unwrap().item();
 
     // Break the children by hand: a frame with nothing to react to must leave it alone.
     app.world_mut().entity_mut(views[1]).despawn();
@@ -9406,7 +9422,7 @@ fn a_gallery_does_not_look_at_its_items_in_a_frame_without_a_change() {
     let groups = gallery_groups(&app, gallery);
     assert_eq!(groups.len(), 2);
     let card = groups[1].1[1];
-    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item();
 
     // Move the last card to a group of its own without Bevy noticing: a frame with nothing to
     // react to must not look at the items, so the gallery stays as it was.
@@ -9439,7 +9455,7 @@ fn a_gallery_still_rebuilds_its_groups_when_the_group_of_an_item_changes() {
     let groups = gallery_groups(&app, gallery);
     assert_eq!(groups.len(), 2);
     let card = groups[1].1[1];
-    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item();
 
     // The last card moves to a group of its own; quiet frames before and after change nothing.
     for _ in 0..3 {
@@ -10977,4 +10993,101 @@ fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_b
             FontWeight::default()
         )
     );
+}
+
+/// The `Entity` in the reflected field `name` of the component `C` on `entity`.
+fn reflected_entity<C: Component + Struct>(
+    app: &App,
+    entity: Entity,
+    name: &str,
+) -> Option<Entity> {
+    app.world()
+        .get::<C>(entity)?
+        .field(name)?
+        .try_downcast_ref::<Entity>()
+        .copied()
+}
+
+#[test]
+fn the_item_and_owner_of_a_selection_view_are_read_by_getters_and_by_reflection() {
+    let mut app = headless_app();
+
+    let control = spawn_segmented_control(&mut app);
+    let segment = segments_of(&app, control)[0];
+    let segment_ref = app.world().get::<Segment>(segment).unwrap();
+    assert_eq!(
+        reflected_entity::<Segment>(&app, segment, "item"),
+        Some(segment_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<Segment>(&app, segment, "owner"),
+        Some(control)
+    );
+    assert_eq!(segment_ref.owner(), control);
+    let indicator = indicator_of(&app, control);
+    assert_eq!(
+        reflected_entity::<SegmentIndicator>(&app, indicator, "owner"),
+        Some(control)
+    );
+    assert_eq!(
+        app.world()
+            .get::<SegmentIndicator>(indicator)
+            .unwrap()
+            .owner(),
+        control
+    );
+
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio"].map(Item::new)),
+    );
+    let tab = tabs_of(&app, bar)[0];
+    let tab_ref = app.world().get::<TabBarTab>(tab).unwrap();
+    assert_eq!(
+        reflected_entity::<TabBarTab>(&app, tab, "item"),
+        Some(tab_ref.item())
+    );
+    assert_eq!(reflected_entity::<TabBarTab>(&app, tab, "owner"), Some(bar));
+    assert_eq!(tab_ref.owner(), bar);
+
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let chip = chip_views(&app, chips)[0];
+    let chip_ref = app.world().get::<ChipView>(chip).unwrap();
+    assert_eq!(
+        reflected_entity::<ChipView>(&app, chip, "item"),
+        Some(chip_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<ChipView>(&app, chip, "owner"),
+        Some(chips)
+    );
+    assert_eq!(chip_ref.owner(), chips);
+
+    let gallery = spawn_gallery(&mut app);
+    let card = gallery_groups(&app, gallery)[0].1[0];
+    let card_ref = app.world().get::<GalleryCardView>(card).unwrap();
+    assert_eq!(
+        reflected_entity::<GalleryCardView>(&app, card, "item"),
+        Some(card_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<GalleryCardView>(&app, card, "owner"),
+        Some(gallery)
+    );
+    assert_eq!(card_ref.owner(), gallery);
+
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let button = toolbar_buttons(&app, toolbar)[0];
+    let button_ref = app.world().get::<ToolbarButton>(button).unwrap();
+    assert_eq!(
+        reflected_entity::<ToolbarButton>(&app, button, "item"),
+        Some(button_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<ToolbarButton>(&app, button, "owner"),
+        Some(toolbar)
+    );
+    assert_eq!(button_ref.owner(), toolbar);
 }

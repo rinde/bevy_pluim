@@ -127,14 +127,48 @@ impl TabBar {
 }
 
 /// One tab of a [`TabBar`]: a [`Tab`] showing one item.
+///
+/// Only the widget builds one, and the component is immutable: the item and the bar are fixed
+/// for the life of the tab and are read with [`item`](Self::item) and [`owner`](Self::owner).
+/// A tab's accessible name is its item's text, so callers supply meaningful item labels.
+///
+/// ```compile_fail
+/// use rin_bevy_ui::tab_bar::TabBarTab;
+/// # let (item, bar) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
+/// let _ = TabBarTab { item, owner: bar };
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::tab_bar::TabBarTab;
+/// fn change(mut tabs: Query<&mut TabBarTab>) {}
+/// bevy::ecs::system::assert_is_system(change);
+/// ```
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 #[require(Name::new("TabBarTab"), Tab, Hovered, BackgroundColor::default())]
 pub struct TabBarTab {
+    item: Entity,
+    owner: Entity,
+}
+
+impl TabBarTab {
+    pub(crate) const fn new(item: Entity, owner: Entity) -> Self {
+        Self { item, owner }
+    }
+
     /// The item this tab shows and selects.
-    pub item_ref: Entity,
-    /// The bar this tab belongs to.
-    pub bar_ref: Entity,
+    #[must_use]
+    pub const fn item(&self) -> Entity {
+        self.item
+    }
+
+    /// The [`TabBar`] this tab belongs to.
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// Marks the text of a [`TabBarTab`].
@@ -181,10 +215,10 @@ fn on_value_change(
     let Ok(tab) = tabs.get(tab) else {
         return;
     };
-    if tab.bar_ref != bar {
+    if tab.owner() != bar {
         return;
     }
-    selections.update_selection(bar, |selection| selection.set_selection([tab.item_ref]));
+    selections.update_selection(bar, |selection| selection.set_selection([tab.item()]));
 }
 
 fn theme_tab_bars(
@@ -205,12 +239,12 @@ fn theme_tab_bars(
     }
 
     for (tab, hovered, mut node, mut background) in &mut tabs {
-        if bar_id.0.is_some_and(|id| id != tab.bar_ref) {
+        if bar_id.0.is_some_and(|id| id != tab.owner()) {
             continue;
         }
         let selected = selections
-            .get(tab.bar_ref)
-            .is_some_and(|selection| selection.is_selected(tab.item_ref));
+            .get(tab.owner())
+            .is_some_and(|selection| selection.is_selected(tab.item()));
         node.height = Val::Px(TAB_HEIGHT);
         node.min_width = Val::Px(TAB_MIN_WIDTH);
         node.padding = UiRect::axes(Val::Px(TAB_SIDE_PADDING), Val::ZERO);
@@ -224,12 +258,12 @@ fn theme_tab_bars(
         let Ok((tab, hovered)) = states.get(child_of.parent()) else {
             continue;
         };
-        if bar_id.0.is_some_and(|id| id != tab.bar_ref) {
+        if bar_id.0.is_some_and(|id| id != tab.owner()) {
             continue;
         }
         let selected = selections
-            .get(tab.bar_ref)
-            .is_some_and(|selection| selection.is_selected(tab.item_ref));
+            .get(tab.owner())
+            .is_some_and(|selection| selection.is_selected(tab.item()));
         text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
@@ -247,7 +281,7 @@ fn sync_accessibility(
     items: Query<&Item<String>>,
 ) {
     for (tab, mut node) in &mut tabs {
-        if let Ok(item) = items.get(tab.item_ref) {
+        if let Ok(item) = items.get(tab.item()) {
             sync_label(&mut node, &item.data);
         }
     }
@@ -299,7 +333,7 @@ fn sync_tab_index(
 /// Restyles the tabs of a bar when a tab gains or loses the pointer.
 fn hover_change(tabs: Query<&TabBarTab, Changed<Hovered>>, mut commands: Commands) {
     for tab in &tabs {
-        commands.run_system_cached_with(theme_tab_bars, Some(tab.bar_ref));
+        commands.run_system_cached_with(theme_tab_bars, Some(tab.owner()));
     }
 }
 
@@ -322,7 +356,7 @@ fn sync_selected_tab(
         .flat_map(RelationshipTarget::iter)
         .find(|child| {
             tabs.get(*child)
-                .is_ok_and(|tab| selection.is_selected(tab.item_ref))
+                .is_ok_and(|tab| selection.is_selected(tab.item()))
         });
     if selected_tab.0 != wanted {
         commands.entity(*bar).insert(SelectedTab(wanted));
@@ -369,7 +403,7 @@ fn on_items_changed(
         .filter_map(|c| tabs.get(c).ok())
     {
         let before = missing.len();
-        missing.retain(|item| *item != tab.item_ref);
+        missing.retain(|item| *item != tab.item());
         if before == missing.len() {
             // a tab without a corresponding item
             commands.entity(tab_id).despawn();
@@ -382,13 +416,7 @@ fn on_items_changed(
         };
         commands.entity(*bar_ref).with_children(|spawner| {
             spawner
-                .spawn((
-                    TabBarTab {
-                        item_ref,
-                        bar_ref: *bar_ref,
-                    },
-                    Node::default(),
-                ))
+                .spawn((TabBarTab::new(item_ref, *bar_ref), Node::default()))
                 .with_children(|parent| {
                     parent.spawn((
                         Text::new(item.data.clone()),
@@ -426,7 +454,7 @@ fn order_tabs(
         .filter_map(|item| {
             children
                 .iter()
-                .find(|c| tabs.get(*c).is_ok_and(|t| t.item_ref == *item))
+                .find(|c| tabs.get(*c).is_ok_and(|t| t.item() == *item))
         })
         .collect();
     let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();
@@ -451,7 +479,7 @@ fn sync_label_text(
         let Ok(tab) = tabs.get(child_of.parent()) else {
             continue;
         };
-        if let Ok(item) = items.get(tab.item_ref)
+        if let Ok(item) = items.get(tab.item())
             && text.0 != item.data
         {
             text.0.clone_from(&item.data);
