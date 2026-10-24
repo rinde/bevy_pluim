@@ -59,10 +59,12 @@ impl Default for ToastPlacement {
 /// A transient message: a [`Card`] with the text, shown bottom centre in the
 /// window for `duration` seconds and then despawned.
 ///
-/// Spawn it as a child of the UI root. It moves into a [`ToastStack`], where
-/// several at once stack upwards with the newest at the bottom; a new toast
-/// with the same text restarts the timer of the one showing instead of
-/// stacking. It never takes the pointer and is no tab stop. For a screen
+/// Spawn it as a child of the UI root. It moves into the [`ToastStack`] that is
+/// a child of its own parent (made there if it has none, so each root has its
+/// own), where several at once stack upwards with the newest at the bottom; a
+/// new toast with the same text restarts the timer of the one showing in that
+/// stack instead of stacking. A toast with no parent has no stack to join: an
+/// `error!` is logged and it is despawned. It never takes the pointer and is no tab stop. For a screen
 /// reader it is a status (a polite live region) with the text.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
@@ -171,37 +173,53 @@ impl ToastTimer {
 #[reflect(Component)]
 struct ToastShown;
 
-/// Moves new toasts into the stack, dropping one whose text is already
-/// showing and restarting the timer of that one instead.
+/// Moves new toasts into the stack of their own parent, creating it when the
+/// parent has none, and drops one whose text is already showing in that stack,
+/// restarting the timer of that one instead. A toast with no parent is logged
+/// and despawned: it has no stack to join and nowhere to make one.
 fn place_toasts(
     mut commands: Commands,
-    stacks: Query<Entity, With<ToastStack>>,
+    stacks: Query<(Entity, &ChildOf), With<ToastStack>>,
     mut fresh: Query<(Entity, &Toast, &mut ToastTimer, Option<&ChildOf>), Without<ToastShown>>,
-    mut shown: Query<(&Toast, &mut ToastTimer), With<ToastShown>>,
+    mut shown: Query<(&ChildOf, &Toast, &mut ToastTimer), With<ToastShown>>,
 ) {
-    let mut stack = stacks.iter().next();
-    let mut kept: Vec<String> = Vec::new();
+    // (parent, stack) pairs: the existing stacks and those made this run.
+    let mut known: Vec<(Entity, Entity)> = stacks
+        .iter()
+        .map(|(stack, parent)| (parent.parent(), stack))
+        .collect();
+    let mut kept: Vec<(Entity, String)> = Vec::new();
     for (entity, toast, mut timer, parent) in &mut fresh {
-        let existing = shown.iter_mut().find(|(other, _)| other.text == toast.text);
-        if existing.is_some() || kept.contains(&toast.text) {
-            if let Some((_, mut other_timer)) = existing {
+        let Some(parent) = parent.map(ChildOf::parent) else {
+            error!(
+                "a Toast ({:?}) has no parent, so it has no ToastStack to join: spawn it as a child of the UI root; despawning it",
+                toast.text
+            );
+            commands.entity(entity).despawn();
+            continue;
+        };
+        let target = if let Some((_, stack)) = known.iter().find(|(p, _)| *p == parent) {
+            *stack
+        } else {
+            let stack = commands.spawn((ToastStack, ChildOf(parent))).id();
+            known.push((parent, stack));
+            stack
+        };
+        let existing = shown
+            .iter_mut()
+            .find(|(of, other, _)| of.parent() == target && other.text == toast.text);
+        let duplicate = kept
+            .iter()
+            .any(|(s, text)| *s == target && *text == toast.text);
+        if existing.is_some() || duplicate {
+            if let Some((_, _, mut other_timer)) = existing {
                 *other_timer = ToastTimer::for_duration(toast.duration);
             }
             commands.entity(entity).despawn();
             continue;
         }
-        let target = if let Some(target) = stack {
-            target
-        } else {
-            let Some(parent) = parent else {
-                continue;
-            };
-            let target = commands.spawn((ToastStack, ChildOf(parent.parent()))).id();
-            stack = Some(target);
-            target
-        };
         *timer = ToastTimer::for_duration(toast.duration);
-        kept.push(toast.text.clone());
+        kept.push((target, toast.text.clone()));
         commands
             .entity(entity)
             .insert((ToastShown, ChildOf(target)));
