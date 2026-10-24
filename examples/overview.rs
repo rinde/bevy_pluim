@@ -378,9 +378,11 @@ fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
 /// A scroll area over a `VirtualList` of ten thousand rows.
 fn virtual_list_scroll_area() -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            ~{VirtualList::new(row_height(28.0))}
-            @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+        || {
+            bsn_list! {
+                ~{VirtualList::new(row_height(28.0))}
+                @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+            }
         },
         true,
         false,
@@ -656,9 +658,11 @@ fn galleries(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Comm
 /// A horizontal scroll area over the gallery of `cards`.
 fn gallery_scroll_area(cards: [Item<GalleryCard>; 6]) -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            Gallery
-            @{Selection::builder().one().scene_with_items(cards)}
+        move || {
+            bsn_list! {
+                Gallery
+                @{Selection::builder().one().scene_with_items(cards.clone())}
+            }
         },
         false,
         true,
@@ -804,11 +808,13 @@ fn scroll_areas(spawner: In<StackChildSpawner>, mut commands: Commands) {
 
 /// A scroll area over a list of many countries.
 fn list_scroll_area(vertical: bool, horizontal: bool) -> impl Scene {
-    let items = (1..=20).map(|i| Item::new(format!("A rather long country name {i}")));
     ScrollArea::scene(
-        bsn_list! {
-            List
-            @{Selection::builder().zero_or_one().scene_with_items(items)}
+        || {
+            let items = (1..=20).map(|i| Item::new(format!("A rather long country name {i}")));
+            bsn_list! {
+                List
+                @{Selection::builder().zero_or_one().scene_with_items(items)}
+            }
         },
         vertical,
         horizontal,

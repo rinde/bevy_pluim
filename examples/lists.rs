@@ -114,9 +114,11 @@ fn row_height(height: f32) -> RowHeight {
 /// The second has the separated look of a `List` with `CornerStyle::Separated`.
 fn virtual_list_scroll_area(list: VirtualList) -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            ~{list}
-            @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+        move || {
+            bsn_list! {
+                ~{list}
+                @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
+            }
         },
         true,
         false,

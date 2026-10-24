@@ -71,5 +71,5 @@ fn gallery(cards: [Item<GalleryCard>; 8]) -> impl Scene {
 
 /// A horizontal scroll area over the gallery of `cards`.
 fn gallery_scroll_area(cards: [Item<GalleryCard>; 8]) -> impl Scene {
-    ScrollArea::scene(bsn_list! { @gallery(cards) }, false, true)
+    ScrollArea::scene(move || bsn_list! { @gallery(cards.clone()) }, false, true)
 }

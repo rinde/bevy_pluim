@@ -537,9 +537,11 @@ fn vehicle_bar(icons: &Icons) -> impl Scene {
             width: px(520.0),
         }
         @ScrollArea::scene(
-            bsn_list! {
-                Gallery
-                @{Selection::builder().one().scene_with_items(cards)}
+            move || {
+                bsn_list! {
+                    Gallery
+                    @{Selection::builder().one().scene_with_items(cards.clone())}
+                }
             },
             false,
             true,
