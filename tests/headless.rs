@@ -2830,6 +2830,51 @@ fn item_views(app: &App, list: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
+#[test]
+fn a_theme_change_restyles_a_palette_after_one_without_swatches() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let empty = app
+        .world_mut()
+        .spawn((
+            ColorPalette,
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<Item<Color>>::new()),
+            ChildOf(root),
+        ))
+        .id();
+    let populated = app
+        .world_mut()
+        .spawn((
+            ColorPalette,
+            Selection::builder()
+                .one()
+                .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data })),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    assert!(item_views(&app, empty).is_empty());
+    let swatches = item_views(&app, populated);
+    assert_eq!(swatches.len(), 2);
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    app.update();
+
+    for swatch in swatches {
+        assert_eq!(
+            background(&app, swatch),
+            DEFAULT_DARK_THEME_COLORS.background_primary
+        );
+    }
+}
+
 fn item_label(app: &App, item: Entity) -> String {
     app.world()
         .entity(item)
