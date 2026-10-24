@@ -7,7 +7,9 @@ use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
 use crate::divider::Divider;
-use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
+use crate::focus::{
+    AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
+};
 use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
 use crate::select::{Item, SelectionParam, structure_may_have_changed};
@@ -107,7 +109,11 @@ pub enum ToolbarLabels {
 /// with a `ZeroOrOne` selection activating the active tool clears the selection.
 ///
 /// Items with different [`Tool::group`]s are separated by a vertical [`Divider`]. A button is a
-/// [`Button`] and a tab stop: Enter and Space on a focused one pick it, like a click.
+/// [`Button`]: Enter and Space on a focused one pick it, like a click. The toolbar is one tab
+/// stop, at the tool that had the focus last (the first at the start): left and right move the
+/// focus to the previous and next tool, wrapping, and Home and End go to the first and last
+/// (focus only, nothing is picked); up and down are left to the app. Disabled and hidden
+/// buttons are skipped.
 ///
 /// To a screen reader the row is a toolbar and each button a toggle button named after its
 /// tool, pressed while its tool is active.
@@ -121,6 +127,7 @@ pub enum ToolbarLabels {
         column_gap: Val::Px(BUTTON_GAP),
         ..default()
     },
+    RovingGroup = RovingGroup::toolbar(),
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::Toolbar)),
 )]
 pub struct Toolbar {
@@ -489,6 +496,7 @@ fn spawn_button(
     commands.entity(button).insert((
         Name::new("ToolbarButton"),
         ToolbarButton::new(item, toolbar),
+        RovingItem::new(toolbar, item),
         refs,
         Button,
         Hovered::default(),
