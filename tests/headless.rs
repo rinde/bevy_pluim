@@ -32,8 +32,8 @@ use bevy::ui::{
 };
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
-    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValue, SliderValueChange, Tab,
-    TabList, ValueChange,
+    ScrollIntoView, Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValue,
+    SliderValueChange, Tab, TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
@@ -9427,4 +9427,186 @@ fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
     app.update();
     app.update();
     assert_eq!(margin(&app), Val::Px(0.0));
+}
+
+/// A scroll-contents node for `scroll_into_view`: 100 by 100 logical pixels at the window's top
+/// left, its content 400 by 400, scrolling along the axes given, drawn at `scale`. The headless
+/// app has no layout, so the sizes and places are set by hand.
+fn scrolling_contents(
+    app: &mut App,
+    parent: Option<Entity>,
+    overflow: Overflow,
+    scroll: Vec2,
+    scale: f32,
+) -> Entity {
+    let mut area = app.world_mut().spawn((
+        Node {
+            overflow,
+            ..default()
+        },
+        ScrollContents,
+        ScrollPosition(scroll),
+        ComputedNode {
+            size: Vec2::splat(100.0 * scale),
+            content_size: Vec2::splat(400.0 * scale),
+            inverse_scale_factor: 1.0 / scale,
+            ..default()
+        },
+        UiGlobalTransform::from_translation(Vec2::splat(50.0 * scale)),
+    ));
+    if let Some(parent) = parent {
+        area.insert(ChildOf(parent));
+    }
+    area.id()
+}
+
+/// A 20 by 20 logical pixel target in `parent`, whose top left the layout last put at `visible`
+/// logical pixels from the window's top left (already shifted by the scroll position).
+fn target_at(app: &mut App, parent: Option<Entity>, visible: Vec2, scale: f32) -> Entity {
+    let mut target = app.world_mut().spawn((
+        Node::default(),
+        ComputedNode {
+            size: Vec2::splat(20.0 * scale),
+            inverse_scale_factor: 1.0 / scale,
+            ..default()
+        },
+        UiGlobalTransform::from_translation((visible + Vec2::splat(10.0)) * scale),
+    ));
+    if let Some(parent) = parent {
+        target.insert(ChildOf(parent));
+    }
+    target.id()
+}
+
+fn scroll_to(app: &mut App, entity: Entity) {
+    app.world_mut().trigger(ScrollIntoView { entity });
+    tick(app);
+}
+
+fn scroll_of(app: &App, area: Entity) -> Vec2 {
+    app.world().get::<ScrollPosition>(area).unwrap().0
+}
+
+const SCROLL_BOTH: Overflow = Overflow::scroll();
+const SCROLL_X: Overflow = Overflow {
+    x: OverflowAxis::Scroll,
+    y: OverflowAxis::Visible,
+};
+
+#[test]
+fn a_horizontal_area_scrolls_a_target_sideways_and_leaves_the_vertical_axis_alone() {
+    // Past the right and the bottom edge: only x moves, as y does not scroll.
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    // Right edge at 170 plus the 3 px ring, in a 100 px view.
+    assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 0.0));
+}
+
+#[test]
+fn a_vertical_area_leaves_the_horizontal_axis_alone() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 73.0));
+}
+
+#[test]
+fn a_two_way_area_scrolls_both_axes_to_show_a_target_with_its_ring() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    // The target ends 3 px from the view's right and bottom edges, not touching them.
+    assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 73.0));
+}
+
+#[test]
+fn a_target_scrolled_in_from_before_the_start_clamps_to_zero_not_below() {
+    // The target lies 1 px into the contents, so with its ring it starts at -2.
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(200.0), 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::splat(-199.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+}
+
+#[test]
+fn a_target_before_the_view_scrolls_back_to_show_its_ring() {
+    // The target is at 50 in the contents, the view starts at 200: the ring starts at 47.
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(200.0), 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::splat(-150.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::splat(47.0));
+}
+
+#[test]
+fn a_target_already_in_view_does_not_move_the_area() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(30.0), 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::splat(40.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::splat(30.0));
+}
+
+#[test]
+fn a_horizontal_area_scrolls_the_same_logical_distance_at_scale_factor_two() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 2.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 2.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 0.0));
+    // And back to the start, clamped to 0.
+    let back = target_at(&mut app, Some(area), Vec2::new(-72.0, 0.0), 2.0);
+    scroll_to(&mut app, back);
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+}
+
+#[test]
+fn a_target_outside_any_scroll_area_is_left_alone_without_a_panic() {
+    let mut app = headless_app();
+    // No parent at all.
+    let loose = target_at(&mut app, None, Vec2::splat(500.0), 1.0);
+    scroll_to(&mut app, loose);
+    // A parent that scrolls but is not a `ScrollContents`.
+    let parent = app
+        .world_mut()
+        .spawn((
+            Node {
+                overflow: SCROLL_BOTH,
+                ..default()
+            },
+            ScrollPosition(Vec2::splat(7.0)),
+        ))
+        .id();
+    let child = target_at(&mut app, Some(parent), Vec2::splat(500.0), 1.0);
+    scroll_to(&mut app, child);
+    assert_eq!(scroll_of(&app, parent), Vec2::splat(7.0));
+}
+
+#[test]
+fn only_the_innermost_scroll_area_takes_a_scroll_into_view() {
+    let mut app = headless_app();
+    let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(inner), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, inner), Vec2::splat(73.0));
+    assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
+}
+
+#[test]
+fn a_target_at_the_end_of_the_contents_stops_at_the_last_scroll_position_at_any_scale() {
+    // The target ends at 400, the contents' end; with its ring it would want 303, but 300 is the
+    // most the 400 px contents scroll in a 100 px view. Physical sizes double at scale 2.
+    for scale in [1.0, 2.0] {
+        let mut app = headless_app();
+        let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, scale);
+        let target = target_at(&mut app, Some(area), Vec2::splat(380.0), scale);
+        scroll_to(&mut app, target);
+        assert_eq!(scroll_of(&app, area), Vec2::splat(300.0), "scale {scale}");
+    }
 }
