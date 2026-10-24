@@ -1550,7 +1550,8 @@ fn panel(world: &mut World) {
         .spawn((
             Panel::new("Stops")
                 .with_close_icon(Handle::default())
-                .with_max_body_height(100.0),
+                .with_max_body_height(100.0)
+                .unwrap(),
             Name::new("tall panel"),
             top,
             ChildOf(root),

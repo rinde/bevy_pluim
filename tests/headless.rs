@@ -292,6 +292,36 @@ fn a_panel_spawned_through_a_stack_keeps_its_own_width() {
     assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));
 }
 
+#[test]
+fn a_panel_scene_with_an_invalid_maximum_body_height_fails_to_build_and_spawns_no_panel() {
+    for height in [f32::NAN, f32::INFINITY, 0.0, -5.0] {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(WindowPlugin {
+            primary_window: None,
+            ..default()
+        });
+        app.add_plugins(InputPlugin);
+        app.add_plugins(DefaultPickingPlugins);
+        app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+        app.init_resource::<ClearColor>();
+        app.init_resource::<Assets<Image>>();
+        app.add_plugins(WidgetsPlugin);
+        app.finish();
+        app.cleanup();
+        let result = app
+            .world_mut()
+            .spawn_scene(bsn! { Panel { title: "Bad", max_body_height: {height} } });
+        assert!(result.is_err(), "height {height} should not build");
+        for _ in 0..3 {
+            app.update();
+        }
+        let world = app.world_mut();
+        assert_eq!(world.query::<&Panel>().iter(world).count(), 0);
+        assert_eq!(world.query::<&PanelRefs>().iter(world).count(), 0);
+    }
+}
+
 fn spawn_real_panel_scene(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(&mut commands, bsn! { Panel { title: "Trains" } });
 }
@@ -6144,7 +6174,7 @@ fn widgets_with_handles_and_scene_constructors_are_written_directly_in_a_scene()
     let panel = world.query::<&Panel>().single(world).unwrap();
     assert_eq!(panel.close_icon.as_ref(), Some(&icon));
     // What is not written is as `Panel::new` has it.
-    assert!((panel.max_body_height - Panel::new("").max_body_height).abs() < f32::EPSILON);
+    assert!((panel.max_body_height() - Panel::new("").max_body_height()).abs() < f32::EPSILON);
     let stepper = world.query::<&NumericStepper>().single(world).unwrap();
     assert_eq!(stepper.decrease_name, "Lower");
     assert_eq!(stepper.increase_name, "Increase");
