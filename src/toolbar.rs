@@ -189,16 +189,37 @@ impl Tool {
     }
 }
 
-/// One button of a [`Toolbar`]: picks its item when it is activated. Only the widget builds
-/// one; its style is the toolbar's, read from there.
+/// One button of a [`Toolbar`]: picks its item when it is activated.
+///
+/// Only the widget builds one, and the component is immutable; its style is the toolbar's, read from there. The item
+/// and the toolbar are read with [`item`](Self::item) and [`owner`](Self::owner). A button's
+/// accessible name is its [`Tool::label`], so callers supply meaningful labels.
+///
+/// ```compile_fail
+/// use rin_bevy_ui::toolbar::ToolbarButton;
+/// # let (item, toolbar) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
+/// let _ = ToolbarButton { item, owner: toolbar };
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::toolbar::ToolbarButton;
+/// fn change(mut buttons: Query<&mut ToolbarButton>) {}
+/// bevy::ecs::system::assert_is_system(change);
+/// ```
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 pub struct ToolbarButton {
     item: Entity,
-    toolbar: Entity,
+    owner: Entity,
 }
 
 impl ToolbarButton {
+    pub(crate) const fn new(item: Entity, owner: Entity) -> Self {
+        Self { item, owner }
+    }
+
     /// The [`Item<Tool>`] this button shows.
     #[must_use]
     pub const fn item(&self) -> Entity {
@@ -207,8 +228,8 @@ impl ToolbarButton {
 
     /// The [`Toolbar`] this button belongs to.
     #[must_use]
-    pub const fn toolbar(&self) -> Entity {
-        self.toolbar
+    pub const fn owner(&self) -> Entity {
+        self.owner
     }
 }
 
@@ -467,7 +488,7 @@ fn spawn_button(
     };
     commands.entity(button).insert((
         Name::new("ToolbarButton"),
-        ToolbarButton { item, toolbar },
+        ToolbarButton::new(item, toolbar),
         refs,
         Button,
         Hovered::default(),
@@ -595,12 +616,12 @@ fn update_buttons(
         let Ok(item) = items.get(button.item()) else {
             continue;
         };
-        let Ok((_, toolbar_labels)) = toolbars.get(button.toolbar()) else {
+        let Ok((_, toolbar_labels)) = toolbars.get(button.owner()) else {
             continue;
         };
         let style = refs.style();
         let active = selections
-            .get(button.toolbar())
+            .get(button.owner())
             .is_some_and(|selection| selection.is_selected(button.item()));
         let look = button_look(theme.colors(), style, item.data.tone, active, hovered.get());
         let labels_shown = *toolbar_labels == ToolbarLabels::Shown;
@@ -711,7 +732,7 @@ fn sync_accessibility(
             continue;
         };
         let active = selections
-            .get(button.toolbar())
+            .get(button.owner())
             .is_some_and(|selection| selection.is_selected(button.item()));
         sync_label(&mut node, &item.data.label);
         sync_toggled(&mut node, Some(active));
@@ -767,7 +788,7 @@ fn on_activate(t: On<Activate>, buttons: Query<&ToolbarButton>, mut selections: 
     let Ok(button) = buttons.get(t.event().event_target()) else {
         return;
     };
-    selections.update_selection(button.toolbar(), |selection| {
+    selections.update_selection(button.owner(), |selection| {
         selection.toggle_selected(button.item())
     });
 }
