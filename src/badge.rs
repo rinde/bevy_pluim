@@ -100,7 +100,8 @@ impl Badge {
 }
 
 /// The badge node spawned under a button that has a [`Badge`].
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct BadgeRef(pub Entity);
 
 /// The node that draws a [`Badge`].
