@@ -4,7 +4,9 @@
 // theme with the pointer resting on the crumb: it keeps the hover colour of the
 // new theme (`background_secondary`, text `link`). The current crumb, a disabled
 // link, stays at rest (`background_primary`, text `text_primary`) in the new theme
-// with the pointer on it. The press case is covered headless: a press would move
+// with the pointer on it. Played with the tester at default, scale 2 and text
+// 1.5x, headless, drawn to an image and under shuffled schedules; breaking a
+// colour makes it fail. The press case is covered headless: a press would move
 // the focus off "Change theme".
 (
     format_version: 3,

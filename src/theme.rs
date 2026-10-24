@@ -2,7 +2,7 @@
 
 use bevy::color::palettes::tailwind::{
     BLUE_200, BLUE_400, BLUE_500, BLUE_600, BLUE_700, BLUE_800, BLUE_900, GRAY_50, GRAY_100,
-    GRAY_200, GRAY_400, GRAY_500, GRAY_600, GRAY_700, GRAY_800, GRAY_900, GRAY_950,
+    GRAY_200, GRAY_400, GRAY_600, GRAY_700, GRAY_800, GRAY_900, GRAY_950,
 };
 use bevy::prelude::*;
 use bevy::text::DEFAULT_REM_SIZE_PX;
@@ -227,8 +227,6 @@ pub struct ThemeColors {
     pub background_primary: Color,
     /// A secondary background, such as a hovered button or a scroll bar track.
     pub background_secondary: Color,
-    /// The dimming behind a popup that blocks input.
-    pub background_blocker: Color,
     /// The background of a selected item.
     pub selected_item: Color,
     /// The background of a hovered item.
@@ -330,12 +328,6 @@ impl Default for ThemeColors {
 pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::Srgba(GRAY_50),
     background_secondary: Color::Srgba(GRAY_200),
-    background_blocker: Color::Srgba(Srgba::new(
-        GRAY_500.red,
-        GRAY_500.green,
-        GRAY_500.blue,
-        0.75,
-    )),
     selected_item: Color::Srgba(BLUE_500),
     hovered_item: Color::Srgba(BLUE_200),
     selected_hovered_item: Color::Srgba(BLUE_400),
@@ -385,12 +377,6 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::Srgba(GRAY_950),
     background_secondary: Color::Srgba(GRAY_800),
-    background_blocker: Color::Srgba(Srgba::new(
-        GRAY_950.red,
-        GRAY_950.green,
-        GRAY_950.blue,
-        0.75,
-    )),
     selected_item: Color::Srgba(BLUE_800),
     hovered_item: Color::Srgba(BLUE_900),
     selected_hovered_item: Color::Srgba(BLUE_700),

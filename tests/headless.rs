@@ -13,6 +13,7 @@ use bevy::asset::{AssetPlugin, HandleTemplate};
 use bevy::camera::ClearColor;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::camera::visibility::VisibilityPlugin;
+use bevy::ecs::event::PropagateEntityTrigger;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::input::InputPlugin;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -32,8 +33,8 @@ use bevy::ui::{
 };
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
-    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderRange, SliderStep, SliderValue,
-    SliderValueChange, Tab, TabList, ValueChange,
+    ScrollIntoView, Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderRange,
+    SliderStep, SliderValue, SliderValueChange, Tab, TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
@@ -59,7 +60,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
-use rin_bevy_ui::link::{Link, LinkState};
+use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
@@ -83,6 +84,7 @@ use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
+use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
@@ -625,17 +627,14 @@ fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is
     app.update();
 
     let world = app.world_mut();
-    let mut links = world.query::<(&Link, &LinkState)>();
+    let mut links = world.query::<(&Link, Has<InteractionDisabled>)>();
     let states = links
         .iter(world)
-        .map(|(_, state)| *state)
+        .map(|(_, disabled)| disabled)
         .collect::<Vec<_>>();
     assert_eq!(states.len(), 2);
     assert_eq!(
-        states
-            .iter()
-            .filter(|state| matches!(state, LinkState::Disabled))
-            .count(),
+        states.iter().filter(|disabled| **disabled).count(),
         1,
         "exactly the last crumb is current"
     );
@@ -1215,12 +1214,15 @@ fn a_press_on_a_link_restyles_it() {
 }
 
 /// A link in a root node, after two updates.
-fn spawn_link(app: &mut App, state: LinkState) -> Entity {
+fn spawn_link(app: &mut App, disabled: bool) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
         .world_mut()
-        .spawn((Link::new("link"), state, ChildOf(root)))
+        .spawn((Link::new("link"), ChildOf(root)))
         .id();
+    if disabled {
+        app.world_mut().entity_mut(link).insert(InteractionDisabled);
+    }
     app.update();
     app.update();
     link
@@ -1235,7 +1237,7 @@ fn link_text_color(app: &App, link: Entity) -> Color {
 #[test]
 fn changing_the_theme_under_a_hovered_link_keeps_it_hovered() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
 
     hover_and_toggle_theme(&mut app, link);
 
@@ -1247,7 +1249,7 @@ fn changing_the_theme_under_a_hovered_link_keeps_it_hovered() {
 #[test]
 fn changing_the_theme_under_a_pressed_link_keeps_it_pressed() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
     press(&mut app, link);
 
     hover_and_toggle_theme(&mut app, link);
@@ -1260,7 +1262,7 @@ fn changing_the_theme_under_a_pressed_link_keeps_it_pressed() {
 #[test]
 fn changing_the_theme_under_a_link_the_pointer_is_not_on_leaves_it_at_rest() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
 
     toggle_theme(&mut app);
     app.update();
@@ -1273,7 +1275,7 @@ fn changing_the_theme_under_a_link_the_pointer_is_not_on_leaves_it_at_rest() {
 #[test]
 fn a_disabled_link_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Disabled);
+    let link = spawn_link(&mut app, true);
 
     hover_and_toggle_theme(&mut app, link);
 
@@ -1295,12 +1297,14 @@ fn a_disabled_link_keeps_its_button_and_is_interaction_disabled() {
     assert!(app.world().entity(link).contains::<Button>());
     assert!(!app.world().entity(link).contains::<InteractionDisabled>());
 
-    app.world_mut().entity_mut(link).insert(LinkState::Disabled);
+    app.world_mut().entity_mut(link).insert(InteractionDisabled);
     app.update();
     assert!(app.world().entity(link).contains::<Button>());
     assert!(app.world().entity(link).contains::<InteractionDisabled>());
 
-    app.world_mut().entity_mut(link).insert(LinkState::Enabled);
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
     app.update();
     assert!(app.world().entity(link).contains::<Button>());
     assert!(!app.world().entity(link).contains::<InteractionDisabled>());
@@ -1312,7 +1316,7 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
         .world_mut()
-        .spawn((Link::new("link"), LinkState::Disabled, ChildOf(root)))
+        .spawn((Link::new("link"), InteractionDisabled, ChildOf(root)))
         .id();
     app.update();
     app.update();
@@ -1338,6 +1342,46 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
             .colors
             .text_primary
     );
+}
+
+#[test]
+fn inserting_and_removing_the_marker_on_a_live_link_restyles_it_under_the_pointer() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, false);
+    app.world_mut().entity_mut(link).insert(Hovered(true));
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+
+    app.world_mut().entity_mut(link).insert(InteractionDisabled);
+    app.world_mut().run_schedule(Update);
+    assert_eq!(background(&app, link), colors.background_primary);
+    assert_eq!(link_text_color(&app, link), colors.text_primary);
+
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
+    app.world_mut().run_schedule(Update);
+    assert_eq!(background(&app, link), colors.background_secondary);
+    assert_eq!(link_text_color(&app, link), colors.link);
+}
+
+#[test]
+fn a_link_enabled_again_reacts_to_the_pointer_again() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, true);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    press(&mut app, link);
+    assert_eq!(background(&app, link), colors.background_primary);
+
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(background(&app, link), colors.background_primary);
+    assert_eq!(link_text_color(&app, link), colors.link);
+
+    press(&mut app, link);
+    assert_eq!(background(&app, link), colors.background_secondary);
+    assert_eq!(link_text_color(&app, link), colors.link_selected);
 }
 
 /// The `Activate`s of the button that [`spawn_push_button`] spawned.
@@ -6769,6 +6813,161 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     }
 }
 
+/// Picks the colour at index 60 of the palette (red-500) for the "accent" row of the theme
+/// editor and returns it.
+fn pick_accent_in_the_theme_editor(app: &mut App) -> Color {
+    let combo = {
+        let world = app.world_mut();
+        world
+            .query::<(Entity, &theme_editor_ui::ThemeSlot)>()
+            .iter(world)
+            .find(|(_, slot)| slot.0 == "accent")
+            .map(|(e, _)| e)
+            .unwrap()
+    };
+    let (picked, color) = {
+        let world = app.world_mut();
+        let color = world
+            .query::<&Item<Color>>()
+            .iter(world)
+            .map(|i| i.data)
+            .nth(60)
+            .unwrap();
+        let picked = world
+            .query::<(Entity, &Item<Color>)>()
+            .iter(world)
+            .find(|(_, i)| i.data == color)
+            .map(|(e, _)| e)
+            .unwrap();
+        (picked, color)
+    };
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(picked))));
+    for _ in 0..3 {
+        app.update();
+    }
+    color
+}
+
+#[test]
+fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
+    let mut app = theme_editor_app();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    app.update();
+    app.update();
+    let before = app.world().get_resource::<Theme>().unwrap().clone();
+    assert_eq!(before.mode(), ThemeMode::Dark);
+
+    let red = pick_accent_in_the_theme_editor(&mut app);
+
+    let theme = app.world().get_resource::<Theme>().unwrap();
+    assert_eq!(theme.mode(), ThemeMode::Dark);
+    assert_ne!(
+        theme_editor_ui::slot_color(&before.colors_of(ThemeMode::Dark), "accent"),
+        Some(red),
+        "the pick is a change"
+    );
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors_of(ThemeMode::Dark), "accent"),
+        Some(red)
+    );
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        Some(red)
+    );
+    assert_eq!(
+        theme.colors_of(ThemeMode::Light),
+        before.colors_of(ThemeMode::Light)
+    );
+}
+
+#[test]
+fn the_theme_editor_pair_source_has_both_blocks_and_follows_an_edit_to_the_dark_half() {
+    let mut theme = Theme::default();
+    let source = theme_editor_ui::pair_source(&theme);
+    assert!(source.contains("const LIGHT: ThemeColors = ThemeColors {\n"));
+    assert!(source.contains("const DARK: ThemeColors = ThemeColors {\n"));
+
+    let mut dark = theme.colors_of(ThemeMode::Dark);
+    assert!(theme_editor_ui::set_slot_color(
+        &mut dark,
+        "accent",
+        Color::srgba(0.25, 0.5, 0.75, 1.0)
+    ));
+    theme.set_colors(ThemeMode::Dark, dark);
+    let edited = theme_editor_ui::pair_source(&theme);
+    let (light_block, dark_block) = edited.split_once("const DARK").unwrap();
+    assert!(dark_block.contains("    accent: Color::srgba(0.25, 0.5, 0.75, 1"));
+    assert!(!light_block.contains("0.25, 0.5, 0.75"));
+    assert_eq!(
+        light_block,
+        theme_editor_ui::pair_source(&Theme::default())
+            .split_once("const DARK")
+            .unwrap()
+            .0,
+        "the light block is untouched"
+    );
+}
+
+#[test]
+fn activating_the_theme_editors_export_button_spawns_a_toast_under_the_ui_root() {
+    let mut app = theme_editor_app();
+    let export = {
+        let world = app.world_mut();
+        let label = world
+            .query::<(&Text, &ChildOf)>()
+            .iter(world)
+            .find(|(text, _)| text.0 == "Export")
+            .map(|(_, child_of)| child_of.parent())
+            .unwrap();
+        assert!(
+            world.get::<PushButton>(label).is_some(),
+            "the label is in a PushButton"
+        );
+        label
+    };
+    let root = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<UiRoot>>()
+            .single(world)
+            .unwrap()
+    };
+    assert_eq!(count_toasts(&mut app), 0);
+
+    app.world_mut().trigger(Activate { entity: export });
+    app.update();
+    app.update();
+
+    let world = app.world_mut();
+    let toasts: Vec<Entity> = world
+        .query_filtered::<Entity, With<Toast>>()
+        .iter(world)
+        .collect();
+    assert_eq!(toasts.len(), 1);
+    assert!(
+        world
+            .get::<ChildOf>(toasts[0])
+            .is_some_and(|child_of| child_of.parent() == root
+                || world
+                    .get::<ChildOf>(child_of.parent())
+                    .is_some_and(|stack| stack.parent() == root)),
+        "the toast is under the UI root (directly or in its stack)"
+    );
+}
+
+fn count_toasts(app: &mut App) -> usize {
+    let world = app.world_mut();
+    world
+        .query_filtered::<(), With<Toast>>()
+        .iter(world)
+        .count()
+}
+
 #[test]
 fn the_theme_editor_exports_every_colour_slot_as_rust_text() {
     use bevy::reflect::structs::Struct as _;
@@ -7620,6 +7819,50 @@ fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
         app.world().get_entity(toast).is_err(),
         "the toast outlived its restarted timer"
     );
+}
+
+#[test]
+fn toasts_with_unusual_durations_do_not_panic_and_the_zero_ones_go_after_a_tick() {
+    use rin_bevy_ui::toast::Toast;
+
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let mut spawn = |text: &str, duration: f32| {
+        app.world_mut()
+            .spawn((Toast::new(text).with_duration(duration), ChildOf(root)))
+            .id()
+    };
+    let long: Vec<Entity> = [("inf", f32::INFINITY), ("max", f32::MAX)]
+        .into_iter()
+        .map(|(text, duration)| spawn(text, duration))
+        .collect();
+    let short: Vec<Entity> = [("nan", f32::NAN), ("negative", -1.0), ("zero", 0.0)]
+        .into_iter()
+        .map(|(text, duration)| spawn(text, duration))
+        .collect();
+    for _ in 0..5 {
+        app.update();
+    }
+    for toast in short {
+        assert!(
+            app.world().get_entity(toast).is_err(),
+            "a zero toast stayed"
+        );
+    }
+    for toast in long {
+        assert!(app.world().get_entity(toast).is_ok(), "a capped toast went");
+    }
+    // Re-inserting a huge duration on a live entity must not panic either.
+    let again = app
+        .world_mut()
+        .spawn((Toast::new("again"), ChildOf(root)))
+        .id();
+    app.update();
+    app.world_mut()
+        .entity_mut(again)
+        .insert(Toast::new("again").with_duration(f32::INFINITY));
+    app.update();
+    app.update();
 }
 
 /// The option of the toggle that sets `preference`.
@@ -8811,7 +9054,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
 #[test]
 fn inserting_a_link_again_changes_its_text_in_place_and_keeps_its_label_in_step() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
     let text = app.world().entity(link).get::<Children>().unwrap()[0];
     assert_eq!(text_of(&app, text), "link");
 
@@ -9106,6 +9349,112 @@ fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_
         app.update();
     }
     assert_eq!(observers_of(&mut app, selection), before);
+}
+
+#[test]
+fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let item = app.world().get::<ChipView>(views[1]).unwrap().item;
+
+    // Break the children by hand: a frame with nothing to react to must leave it alone.
+    app.world_mut().entity_mut(views[1]).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(chip_views(&app, chips).len(), 2);
+
+    // A change to an item makes the chips look again, and they are built as they should be.
+    app.world_mut()
+        .get_mut::<Item<Chip>>(item)
+        .unwrap()
+        .set_changed();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(chip_views(&app, chips).len(), 3);
+}
+
+#[test]
+fn a_toolbar_does_not_look_at_its_buttons_in_a_frame_without_a_change() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+    let item = app.world().get::<ToolbarButton>(buttons[0]).unwrap().item();
+
+    app.world_mut().entity_mut(buttons[0]).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toolbar_buttons(&app, toolbar).len(), buttons.len() - 1);
+
+    app.world_mut()
+        .get_mut::<Item<Tool>>(item)
+        .unwrap()
+        .set_changed();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toolbar_buttons(&app, toolbar).len(), buttons.len());
+}
+
+#[test]
+fn a_gallery_does_not_look_at_its_items_in_a_frame_without_a_change() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+    assert_eq!(groups.len(), 2);
+    let card = groups[1].1[1];
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+
+    // Move the last card to a group of its own without Bevy noticing: a frame with nothing to
+    // react to must not look at the items, so the gallery stays as it was.
+    app.world_mut()
+        .get_mut::<Item<GalleryCard>>(item)
+        .unwrap()
+        .bypass_change_detection()
+        .data
+        .group = "Specials".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery), groups);
+
+    // A change to an item makes the gallery look again, and the groups are built as they should be.
+    app.world_mut()
+        .get_mut::<Item<GalleryCard>>(item)
+        .unwrap()
+        .set_changed();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery).len(), 3);
+}
+
+#[test]
+fn a_gallery_still_rebuilds_its_groups_when_the_group_of_an_item_changes() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+    assert_eq!(groups.len(), 2);
+    let card = groups[1].1[1];
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+
+    // The last card moves to a group of its own; quiet frames before and after change nothing.
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery), groups);
+    app.world_mut()
+        .get_mut::<Item<GalleryCard>>(item)
+        .unwrap()
+        .data
+        .group = "Specials".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery).len(), 3);
 }
 
 /// An entity with the given items, to draw a selection from through `ItemsRef`.
@@ -9893,6 +10242,211 @@ fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
     assert_eq!(margin(&app), Val::Px(0.0));
 }
 
+/// A scroll-contents node for `scroll_into_view`: 100 by 100 logical pixels at the window's top
+/// left, its content 400 by 400, scrolling along the axes given, drawn at `scale`. The headless
+/// app has no layout, so the sizes and places are set by hand.
+fn scrolling_contents(
+    app: &mut App,
+    parent: Option<Entity>,
+    overflow: Overflow,
+    scroll: Vec2,
+    scale: f32,
+) -> Entity {
+    let mut area = app.world_mut().spawn((
+        Node {
+            overflow,
+            ..default()
+        },
+        ScrollContents,
+        ScrollPosition(scroll),
+        ComputedNode {
+            size: Vec2::splat(100.0 * scale),
+            content_size: Vec2::splat(400.0 * scale),
+            inverse_scale_factor: 1.0 / scale,
+            ..default()
+        },
+        UiGlobalTransform::from_translation(Vec2::splat(50.0 * scale)),
+    ));
+    if let Some(parent) = parent {
+        area.insert(ChildOf(parent));
+    }
+    area.id()
+}
+
+/// A 20 by 20 logical pixel target in `parent`, whose top left the layout last put at `visible`
+/// logical pixels from the window's top left (already shifted by the scroll position).
+fn target_at(app: &mut App, parent: Option<Entity>, visible: Vec2, scale: f32) -> Entity {
+    let mut target = app.world_mut().spawn((
+        Node::default(),
+        ComputedNode {
+            size: Vec2::splat(20.0 * scale),
+            inverse_scale_factor: 1.0 / scale,
+            ..default()
+        },
+        UiGlobalTransform::from_translation((visible + Vec2::splat(10.0)) * scale),
+    ));
+    if let Some(parent) = parent {
+        target.insert(ChildOf(parent));
+    }
+    target.id()
+}
+
+fn scroll_to(app: &mut App, entity: Entity) {
+    app.world_mut().trigger(ScrollIntoView { entity });
+    tick(app);
+}
+
+fn scroll_of(app: &App, area: Entity) -> Vec2 {
+    app.world().get::<ScrollPosition>(area).unwrap().0
+}
+
+const SCROLL_BOTH: Overflow = Overflow::scroll();
+const SCROLL_X: Overflow = Overflow {
+    x: OverflowAxis::Scroll,
+    y: OverflowAxis::Visible,
+};
+
+#[test]
+fn a_horizontal_area_scrolls_a_target_sideways_and_leaves_the_vertical_axis_alone() {
+    // Past the right and the bottom edge: only x moves, as y does not scroll.
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    // Right edge at 170 plus the 3 px ring, in a 100 px view.
+    assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 0.0));
+}
+
+#[test]
+fn a_vertical_area_leaves_the_horizontal_axis_alone() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 73.0));
+}
+
+#[test]
+fn a_two_way_area_scrolls_both_axes_to_show_a_target_with_its_ring() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    // The target ends 3 px from the view's right and bottom edges, not touching them.
+    assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 73.0));
+}
+
+#[test]
+fn a_target_scrolled_in_from_before_the_start_clamps_to_zero_not_below() {
+    // The target lies 1 px into the contents, so with its ring it starts at -2.
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(200.0), 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::splat(-199.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+}
+
+#[test]
+fn a_target_before_the_view_scrolls_back_to_show_its_ring() {
+    // The target is at 50 in the contents, the view starts at 200: the ring starts at 47.
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(200.0), 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::splat(-150.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::splat(47.0));
+}
+
+#[test]
+fn a_target_already_in_view_does_not_move_the_area() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(30.0), 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::splat(40.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::splat(30.0));
+}
+
+#[test]
+fn a_horizontal_area_scrolls_the_same_logical_distance_at_scale_factor_two() {
+    let mut app = headless_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 2.0);
+    let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 2.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 0.0));
+    // And back to the start, clamped to 0.
+    let back = target_at(&mut app, Some(area), Vec2::new(-72.0, 0.0), 2.0);
+    scroll_to(&mut app, back);
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+}
+
+#[test]
+fn a_target_outside_any_scroll_area_is_left_alone_without_a_panic() {
+    let mut app = headless_app();
+    // No parent at all.
+    let loose = target_at(&mut app, None, Vec2::splat(500.0), 1.0);
+    scroll_to(&mut app, loose);
+    // A parent that scrolls but is not a `ScrollContents`.
+    let parent = app
+        .world_mut()
+        .spawn((
+            Node {
+                overflow: SCROLL_BOTH,
+                ..default()
+            },
+            ScrollPosition(Vec2::splat(7.0)),
+        ))
+        .id();
+    let child = target_at(&mut app, Some(parent), Vec2::splat(500.0), 1.0);
+    scroll_to(&mut app, child);
+    assert_eq!(scroll_of(&app, parent), Vec2::splat(7.0));
+}
+
+#[test]
+fn only_the_innermost_scroll_area_takes_a_scroll_into_view() {
+    let mut app = headless_app();
+    let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(inner), Vec2::new(150.0, 150.0), 1.0);
+    scroll_to(&mut app, target);
+    assert_eq!(scroll_of(&app, inner), Vec2::splat(73.0));
+    assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
+}
+
+#[test]
+fn a_scroll_into_view_that_propagates_stops_at_the_innermost_scroll_area() {
+    // `World::trigger` runs the observers of the first hop only, so it cannot tell whether the
+    // observer stops the event. Trigger it with propagation switched on, so it climbs from
+    // the target's area to the outer one unless `scroll_into_view` stops it.
+    let mut app = headless_app();
+    let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
+    // The inner area lies 300 px down and right in the outer one, outside its 100 px view, so
+    // an outer area that took the event would scroll to show it.
+    app.world_mut()
+        .entity_mut(inner)
+        .insert(UiGlobalTransform::from_translation(Vec2::splat(350.0)));
+    let target = target_at(&mut app, Some(inner), Vec2::splat(450.0), 1.0);
+    let mut trigger = PropagateEntityTrigger::<false, ScrollIntoView, &ChildOf>::default();
+    trigger.propagate = true;
+    app.world_mut()
+        .trigger_with(ScrollIntoView { entity: target }, trigger);
+    tick(&mut app);
+    assert_eq!(scroll_of(&app, inner), Vec2::splat(73.0));
+    assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
+}
+
+#[test]
+fn a_target_at_the_end_of_the_contents_stops_at_the_last_scroll_position_at_any_scale() {
+    // The target ends at 400, the contents' end; with its ring it would want 303, but 300 is the
+    // most the 400 px contents scroll in a 100 px view. Physical sizes double at scale 2.
+    for scale in [1.0, 2.0] {
+        let mut app = headless_app();
+        let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, scale);
+        let target = target_at(&mut app, Some(area), Vec2::splat(380.0), scale);
+        scroll_to(&mut app, target);
+        assert_eq!(scroll_of(&app, area), Vec2::splat(300.0), "scale {scale}");
+    }
+}
+
 /// The accessible value of `entity`.
 fn accessible_value(app: &App, entity: Entity) -> Option<String> {
     app.world()
@@ -10242,4 +10796,76 @@ fn reinserting_a_slider_updates_its_range_format_name_and_value() {
     if let Some(old) = parts_before {
         assert!(world.get_entity(old).is_err(), "no stale label");
     }
+}
+
+#[test]
+fn a_toast_with_no_parent_is_logged_and_despawned() {
+    use bevy::log::tracing::{self, Level};
+    use bevy::log::tracing_subscriber::{self, layer::SubscriberExt};
+    use rin_bevy_ui::toast::Toast;
+    use std::sync::{Arc, Mutex};
+
+    struct Errors(Arc<Mutex<usize>>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Errors {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() == Level::ERROR
+                && let Ok(mut count) = self.0.lock()
+            {
+                *count += 1;
+            }
+        }
+    }
+
+    let count = Arc::new(Mutex::new(0));
+    let subscriber = tracing_subscriber::registry().with(Errors(count.clone()));
+    let mut app = headless_app();
+    // The subscriber is thread-local, so the systems must run on this thread.
+    app.edit_schedule(Update, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let toast = app.world_mut().spawn(Toast::new("Orphan")).id();
+    tracing::subscriber::with_default(subscriber, || {
+        for _ in 0..3 {
+            app.update();
+        }
+    });
+    assert!(
+        app.world().get_entity(toast).is_err(),
+        "a parentless toast stayed"
+    );
+    assert_eq!(*count.lock().unwrap(), 1, "one error should be logged");
+}
+
+#[test]
+fn two_roots_each_get_their_own_toast_stack() {
+    use rin_bevy_ui::toast::{Toast, ToastStack};
+
+    let mut app = headless_app();
+    let first = app.world_mut().spawn(Node::default()).id();
+    let second = app.world_mut().spawn(Node::default()).id();
+    let a = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(first)))
+        .id();
+    app.update();
+    // The second root's toast has the same text and must not join (or be
+    // dropped for) the first root's stack.
+    let b = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(second)))
+        .id();
+    app.update();
+    app.update();
+    let parent_of = |app: &App, entity: Entity| {
+        let stack = app.world().get::<ChildOf>(entity)?.parent();
+        let root = app.world().get::<ChildOf>(stack)?.parent();
+        app.world().get::<ToastStack>(stack)?;
+        Some(root)
+    };
+    assert_eq!(parent_of(&app, a), Some(first));
+    assert_eq!(parent_of(&app, b), Some(second));
 }
