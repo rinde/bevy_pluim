@@ -1294,6 +1294,39 @@ fn color_palette(world: &mut World) {
                 false,
             ),
         ));
+        // Combos over a selection of many, out of the flow and last for the same reasons:
+        // `zero or more palette combo` starts with nothing selected, `one or more palette
+        // combo` with slate-50, the first colour.
+        for (name, left, selection) in [
+            (
+                "zero or more palette combo",
+                1000,
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items_ref(selection_ref),
+            ),
+            (
+                "one or more palette combo",
+                1100,
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items_ref(selection_ref),
+            ),
+        ] {
+            root.spawn((
+                ColorPaletteCombo,
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    position_type: PositionType::Absolute,
+                    top: px(250),
+                    left: px(left),
+                    ..default()
+                },
+                ListLayout::VerticalGrid { columns: 11 },
+                selection,
+                Name::new(name),
+            ));
+        }
     });
 }
 

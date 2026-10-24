@@ -60,8 +60,13 @@ impl Plugin for ColorPaletteComboPlugin {
 /// click elsewhere); the focus then goes back to the button, unless it moved to another widget.
 ///
 /// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a label:
-/// its value is the name of the selected colour (empty for none), it is expanded while the
-/// popup is open, and it controls the popup's palette.
+/// its value is the names of the selected colours joined by `", "` in selection order (empty
+/// for none), it is expanded while the popup is open, and it controls the popup's palette.
+///
+/// Any [`Selection`] works, including `OneOrMore` and `ZeroOrMore`. The button's colour square
+/// previews the first selected item that has an [`Item<Color>`] (transparent when there is
+/// none, also for a mandatory selection that has not picked its first item yet); it does not
+/// show the others. A popup over a selection of many stays open when a swatch is picked.
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -385,6 +390,20 @@ fn position_float(
     node.overflow.y = OverflowAxis::Scroll;
 }
 
+/// The colours of the selected items that have an [`Item<Color>`], in selection order.
+///
+/// A selected item without a colour (a pending mandatory selection holds a placeholder) is
+/// skipped.
+fn selected_colors<'a>(
+    selection: &'a SelectionValue,
+    items: &'a Query<&Item<Color>>,
+) -> impl Iterator<Item = Color> + 'a {
+    selection
+        .iter()
+        .filter_map(|selected| items.get(selected).ok())
+        .map(|item| item.data)
+}
+
 /// Keeps the popup's palette and the button's colour square in step with the combo's
 /// selection.
 ///
@@ -430,11 +449,9 @@ fn on_selection_change(
                 continue;
             };
 
-            assert!(!selection.allow_multiple(), "Multi selection not supported");
-            let color = selection
-                .single()
-                .and_then(|selected| items.get(selected).ok())
-                .map_or(Color::Srgba(Srgba::NONE), |item| item.data);
+            let color = selected_colors(selection, &items)
+                .next()
+                .unwrap_or(Color::Srgba(Srgba::NONE));
             color_square_background.0 = color;
             commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
         }
@@ -454,11 +471,12 @@ fn sync_accessibility(
         let Ok(mut node) = nodes.get_mut(sub_refs.button) else {
             continue;
         };
-        let value = selections
-            .get(combo)
-            .and_then(SelectionValue::single)
-            .and_then(|selected| items.get(selected).ok())
-            .map_or_else(String::new, |item| color_name(item.data));
+        let value = selections.get(combo).map_or_else(String::new, |selection| {
+            selected_colors(selection, &items)
+                .map(color_name)
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
         sync_role(&mut node, Role::ComboBox);
         clear_label(&mut node);
         sync_value(&mut node, &value);

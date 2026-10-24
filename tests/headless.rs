@@ -8038,3 +8038,239 @@ fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_
     }
     assert_eq!(observers_of(&mut app, selection), before);
 }
+
+// ---- ColorPaletteCombo over a selection of many ----
+
+/// Red, blue and green, in that order.
+fn three_colors() -> Vec<Item<Color>> {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
+    [RED_500, BLUE_500, GREEN_500]
+        .into_iter()
+        .map(|data| Item { data: data.into() })
+        .collect()
+}
+
+/// The items of the selection entity `selection_ref`, in order.
+fn items_of(app: &App, selection_ref: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(selection_ref)
+        .get::<ItemValues>()
+        .unwrap()
+        .iter()
+        .collect()
+}
+
+/// The colour of the square in the palette combo's button.
+fn combo_square(app: &App, button: Entity) -> Color {
+    let square = app.world().get::<ColorSquareRef>(button).unwrap().entity();
+    app.world().get::<BackgroundColor>(square).unwrap().0
+}
+
+/// The value the palette combo's button tells a screen reader.
+fn combo_value(app: &App, button: Entity) -> String {
+    app.world()
+        .get::<AccessibilityNode>(button)
+        .unwrap()
+        .value()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn select_items(app: &mut App, selection_ref: Entity, items: &[Entity]) {
+    let items = items.to_vec();
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(selection_ref, |s| s.set_selection(items.clone()));
+        })
+        .unwrap();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn a_color_palette_combo_over_many_shows_the_first_selected_colour_and_names_them_all() {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
+    let none = Color::Srgba(Srgba::NONE);
+    let (red, blue, green): (Color, Color, Color) =
+        (RED_500.into(), BLUE_500.into(), GREEN_500.into());
+    for (name, builder, first) in [
+        ("ZeroOrMore", Selection::builder().zero_or_more(), none),
+        ("OneOrMore", Selection::builder().one_or_more(), red),
+    ] {
+        let mut app = headless_app();
+        let (combo, button) = {
+            app.world_mut().spawn((Window::default(), PrimaryWindow));
+            let root = app.world_mut().spawn(Node::default()).id();
+            let combo = app
+                .world_mut()
+                .spawn((
+                    ColorPaletteCombo,
+                    builder.build_with_items(three_colors()),
+                    ChildOf(root),
+                ))
+                .id();
+            app.update();
+            app.update();
+            (combo, single_entity_with::<ColorPushButton>(&mut app))
+        };
+        let items = items_of(&app, combo);
+        assert_eq!(combo_square(&app, button), first, "{name}: initial");
+        assert_eq!(
+            combo_value(&app, button),
+            if first == none { "" } else { "red-500" },
+            "{name}: initial value"
+        );
+
+        select_items(&mut app, combo, &[items[1], items[0]]);
+        assert_eq!(combo_square(&app, button), blue, "{name}: first selected");
+        assert_eq!(
+            combo_value(&app, button),
+            "blue-500, red-500",
+            "{name}: order"
+        );
+
+        select_items(&mut app, combo, &[items[0], items[1], items[2]]);
+        assert_eq!(combo_square(&app, button), red, "{name}");
+        assert_eq!(combo_value(&app, button), "red-500, blue-500, green-500");
+
+        select_items(&mut app, combo, &[items[1], items[2]]);
+        assert_eq!(combo_square(&app, button), blue, "{name}: red deselected");
+        assert_eq!(combo_value(&app, button), "blue-500, green-500");
+
+        select_items(&mut app, combo, &[items[2]]);
+        assert_eq!(combo_square(&app, button), green, "{name}");
+        assert_eq!(combo_value(&app, button), "green-500");
+
+        if name == "ZeroOrMore" {
+            select_items(&mut app, combo, &[]);
+            assert_eq!(combo_square(&app, button), none, "{name}: nothing selected");
+            assert_eq!(combo_value(&app, button), "");
+        }
+        let accessible = app.world().get::<AccessibilityNode>(button).unwrap();
+        assert_eq!(accessible.label(), None, "{name}: no label");
+    }
+}
+
+#[test]
+fn a_color_palette_combo_over_a_shared_selection_of_many_follows_it() {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500};
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let shared = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .zero_or_more()
+                .build_with_items(three_colors()),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((
+        ColorPaletteCombo,
+        Selection::reference(shared),
+        ChildOf(root),
+    ));
+    app.update();
+    app.update();
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    let items = items_of(&app, shared);
+    assert_eq!(combo_square(&app, button), Color::Srgba(Srgba::NONE));
+    assert_eq!(combo_value(&app, button), "");
+
+    select_items(&mut app, shared, &[items[2], items[1]]);
+    assert_eq!(combo_square(&app, button), Color::from(GREEN_500));
+    assert_eq!(combo_value(&app, button), "green-500, blue-500");
+
+    select_items(&mut app, shared, &[items[1]]);
+    assert_eq!(combo_square(&app, button), Color::from(BLUE_500));
+    assert_eq!(combo_value(&app, button), "blue-500");
+}
+
+#[test]
+fn a_color_palette_combo_with_a_mandatory_selection_that_is_pending_is_transparent_and_unnamed() {
+    for (name, builder) in [
+        ("One", Selection::builder().one()),
+        ("OneOrMore", Selection::builder().one_or_more()),
+    ] {
+        let mut app = headless_app();
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        let root = app.world_mut().spawn(Node::default()).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                ColorPaletteCombo,
+                builder.build_with_items(Vec::<Item<Color>>::new()),
+                ChildOf(root),
+            ))
+            .id();
+        app.update();
+        app.update();
+        let button = single_entity_with::<ColorPushButton>(&mut app);
+        assert_eq!(
+            combo_square(&app, button),
+            Color::Srgba(Srgba::NONE),
+            "{name}"
+        );
+        assert_eq!(combo_value(&app, button), "", "{name}");
+
+        // The first item arrives and the pending selection takes it.
+        app.world_mut().spawn((
+            Item {
+                data: Color::from(bevy::color::palettes::tailwind::RED_500),
+            },
+            ItemOf(combo),
+        ));
+        app.update();
+        app.update();
+        app.update();
+        assert_eq!(
+            combo_square(&app, button),
+            Color::from(bevy::color::palettes::tailwind::RED_500),
+            "{name}"
+        );
+        assert_eq!(combo_value(&app, button), "red-500", "{name}");
+    }
+}
+
+#[test]
+fn a_swatch_click_leaves_the_popup_of_a_palette_combo_over_many_open() {
+    for (name, builder) in [
+        ("ZeroOrMore", Selection::builder().zero_or_more()),
+        ("OneOrMore", Selection::builder().one_or_more()),
+    ] {
+        let mut app = headless_app();
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        let root = app.world_mut().spawn(Node::default()).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                ColorPaletteCombo,
+                builder.build_with_items(three_colors()),
+                ChildOf(root),
+            ))
+            .id();
+        app.update();
+        app.update();
+        let button = single_entity_with::<ColorPushButton>(&mut app);
+        click(&mut app, button);
+        assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);
+        let palette = single_entity_with::<ColorPalette>(&mut app);
+        let swatches = item_views(&app, palette);
+        assert_eq!(swatches.len(), 3);
+
+        click_row(&mut app, swatches[1]);
+        click_row(&mut app, swatches[2]);
+
+        assert_eq!(
+            palette_combo_state(&app, combo),
+            PaletteComboState::Open,
+            "{name}"
+        );
+        assert!(selection_colors(&app, combo).len() >= 2, "{name}");
+        assert_eq!(
+            combo_value(&app, button).split(", ").count(),
+            selection_colors(&app, combo).len(),
+            "{name}"
+        );
+    }
+}
