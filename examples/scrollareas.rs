@@ -64,7 +64,7 @@ fn setup(mut commands: Commands) {
 /// A scroll area over a grid of `num` coloured squares.
 ///
 fn scroll_area(num: usize, grid_auto_flow: GridAutoFlow, v: bool, h: bool) -> impl Scene {
-    ScrollArea::scene(bsn_list! { @squares(num, grid_auto_flow) }, v, h)
+    ScrollArea::scene(move || bsn_list! { @squares(num, grid_auto_flow) }, v, h)
 }
 
 /// A grid of `num` coloured squares, laid out along `grid_auto_flow`.

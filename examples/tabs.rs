@@ -296,9 +296,11 @@ fn update_theme(
 /// A vertical scroll area over a list of the items.
 fn item_scroll_area() -> impl Scene {
     ScrollArea::scene(
-        bsn_list! {
-            List
-            @{Selection::builder().one().scene_with_items(items())}
+        || {
+            bsn_list! {
+                List
+                @{Selection::builder().one().scene_with_items(items())}
+            }
         },
         true,
         false,
@@ -307,5 +309,5 @@ fn item_scroll_area() -> impl Scene {
 
 /// A scroll area over the cards.
 fn card_scroll_area(background_color: Color) -> impl Scene {
-    ScrollArea::scene(bsn_list! { @cards(background_color) }, true, true)
+    ScrollArea::scene(move || bsn_list! { @cards(background_color) }, true, true)
 }

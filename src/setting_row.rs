@@ -38,11 +38,14 @@ impl Plugin for SettingRowPlugin {
 /// [`SettingRowRefs::control_slot`]. Put the rows in a [`SettingRows`] column, which keeps the
 /// divider between consecutive rows and none after the last.
 ///
+/// A live row is changed by inserting a new `SettingRow` on it: the title text, the description
+/// and the accessibility node follow, and the children, [`SettingRowRefs`] and the control stay.
+///
 /// To assistive technology it is a group ([`Role::Group`]) labelled with its title and
 /// described by its description.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
-#[component(on_add=Self::on_add)]
+#[component(on_insert=Self::on_insert)]
 #[require(
     Name::new("SettingRow"),
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::Group)),
@@ -96,7 +99,7 @@ impl SettingRow {
         }
     }
 
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let Some(row) = world.entity(context.entity).get::<Self>() else {
             return;
         };
@@ -105,6 +108,24 @@ impl SettingRow {
         if let Some(mut node) = world.get_mut::<AccessibilityNode>(context.entity) {
             node.set_label(title.as_str());
             node.set_description(description.as_str());
+        }
+
+        // A row that already has its parts only gets the new text: the children, the refs and
+        // whatever the app put into the control slot stay.
+        if let Some(refs) = world
+            .entity(context.entity)
+            .get::<SettingRowRefs>()
+            .copied()
+        {
+            world
+                .commands()
+                .entity(refs.title_id)
+                .insert(Text::new(title));
+            world
+                .commands()
+                .entity(refs.description_id)
+                .insert(Label::secondary(description));
+            return;
         }
 
         let mut title_id = Entity::PLACEHOLDER;

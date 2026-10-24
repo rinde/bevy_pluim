@@ -12,6 +12,9 @@ use crate::theme::Theme;
 
 /// How long a toast shows by default, in seconds.
 const DEFAULT_DURATION_SECS: f32 = 3.0;
+/// The longest a toast is timed for, in seconds (one day): longer, infinite and
+/// huge durations are capped to it, as `Duration` cannot hold them.
+const MAX_DURATION_SECS: f32 = 86_400.0;
 /// The widest a toast gets, in pixels; longer text wraps.
 const MAX_WIDTH: f32 = 480.0;
 /// The gap between stacked toasts, in pixels.
@@ -80,7 +83,9 @@ impl Default for ToastPlacement {
 pub struct Toast {
     /// The message.
     pub text: String,
-    /// How long it shows, in seconds.
+    /// How long it shows, in seconds. Zero, a negative value and NaN all mean
+    /// zero: the toast goes after its first tick. A value above one day,
+    /// infinity included, is capped to one day (86,400 s).
     pub duration: f32,
 }
 
@@ -93,7 +98,9 @@ impl Toast {
         }
     }
 
-    /// The same toast shown for `seconds`.
+    /// The same toast shown for `seconds`. Zero, a negative value and NaN mean
+    /// zero (it goes after its first tick); a value above one day, infinity
+    /// included, is capped to one day (86,400 s). Nothing here panics.
     #[must_use]
     pub const fn with_duration(mut self, seconds: f32) -> Self {
         self.duration = seconds;
@@ -105,14 +112,14 @@ impl Toast {
             return;
         };
         let text = this.text.clone();
-        let duration = this.duration.max(0.0);
+        let timer = ToastTimer::for_duration(this.duration);
         let mut node = AccessNode::new(Role::Status);
         node.set_label(text.as_str());
         node.set_live(Live::Polite);
         world.commands().entity(context.entity).insert((
             Text(text),
             AccessibilityNode::from(node),
-            ToastTimer(Timer::from_seconds(duration, TimerMode::Once)),
+            timer,
         ));
         world
             .commands()
@@ -146,6 +153,19 @@ pub struct ToastStack;
 #[reflect(Component)]
 struct ToastTimer(Timer);
 
+impl ToastTimer {
+    /// The timer for a [`Toast::duration`]: NaN and negative values become 0,
+    /// anything above [`MAX_DURATION_SECS`] (infinity too) is capped to it.
+    fn for_duration(seconds: f32) -> Self {
+        let seconds = if seconds.is_nan() {
+            0.0
+        } else {
+            seconds.clamp(0.0, MAX_DURATION_SECS)
+        };
+        Self(Timer::from_seconds(seconds, TimerMode::Once))
+    }
+}
+
 /// A [`Toast`] that has moved into its [`ToastStack`].
 #[derive(Component, Copy, Clone, Debug, Reflect)]
 #[reflect(Component)]
@@ -162,11 +182,10 @@ fn place_toasts(
     let mut stack = stacks.iter().next();
     let mut kept: Vec<String> = Vec::new();
     for (entity, toast, mut timer, parent) in &mut fresh {
-        let duration = toast.duration.max(0.0);
         let existing = shown.iter_mut().find(|(other, _)| other.text == toast.text);
         if existing.is_some() || kept.contains(&toast.text) {
             if let Some((_, mut other_timer)) = existing {
-                *other_timer = ToastTimer(Timer::from_seconds(duration, TimerMode::Once));
+                *other_timer = ToastTimer::for_duration(toast.duration);
             }
             commands.entity(entity).despawn();
             continue;
@@ -181,7 +200,7 @@ fn place_toasts(
             stack = Some(target);
             target
         };
-        *timer = ToastTimer(Timer::from_seconds(duration, TimerMode::Once));
+        *timer = ToastTimer::for_duration(toast.duration);
         kept.push(toast.text.clone());
         commands
             .entity(entity)

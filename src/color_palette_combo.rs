@@ -1,9 +1,8 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
-use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
+use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -13,11 +12,9 @@ use itertools::Either;
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::{Float, fit_vertically, keep_in_window_x};
-use crate::focus::{
-    AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
-    sync_role, sync_value,
-};
+use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::list::{ItemView, ListLayout};
+use crate::popup::{self, ButtonLook};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
@@ -59,7 +56,7 @@ impl Plugin for ColorPaletteComboPlugin {
 /// Space work on it. Escape closes it, as does the focus leaving the palette (Tab away, a
 /// click elsewhere); the focus then goes back to the button, unless it moved to another widget.
 ///
-/// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a label:
+/// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a label:
 /// its value is the names of the selected colours joined by `", "` in selection order (empty
 /// for none), it is expanded while the popup is open, and it controls the popup's palette.
 ///
@@ -82,16 +79,18 @@ pub struct ColorPaletteCombo;
 /// Its [`Hovered`] says whether the pointer is on the combo, for the outside click. A
 /// [`ColorPushButton`] is named after its colour; this one is not, since its value says the
 /// colour.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 #[require(Hovered)]
-pub(crate) struct ColorPaletteComboButton;
+pub struct ColorPaletteComboButton;
 
 /// Marks the popup of a [`ColorPaletteCombo`].
 ///
 /// Its [`Hovered`] says whether the pointer is on the popup, for the outside click.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 #[require(Hovered)]
-struct ColorPaletteComboFloat;
+pub struct ColorPaletteComboFloat;
 
 /// Builds a [`ColorPaletteCombo`]: its button and its popup, both children of the combo.
 ///
@@ -113,6 +112,7 @@ fn on_insert_combo(
     selections: SelectionParam,
     names: Query<&Name>,
     built: Query<(), With<SubRefs>>,
+    theme: Res<Theme>,
 ) {
     let combo = t.event().event_target();
     // Inserting the component again on a live combo keeps what it already built.
@@ -132,6 +132,7 @@ fn on_insert_combo(
         button_id = parent
             .spawn((
                 ColorPaletteComboButton,
+                Name::new("ColorPaletteComboButton"),
                 ColorPushButton,
                 NoDefaultHover,
                 // allow mouse events to pass through to parent
@@ -154,7 +155,7 @@ fn on_insert_combo(
                     border: UiRect::all(Val::Px(1.0)),
                     ..default()
                 },
-                BorderColor::all(Color::BLACK),
+                BorderColor::all(theme.colors.border_highlight),
                 Visibility::Hidden,
                 ScrollArea::bundle(
                     move |parent| {
@@ -186,7 +187,15 @@ fn on_insert_combo(
         float_id,
         palette: palette_id,
     };
-    commands.entity(combo).insert((State::Closed, sub_refs));
+    commands.entity(combo).insert((
+        ColorPaletteComboState::Closed,
+        sub_refs,
+        ColorPaletteComboRefs {
+            button: button_id,
+            popup: float_id,
+            palette: palette_id,
+        },
+    ));
 
     commands
         .entity(palette_id)
@@ -213,17 +222,19 @@ fn popup_name(combo_name: Option<&Name>) -> Name {
 fn close_on_key(
     input: On<FocusedInput<KeyboardInput>>,
     sub_refs: Query<&SubRefs>,
-    states: Query<&State>,
+    states: Query<&ColorPaletteComboState>,
     selections: SelectionParam,
     mut commands: Commands,
 ) {
     let Ok(sub_refs) = sub_refs.get(input.event_target()) else {
         return;
     };
-    if states.get(sub_refs.parent) == Ok(&State::Open)
+    if states.get(sub_refs.parent) == Ok(&ColorPaletteComboState::Open)
         && popup_key_closes(&input.event().input, selections.get(sub_refs.parent))
     {
-        commands.entity(sub_refs.parent).insert(State::Closed);
+        commands
+            .entity(sub_refs.parent)
+            .insert(ColorPaletteComboState::Closed);
     }
 }
 
@@ -231,7 +242,7 @@ fn close_on_key(
 fn close_on_focus_lost(
     lost: On<FocusLost>,
     sub_refs: Query<&SubRefs>,
-    states: Query<&State>,
+    states: Query<&ColorPaletteComboState>,
     hovered: Query<&Hovered, With<ColorPaletteComboFloat>>,
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
@@ -249,12 +260,14 @@ fn close_on_focus_lost(
     let popup_hovered = hovered.get(sub_refs.float_id).is_ok_and(Hovered::get);
     if popup_focus_lost(
         &mut focus,
-        state == State::Open,
+        state == ColorPaletteComboState::Open,
         sub_refs.button,
         sub_refs.palette,
         popup_hovered,
     ) {
-        commands.entity(sub_refs.parent).insert(State::Closed);
+        commands
+            .entity(sub_refs.parent)
+            .insert(ColorPaletteComboState::Closed);
     }
 }
 
@@ -270,10 +283,43 @@ fn on_remove_combo(
         commands.entity(sub_refs.palette).try_despawn();
         commands.entity(sub_refs.float_id).try_despawn();
         commands.entity(sub_refs.button).try_despawn();
-        commands.entity(combo).try_remove::<(SubRefs, State)>();
+        commands
+            .entity(combo)
+            .try_remove::<(SubRefs, ColorPaletteComboRefs, ColorPaletteComboState)>();
     }
 }
 
+/// The parts of a [`ColorPaletteCombo`], on the combo itself. Only the widget builds it.
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct ColorPaletteComboRefs {
+    button: Entity,
+    popup: Entity,
+    palette: Entity,
+}
+
+impl ColorPaletteComboRefs {
+    /// The [`ColorPaletteComboButton`].
+    #[must_use]
+    pub const fn button(&self) -> Entity {
+        self.button
+    }
+
+    /// The popup, a [`ColorPaletteComboFloat`].
+    #[must_use]
+    pub const fn popup(&self) -> Entity {
+        self.popup
+    }
+
+    /// The popup's [`ColorPalette`].
+    #[must_use]
+    pub const fn palette(&self) -> Entity {
+        self.palette
+    }
+}
+
+/// Routing record on the combo and on its button and palette.
 #[derive(Component, Debug, Copy, Clone)]
 struct SubRefs {
     parent: Entity,
@@ -287,14 +333,14 @@ struct SubRefs {
 #[derive(Component, Debug, Copy, Clone, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
-pub enum State {
+pub enum ColorPaletteComboState {
     /// The popup is showing.
     Open,
     /// The popup is hidden.
     Closed,
 }
 
-impl State {
+impl ColorPaletteComboState {
     /// The other state.
     #[must_use]
     pub const fn inverse(&self) -> Self {
@@ -306,8 +352,8 @@ impl State {
 }
 
 fn on_insert_state(
-    t: On<Insert<State>>,
-    state: Query<(&State, &SubRefs)>,
+    t: On<Insert<ColorPaletteComboState>>,
+    state: Query<(&ColorPaletteComboState, &SubRefs)>,
     mut accessibility_nodes: Query<&mut AccessibilityNode>,
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
@@ -315,29 +361,13 @@ fn on_insert_state(
     let Ok((&state, &sub_refs)) = state.get(t.event().event_target()) else {
         return;
     };
-    // A closed popup's palette is not a tab stop.
-    match state {
-        State::Open => commands.entity(sub_refs.palette).remove::<Unreachable>(),
-        State::Closed => commands.entity(sub_refs.palette).insert(Unreachable),
-    };
-    match state {
-        State::Open => focus.set(sub_refs.palette, FocusCause::Navigated),
-        // Whoever closed the popup, the focus does not stay on a hidden palette.
-        State::Closed if focus.get() == Some(sub_refs.palette) => {
-            focus.set(sub_refs.button, FocusCause::Navigated);
-        }
-        State::Closed => {}
-    }
-
-    let visibility = match state {
-        State::Open => Visibility::Visible,
-        State::Closed => Visibility::Hidden,
-    };
-    commands.entity(sub_refs.float_id).insert(visibility);
+    let open = state == ColorPaletteComboState::Open;
+    popup::show_popup(&mut commands, open, sub_refs.palette, sub_refs.float_id);
+    popup::move_focus(&mut focus, open, sub_refs.palette, sub_refs.button);
     if let Ok(mut node) = accessibility_nodes.get_mut(sub_refs.button) {
-        node.set_expanded(state == State::Open);
+        popup::set_expanded(&mut node, open);
     }
-    if state == State::Open {
+    if open {
         commands.run_system_cached_with(position_float, sub_refs);
     }
 }
@@ -477,10 +507,7 @@ fn sync_accessibility(
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        sync_role(&mut node, Role::ComboBox);
-        clear_label(&mut node);
-        sync_value(&mut node, &value);
-        sync_controls(&mut node, sub_refs.palette);
+        popup::sync_combo_box(&mut node, &value, sub_refs.palette);
     }
 }
 
@@ -494,7 +521,7 @@ fn sync_accessibility(
 /// an image.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combos: Query<(Entity, &State, &SubRefs), With<ColorPaletteCombo>>,
+    combos: Query<(Entity, &ColorPaletteComboState, &SubRefs), With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
         (&Hovered, &mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
@@ -511,7 +538,12 @@ fn close_combos_on_outside_click(
                 continue;
             };
             let over_float = floats.get(subs.float_id).is_ok_and(Hovered::get);
-            if combo_state == State::Open && !over_button.get() && !over_float {
+            // Inside the float counts as inside whatever the selection.
+            if popup::closes_on_outside_release(
+                combo_state == ColorPaletteComboState::Open,
+                over_button.get(),
+                over_float,
+            ) {
                 close(
                     combo_id,
                     &mut background_color,
@@ -532,9 +564,10 @@ fn close(
     theme: &Theme,
     commands: &mut Commands,
 ) {
-    *background_color = BackgroundColor(theme.colors.background_primary);
-    *border_color = BorderColor::all(theme.colors.border);
-    commands.entity(combo).insert(State::Closed);
+    popup::apply_look(ButtonLook::Resting, theme, background_color, border_color);
+    commands
+        .entity(combo)
+        .insert(ColorPaletteComboState::Closed);
 }
 
 /// Closes the popup of a combo whose selection holds one item at most when a swatch
@@ -551,7 +584,7 @@ fn close_on_swatch_click(
     t: On<MouseEvent>,
     palettes: Query<&SubRefs, With<ColorPalette>>,
     swatches: Query<&ItemView>,
-    states: Query<&State, With<ColorPaletteCombo>>,
+    states: Query<&ColorPaletteComboState, With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
         (&mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
@@ -575,7 +608,7 @@ fn close_on_swatch_click(
     let Some(selection) = selections.get(subs.parent) else {
         return;
     };
-    if selection.allow_multiple() || states.get(subs.parent) != Ok(&State::Open) {
+    if selection.allow_multiple() || states.get(subs.parent) != Ok(&ColorPaletteComboState::Open) {
         return;
     }
     let Ok((mut background_color, mut border_color)) = combo_buttons.get_mut(subs.button) else {
@@ -596,7 +629,7 @@ fn handle_combo_button_mouse_events(
         (&SubRefs, &mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
     >,
-    combos: Query<&State, With<ColorPaletteCombo>>,
+    combos: Query<&ColorPaletteComboState, With<ColorPaletteCombo>>,
     theme: Res<Theme>,
 ) {
     let Ok((
@@ -613,20 +646,11 @@ fn handle_combo_button_mouse_events(
         return;
     };
 
-    match (trigger.event().kind, combo_state) {
-        // A drag says nothing new about the pointer being on the button, and can arrive
-        // after the pointer left it, so it does not restyle the button. A release or a
-        // click on a closed combo does not either, so all three share one empty arm.
-        (MouseKind::Drag, _) | (MouseKind::Released | MouseKind::Click(_), State::Closed) => {}
-        (MouseKind::Over | MouseKind::Pressed, _) | (_, State::Open) => {
-            *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor::all(theme.colors.border_highlight);
-        }
-
-        (MouseKind::Out, State::Closed) => {
-            *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor::all(theme.colors.border);
-        }
+    if let Some(look) = popup::button_look(
+        trigger.event().kind,
+        *combo_state == ColorPaletteComboState::Open,
+    ) {
+        popup::apply_look(look, &theme, &mut background_color, &mut border_color);
     }
 }
 
@@ -634,7 +658,7 @@ fn handle_combo_button_mouse_events(
 fn toggle_on_activate(
     activate: On<Activate>,
     buttons: Query<&SubRefs, With<ColorPaletteComboButton>>,
-    states: Query<&State, With<ColorPaletteCombo>>,
+    states: Query<&ColorPaletteComboState, With<ColorPaletteCombo>>,
     mut commands: Commands,
 ) {
     let Ok(&SubRefs { parent, .. }) = buttons.get(activate.event_target()) else {
