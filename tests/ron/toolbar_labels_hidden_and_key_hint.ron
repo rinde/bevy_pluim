@@ -1,0 +1,43 @@
+// `ToolbarLabels::Hidden` hides the label text of a filled toolbar's buttons and shrinks them
+// from 66 x 60 to 56 x 52 px. A tool's `key_hint` shows in the corner and takes the ink of the
+// active state with the button. The buttons of an underlined toolbar get a tooltip with the
+// tool's label after the pointer has rested on them.
+(
+    format_version: 3,
+    name: "hidden labels shrink the buttons, a key hint follows the active ink, an underlined tool has a tooltip",
+    setup: App(Toolbar),
+    steps: [
+        Wait(2),
+        Check(Component(target: Nth(0, Within(Name("filled toolbar"), Name("ToolbarButton"))), path: "ComputedNode.size.x", unit: Logical, is: Between(65.5, 66.5))),
+        Check(Component(target: Nth(0, Within(Name("filled toolbar"), Name("ToolbarButton"))), path: "ComputedNode.size.y", unit: Logical, is: Between(59.5, 60.5))),
+        Check(Component(target: Within(Name("filled toolbar"), Text("Select")), path: "Node.display", is: Ne(None))),
+        Check(Component(target: Nth(0, Within(Name("icon only toolbar"), Name("ToolbarButton"))), path: "ComputedNode.size.x", unit: Logical, is: Between(55.5, 56.5))),
+        Check(Component(target: Nth(0, Within(Name("icon only toolbar"), Name("ToolbarButton"))), path: "ComputedNode.size.y", unit: Logical, is: Between(51.5, 52.5))),
+        Check(Component(target: Within(Name("icon only toolbar"), Text("Rail")), path: "Node.display", is: Eq(None))),
+        // The label is still the accessible name (the tester's `Role` label also reads the hint text).
+        Check(App(Accessible(of: Nth(0, Within(Name("icon only toolbar"), Name("ToolbarButton"))), role: Some("Button"), label: Some("Rail"), value: None, states: [Toggled]))),
+        // The hints show; the active tool's takes the active ink, the other the resting one.
+        Check(Visible(Within(Name("icon only toolbar"), Text("1")))),
+        Check(Visible(Within(Name("icon only toolbar"), Text("2")))),
+        Capture(name: "active hint ink", value: Component(target: Within(Name("icon only toolbar"), Text("1")), path: "TextColor.0")),
+        Capture(name: "resting hint ink", value: Component(target: Within(Name("icon only toolbar"), Text("2")), path: "TextColor.0")),
+        Check(Component(target: Within(Name("icon only toolbar"), Text("2")), path: "TextColor.0", is: Ne(Captured("active hint ink")))),
+        MoveTo(Nth(1, Within(Name("icon only toolbar"), Name("ToolbarButton")))),
+        Click(Left),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(App(Selected(of: Name("icon only toolbar"), items: ["Signal"]))),
+        Check(Component(target: Within(Name("icon only toolbar"), Text("2")), path: "TextColor.0", is: Eq(Captured("active hint ink")))),
+        Check(Component(target: Within(Name("icon only toolbar"), Text("1")), path: "TextColor.0", is: Eq(Captured("resting hint ink")))),
+        // The underlined toolbar shows no label; its tooltip appears after half a second.
+        Check(Not(Exists(Text("Trains")))),
+        MoveTo(Nth(0, Within(Name("underlined toolbar"), Name("ToolbarButton")))),
+        Wait(10),
+        Check(Not(Exists(Text("Trains")))),
+        Check(Within(600, Visible(Text("Trains")))),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(Not(Exists(Text("Trains")))),
+    ],
+    expect: [],
+)

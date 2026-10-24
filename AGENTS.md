@@ -976,8 +976,8 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
   pulls it in, like `widgets_setup`, and it stays out of `common` for the
   same `dead_code` reason). A `Selection` holds entities, which mean nothing
   in a script, so `Selected` names the selected items by what they show, in
-  the order they were selected: an `Item<String>` by its text, an
-  `Item<Color>` by its Tailwind colour (`blue-500`) when it is one, else its hex (`color_name`). `of` is
+  the order they were selected: an `Item<String>` by its text, an `Item<Tool>` or
+  `Item<GalleryCard>` by its label, an `Item<Color>` by its Tailwind colour (`blue-500`) when it is one, else its hex (`color_name`). `of` is
   any target that resolves to a widget: the selection is the first on it or
   above it, and a `Selection::Ref` is followed, so the `List`, `Combo`,
   `BreadCrumbs` or `ColorPalette` that shares a selection reports it. It goes
@@ -1037,7 +1037,19 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
   two groups, a `One` selection) and `filled toolbar` (Select, Build, Bulldoze, a `One`
   selection), each with "Change theme". Their `*_text_follows_rem_size.ron` files check that a
   label is `Rem(0.6)` text and fits inside its fixed px card (104 x 92) or button (66 x 60) at
-  `[text 1.5x]`; both pass, so those sizes stay px.
+  `[text 1.5x]`; both pass, so those sizes stay px. The `Toolbar` screen also has three toolbars
+  absolutely placed at x 0 (y 150, 300, 450) and spawned last, so nothing above moves and the tab
+  order of the first two stays: `optional toolbar` (Pan, Zoom, `ZeroOrOne`, nothing open),
+  `icon only toolbar` (`ToolbarLabels::Hidden`, Rail with key hint "1" and Signal with "2", `One`)
+  and `underlined toolbar` (Trains, Stops, `One`, icon only, so each button has a `Tooltip`).
+  `toolbar_click_picks_tool.ron` and `gallery_click_picks_card.ron` read the active look (the
+  button's `BackgroundColor.0` and text colour, the card's `BorderColor.top`) against a `Capture`
+  of the resting one; `toolbar_keyboard_picks_tool.ron` and `gallery_keyboard_picks_card.ron` Tab
+  in, pick with Enter / Space (toolbar) or the arrows (gallery) and Tab out;
+  `toolbar_labels_hidden_and_key_hint.ron` checks the button sizes (66 x 60 shown, 56 x 52
+  hidden), that a hint takes the ink of the active state, and the underlined tooltip. A tool with
+  a key hint has the hint in its button's text, so reach those buttons with `Nth(i, Within(Name(..),
+  Name("ToolbarButton")))`: a `Role` label would read "1 Rail".
 - **The `Slider` screen.** A column of `continuous slider` (0 to 1, 320 px wide, name
   "Continuous"), `stepped slider` (0 to 10 in steps of 1, 200 px, name "Stepped"; the
   `SliderChanges` resource keeps the `last` value of its `ValueChange<f32>`s and counts the

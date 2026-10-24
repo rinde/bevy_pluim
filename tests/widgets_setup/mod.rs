@@ -62,7 +62,7 @@ use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
 use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::toast::Toast;
-use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
+use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
 use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
@@ -1598,6 +1598,45 @@ fn toolbar(world: &mut World) {
             Name::new("filled toolbar"),
         ));
         spawn_theme_button(root);
+        // The toolbars below are out of the flow and spawned last, so nothing above moves and
+        // the tab order of the first two stays.
+        let absolute = |top: i32| Node {
+            position_type: PositionType::Absolute,
+            left: px(0),
+            top: px(top),
+            ..default()
+        };
+        root.spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["Pan", "Zoom"].map(|label| Item {
+                    data: Tool::new(Handle::default(), label),
+                })),
+            absolute(150),
+            Name::new("optional toolbar"),
+        ));
+        root.spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            ToolbarLabels::Hidden,
+            Selection::builder()
+                .one()
+                .build_with_items([("Rail", "1"), ("Signal", "2")].map(|(label, hint)| Item {
+                    data: Tool::new(Handle::default(), label).with_key_hint(hint),
+                })),
+            absolute(300),
+            Name::new("icon only toolbar"),
+        ));
+        root.spawn((
+            Toolbar::new(ToolbarStyle::Underlined),
+            Selection::builder()
+                .one()
+                .build_with_items(["Trains", "Stops"].map(|label| Item {
+                    data: Tool::new(Handle::default(), label),
+                })),
+            absolute(450),
+            Name::new("underlined toolbar"),
+        ));
     });
 }
 

@@ -1,0 +1,36 @@
+// Tab enters a gallery once, at the picked card. The arrows move the focus through the cards in
+// the order shown and pick the card they land on; Enter and Space on the focused card keep it
+// picked (a `One` selection), and the next Tab leaves the gallery.
+(
+    format_version: 3,
+    name: "Tab enters a gallery at the picked card, the arrows pick and Enter or Space keep the pick",
+    setup: App(Gallery),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Steam"))))),
+        Tap(key: Enter),
+        Check(App(Selected(of: Name("gallery"), items: ["Steam"]))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Diesel"))))),
+        Check(App(Selected(of: Name("gallery"), items: ["Diesel"]))),
+        Tap(key: Space),
+        Check(App(Selected(of: Name("gallery"), items: ["Diesel"]))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Passenger"))))),
+        Check(App(Selected(of: Name("gallery"), items: ["Passenger"]))),
+        Tap(key: Enter),
+        Check(App(Selected(of: Name("gallery"), items: ["Passenger"]))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        // Shift+Tab comes back to the picked card.
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Passenger"))))),
+        Check(App(Selected(of: Name("gallery"), items: ["Passenger"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("gallery"), items: ["Passenger"])),
+    ],
+)

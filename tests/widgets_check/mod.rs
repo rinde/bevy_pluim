@@ -31,9 +31,11 @@ use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::combo::{Combo, ComboList};
 use rin_bevy_ui::filter_chips::Chip;
+use rin_bevy_ui::gallery::GalleryCard;
 use rin_bevy_ui::list::List;
 use rin_bevy_ui::select::{Item, Selection, SelectionValue};
 use rin_bevy_ui::tailwind::color_name;
+use rin_bevy_ui::toolbar::Tool;
 use rin_bevy_ui_tester::targets::resolve;
 use rin_bevy_ui_tester::{AppCheck, CheckResult, Probe, ReflectAppCheck, Target};
 
@@ -327,12 +329,18 @@ fn selected_labels(world: &World, holder: Entity) -> Result<Vec<String>, String>
     Ok(value.iter().map(|item| label_of(world, item)).collect())
 }
 
-/// What an item shows: its text, or the name of its colour.
+/// What an item shows: its text, label, or the name of its colour.
 fn label_of(world: &World, item: Entity) -> String {
     if let Some(Item { data }) = world.get::<Item<String>>(item) {
         return data.clone();
     }
     if let Some(Item { data }) = world.get::<Item<Chip>>(item) {
+        return data.label.clone();
+    }
+    if let Some(Item { data }) = world.get::<Item<Tool>>(item) {
+        return data.label.clone();
+    }
+    if let Some(Item { data }) = world.get::<Item<GalleryCard>>(item) {
         return data.label.clone();
     }
     if let Some(Item { data }) = world.get::<Item<Color>>(item) {

@@ -1,0 +1,48 @@
+// A click on a tool picks it, and the active look follows: the picked button takes the accent
+// background and text, the one that was active goes back to the resting look. With a `One`
+// selection a click on the active tool keeps it; with a `ZeroOrOne` one it clears the selection.
+(
+    format_version: 3,
+    name: "clicking a tool picks it and the active look follows, a ZeroOrOne toolbar toggles closed",
+    setup: App(Toolbar),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("filled toolbar"), items: ["Select"]))),
+        Capture(name: "resting background", value: Component(target: Within(Name("filled toolbar"), Role(role: Button, label: "Build")), path: "BackgroundColor.0")),
+        Capture(name: "resting ink", value: Component(target: Within(Name("filled toolbar"), Text("Build")), path: "TextColor.0")),
+        MoveTo(Within(Name("filled toolbar"), Role(role: Button, label: "Build"))),
+        Click(Left),
+        MoveTo(Role(role: Button, label: "Change theme")),
+        Wait(2),
+        Check(App(Selected(of: Name("filled toolbar"), items: ["Build"]))),
+        Check(App(Accessible(of: Within(Name("filled toolbar"), Role(role: Button, label: "Build")), role: Some("Button"), label: Some("Build"), value: None, states: [Toggled]))),
+        Check(App(Accessible(of: Within(Name("filled toolbar"), Role(role: Button, label: "Select")), role: Some("Button"), label: Some("Select"), value: None, states: [NotToggled]))),
+        Check(Component(target: Within(Name("filled toolbar"), Role(role: Button, label: "Build")), path: "BackgroundColor.0", is: Ne(Captured("resting background")))),
+        Check(Component(target: Within(Name("filled toolbar"), Text("Build")), path: "TextColor.0", is: Ne(Captured("resting ink")))),
+        Check(Component(target: Within(Name("filled toolbar"), Role(role: Button, label: "Select")), path: "BackgroundColor.0", is: Eq(Captured("resting background")))),
+        Check(Component(target: Within(Name("filled toolbar"), Text("Select")), path: "TextColor.0", is: Eq(Captured("resting ink")))),
+        // A One selection keeps its tool when the active one is clicked again.
+        MoveTo(Within(Name("filled toolbar"), Role(role: Button, label: "Build"))),
+        Click(Left),
+        Check(App(Selected(of: Name("filled toolbar"), items: ["Build"]))),
+        MoveTo(Within(Name("filled toolbar"), Role(role: Button, label: "Bulldoze"))),
+        Click(Left),
+        Check(App(Selected(of: Name("filled toolbar"), items: ["Bulldoze"]))),
+        // The ZeroOrOne toolbar opens a tool, switches, and clears when the open one is clicked.
+        Check(App(Selected(of: Name("optional toolbar"), items: []))),
+        MoveTo(Within(Name("optional toolbar"), Role(role: Button, label: "Pan"))),
+        Click(Left),
+        Check(App(Selected(of: Name("optional toolbar"), items: ["Pan"]))),
+        MoveTo(Within(Name("optional toolbar"), Role(role: Button, label: "Zoom"))),
+        Click(Left),
+        Check(App(Selected(of: Name("optional toolbar"), items: ["Zoom"]))),
+        Click(Left),
+        Check(App(Selected(of: Name("optional toolbar"), items: []))),
+        Check(App(Accessible(of: Within(Name("optional toolbar"), Role(role: Button, label: "Zoom")), role: Some("Button"), label: Some("Zoom"), value: None, states: [NotToggled]))),
+        // None of this touched the first toolbar.
+        Check(App(Selected(of: Name("filled toolbar"), items: ["Bulldoze"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("filled toolbar"), items: ["Bulldoze"])),
+    ],
+)
