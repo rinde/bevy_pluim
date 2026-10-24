@@ -1,25 +1,29 @@
-// Every segment is a tab stop: Tab reaches "Auto", then "Manual"; Enter or Space on a focused
-// segment selects it.
+// A segmented control is one tab stop, at its selected segment: Tab reaches "Auto" and the next
+// Tab leaves the control for the next one. The arrow keys move the focus between segments and
+// pick the one they land on; Enter or Space on a focused segment keeps it picked.
 (
     format_version: 3,
-    name: "Enter and Space on a focused segment select it",
+    name: "Tab enters a segmented control once and the arrow keys then move and pick",
     setup: App(SegmentedControls),
     steps: [
         Wait(2),
         Tap(key: Tab),
         Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
-        Tap(key: Tab),
+        Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Manual"))))),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
         Tap(key: Enter),
         Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
-        // On to the first shared control: "Dark", then "Light", which Space selects for both.
+        // One Tab leaves the control for the first shared control, at its selected segment "Dark";
+        // the right arrow moves to "Light" and picks it for both shared controls.
         Tap(key: Tab),
         Check(App(Focused(of: Within(Name("first shared segmented control"), Role(role: Button, label: "Dark"))))),
-        Tap(key: Tab),
+        Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("first shared segmented control"), Role(role: Button, label: "Light"))))),
-        Tap(key: Space),
         Check(App(Selected(of: Name("first shared segmented control"), items: ["Light"]))),
         Check(App(Selected(of: Name("second shared segmented control"), items: ["Light"]))),
+        Tap(key: Space),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Light"]))),
     ],
     expect: [
         App(Selected(of: Name("own segmented control"), items: ["Manual"])),

@@ -1,0 +1,46 @@
+// A toolbar is one tab stop: Tab enters at its first tool, the next Tab leaves, and Shift+Tab
+// comes back to the tool that had the focus last. Left and right move the focus and wrap, Home
+// and End go to the ends; moving picks nothing, Enter does.
+(
+    format_version: 3,
+    name: "a toolbar is one tab stop with arrow keys that move the focus only",
+    setup: App(Toolbar),
+    steps: [
+        Wait(2),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Select"))))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Build"))))),
+        Check(App(Accessible(
+            of: Within(Name("filled toolbar"), Role(role: Button, label: "Select")),
+            role: Some("Button"),
+            label: Some("Select"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+        Key(key: ShiftLeft),
+        Tap(key: Tab),
+        KeyUp(key: ShiftLeft),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Build"))))),
+        Tap(key: Enter),
+        Check(App(Accessible(
+            of: Within(Name("filled toolbar"), Role(role: Button, label: "Build")),
+            role: Some("Button"),
+            label: Some("Build"),
+            value: None,
+            states: [Toggled],
+        ))),
+        Tap(key: End),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Bulldoze"))))),
+        Tap(key: ArrowRight),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Select"))))),
+        Tap(key: ArrowLeft),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Bulldoze"))))),
+        Tap(key: Home),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Select"))))),
+    ],
+    expect: [],
+)

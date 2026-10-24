@@ -16,12 +16,12 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::system::SystemParam;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
+use bevy::input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusVisible};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, UiSystems};
-use bevy::ui_widgets::{ActiveDescendant, ListItem, Tab};
+use bevy::ui_widgets::{ActiveDescendant, ListItem, ScrollIntoView, Tab};
 
-use crate::select::SelectionValue;
+use crate::select::{SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
 /// Width of the focus ring, in logical pixels.
@@ -42,10 +42,15 @@ pub(crate) struct FocusPlugin;
 
 impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostUpdate, draw_focus_ring.in_set(DrawFocusRing))
+        app.add_observer(navigate_roving_group)
+            .add_systems(PostUpdate, draw_focus_ring.in_set(DrawFocusRing))
             .add_systems(
                 PostUpdate,
-                (sync_tab_index, sync_accessibility_hidden)
+                (
+                    sync_tab_index,
+                    sync_roving_groups.after(sync_tab_index),
+                    sync_accessibility_hidden,
+                )
                     .after(VisibilitySystems::VisibilityPropagate),
             )
             .configure_sets(PostUpdate, DrawFocusRing.before(UiSystems::Layout))
@@ -152,6 +157,109 @@ pub(crate) const fn node_id(entity: Entity) -> accesskit::NodeId {
 #[require(TabIndex(0))]
 pub(crate) struct TabStop;
 
+/// Marks an item button of a composite widget (a segment, chip, card or tool) whose container
+/// is one tab stop as a whole: [`sync_roving_groups`] owns its [`TabIndex`] (0 for the one
+/// button Tab reaches, -1 for the rest) instead of `sync_tab_index`.
+#[derive(Component, Clone, Copy, Debug)]
+#[component(immutable)]
+pub(crate) struct RovingItem {
+    owner: Entity,
+    item: Entity,
+}
+
+impl RovingItem {
+    /// The button for `item`, of the group `owner`.
+    pub(crate) const fn new(owner: Entity, item: Entity) -> Self {
+        Self { owner, item }
+    }
+}
+
+/// Which item a [`RovingGroup`] offers to Tab when the focus is not in it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RovingEntry {
+    /// The selected eligible item, else the first eligible one (a radio group).
+    Selected,
+    /// The item that had the focus last while it is eligible, else the first one (a toolbar).
+    Last,
+}
+
+/// Which keys move the focus inside a [`RovingGroup`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RovingKeys {
+    /// Left and up go back, right and down forward, Home and End to the ends.
+    Radio,
+    /// Left goes back, right forward, Home and End to the ends. Up and down are left to the app.
+    Horizontal,
+}
+
+/// A composite widget with one tab stop and arrow keys between its [`RovingItem`]s, like a
+/// `TabBar`'s tabs: a `SegmentedControl`, `FilterChips`, `Gallery` or `Toolbar`.
+#[derive(Component, Clone, Debug)]
+pub(crate) struct RovingGroup {
+    entry: RovingEntry,
+    keys: RovingKeys,
+    /// Whether moving the focus selects the item it lands on (for a selection of at most one).
+    select_on_move: bool,
+    /// The last item of this group that had the focus.
+    last: Option<Entity>,
+    /// Whether the focus was on one of the items when this was last looked at.
+    holds_focus: bool,
+    /// The items in the order they are shown, with whether Tab and the arrows may land on each.
+    order: Vec<(Entity, bool)>,
+}
+
+impl RovingGroup {
+    /// A radio group: the arrows move the focus and select, for a selection of at most one.
+    pub(crate) const fn radio() -> Self {
+        Self::new(RovingEntry::Selected, RovingKeys::Radio, true)
+    }
+
+    /// A toolbar: left and right move the focus only.
+    pub(crate) const fn toolbar() -> Self {
+        Self::new(RovingEntry::Last, RovingKeys::Horizontal, false)
+    }
+
+    const fn new(entry: RovingEntry, keys: RovingKeys, select_on_move: bool) -> Self {
+        Self {
+            entry,
+            keys,
+            select_on_move,
+            last: None,
+            holds_focus: false,
+            order: Vec::new(),
+        }
+    }
+
+    /// The item `step` places from `from` among the eligible ones, wrapping.
+    fn step(&self, from: Entity, step: isize) -> Option<Entity> {
+        let eligible: Vec<Entity> = self
+            .order
+            .iter()
+            .filter(|(_, ok)| *ok)
+            .map(|(entity, _)| *entity)
+            .collect();
+        let at = eligible.iter().position(|entity| *entity == from)?;
+        let len = isize::try_from(eligible.len()).ok()?;
+        let to = (isize::try_from(at).ok()? + step).rem_euclid(len);
+        eligible.get(usize::try_from(to).ok()?).copied()
+    }
+
+    fn first(&self) -> Option<Entity> {
+        self.order
+            .iter()
+            .find(|(_, ok)| *ok)
+            .map(|(entity, _)| *entity)
+    }
+
+    fn final_one(&self) -> Option<Entity> {
+        self.order
+            .iter()
+            .rev()
+            .find(|(_, ok)| *ok)
+            .map(|(entity, _)| *entity)
+    }
+}
+
 /// Marks a [`TabStop`] that Tab skips although it is usable: the list of a closed combo.
 ///
 /// Whoever hides the widget inserts it, and removes it again when the widget shows.
@@ -245,7 +353,10 @@ impl HiddenChanges<'_, '_> {
 /// ancestor) or parent changed.
 fn sync_tab_index(
     mut changes: HiddenChanges,
-    mut stops: Query<(&mut TabIndex, Has<InteractionDisabled>, Has<Unreachable>), With<TabStop>>,
+    mut stops: Query<
+        (&mut TabIndex, Has<InteractionDisabled>, Has<Unreachable>),
+        (With<TabStop>, Without<RovingItem>),
+    >,
     new_stops: Query<Entity, Added<TabStop>>,
     disabled_added: Query<Entity, Added<InteractionDisabled>>,
     unreachable_added: Query<Entity, Added<Unreachable>>,
@@ -459,4 +570,256 @@ pub(crate) fn popup_focus_lost(
         focus.set(button, FocusCause::Navigated);
     }
     open
+}
+
+/// What changed this frame that can change which item of a [`RovingGroup`] Tab reaches.
+#[derive(SystemParam)]
+struct RovingChanges<'w, 's> {
+    new_items: Query<'w, 's, &'static RovingItem, Added<RovingItem>>,
+    disabled_added: Query<'w, 's, &'static RovingItem, Added<InteractionDisabled>>,
+    unreachable_added: Query<'w, 's, &'static RovingItem, Added<Unreachable>>,
+    disabled_removed: RemovedComponents<'w, 's, InteractionDisabled>,
+    unreachable_removed: RemovedComponents<'w, 's, Unreachable>,
+    items_removed: RemovedComponents<'w, 's, RovingItem>,
+    changed_children: Query<'w, 's, Entity, (Changed<Children>, With<RovingGroup>)>,
+    changed_selections: Query<'w, 's, (), Changed<crate::select::Selection>>,
+}
+
+/// Keeps the one reachable item of every [`RovingGroup`] valid, and the focus too.
+///
+/// Tab reaches exactly one eligible item per group (its `TabIndex` is 0, the others' -1): the
+/// focused one, else the group's entry item. An item is eligible unless it is
+/// [`InteractionDisabled`], [`Unreachable`] or hidden; a group without an eligible item has no
+/// stop. When the item that had the focus goes (despawned, hidden, disabled) the focus moves to
+/// the next eligible item, or the previous one at the end, and is cleared when none is left;
+/// focus that went elsewhere is never taken.
+///
+/// A group is looked at only when one of its items changed, its own children changed, a
+/// selection changed (for a group that enters at the selected item) or the focus moved.
+fn sync_roving_groups(
+    mut changes: HiddenChanges,
+    mut roving: RovingChanges,
+    mut groups: Query<(Entity, &mut RovingGroup)>,
+    items: Query<(&RovingItem, Has<InteractionDisabled>, Has<Unreachable>)>,
+    mut indices: Query<&mut TabIndex, With<RovingItem>>,
+    selections: SelectionParam,
+    mut focus: ResMut<InputFocus>,
+    children: Query<&Children>,
+    shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
+    parents: Query<&ChildOf>,
+) {
+    let mut dirty_items = changes.dirty();
+    dirty_items.extend(roving.disabled_removed.read());
+    dirty_items.extend(roving.unreachable_removed.read());
+    let gone: Vec<Entity> = roving.items_removed.read().collect();
+    let mut dirty_groups = EntityHashSet::default();
+    for entity in dirty_items {
+        if let Ok((item, _, _)) = items.get(entity) {
+            dirty_groups.insert(item.owner);
+        }
+    }
+    dirty_groups.extend(roving.new_items.iter().map(|item| item.owner));
+    dirty_groups.extend(roving.disabled_added.iter().map(|item| item.owner));
+    dirty_groups.extend(roving.unreachable_added.iter().map(|item| item.owner));
+    dirty_groups.extend(roving.changed_children.iter());
+    let focus_moved = focus.is_changed();
+    let selection_changed = !roving.changed_selections.is_empty();
+    for (entity, group) in &groups {
+        if focus_moved
+            || (selection_changed && group.entry == RovingEntry::Selected)
+            || (!gone.is_empty() && group.order.iter().any(|(item, _)| gone.contains(item)))
+        {
+            dirty_groups.insert(entity);
+        }
+    }
+
+    for owner in dirty_groups {
+        let Ok((_, mut group)) = groups.get_mut(owner) else {
+            continue;
+        };
+        let order: Vec<(Entity, bool)> = children
+            .iter_descendants_depth_first(owner)
+            .filter_map(|entity| {
+                let (item, disabled, unreachable) = items.get(entity).ok()?;
+                (item.owner == owner).then(|| {
+                    let eligible =
+                        !disabled && !unreachable && !is_hidden(entity, &shown, &parents);
+                    (entity, eligible)
+                })
+            })
+            .collect();
+        let eligible_of =
+            |entity: Entity| order.iter().find(|(e, _)| *e == entity).map(|(_, ok)| *ok);
+        let focused = focus.get();
+        let focused_item = focused.filter(|entity| eligible_of(*entity).is_some());
+
+        let mut chosen = None;
+        if let Some(item) = focused_item {
+            if eligible_of(item) == Some(true) {
+                group.last = Some(item);
+                group.holds_focus = true;
+                chosen = Some(item);
+            } else {
+                // The focused item stopped being eligible: hand the focus on.
+                let replacement = replacement_for(&group.order, item, &order);
+                match replacement {
+                    Some(next) => focus.set(next, FocusCause::Navigated),
+                    None => focus.clear(),
+                }
+                group.last = replacement;
+                group.holds_focus = replacement.is_some();
+                chosen = replacement;
+            }
+        } else if group.holds_focus {
+            let last = group.last;
+            let last_eligible = last.is_some_and(|last| eligible_of(last) == Some(true));
+            // A despawned item keeps the `InputFocus` until the next key, so a focus that is
+            // still on it is stale; one that was cleared (`None`) or moved was taken by
+            // somebody, and is not ours to put back.
+            let focus_is_stale = focused.is_some() && focused == last;
+            if last_eligible || !focus_is_stale {
+                // The focus left (a click elsewhere, another widget took it).
+                group.holds_focus = false;
+            } else if let Some(last) = last {
+                // The item that had the focus is gone.
+                let replacement = replacement_for(&group.order, last, &order);
+                match replacement {
+                    Some(next) => focus.set(next, FocusCause::Navigated),
+                    None => focus.clear(),
+                }
+                group.last = replacement;
+                group.holds_focus = replacement.is_some();
+                chosen = replacement;
+            } else {
+                group.holds_focus = false;
+            }
+        }
+        if chosen.is_none() {
+            chosen = match group.entry {
+                RovingEntry::Selected => {
+                    let selection = selections.get(owner);
+                    order
+                        .iter()
+                        .find(|(entity, ok)| {
+                            *ok && selection.is_some_and(|selection| {
+                                items
+                                    .get(*entity)
+                                    .is_ok_and(|(item, _, _)| selection.is_selected(item.item))
+                            })
+                        })
+                        .or_else(|| order.iter().find(|(_, ok)| *ok))
+                        .map(|(entity, _)| *entity)
+                }
+                RovingEntry::Last => group
+                    .last
+                    .filter(|last| eligible_of(*last) == Some(true))
+                    .or_else(|| order.iter().find(|(_, ok)| *ok).map(|(entity, _)| *entity)),
+            };
+        }
+        for (entity, _) in &order {
+            let wanted = if Some(*entity) == chosen { 0 } else { -1 };
+            if let Ok(mut index) = indices.get_mut(*entity)
+                && index.0 != wanted
+            {
+                index.0 = wanted;
+            }
+        }
+        group.order = order;
+    }
+}
+
+/// The item that takes the focus when `lost`, an item of `before`, can no longer have it: the
+/// next one in `before` that is eligible in `now`, else the previous one.
+fn replacement_for(
+    before: &[(Entity, bool)],
+    lost: Entity,
+    now: &[(Entity, bool)],
+) -> Option<Entity> {
+    let eligible = |entity: Entity| now.iter().any(|(e, ok)| *e == entity && *ok);
+    let Some(at) = before.iter().position(|(entity, _)| *entity == lost) else {
+        return now.iter().find(|(_, ok)| *ok).map(|(entity, _)| *entity);
+    };
+    let (earlier, later) = before.split_at(at);
+    later
+        .iter()
+        .skip(1)
+        .map(|(entity, _)| *entity)
+        .find(|entity| eligible(*entity))
+        .or_else(|| {
+            earlier
+                .iter()
+                .rev()
+                .map(|(entity, _)| *entity)
+                .find(|entity| eligible(*entity))
+        })
+}
+
+/// Moves the focus between the items of a [`RovingGroup`] with its keys, and keeps those keys
+/// from bubbling on (pressed, repeated and released), only while the focus is on one of its
+/// own items.
+fn navigate_roving_group(
+    mut input: On<FocusedInput<KeyboardInput>>,
+    items: Query<&RovingItem>,
+    groups: Query<&RovingGroup>,
+    mut focus: ResMut<InputFocus>,
+    mut visible: ResMut<InputFocusVisible>,
+    mut selections: SelectionParam,
+    mut commands: Commands,
+) {
+    // `focused_entity` follows the event up the tree, so the focus itself is read.
+    let target = input.event_target();
+    if focus.get() != Some(target) {
+        return;
+    }
+    let Ok(item) = items.get(target) else {
+        return;
+    };
+    let Ok(group) = groups.get(item.owner) else {
+        return;
+    };
+    let key = input.event().input.key_code;
+    let uses = match group.keys {
+        RovingKeys::Radio => matches!(
+            key,
+            KeyCode::ArrowLeft
+                | KeyCode::ArrowRight
+                | KeyCode::ArrowUp
+                | KeyCode::ArrowDown
+                | KeyCode::Home
+                | KeyCode::End
+        ),
+        RovingKeys::Horizontal => matches!(
+            key,
+            KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::Home | KeyCode::End
+        ),
+    };
+    if !uses {
+        return;
+    }
+    input.propagate(false);
+    if !input.event().input.state.is_pressed() {
+        return;
+    }
+    let destination = match key {
+        KeyCode::ArrowLeft | KeyCode::ArrowUp => group.step(target, -1),
+        KeyCode::ArrowRight | KeyCode::ArrowDown => group.step(target, 1),
+        KeyCode::Home => group.first(),
+        _ => group.final_one(),
+    };
+    let Some(destination) = destination else {
+        return;
+    };
+    focus.set(destination, FocusCause::Navigated);
+    visible.0 = true;
+    if group.select_on_move
+        && let Ok(destination_item) = items.get(destination)
+    {
+        let picked = destination_item.item;
+        selections.update_selection(item.owner, |selection| {
+            (!selection.allow_multiple()).then(|| selection.set_selection([picked]))?
+        });
+    }
+    commands.trigger(ScrollIntoView {
+        entity: destination,
+    });
 }

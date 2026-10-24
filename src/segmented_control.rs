@@ -10,7 +10,9 @@ use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{Activate, Button};
 
-use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
+use crate::focus::{
+    AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
+};
 use crate::list::sync_selected;
 use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
 use crate::theme::{Theme, ThemeColors};
@@ -104,8 +106,12 @@ impl Plugin for SegmentedControlPlugin {
 /// The selected segment is marked by a [`SegmentIndicator`] behind the segments, which slides to
 /// a newly selected segment instead of jumping.
 ///
-/// Each segment is a [`Button`] and a tab stop, and carries [`Selected`] while it is the
-/// selected one.
+/// Each segment is a [`Button`] and carries [`Selected`] while it is the selected one. As a
+/// whole the control is one tab stop, at its selected item (the first when none is selected).
+/// Left and up move the focus to the previous item and right and down to the next, wrapping in
+/// the order shown; Home and End go to the first and last. For a selection of at most one item
+/// the arrows also pick the item they land on (never toggling it off); for a selection of many
+/// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
 ///
 /// To a screen reader the control is a radio group and each segment a radio button, checked
 /// while it is selected. The library gives the group no label; an app can insert Bevy's
@@ -126,6 +132,7 @@ impl Plugin for SegmentedControlPlugin {
     },
     BackgroundColor::default(),
     SegmentLabels,
+    RovingGroup = RovingGroup::radio(),
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct SegmentedControl;
@@ -693,8 +700,11 @@ fn on_items_changed(
         };
         let is_selected = selection.is_some_and(|selection| selection.is_selected(item_ref));
         commands.entity(*control_ref).with_children(|spawner| {
-            let mut segment =
-                spawner.spawn((Segment::new(item_ref, *control_ref), Node::default()));
+            let mut segment = spawner.spawn((
+                Segment::new(item_ref, *control_ref),
+                RovingItem::new(*control_ref, item_ref),
+                Node::default(),
+            ));
             segment.observe(on_activate).with_children(|parent| {
                 parent.spawn((Text::new(item.data.clone()), SegmentLabel, Pickable::IGNORE));
             });

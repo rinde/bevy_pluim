@@ -9,7 +9,9 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
-use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
+use crate::focus::{
+    AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
+};
 use crate::select::{Item, Selection, SelectionParam, structure_may_have_changed};
 use crate::theme::{Theme, ThemeColors};
 
@@ -61,10 +63,12 @@ impl Plugin for FilterChipsPlugin {
 /// application's: add and remove the items to change them. To change a count, change the
 /// [`Chip`] in its [`Item`]; the chip is kept and its text changes.
 ///
-/// A chip is a [`Button`] and a tab stop: Enter and Space on a focused chip pick it, like a
-/// click. The chips wrap onto further lines when the row is too narrow.
-///
-/// There is no arrow-key navigation between chips: each chip is a tab stop of its own.
+/// A chip is a [`Button`]: Enter and Space on a focused chip pick it, like a click. The chips
+/// wrap onto further lines when the row is too narrow. As a whole the row is one tab stop, at its selected item (the first when none is selected).
+/// Left and up move the focus to the previous item and right and down to the next, wrapping in
+/// the order shown; Home and End go to the first and last. For a selection of at most one item
+/// the arrows also pick the item they land on (never toggling it off); for a selection of many
+/// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
 ///
 /// To a screen reader the row is a radio group and each chip a radio button named after its
 /// label and count (`Waiting 3`), checked while it is active. The library gives the group no
@@ -80,6 +84,7 @@ impl Plugin for FilterChipsPlugin {
         row_gap: Val::Px(CHIP_GAP),
         ..default()
     },
+    RovingGroup = RovingGroup::radio(),
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct FilterChips;
@@ -256,6 +261,7 @@ fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entit
     commands.entity(chip).insert((
         Name::new("Chip"),
         ChipView::new(item, chips),
+        RovingItem::new(chips, item),
         ChipRefs { label, count },
         Button,
         Hovered::default(),

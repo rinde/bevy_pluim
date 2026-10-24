@@ -8,7 +8,9 @@ use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
 use crate::divider::Divider;
-use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
+use crate::focus::{
+    AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
+};
 use crate::icon::Icon;
 use crate::label::Label;
 use crate::select::{Item, SelectionParam, structure_may_have_changed};
@@ -74,8 +76,11 @@ impl Plugin for GalleryPlugin {
 /// [`Divider`] between them, and do not shrink, so a gallery wider than its parent overflows:
 /// put it in a horizontal [`ScrollArea`](crate::scroll_area::ScrollArea) to scroll it.
 ///
-/// A card is a [`Button`] and a tab stop: Enter and Space on a focused one pick it, like a
-/// click.
+/// A card is a [`Button`]: Enter and Space on a focused one pick it, like a click. As a whole the gallery is one tab stop, at its selected item (the first when none is selected).
+/// Left and up move the focus to the previous item and right and down to the next, wrapping in
+/// the order shown, through the groups; Home and End go to the first and last. For a selection of at most one item
+/// the arrows also pick the item they land on (never toggling it off); for a selection of many
+/// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
 ///
 /// To a screen reader the gallery is a radio group and each card a radio button named after
 /// its label, checked while it is picked. The library gives the group no label; an app can
@@ -90,6 +95,7 @@ impl Plugin for GalleryPlugin {
         flex_shrink: 0.0,
         ..default()
     },
+    RovingGroup = RovingGroup::radio(),
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
 )]
 pub struct Gallery;
@@ -284,6 +290,7 @@ fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Enti
     commands.entity(card).insert((
         Name::new("GalleryCard"),
         GalleryCardView::new(item, gallery),
+        RovingItem::new(gallery, item),
         GalleryCardRefs { image, label },
         Button,
         Hovered::default(),
