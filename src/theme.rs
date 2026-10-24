@@ -435,9 +435,33 @@ pub const SHADOW_LG_DARK_MODE: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
 pub const SHADOW_LG_LIGHT_MODE: Color =
     Color::srgba(60.0 / 255.0, 50.0 / 255.0, 30.0 / 255.0, 0.14);
 
+/// The WCAG 2.x relative luminance of a colour in sRGB.
+fn relative_luminance(color: Color) -> f32 {
+    let c = color.to_srgba();
+    let linear = |v: f32| {
+        if v <= 0.039_28 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.0722_f32.mul_add(
+        linear(c.blue),
+        0.7152_f32.mul_add(linear(c.green), 0.2126 * linear(c.red)),
+    )
+}
+
+/// The WCAG 2.x contrast ratio of two colours, from 1 to 21.
+pub(crate) fn contrast_ratio(a: Color, b: Color) -> f32 {
+    let (la, lb) = (relative_luminance(a), relative_luminance(b));
+    let (light, dark) = if la > lb { (la, lb) } else { (lb, la) };
+    (light + 0.05) / (dark + 0.05)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::list::{NoteTone, note_ink};
 
     #[test]
     fn the_default_themes_differ_in_every_new_slot() {
@@ -558,29 +582,6 @@ mod tests {
         }
     }
 
-    /// The WCAG 2.x relative luminance of a colour in sRGB.
-    fn relative_luminance(color: Color) -> f32 {
-        let c = color.to_srgba();
-        let linear = |v: f32| {
-            if v <= 0.039_28 {
-                v / 12.92
-            } else {
-                ((v + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        0.0722_f32.mul_add(
-            linear(c.blue),
-            0.7152_f32.mul_add(linear(c.green), 0.2126 * linear(c.red)),
-        )
-    }
-
-    /// The WCAG 2.x contrast ratio of two colours, from 1 to 21.
-    fn contrast_ratio(a: Color, b: Color) -> f32 {
-        let (la, lb) = (relative_luminance(a), relative_luminance(b));
-        let (light, dark) = if la > lb { (la, lb) } else { (lb, la) };
-        (light + 0.05) / (dark + 0.05)
-    }
-
     #[test]
     fn the_contrast_ratio_matches_the_wcag_extremes() {
         let ratio = contrast_ratio(Color::BLACK, Color::WHITE);
@@ -692,6 +693,61 @@ mod tests {
                     c.segmented_track,
                 ),
                 ("link on background_primary", c.link, c.background_primary),
+                (
+                    "link_selected on background_primary",
+                    c.link_selected,
+                    c.background_primary,
+                ),
+                (
+                    "note text_secondary on hovered_item",
+                    note_ink(&c, NoteTone::Secondary, c.hovered_item),
+                    c.hovered_item,
+                ),
+                (
+                    "note warning_text on hovered_item",
+                    note_ink(&c, NoteTone::Warning, c.hovered_item),
+                    c.hovered_item,
+                ),
+                (
+                    "note text_secondary on hovered_selected_item",
+                    note_ink(&c, NoteTone::Secondary, c.hovered_selected_item),
+                    c.hovered_selected_item,
+                ),
+                (
+                    "note warning_text on hovered_selected_item",
+                    note_ink(&c, NoteTone::Warning, c.hovered_selected_item),
+                    c.hovered_selected_item,
+                ),
+                (
+                    "note text_secondary on selected_item",
+                    note_ink(&c, NoteTone::Secondary, c.selected_item),
+                    c.selected_item,
+                ),
+                (
+                    "note warning_text on selected_item",
+                    note_ink(&c, NoteTone::Warning, c.selected_item),
+                    c.selected_item,
+                ),
+                (
+                    "note text_secondary on selected_hovered_item",
+                    note_ink(&c, NoteTone::Secondary, c.selected_hovered_item),
+                    c.selected_hovered_item,
+                ),
+                (
+                    "note warning_text on selected_hovered_item",
+                    note_ink(&c, NoteTone::Warning, c.selected_hovered_item),
+                    c.selected_hovered_item,
+                ),
+                (
+                    "text_secondary on segmented_track",
+                    c.text_secondary,
+                    c.segmented_track,
+                ),
+                (
+                    "text_secondary on pill_background",
+                    c.text_secondary,
+                    c.pill_background,
+                ),
             ];
             for (name, fg, bg) in text {
                 let ratio = contrast_ratio(fg, bg);
