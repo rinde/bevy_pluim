@@ -58,9 +58,25 @@ pub struct ColorPushButton;
 #[reflect(Component)]
 pub struct ColorSquare;
 
-/// The colour square of a [`ColorPushButton`].
+/// The colour square of a [`ColorPushButton`], for reading. Only the widget builds it; the
+/// component is immutable and its field is private.
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::color_push_button::ColorSquareRef;
+/// let _ = ColorSquareRef(Entity::PLACEHOLDER);
+/// ```
 #[derive(Component, Clone, Copy, Debug)]
-pub struct ColorSquareRef(pub Entity);
+#[component(immutable)]
+pub struct ColorSquareRef(Entity);
+
+impl ColorSquareRef {
+    /// The colour square.
+    #[must_use]
+    pub const fn entity(&self) -> Entity {
+        self.0
+    }
+}
 
 const SQUARE_SIZE: f32 = 25.0;
 

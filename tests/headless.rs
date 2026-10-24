@@ -735,7 +735,7 @@ fn an_icon_button_spawns_a_sized_icon_and_follows_its_image_and_name() {
     app.update();
     app.update();
 
-    let icon_of = |app: &App, e: Entity| app.world().get::<IconButtonRefs>(e).unwrap().icon_id;
+    let icon_of = |app: &App, e: Entity| app.world().get::<IconButtonRefs>(e).unwrap().icon();
     let side = |app: &App, e: Entity| {
         let node = app.world().get::<Node>(e).unwrap();
         (node.width, node.height)
@@ -801,7 +801,7 @@ fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
 
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     let tint = |app: &App, e: Entity| {
-        let icon = app.world().get::<IconButtonRefs>(e).unwrap().icon_id;
+        let icon = app.world().get::<IconButtonRefs>(e).unwrap().icon();
         app.world().get::<ImageNode>(icon).unwrap().color
     };
     let state = |app: &App, e: Entity| app.world().get::<ToggleState>(e).copied();
@@ -869,7 +869,7 @@ fn activating_a_toggle_push_button_flips_its_state_restyles_it_and_sets_its_togg
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     let state = |app: &App, e: Entity| app.world().get::<ToggleState>(e).copied();
     let label_color = |app: &App, e: Entity| {
-        let label = app.world().get::<PushButtonRefs>(e).unwrap().label_id;
+        let label = app.world().get::<PushButtonRefs>(e).unwrap().label();
         app.world().get::<TextColor>(label).unwrap().0
     };
     let toggled = |app: &App, e: Entity| app.world().get::<AccessibilityNode>(e).unwrap().toggled();
@@ -1382,7 +1382,7 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
     let label_color = |app: &App| app.world().entity(label).get::<TextColor>().unwrap().0;
     assert_eq!(label_color(&app), colors.text_disabled);
 
@@ -1443,7 +1443,7 @@ fn a_compact_push_button_is_small_and_keeps_it_after_a_theme_change() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
     let check = |app: &App| {
         let theme = app.world().get_resource::<Theme>().unwrap();
         let node = app.world().entity(button).get::<Node>().unwrap();
@@ -2073,7 +2073,7 @@ fn a_color_push_button_outside_a_combo_is_named_after_its_colour() {
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app.world_mut().spawn((ColorPushButton, ChildOf(root))).id();
     app.update();
-    let square = app.world().get::<ColorSquareRef>(button).unwrap().0;
+    let square = app.world().get::<ColorSquareRef>(button).unwrap().entity();
     app.world_mut().entity_mut(square).insert(BackgroundColor(
         bevy::color::palettes::tailwind::RED_500.into(),
     ));
@@ -3498,7 +3498,7 @@ fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
     assert_eq!(
         font_of(&app, button_label),
         (body.clone().into(), FontSize::Rem(1.0))
@@ -4608,7 +4608,7 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
         .world()
         .get::<IconButtonRefs>(refs.close)
         .unwrap()
-        .icon_id;
+        .icon();
     assert_eq!(
         app.world().get::<ImageNode>(close_icon).unwrap().image,
         icon
@@ -5858,7 +5858,7 @@ fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> E
 }
 
 fn icon_tint(app: &App, button: Entity) -> Color {
-    let icon = app.world().get::<IconButtonRefs>(button).unwrap().icon_id;
+    let icon = app.world().get::<IconButtonRefs>(button).unwrap().icon();
     app.world().get::<ImageNode>(icon).unwrap().color
 }
 
@@ -7649,7 +7649,7 @@ fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_i
 
     let after = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
     assert_eq!(after, refs, "no respawn, refs kept");
-    assert_eq!(text_of(&app, after.label_id), "Stop");
+    assert_eq!(text_of(&app, after.label()), "Stop");
     assert_eq!(accessible_label(&app, button).as_deref(), Some("Stop"));
     assert_eq!(
         app.world().entity(button).get::<Children>().unwrap().len(),
@@ -7672,7 +7672,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
 
     app.world_mut()
         .entity_mut(button)
@@ -7681,8 +7681,8 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     app.update();
 
     let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
-    assert_eq!(refs.label_id, label_id);
-    let icon = refs.icon_id.unwrap();
+    assert_eq!(refs.label(), label_id);
+    let icon = refs.icon().unwrap();
     assert_eq!(text_of(&app, icon), "+");
     assert_eq!(accessible_label(&app, button).as_deref(), Some("Go"));
     assert!(
@@ -7696,7 +7696,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     app.update();
     app.update();
     let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
-    assert_eq!(refs.icon_id, Some(icon));
+    assert_eq!(refs.icon(), Some(icon));
     assert_eq!(text_of(&app, icon), "-");
 
     app.world_mut()
@@ -7705,7 +7705,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     app.update();
     app.update();
     let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
-    assert_eq!(refs.icon_id, None);
+    assert_eq!(refs.icon(), None);
     assert!(app.world().get_entity(icon).is_err(), "the icon is gone");
     assert_eq!(
         app.world().entity(button).get::<Children>().unwrap().len(),

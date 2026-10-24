@@ -581,6 +581,13 @@ of them (`just example gallery -- --run-all stack link`).
   The short type paths `Label`, `ScrollArea` and `Slider` are also Bevy's own, so a
   lookup by short path is ambiguous for those three; use the full path
   (`rin_bevy_ui::slider::Slider`).
+- **Insert-time configuration is immutable; refs are read-only.** `PushButton`, `IconButton` and
+  `Link` are `#[component(immutable)]`: a live button is changed by building or cloning a value,
+  editing it outside the world and inserting it again, which updates the children in place (no
+  `Changed<..>` synchronisation). `PushButtonRefs`, `IconButtonRefs` and `ColorSquareRef` are
+  immutable, queryable records with private fields and no public constructor; read them through
+  `PushButtonRefs::label()` / `icon()`, `IconButtonRefs::icon()` and `ColorSquareRef::entity()`.
+  `compile_fail` doctests on the types guard both.
 - **State is an immutable component**; a transition inserts a new value
   (`ComboState`, `LinkState`, `Selection`, the palette combo's `State`).
 - **Composite widgets keep their children in a refs component**

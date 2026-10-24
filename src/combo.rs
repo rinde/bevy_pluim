@@ -409,10 +409,10 @@ fn update_selection(
             .insert(Selection::reference(selection_ref));
     }
 
-    let Ok(PushButtonRefs { label_id, .. }) = pblr.get(sub_refs.button_id) else {
+    let Ok(refs) = pblr.get(sub_refs.button_id) else {
         return;
     };
-    let Ok(mut text) = labels.get_mut(*label_id) else {
+    let Ok(mut text) = labels.get_mut(refs.label()) else {
         return;
     };
     let label = if selection.is_empty() {
