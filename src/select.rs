@@ -30,10 +30,7 @@ impl Plugin for ItemsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectionResource>()
             .add_systems(Update, items_change)
-            .add_systems(
-                Update,
-                process_event_buffer.run_if(resource_changed::<SelectionResource>),
-            )
+            .add_systems(Update, process_event_buffer.run_if(has_pending_selections))
             .add_observer(on_add_selection)
             .register_type::<Item<String>>()
             .register_type::<ItemOf>()
@@ -51,6 +48,12 @@ impl Plugin for ItemsPlugin {
 #[component(immutable)]
 pub enum Selection {
     /// Use the selection on that entity.
+    ///
+    /// Exactly one hop is followed: the target must hold a
+    /// [`Selection::Value`]. A target that is missing, has no `Selection`,
+    /// is this very entity, or is itself a `Ref` (a chain) resolves to
+    /// nothing, and [`SelectionParam`] logs an `error!`; point a `Ref` at the
+    /// entity that holds the value instead.
     Ref(Entity),
     /// The selection itself.
     Value(SelectionValue),
@@ -252,42 +255,66 @@ fn on_add_selection(
     }
 }
 
+fn has_pending_selections(r: Res<SelectionResource>) -> bool {
+    !r.buffer.is_empty()
+}
+
 #[derive(Resource, Default)]
 struct SelectionResource {
     buffer: Vec<(Entity, Entity)>,
 }
 
+/// Repairs the selections waiting for their first item.
+///
+/// An entry stays in the buffer until it is repaired (or its entity is gone), and the
+/// buffer is only borrowed mutably when something was removed, so the resource is not
+/// marked changed otherwise.
 fn process_event_buffer(
     mut r: ResMut<SelectionResource>,
     mut commands: Commands,
     selections: SelectionParam,
 ) {
-    for (target_ref, selection_ref) in r.buffer.drain(..) {
-        if let Some((_, values)) = selections.get_item_values(selection_ref) {
-            let Some(selection_value) = selections.get(selection_ref) else {
-                continue;
-            };
-            let Some(first_item) = values.iter().next() else {
-                continue;
-            };
-            let new_selection_value = match selection_value {
-                SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
-                    Some(SelectionValue::One(first_item))
-                }
-                SelectionValue::OneOrMore(selected) if selected.is_empty() => {
-                    Some(SelectionValue::OneOrMore(smallvec![first_item]))
-                }
-                SelectionValue::One(_)
-                | SelectionValue::OneOrMore(_)
-                | SelectionValue::ZeroOrOne(_)
-                | SelectionValue::ZeroOrMore(_) => None,
-            };
-            if let Some(new_selection_value) = new_selection_value {
-                commands
-                    .entity(target_ref)
-                    .insert(Selection::Value(new_selection_value));
-            }
+    let mut done = Vec::new();
+    for (index, (target_ref, selection_ref)) in r.buffer.iter().enumerate() {
+        if commands.get_entity(*target_ref).is_err() {
+            done.push(index);
+            continue;
         }
+        let Some((_, values)) = selections.get_item_values(*selection_ref) else {
+            continue;
+        };
+        let Some(selection_value) = selections.get(*selection_ref) else {
+            continue;
+        };
+        let Some(first_item) = values.iter().next() else {
+            continue;
+        };
+        let new_selection_value = match selection_value {
+            SelectionValue::One(x) if *x == Entity::PLACEHOLDER => {
+                Some(SelectionValue::One(first_item))
+            }
+            SelectionValue::OneOrMore(selected) if selected.is_empty() => {
+                Some(SelectionValue::OneOrMore(smallvec![first_item]))
+            }
+            SelectionValue::One(_)
+            | SelectionValue::OneOrMore(_)
+            | SelectionValue::ZeroOrOne(_)
+            | SelectionValue::ZeroOrMore(_) => None,
+        };
+        if let Some(new_selection_value) = new_selection_value {
+            commands
+                .entity(*target_ref)
+                .insert(Selection::Value(new_selection_value));
+        }
+        done.push(index);
+    }
+    if !done.is_empty() {
+        let mut index = 0;
+        r.buffer.retain(|_| {
+            let keep = !done.contains(&index);
+            index += 1;
+            keep
+        });
     }
 }
 
@@ -525,7 +552,10 @@ impl SelectionValue {
         }
     }
 
-    /// Deselects everything.
+    /// Deselects everything, where the variant allows an empty selection.
+    ///
+    /// `One` and `OneOrMore` must keep an item, so they refuse (`None`), as does a
+    /// selection that is already empty.
     #[must_use]
     pub fn clear(&self) -> Option<Self> {
         match self {
@@ -652,7 +682,7 @@ where
 
     /// Resolves `selection` to the entity holding the value and the value
     /// itself. `None` if a `Selection::Ref` does not point to a
-    /// `Selection::Value`.
+    /// `Selection::Value` (logged as an `error!`).
     fn find<'a>(
         &'a self,
         entity: Entity,
@@ -660,8 +690,25 @@ where
     ) -> Option<(Entity, &'a SelectionValue)> {
         match selection {
             Selection::Ref(entity_ref) => {
-                let value = self.selection_refs.get(*entity_ref).ok()?.as_selection()?;
-                Some((*entity_ref, value))
+                let value = self
+                    .selection_refs
+                    .get(*entity_ref)
+                    .ok()
+                    .and_then(Selection::as_selection);
+                if value.is_none() {
+                    error!(
+                        "Selection::Ref on {entity} points to {entity_ref}, which is {}; \
+                         a Ref must point to an entity holding a Selection::Value",
+                        if *entity_ref == entity {
+                            "itself"
+                        } else if self.selection_refs.contains(*entity_ref) {
+                            "another Selection::Ref (chains are not followed)"
+                        } else {
+                            "missing or without a Selection"
+                        }
+                    );
+                }
+                Some((*entity_ref, value?))
             }
             Selection::Value(selection) => Some((entity, selection)),
         }
@@ -832,8 +879,6 @@ fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut comman
     }
 }
 
-// a selection value should have this component, should not be added to any
-// other component
 /// Lets a selection choose from the [`ItemValues`] on another entity.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemSelections)]
@@ -885,6 +930,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::relationship::RelationshipTarget;
+    use bevy::ecs::system::RunSystemOnce;
 
     fn entity(index: u32) -> Entity {
         Entity::from_raw_u32(index).unwrap_or(Entity::PLACEHOLDER)
@@ -1291,5 +1338,351 @@ mod tests {
     fn iter_yields_all_selected_entities_in_order() {
         let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
         assert_eq!(value.iter().collect::<Vec<_>>(), vec![entity(1), entity(2)]);
+    }
+
+    // set_selection and append, the gaps of the first tests
+
+    #[test]
+    fn setting_one_to_a_different_entity_replaces_it() {
+        let value = SelectionValue::One(entity(1));
+        assert_eq!(
+            value.set_selection([entity(2)]),
+            Some(SelectionValue::One(entity(2)))
+        );
+    }
+
+    #[test]
+    fn setting_one_to_its_own_entity_is_a_no_op() {
+        assert_eq!(
+            SelectionValue::One(entity(1)).set_selection([entity(1)]),
+            None
+        );
+    }
+
+    #[test]
+    fn setting_one_to_nothing_or_to_two_entities_is_refused() {
+        let value = SelectionValue::One(entity(1));
+        assert_eq!(value.set_selection([]), None);
+        assert_eq!(value.set_selection([entity(2), entity(3)]), None);
+    }
+
+    #[test]
+    fn setting_one_to_the_same_entity_twice_selects_it_once() {
+        let value = SelectionValue::One(entity(1));
+        assert_eq!(
+            value.set_selection([entity(2), entity(2)]),
+            Some(SelectionValue::One(entity(2)))
+        );
+    }
+
+    #[test]
+    fn setting_an_empty_zero_or_one_selects_the_entity() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(None).set_selection([entity(1)]),
+            Some(SelectionValue::ZeroOrOne(Some(entity(1))))
+        );
+    }
+
+    #[test]
+    fn setting_zero_or_one_to_nothing_clears_it() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(Some(entity(1))).set_selection([]),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+    }
+
+    #[test]
+    fn setting_zero_or_one_to_what_it_holds_is_a_no_op() {
+        assert_eq!(SelectionValue::ZeroOrOne(None).set_selection([]), None);
+        assert_eq!(
+            SelectionValue::ZeroOrOne(Some(entity(1))).set_selection([entity(1)]),
+            None
+        );
+    }
+
+    #[test]
+    fn setting_zero_or_one_to_two_entities_is_refused() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(None).set_selection([entity(1), entity(2)]),
+            None
+        );
+    }
+
+    #[test]
+    fn appending_duplicates_to_one_or_more_adds_each_entity_once() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.append([entity(2), entity(2), entity(1)]),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]))
+        );
+    }
+
+    #[test]
+    fn appending_only_selected_entities_to_one_or_more_is_a_no_op() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(value.append([entity(2), entity(1)]), None);
+    }
+
+    #[test]
+    fn appending_duplicates_to_zero_or_more_adds_each_entity_once() {
+        let value = SelectionValue::ZeroOrMore(smallvec![entity(1)]);
+        assert_eq!(
+            value.append([entity(2), entity(2), entity(1)]),
+            Some(SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]))
+        );
+        assert_eq!(value.append([entity(1)]), None);
+    }
+
+    #[test]
+    fn appending_the_same_entity_twice_to_an_empty_zero_or_one_selects_it() {
+        assert_eq!(
+            SelectionValue::ZeroOrOne(None).append([entity(1), entity(1)]),
+            Some(SelectionValue::ZeroOrOne(Some(entity(1))))
+        );
+    }
+
+    #[test]
+    fn appending_to_one_is_refused() {
+        assert_eq!(SelectionValue::One(entity(1)).append([entity(2)]), None);
+    }
+
+    // The builder, the items and `ItemParam`, in an app with the selection model
+
+    fn items_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(ItemsPlugin);
+        app
+    }
+
+    fn selection_value(app: &App, entity: Entity) -> Option<SelectionValue> {
+        match app.world().get::<Selection>(entity) {
+            Some(Selection::Value(value)) => Some(value.clone()),
+            _ => None,
+        }
+    }
+
+    fn item_entities(app: &App, owner: Entity) -> Vec<Entity> {
+        app.world()
+            .get::<ItemValues>(owner)
+            .map(|items| items.iter().collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_one_builder_selects_the_first_item() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        let items = item_entities(&app, id);
+        assert_eq!(items.len(), 2);
+        assert_eq!(
+            selection_value(&app, id),
+            items.first().map(|first| SelectionValue::One(*first))
+        );
+    }
+
+    #[test]
+    fn a_one_with_builder_selects_the_given_entity() {
+        let mut app = items_app();
+        let chosen = app.world_mut().spawn_empty().id();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_with(chosen)
+                    .build_with_items(["a"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        assert_eq!(selection_value(&app, id), Some(SelectionValue::One(chosen)));
+    }
+
+    #[test]
+    fn a_zero_or_one_builder_starts_empty_with_its_items() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        assert_eq!(
+            selection_value(&app, id),
+            Some(SelectionValue::ZeroOrOne(None))
+        );
+        assert_eq!(item_entities(&app, id).len(), 2);
+    }
+
+    #[test]
+    fn a_zero_or_more_builder_starts_empty_with_its_items() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        assert_eq!(
+            selection_value(&app, id),
+            Some(SelectionValue::ZeroOrMore(smallvec![]))
+        );
+        assert_eq!(item_entities(&app, id).len(), 3);
+    }
+
+    #[test]
+    fn a_one_or_more_builder_selects_the_first_item() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        let items = item_entities(&app, id);
+        assert_eq!(
+            selection_value(&app, id),
+            items
+                .first()
+                .map(|first| SelectionValue::OneOrMore(smallvec![*first]))
+        );
+    }
+
+    #[test]
+    fn a_builder_with_items_ref_chooses_from_the_items_of_another_entity() {
+        let mut app = items_app();
+        let owner = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        let sharing = app
+            .world_mut()
+            .spawn(Selection::builder().one().build_with_items_ref(owner))
+            .id();
+        app.update();
+        let items = item_entities(&app, owner);
+        assert!(app.world().get::<ItemValues>(sharing).is_none());
+        assert_eq!(
+            app.world().get::<ItemsRef>(sharing).map(|r| r.0),
+            Some(owner)
+        );
+        assert_eq!(
+            app.world()
+                .get::<ItemSelections>(owner)
+                .map(RelationshipTarget::len),
+            Some(1)
+        );
+        assert_eq!(
+            selection_value(&app, sharing),
+            items.first().map(|first| SelectionValue::One(*first))
+        );
+    }
+
+    #[test]
+    fn a_one_selection_over_no_items_selects_the_first_item_added_later() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(Vec::<Item<String>>::new()),
+            )
+            .id();
+        app.update();
+        assert_eq!(
+            selection_value(&app, id),
+            Some(SelectionValue::One(Entity::PLACEHOLDER))
+        );
+        let added = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        app.update();
+        assert_eq!(selection_value(&app, id), Some(SelectionValue::One(added)));
+    }
+
+    #[test]
+    fn changing_the_items_triggers_items_changed_with_the_new_items() {
+        #[derive(Resource, Default)]
+        struct Seen(Vec<(Entity, usize)>);
+
+        fn seen(app: &App) -> Vec<(Entity, usize)> {
+            app.world()
+                .get_resource::<Seen>()
+                .map(|seen| seen.0.clone())
+                .unwrap_or_default()
+        }
+
+        let mut app = items_app();
+        app.init_resource::<Seen>();
+        app.add_observer(|changed: On<ItemsChanged>, mut seen: ResMut<Seen>| {
+            seen.0.push((changed.entity, changed.items.len()));
+        });
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        assert_eq!(seen(&app), vec![(id, 2)]);
+
+        app.world_mut().spawn((Item::new("c"), ItemOf(id)));
+        app.update();
+        assert_eq!(seen(&app), vec![(id, 2), (id, 3)]);
+
+        app.update();
+        assert_eq!(seen(&app).len(), 2);
+    }
+
+    #[test]
+    fn an_item_param_finds_the_first_item_matching_the_predicate() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b", "c"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        let items = item_entities(&app, id);
+        let found = app
+            .world_mut()
+            .run_system_once(|param: ItemParam<String>| {
+                (
+                    param.find_item_ref(|item, ()| item.data == "b"),
+                    param.find_item_ref(|item, ()| item.data == "z"),
+                    param
+                        .find_item(|item, ()| item.data == "c")
+                        .map(|(_, item, ())| item.data.clone()),
+                )
+            })
+            .ok();
+        assert_eq!(
+            found,
+            Some((items.get(1).copied(), None, Some("c".to_owned())))
+        );
     }
 }

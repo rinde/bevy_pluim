@@ -16,7 +16,7 @@ use bevy::prelude::*;
 use bevy::reflect::TypeRegistry;
 use rin_bevy_ui::WidgetsPlugin;
 use rin_bevy_ui::badge::Badge;
-use rin_bevy_ui::breadcrumbs::BreadCrumbs;
+use rin_bevy_ui::breadcrumbs::{BreadCrumb, BreadCrumbs};
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::{self, ColorPaletteCombo};
@@ -45,13 +45,13 @@ use rin_bevy_ui::segmented_control::{
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
 use rin_bevy_ui::slider::Slider;
-use rin_bevy_ui::stack::Stack;
+use rin_bevy_ui::stack::{Stack, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarLabels};
-use rin_bevy_ui::tooltip::Tooltip;
+use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 
 fn app_with_widgets() -> App {
@@ -98,6 +98,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ItemNote>(registry);
         assert_component::<Link>(registry);
         assert_component::<BreadCrumbs>(registry);
+        assert_component::<BreadCrumb>(registry);
         assert_component::<ColorPalette>(registry);
         assert_component::<ColorPaletteCombo>(registry);
         assert_component::<ColorPushButton>(registry);
@@ -109,6 +110,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ScrollContents>(registry);
         assert_component::<ScrollBar>(registry);
         assert_component::<Stack>(registry);
+        assert_component::<StackItem>(registry);
         assert_component::<Card>(registry);
         assert_component::<Divider>(registry);
         assert_component::<Icon>(registry);
@@ -139,6 +141,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<VirtualList>(registry);
         assert_component::<VirtualListRow>(registry);
         assert_component::<Tooltip>(registry);
+        assert_component::<TooltipPopup>(registry);
         assert_component::<Toast>(registry);
         assert_component::<ToastStack>(registry);
         assert_component::<TextField>(registry);

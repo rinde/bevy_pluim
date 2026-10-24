@@ -12,7 +12,7 @@ use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
 use crate::select::{Item, SelectionParam};
 use crate::theme::{Theme, ThemeColors};
-use crate::tooltip::Tooltip;
+use crate::tooltip::{OwnedTooltip, Tooltip};
 
 /// The width of a button of a [`ToolbarStyle::Filled`] toolbar, in logical pixels.
 const FILLED_WIDTH: f32 = 66.0;
@@ -184,29 +184,96 @@ impl Tool {
     }
 }
 
-/// One button of a [`Toolbar`]: picks its item when it is activated.
+/// One button of a [`Toolbar`]: picks its item when it is activated. Only the widget builds
+/// one; its style is the toolbar's, read from there.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 pub struct ToolbarButton {
-    /// The [`Item<Tool>`] this button shows.
-    pub item: Entity,
-    /// The [`Toolbar`] this button belongs to.
-    pub toolbar: Entity,
-    /// The style the button was built for.
-    pub style: ToolbarStyle,
+    item: Entity,
+    toolbar: Entity,
 }
 
-/// The children of a [`ToolbarButton`].
+impl ToolbarButton {
+    /// The [`Item<Tool>`] this button shows.
+    #[must_use]
+    pub const fn item(&self) -> Entity {
+        self.item
+    }
+
+    /// The [`Toolbar`] this button belongs to.
+    #[must_use]
+    pub const fn toolbar(&self) -> Entity {
+        self.toolbar
+    }
+}
+
+/// The children of a [`ToolbarButton`]; the variant is the style the button was built for, so a
+/// child its style does not have cannot be named.
 #[derive(Component, Debug, Copy, Clone)]
-pub struct ToolbarButtonRefs {
+pub enum ToolbarButtonRefs {
+    /// A button of a [`ToolbarStyle::Filled`] toolbar.
+    Filled {
+        /// The [`Icon`].
+        icon: Entity,
+        /// The label text.
+        label: Entity,
+        /// The key hint text in the top-right corner; only for a tool with a [`Tool::key_hint`].
+        hint: Option<Entity>,
+    },
+    /// A button of a [`ToolbarStyle::Underlined`] toolbar.
+    Underlined {
+        /// The [`Icon`].
+        icon: Entity,
+        /// The accent bar.
+        bar: Entity,
+        /// The key hint text in the top-right corner; only for a tool with a [`Tool::key_hint`].
+        hint: Option<Entity>,
+    },
+}
+
+impl ToolbarButtonRefs {
     /// The [`Icon`].
-    pub icon: Entity,
+    #[must_use]
+    pub const fn icon(&self) -> Entity {
+        match *self {
+            Self::Filled { icon, .. } | Self::Underlined { icon, .. } => icon,
+        }
+    }
+
+    /// The key hint text, for a tool with a [`Tool::key_hint`].
+    #[must_use]
+    pub const fn hint(&self) -> Option<Entity> {
+        match *self {
+            Self::Filled { hint, .. } | Self::Underlined { hint, .. } => hint,
+        }
+    }
+
     /// The label text; only in a [`ToolbarStyle::Filled`] toolbar.
-    pub label: Option<Entity>,
-    /// The key hint text in the top-right corner; only for a tool with a [`Tool::key_hint`].
-    pub hint: Option<Entity>,
+    #[must_use]
+    pub const fn label(&self) -> Option<Entity> {
+        match *self {
+            Self::Filled { label, .. } => Some(label),
+            Self::Underlined { .. } => None,
+        }
+    }
+
     /// The accent bar; only in a [`ToolbarStyle::Underlined`] toolbar.
-    pub bar: Option<Entity>,
+    #[must_use]
+    pub const fn bar(&self) -> Option<Entity> {
+        match *self {
+            Self::Underlined { bar, .. } => Some(bar),
+            Self::Filled { .. } => None,
+        }
+    }
+
+    /// The style the button was built for.
+    #[must_use]
+    pub const fn style(&self) -> ToolbarStyle {
+        match self {
+            Self::Filled { .. } => ToolbarStyle::Filled,
+            Self::Underlined { .. } => ToolbarStyle::Underlined,
+        }
+    }
 }
 
 /// A divider between two groups of a [`Toolbar`].
@@ -258,11 +325,11 @@ fn sync_buttons(
                 existing.push((
                     child,
                     Slot::Button {
-                        item: button.item,
-                        hint: refs.hint.is_some(),
+                        item: button.item(),
+                        hint: refs.hint().is_some(),
                     },
                 ));
-                current_style &= button.style == toolbar.style;
+                current_style &= refs.style() == toolbar.style;
             } else if dividers.contains(child) {
                 existing.push((child, Slot::Divider));
             }
@@ -333,16 +400,6 @@ fn spawn_button(
             ChildOf(button),
         ))
         .id();
-    let label = (style == ToolbarStyle::Filled).then(|| {
-        commands
-            .spawn((
-                Text::new(""),
-                label_font(theme),
-                Pickable::IGNORE,
-                ChildOf(button),
-            ))
-            .id()
-    });
     let hint = hint.then(|| {
         commands
             .spawn((
@@ -365,7 +422,7 @@ fn spawn_button(
             ))
             .id()
     });
-    let bar = (style == ToolbarStyle::Underlined).then(|| {
+    let bar = |commands: &mut Commands| {
         commands
             .spawn((
                 Name::new("ToolbarBar"),
@@ -383,20 +440,29 @@ fn spawn_button(
                 ChildOf(button),
             ))
             .id()
-    });
+    };
+    let refs = match style {
+        ToolbarStyle::Filled => {
+            let label = commands
+                .spawn((
+                    Text::new(""),
+                    label_font(theme),
+                    Pickable::IGNORE,
+                    ChildOf(button),
+                ))
+                .id();
+            ToolbarButtonRefs::Filled { icon, label, hint }
+        }
+        ToolbarStyle::Underlined => ToolbarButtonRefs::Underlined {
+            icon,
+            bar: bar(commands),
+            hint,
+        },
+    };
     commands.entity(button).insert((
         Name::new("ToolbarButton"),
-        ToolbarButton {
-            item,
-            toolbar,
-            style,
-        },
-        ToolbarButtonRefs {
-            icon,
-            label,
-            hint,
-            bar,
-        },
+        ToolbarButton { item, toolbar },
+        refs,
         Button,
         Hovered::default(),
         TabStop,
@@ -498,7 +564,7 @@ const fn button_look(
 /// selection, the pointer and the theme.
 fn update_buttons(
     theme: Res<Theme>,
-    toolbars: Query<&ToolbarLabels>,
+    toolbars: Query<(&Toolbar, &ToolbarLabels)>,
     selections: SelectionParam,
     items: Query<&Item<Tool>>,
     mut buttons: Query<(
@@ -520,23 +586,19 @@ fn update_buttons(
     mut commands: Commands,
 ) {
     for (button, refs, hovered, mut background, mut node) in &mut buttons {
-        let Ok(item) = items.get(button.item) else {
+        let Ok(item) = items.get(button.item()) else {
             continue;
         };
+        let Ok((_, toolbar_labels)) = toolbars.get(button.toolbar()) else {
+            continue;
+        };
+        let style = refs.style();
         let active = selections
-            .get(button.toolbar)
-            .is_some_and(|selection| selection.is_selected(button.item));
-        let look = button_look(
-            &theme.colors,
-            button.style,
-            item.data.tone,
-            active,
-            hovered.get(),
-        );
-        let labels_shown = toolbars
-            .get(button.toolbar)
-            .is_ok_and(|labels| *labels == ToolbarLabels::Shown);
-        if button.style == ToolbarStyle::Filled {
+            .get(button.toolbar())
+            .is_some_and(|selection| selection.is_selected(button.item()));
+        let look = button_look(&theme.colors, style, item.data.tone, active, hovered.get());
+        let labels_shown = *toolbar_labels == ToolbarLabels::Shown;
+        if style == ToolbarStyle::Filled {
             let (width, height) = if labels_shown {
                 (FILLED_WIDTH, FILLED_HEIGHT)
             } else {
@@ -554,15 +616,17 @@ fn update_buttons(
             node.border_radius = BorderRadius::all(theme.control_radius);
         }
 
-        if let Ok((icon, mut image)) = icons.get_mut(refs.icon) {
+        if let Ok((icon, mut image)) = icons.get_mut(refs.icon()) {
             if image.image != item.data.icon {
                 image.image = item.data.icon.clone();
             }
             if icon.color != look.icon {
-                commands.entity(refs.icon).insert(Icon { color: look.icon });
+                commands
+                    .entity(refs.icon())
+                    .insert(Icon { color: look.icon });
             }
         }
-        if let Some(label) = refs.label
+        if let Some(label) = refs.label()
             && let Ok((mut text, mut color, mut font, mut label_node)) = labels.get_mut(label)
         {
             let display = if labels_shown {
@@ -581,7 +645,7 @@ fn update_buttons(
                 *font = label_font(&theme);
             }
         }
-        if let Some(hint) = refs.hint
+        if let Some(hint) = refs.hint()
             && let Ok((mut text, mut color, mut font, _)) = labels.get_mut(hint)
         {
             let key = item.data.key_hint.as_deref().unwrap_or_default();
@@ -595,7 +659,7 @@ fn update_buttons(
                 font.font = theme.body_font.clone().into();
             }
         }
-        if let Some(bar) = refs.bar
+        if let Some(bar) = refs.bar()
             && let Ok((mut bar_node, mut bar_color)) = bars.get_mut(bar)
         {
             let display = if look.bar {
@@ -637,35 +701,57 @@ fn sync_accessibility(
         sync_role(&mut node, Role::Toolbar);
     }
     for (button, mut node) in &mut buttons {
-        let Ok(item) = items.get(button.item) else {
+        let Ok(item) = items.get(button.item()) else {
             continue;
         };
         let active = selections
-            .get(button.toolbar)
-            .is_some_and(|selection| selection.is_selected(button.item));
+            .get(button.toolbar())
+            .is_some_and(|selection| selection.is_selected(button.item()));
         sync_label(&mut node, &item.data.label);
         sync_toggled(&mut node, Some(active));
     }
 }
 
 /// Gives the buttons of an underlined toolbar, whose labels are hidden, a [`Tooltip`] with the
-/// label of their tool.
+/// label of their tool, and takes it off again when the toolbar is not underlined. Only a tooltip
+/// the widget added (marked [`OwnedTooltip`]) is replaced or removed: one with other text is the
+/// app's. Limit: an app tooltip with exactly the tool's label, put on before the widget's, is
+/// not told apart from it.
 fn sync_tooltips(
-    buttons: Query<(Entity, &ToolbarButton, Option<&Tooltip>)>,
+    buttons: Query<(
+        Entity,
+        &ToolbarButton,
+        &ToolbarButtonRefs,
+        Option<&Tooltip>,
+        Option<&OwnedTooltip>,
+    )>,
     items: Query<&Item<Tool>>,
     mut commands: Commands,
 ) {
-    for (entity, button, tooltip) in &buttons {
-        if button.style != ToolbarStyle::Underlined {
+    for (entity, button, refs, tooltip, owned) in &buttons {
+        // A tooltip whose text is not the one the widget added replaced it: it is the app's.
+        let owned = match (owned, tooltip) {
+            (Some(owned), Some(tooltip)) if owned.0 == tooltip.text => true,
+            (Some(_), _) => {
+                commands.entity(entity).remove::<OwnedTooltip>();
+                false
+            }
+            (None, _) => false,
+        };
+        if refs.style() != ToolbarStyle::Underlined {
+            if owned {
+                commands.entity(entity).remove::<(Tooltip, OwnedTooltip)>();
+            }
             continue;
         }
-        let Ok(item) = items.get(button.item) else {
+        let Ok(item) = items.get(button.item()) else {
             continue;
         };
-        if tooltip.is_none_or(|t| t.text != item.data.label) {
+        let label = &item.data.label;
+        if (tooltip.is_none() || owned) && tooltip.is_none_or(|t| t.text != *label) {
             commands
                 .entity(entity)
-                .insert(Tooltip::new(item.data.label.clone()));
+                .insert((Tooltip::new(label.clone()), OwnedTooltip(label.clone())));
         }
     }
 }
@@ -675,8 +761,8 @@ fn on_activate(t: On<Activate>, buttons: Query<&ToolbarButton>, mut selections: 
     let Ok(button) = buttons.get(t.event().event_target()) else {
         return;
     };
-    selections.update_selection(button.toolbar, |selection| {
-        selection.toggle_selected(button.item)
+    selections.update_selection(button.toolbar(), |selection| {
+        selection.toggle_selected(button.item())
     });
 }
 

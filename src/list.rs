@@ -91,6 +91,11 @@ impl Plugin for ListPlugin {
     Name::new("List"),
     ListBox,
     TabStop,
+    Node {
+        position_type: PositionType::Relative,
+        display: Display::Grid,
+        ..default()
+    },
     ListLayout::Vertical,
     CornerStyle::FollowLayout,
     Pickable {
@@ -101,8 +106,11 @@ impl Plugin for ListPlugin {
 pub struct List;
 
 /// How the item views of a [`List`] are arranged.
+///
+/// Changing it on a live list updates the grid of its [`Node`] (flow and columns) in place.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
+#[component(on_insert = Self::on_insert)]
 pub enum ListLayout {
     /// One item per row.
     Vertical,
@@ -110,9 +118,25 @@ pub enum ListLayout {
     Horizontal,
     /// A grid that fills row by row.
     VerticalGrid {
-        /// The number of columns.
+        /// The number of columns. `0` has no meaning: the list is laid out as one column
+        /// (`1`) and an `error!` is logged when the layout is inserted.
         columns: u16,
     },
+}
+
+impl ListLayout {
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        if matches!(
+            world.entity(context.entity).get::<Self>(),
+            Some(Self::VerticalGrid { columns: 0 })
+        ) {
+            error!(
+                "ListLayout::VerticalGrid {{ columns: 0 }} on {}: laying out as one column",
+                context.entity
+            );
+        }
+        apply_layout(&mut world, context.entity);
+    }
 }
 
 /// Which corners of a [`List`] and its item views are rounded.
@@ -182,39 +206,39 @@ pub struct NoDefaultItems;
 
 impl List {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        // TODO change this assert
-        // assert!(
-        //     world.entity(context.entity).get::<Node>().is_none(),
-        //     "Cannot override Node for List"
-        // );
-
-        let Some(layout) = world.entity(context.entity).get::<ListLayout>() else {
-            return;
-        };
-        let grid_auto_flow = match layout {
-            ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => {
-                GridAutoFlow::RowDense
-            }
-            ListLayout::Horizontal => GridAutoFlow::ColumnDense,
-        };
-        let grid_template_columns = match layout {
-            ListLayout::Vertical | ListLayout::Horizontal => vec![],
-            ListLayout::VerticalGrid { columns } => vec![RepeatedGridTrack::auto(*columns)],
-        };
-
-        let node = Node {
-            position_type: PositionType::Relative,
-            display: Display::Grid,
-            grid_auto_flow,
-            grid_template_columns,
-            ..default()
-        };
-        world.commands().entity(context.entity).insert(node);
-
+        apply_layout(&mut world, context.entity);
         world
             .commands()
             .run_system_cached_with(theme_lists, Some(context.entity));
     }
+}
+
+/// Sets the grid fields of the [`Node`] of `entity` from its [`ListLayout`], in place: the
+/// fields a [`List`] owns (`display`, `position_type`, `grid_auto_flow` and
+/// `grid_template_columns`) and nothing else, so a width or margin of the app survives.
+/// Does nothing for an entity that is not a [`List`] or has no [`Node`] yet.
+fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
+    let Some(layout) = world.entity(entity).get::<ListLayout>().copied() else {
+        return;
+    };
+    if !world.entity(entity).contains::<List>() {
+        return;
+    }
+    let grid_auto_flow = match layout {
+        ListLayout::Vertical | ListLayout::VerticalGrid { columns: _ } => GridAutoFlow::RowDense,
+        ListLayout::Horizontal => GridAutoFlow::ColumnDense,
+    };
+    let grid_template_columns = match layout {
+        ListLayout::Vertical | ListLayout::Horizontal => vec![],
+        ListLayout::VerticalGrid { columns } => vec![RepeatedGridTrack::auto(columns.max(1))],
+    };
+    let Some(mut node) = world.get_mut::<Node>(entity) else {
+        return;
+    };
+    node.position_type = PositionType::Relative;
+    node.display = Display::Grid;
+    node.grid_auto_flow = grid_auto_flow;
+    node.grid_template_columns = grid_template_columns;
 }
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
@@ -1092,7 +1116,7 @@ fn theme_item_border(
                     }
                 }
                 ListLayout::VerticalGrid { columns } => {
-                    let columns = columns as usize;
+                    let columns = usize::from(columns.max(1));
                     node.border_radius = match i {
                         0 => BorderRadius::top_left(theme.control_radius),
                         n if n == columns - 1 => BorderRadius::top_right(theme.control_radius),

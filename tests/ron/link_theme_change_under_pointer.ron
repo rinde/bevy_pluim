@@ -1,0 +1,95 @@
+// A theme change restyles a `Link` by what the pointer is doing, not by its
+// resting look. "Change theme" is clicked (dark), then the pointer moves onto
+// the crumb "Home" and Enter, on the still focused "Change theme", switches the
+// theme with the pointer resting on the crumb: it keeps the hover colour of the
+// new theme (`background_secondary`, text `link`). The current crumb, a disabled
+// link, stays at rest (`background_primary`, text `text_primary`) in the new theme
+// with the pointer on it. The press case is covered headless: a press would move
+// the focus off "Change theme".
+(
+    format_version: 3,
+    name: "a link under the pointer keeps its hover colour when the theme changes",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        // Home > Panel A: "Home" is a link, "Panel A" the current crumb.
+        MoveTo(Role(role: Button, label: "Go to Panel A")), Click(Left),
+        Wait(2),
+        MoveTo(Role(role: Button, label: "Change theme")), Click(Left),
+        Wait(2),
+        // Dark, the pointer not on the crumbs: both at rest.
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        MoveTo(Within(Name("BreadCrumbs"), Role(role: Button, label: "Home"))),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.12156863,green:0.16078432,blue:0.21568628,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        // Enter on the focused "Change theme": light, with the pointer on "Home".
+        Tap(key: Enter),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.12156863,green:0.16078432,blue:0.21568628,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Home")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        // The disabled current crumb stays at rest under the pointer.
+        MoveTo(Nth(1, Within(Name("BreadCrumbs"), Name("Link")))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Component(
+            target: Nth(1, Within(Name("BreadCrumbs"), Name("Link"))),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Panel A")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.06666667,green:0.09411765,blue:0.15294118,alpha:1.0))),
+        )),
+        Tap(key: Enter),
+        Wait(2),
+        Check(Component(
+            target: Nth(1, Within(Name("BreadCrumbs"), Name("Link"))),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.011764706,green:0.02745098,blue:0.07058824,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Text("Panel A")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.9529412,green:0.95686275,blue:0.9647059,alpha:1.0))),
+        )),
+    ],
+    expect: [App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel A"]))],
+)

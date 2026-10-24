@@ -16,6 +16,11 @@ const MARGIN: f32 = 6.0;
 /// The gap between the node and its popup, in logical pixels.
 const GAP: f32 = 6.0;
 
+/// Marks an entity whose [`Tooltip`] a widget added, holding the text it gave it, so that the
+/// widget replaces or removes only that one: a [`Tooltip`] with other text is the app's.
+#[derive(Component, Debug, Clone)]
+pub(crate) struct OwnedTooltip(pub String);
+
 /// Registers the systems and observers of [`Tooltip`].
 ///
 /// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
@@ -46,6 +51,9 @@ impl Plugin for TooltipPlugin {
 /// [`IconButton`](crate::icon_button::IconButton) has one with its name, and so has the button
 /// of an underlined [`Toolbar`](crate::toolbar::Toolbar), whose labels are hidden.
 ///
+/// A `Tooltip` with empty text shows no popup (an empty bordered box would say nothing); a popup
+/// that is showing goes when the text is changed to empty.
+///
 /// Insert a `Tooltip` again to change the text.
 #[derive(Component, Clone, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
@@ -72,10 +80,19 @@ struct TooltipClock {
 }
 
 /// The popup of a [`Tooltip`] node that is showing.
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct TooltipPopup {
     /// The node the popup belongs to.
-    pub owner: Entity,
+    owner: Entity,
+}
+
+impl TooltipPopup {
+    /// The node the popup belongs to.
+    #[must_use]
+    pub const fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// The text of a popup.
@@ -127,7 +144,10 @@ fn update_tooltips(
         } else if !clock.suppressed {
             clock.elapsed += time.delta_secs();
         }
-        let wanted = hovered.get() && !clock.suppressed && clock.elapsed >= TOOLTIP_DELAY_SECS;
+        let wanted = hovered.get()
+            && !clock.suppressed
+            && clock.elapsed >= TOOLTIP_DELAY_SECS
+            && !tooltip.text.is_empty();
         match (wanted, popup) {
             (true, None) => {
                 let popup = spawn_popup(&mut commands, &theme, entity, &tooltip.text);
@@ -209,7 +229,7 @@ fn place_popups(
 ) {
     let window = window.iter().next();
     for (popup, popup_computed, mut node, mut visibility) in &mut popups {
-        let Ok((owner_computed, owner_transform)) = owners.get(popup.owner) else {
+        let Ok((owner_computed, owner_transform)) = owners.get(popup.owner()) else {
             continue;
         };
         let scale = owner_computed.inverse_scale_factor();
@@ -226,7 +246,8 @@ fn place_popups(
         if let Some(window) = window {
             left = left.min(window.width() - MARGIN - popup_size.x).max(MARGIN);
             if below + popup_size.y + MARGIN > window.height() {
-                top = center.y - owner_size.y / 2.0 - GAP - popup_size.y;
+                // Not above the window's margin, whatever room there is.
+                top = (center.y - owner_size.y / 2.0 - GAP - popup_size.y).max(MARGIN);
             }
         }
         node.left = Val::Px(left);
