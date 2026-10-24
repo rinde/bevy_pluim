@@ -10899,3 +10899,82 @@ fn replacing_a_toast_updates_its_text_and_label_and_keeps_one_entity_in_its_plac
     }
     assert!(app.world().get_entity(second).is_err());
 }
+
+#[test]
+fn a_badge_on_a_host_without_an_accessibility_node_describes_it_once_the_node_appears() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let host = app
+        .world_mut()
+        .spawn((Node::default(), Badge::count(5), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    assert!(app.world().get::<AccessibilityNode>(host).is_none());
+    assert_eq!(badge_under(&app, host).unwrap().1, "5");
+
+    app.world_mut()
+        .entity_mut(host)
+        .insert(AccessibilityNode::from(accesskit::Node::new(
+            accesskit::Role::Button,
+        )));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3.as_deref(), Some("5"));
+
+    // An empty badge then clears the description again.
+    app.world_mut().entity_mut(host).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3, None);
+}
+
+#[test]
+fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_back() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let label = app
+        .world_mut()
+        .spawn((Label::regular("Locomotives"), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let state = |app: &App| {
+        let e = app.world().entity(label);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            e.get::<LetterSpacing>().unwrap().clone(),
+            e.get::<TextFont>().unwrap().weight,
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::overline("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "LOCOMOTIVES".to_string(),
+            LetterSpacing::Px(0.5),
+            FontWeight::SEMIBOLD
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::regular("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
+}
