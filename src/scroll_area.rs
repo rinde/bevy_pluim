@@ -14,15 +14,17 @@ use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::template::TemplateContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
-use bevy::picking::hover::HoverMap;
+use bevy::picking::hover::{HoverMap, Hovered};
 use bevy::prelude::*;
 use bevy::scene::EmptySceneEffect;
-use bevy::ui::{FixedNode, UiSystems};
-use bevy::ui_widgets::{ControlOrientation, ScrollIntoView, Scrollbar, ScrollbarThumb};
+use bevy::ui::{FixedNode, Pressed, UiSystems};
+use bevy::ui_widgets::{
+    ControlOrientation, ScrollIntoView, Scrollbar, ScrollbarDragState, ScrollbarThumb,
+};
 use itertools::Either;
 
 use crate::focus::FOCUS_RING_REACH;
-use crate::theme::Theme;
+use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`ScrollArea`].
@@ -40,6 +42,7 @@ impl Plugin for ScrollAreaPlugin {
                 (
                     refresh_changed_scroll_bars.before(UiSystems::Layout),
                     show_scroll_bars,
+                    restyle_thumbs_on_drag_change,
                 ),
             )
             .add_systems(
@@ -341,24 +344,65 @@ fn refresh_changed_scroll_bars(
 /// The thumb of a [`ScrollBar`]: a `bevy_ui_widgets` [`ScrollbarThumb`], which has no
 /// `Node` because the widget sizes and places it along its track.
 #[derive(Component, Clone, Copy, Debug)]
-#[require(ScrollbarThumb, Pickable::default(), Name::new("ScrollThumb"))]
+#[require(ScrollbarThumb, Hovered, Pickable::default(), Name::new("ScrollThumb"))]
 struct ScrollThumb;
+
+/// The thumb's background: the one function of its state that the pointer handler, the drag
+/// restyle and `theme_scroll_area` all call, so a theme change under the pointer keeps the colour.
+const fn thumb_background(colors: &ThemeColors, hovered: bool, pressed: bool) -> Color {
+    if pressed {
+        colors.selected_hovered_item
+    } else if hovered {
+        colors.hovered_item
+    } else {
+        colors.scroll_thumb_background
+    }
+}
 
 fn handle_hover(
     trigger: On<MouseEvent>,
-    mut query: Query<&mut BackgroundColor>,
+    mut query: Query<(&mut BackgroundColor, Option<&ScrollbarDragState>)>,
+    theme: Res<Theme>,
+    mut commands: Commands,
+) {
+    // A click or a drag says nothing new: the events around them set the state.
+    let kind = trigger.event().kind;
+    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
+        return;
+    }
+    let thumb = trigger.event().event_target();
+    let Ok((mut background, drag)) = query.get_mut(thumb) else {
+        return;
+    };
+    // The pointer is on the thumb for every event but `Out`, a release included.
+    let hovered = !matches!(kind, MouseKind::Out);
+    let dragging = drag.is_some_and(|drag| drag.dragging);
+    let pressed = matches!(kind, MouseKind::Pressed) || (dragging && hovered);
+    if pressed {
+        commands.entity(thumb).insert(Pressed);
+    } else {
+        commands.entity(thumb).remove::<Pressed>();
+    }
+    *background = BackgroundColor(thumb_background(&theme.colors, hovered, pressed));
+}
+
+/// Restyles a thumb whose drag started or ended: a drag that ends with the pointer away from the
+/// thumb sends it no release, so the pointer events alone would leave the pressed colour.
+fn restyle_thumbs_on_drag_change(
+    mut thumbs: Query<
+        (
+            &ScrollbarDragState,
+            &Hovered,
+            &mut BackgroundColor,
+            Has<Pressed>,
+        ),
+        (With<ScrollThumb>, Changed<ScrollbarDragState>),
+    >,
     theme: Res<Theme>,
 ) {
-    let color = match trigger.event().kind {
-        MouseKind::Over => theme.colors.hovered_item,
-        MouseKind::Pressed => theme.colors.selected_hovered_item,
-        MouseKind::Released => theme.colors.selected_item,
-        MouseKind::Out => theme.colors.scroll_thumb_background,
-        // A click or a drag leaves the colour of the press and release before it.
-        MouseKind::Click(_) | MouseKind::Drag => return,
-    };
-    if let Ok(mut background) = query.get_mut(trigger.event().event_target()) {
-        *background = BackgroundColor(color);
+    for (drag, hovered, mut background, pressed) in &mut thumbs {
+        let color = thumb_background(&theme.colors, hovered.get(), pressed || drag.dragging);
+        background.set_if_neq(BackgroundColor(color));
     }
 }
 
@@ -546,7 +590,14 @@ fn theme_scroll_area(
         (With<ScrollBar>, Without<ScrollContents>),
     >,
     mut scroll_thumbs: Query<
-        (&mut ScrollbarThumb, &mut BackgroundColor, &mut BorderColor),
+        (
+            &mut ScrollbarThumb,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &Hovered,
+            Has<Pressed>,
+            Option<&ScrollbarDragState>,
+        ),
         (
             With<ScrollThumb>,
             Without<ScrollContents>,
@@ -575,13 +626,23 @@ fn theme_scroll_area(
 
             // Only the marked thumb is ours; other children of the bar are the app's.
             for thumb_entity in children.into_iter().flatten() {
-                let Ok((mut thumb, mut thumb_background_color, mut thumb_border_color)) =
-                    scroll_thumbs.get_mut(*thumb_entity)
+                let Ok((
+                    mut thumb,
+                    mut thumb_background_color,
+                    mut thumb_border_color,
+                    hovered,
+                    pressed,
+                    drag,
+                )) = scroll_thumbs.get_mut(*thumb_entity)
                 else {
                     continue;
                 };
                 // The thumb is as thick as its scroll bar: the `Scrollbar` sizes it.
-                thumb_background_color.0 = theme.colors.scroll_thumb_background;
+                thumb_background_color.0 = thumb_background(
+                    &theme.colors,
+                    hovered.get(),
+                    pressed || drag.is_some_and(|drag| drag.dragging),
+                );
                 thumb.border_radius = BorderRadius::all(theme.control_radius);
                 thumb_border_color.set_all(theme.colors.border);
             }
