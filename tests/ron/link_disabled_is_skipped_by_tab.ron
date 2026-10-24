@@ -1,0 +1,34 @@
+// A disabled `Link` (`InteractionDisabled`, the current crumb) is outside Tab
+// navigation: with only "Home" in the trail the first Tab skips it and focuses
+// "Change theme", and its `TabIndex` is -1. When the trail grows "Home" is an
+// enabled link again with `TabIndex` 0 and the new current crumb is -1.
+(
+    format_version: 3,
+    name: "Tab skips a disabled link and finds it again once enabled",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "TabIndex.0",
+            is: Eq(-1),
+        )),
+        Tap(key: Tab),
+        Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
+
+        // Home > Panel A: "Home" is enabled, "Panel A" is current.
+        MoveTo(Role(role: Button, label: "Go to Panel A")), Click(Left),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")),
+            path: "TabIndex.0",
+            is: Eq(0),
+        )),
+        Check(Component(
+            target: Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel A")),
+            path: "TabIndex.0",
+            is: Eq(-1),
+        )),
+    ],
+    expect: [],
+)

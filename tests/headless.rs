@@ -59,7 +59,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
-use rin_bevy_ui::link::{Link, LinkState};
+use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
@@ -625,17 +625,14 @@ fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is
     app.update();
 
     let world = app.world_mut();
-    let mut links = world.query::<(&Link, &LinkState)>();
+    let mut links = world.query::<(&Link, Has<InteractionDisabled>)>();
     let states = links
         .iter(world)
-        .map(|(_, state)| *state)
+        .map(|(_, disabled)| disabled)
         .collect::<Vec<_>>();
     assert_eq!(states.len(), 2);
     assert_eq!(
-        states
-            .iter()
-            .filter(|state| matches!(state, LinkState::Disabled))
-            .count(),
+        states.iter().filter(|disabled| **disabled).count(),
         1,
         "exactly the last crumb is current"
     );
@@ -1215,12 +1212,15 @@ fn a_press_on_a_link_restyles_it() {
 }
 
 /// A link in a root node, after two updates.
-fn spawn_link(app: &mut App, state: LinkState) -> Entity {
+fn spawn_link(app: &mut App, disabled: bool) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
         .world_mut()
-        .spawn((Link::new("link"), state, ChildOf(root)))
+        .spawn((Link::new("link"), ChildOf(root)))
         .id();
+    if disabled {
+        app.world_mut().entity_mut(link).insert(InteractionDisabled);
+    }
     app.update();
     app.update();
     link
@@ -1235,7 +1235,7 @@ fn link_text_color(app: &App, link: Entity) -> Color {
 #[test]
 fn changing_the_theme_under_a_hovered_link_keeps_it_hovered() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
 
     hover_and_toggle_theme(&mut app, link);
 
@@ -1247,7 +1247,7 @@ fn changing_the_theme_under_a_hovered_link_keeps_it_hovered() {
 #[test]
 fn changing_the_theme_under_a_pressed_link_keeps_it_pressed() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
     press(&mut app, link);
 
     hover_and_toggle_theme(&mut app, link);
@@ -1260,7 +1260,7 @@ fn changing_the_theme_under_a_pressed_link_keeps_it_pressed() {
 #[test]
 fn changing_the_theme_under_a_link_the_pointer_is_not_on_leaves_it_at_rest() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
 
     toggle_theme(&mut app);
     app.update();
@@ -1273,7 +1273,7 @@ fn changing_the_theme_under_a_link_the_pointer_is_not_on_leaves_it_at_rest() {
 #[test]
 fn a_disabled_link_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Disabled);
+    let link = spawn_link(&mut app, true);
 
     hover_and_toggle_theme(&mut app, link);
 
@@ -1295,12 +1295,14 @@ fn a_disabled_link_keeps_its_button_and_is_interaction_disabled() {
     assert!(app.world().entity(link).contains::<Button>());
     assert!(!app.world().entity(link).contains::<InteractionDisabled>());
 
-    app.world_mut().entity_mut(link).insert(LinkState::Disabled);
+    app.world_mut().entity_mut(link).insert(InteractionDisabled);
     app.update();
     assert!(app.world().entity(link).contains::<Button>());
     assert!(app.world().entity(link).contains::<InteractionDisabled>());
 
-    app.world_mut().entity_mut(link).insert(LinkState::Enabled);
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
     app.update();
     assert!(app.world().entity(link).contains::<Button>());
     assert!(!app.world().entity(link).contains::<InteractionDisabled>());
@@ -1312,7 +1314,7 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
         .world_mut()
-        .spawn((Link::new("link"), LinkState::Disabled, ChildOf(root)))
+        .spawn((Link::new("link"), InteractionDisabled, ChildOf(root)))
         .id();
     app.update();
     app.update();
@@ -1338,6 +1340,46 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
             .colors
             .text_primary
     );
+}
+
+#[test]
+fn inserting_and_removing_the_marker_on_a_live_link_restyles_it_under_the_pointer() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, false);
+    app.world_mut().entity_mut(link).insert(Hovered(true));
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+
+    app.world_mut().entity_mut(link).insert(InteractionDisabled);
+    app.world_mut().run_schedule(Update);
+    assert_eq!(background(&app, link), colors.background_primary);
+    assert_eq!(link_text_color(&app, link), colors.text_primary);
+
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
+    app.world_mut().run_schedule(Update);
+    assert_eq!(background(&app, link), colors.background_secondary);
+    assert_eq!(link_text_color(&app, link), colors.link);
+}
+
+#[test]
+fn a_link_enabled_again_reacts_to_the_pointer_again() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, true);
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    press(&mut app, link);
+    assert_eq!(background(&app, link), colors.background_primary);
+
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(background(&app, link), colors.background_primary);
+    assert_eq!(link_text_color(&app, link), colors.link);
+
+    press(&mut app, link);
+    assert_eq!(background(&app, link), colors.background_secondary);
+    assert_eq!(link_text_color(&app, link), colors.link_selected);
 }
 
 /// The `Activate`s of the button that [`spawn_push_button`] spawned.
@@ -8855,7 +8897,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
 #[test]
 fn inserting_a_link_again_changes_its_text_in_place_and_keeps_its_label_in_step() {
     let mut app = headless_app();
-    let link = spawn_link(&mut app, LinkState::Enabled);
+    let link = spawn_link(&mut app, false);
     let text = app.world().entity(link).get::<Children>().unwrap()[0];
     assert_eq!(text_of(&app, text), "link");
 
