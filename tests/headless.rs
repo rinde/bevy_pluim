@@ -47,7 +47,7 @@ use rin_bevy_ui::color_palette_combo::{
     ColorPaletteComboState as PaletteComboState,
 };
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
-use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboRefs, ComboState};
+use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
@@ -9779,4 +9779,69 @@ fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
     app.update();
     app.update();
     assert_eq!(margin(&app), Val::Px(0.0));
+}
+
+/// The accessible value of `entity`.
+fn accessible_value(app: &App, entity: Entity) -> Option<String> {
+    app.world()
+        .get::<AccessibilityNode>(entity)
+        .unwrap()
+        .value()
+        .map(str::to_string)
+}
+
+/// The text of a combo button's label.
+fn combo_label(app: &App, button: Entity) -> String {
+    let label = app.world().get::<PushButtonRefs>(button).unwrap().label();
+    app.world().get::<Text>(label).unwrap().0.clone()
+}
+
+#[test]
+fn a_combo_shows_select_dots_by_default_while_nothing_is_selected() {
+    let mut app = headless_app();
+    let (_, button) = spawn_combo(&mut app);
+    assert_eq!(combo_label(&app, button), "Select..");
+}
+
+#[test]
+fn a_combo_shows_its_placeholder_while_nothing_is_selected_and_the_selection_after() {
+    let mut app = headless_app();
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            ComboPlaceholder("Pick a country".to_string()),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let button = app.world().get::<ComboRefs>(combo).unwrap().button();
+    assert_eq!(combo_label(&app, button), "Pick a country");
+    assert_eq!(accessible_value(&app, button), Some(String::new()));
+
+    // Select the first item through the open popup.
+    click(&mut app, button);
+    app.update();
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
+    let item = app.world().get::<Children>(list).unwrap()[0];
+    click(&mut app, item);
+    app.update();
+    app.update();
+    assert_eq!(combo_label(&app, button), "a");
+}
+
+#[test]
+fn inserting_a_placeholder_changes_the_text_of_a_live_combo() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(ComboPlaceholder("Nothing yet".to_string()));
+    app.update();
+    app.update();
+    assert_eq!(combo_label(&app, button), "Nothing yet");
+    assert_eq!(accessible_value(&app, button), Some(String::new()));
 }

@@ -43,7 +43,8 @@ impl Plugin for ComboPlugin {
                     place_open_lists.before(UiSystems::Layout),
                 ),
             )
-            .add_observer(on_insert_combo);
+            .add_observer(on_insert_combo)
+            .add_observer(on_insert_placeholder);
     }
 }
 
@@ -80,6 +81,23 @@ pub struct Combo;
 #[reflect(Component)]
 #[require(Name::new("ComboButton"), Hovered)]
 pub struct ComboButton;
+
+/// The text a [`Combo`]'s button shows while nothing is selected, "Select.." by default.
+///
+/// Put it on the combo, with it or later; inserting it again changes the text of a live
+/// combo. To a screen reader a combo with no selection still has an empty value, not this
+/// text. Removing it does not change the button; insert `ComboPlaceholder::default()` to
+/// restore the default.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct ComboPlaceholder(pub String);
+
+impl Default for ComboPlaceholder {
+    fn default() -> Self {
+        Self(PLACEHOLDER_TEXT.to_string())
+    }
+}
 
 /// The parts of a [`Combo`], on the combo itself. Only the widget builds it.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
@@ -188,13 +206,16 @@ impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let mut button_id = Entity::PLACEHOLDER;
         let mut list_id = Entity::PLACEHOLDER;
+        let placeholder = world
+            .get::<ComboPlaceholder>(context.entity)
+            .map_or_else(|| PLACEHOLDER_TEXT.to_string(), |p| p.0.clone());
         let chevron = world
             .get_resource_mut::<Assets<Image>>()
             .map_or_else(Handle::default, |mut images| images.add(chevron()));
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((
-                    PushButton::from_label(PLACEHOLDER_TEXT),
+                    PushButton::from_label(placeholder),
                     ComboButton,
                     NoDefaultHover,
                     // allow mouse events to pass through to parent
@@ -358,6 +379,18 @@ fn on_insert_combo(t: On<Insert<Combo>>, selections: SelectionParam, mut command
     commands.run_system_cached_with(update_selection, (combo_selection, combo_ref));
 }
 
+fn on_insert_placeholder(
+    t: On<Insert<ComboPlaceholder>>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let combo_ref = t.event().event_target();
+    let Some(combo_selection) = selections.get_ref(combo_ref) else {
+        return;
+    };
+    commands.run_system_cached_with(update_selection, (combo_selection, combo_ref));
+}
+
 fn selection_change(
     q: Query<Entity, Changed<Selection>>,
     combos: Query<(Entity, &Selection), (With<Combo>, Without<NoDefaultItems>)>,
@@ -383,6 +416,7 @@ fn update_selection(
     combo_sub_refs: Query<&ComboRefs>,
     pblr: Query<&PushButtonRefs>,
     items: Query<&Item<String>>,
+    placeholders: Query<&ComboPlaceholder>,
     mut labels: Query<&mut Text, With<PushButtonLabel>>,
     mut commands: Commands,
 ) {
@@ -410,7 +444,9 @@ fn update_selection(
         return;
     };
     let label = if selection.is_empty() {
-        PLACEHOLDER_TEXT.to_string()
+        placeholders
+            .get(combo_ref)
+            .map_or_else(|_| PLACEHOLDER_TEXT.to_string(), |p| p.0.clone())
     } else {
         selected_text(selection, &items)
     };
