@@ -2336,7 +2336,7 @@ fn a_virtual_list_row_shows_an_item_with_its_index_or_nothing_and_an_insert_obse
     let mut app = widgets_app();
     app.init_resource::<InsertedRows>();
     app.add_observer(
-        |t: On<Insert, VirtualListRow>,
+        |t: On<Insert<VirtualListRow>>,
          rows: Query<&VirtualListRow>,
          mut seen: ResMut<InsertedRows>| {
             if let Ok(row) = rows.get(t.event_target()) {
@@ -2364,7 +2364,7 @@ fn a_virtual_list_row_shows_an_item_with_its_index_or_nothing_and_an_insert_obse
     }
 
     // The observer of the insert got a shown row with both, for the creator's rows.
-    let seen = &app.world().resource::<InsertedRows>().0;
+    let seen = &app.world().get_resource::<InsertedRows>().unwrap().0;
     assert!(seen.iter().any(Option::is_some), "no insert showed an item");
     assert!(seen.iter().flatten().all(|shown| shown.index < 100));
 }
