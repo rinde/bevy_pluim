@@ -227,6 +227,22 @@ impl Segment {
 ///
 /// It is a child of the control, placed absolutely behind the segments, and slides to the
 /// selected segment when the selection changes; the segments themselves are transparent.
+///
+/// Only the widget builds one, and the component is immutable: the control is fixed for the life
+/// of the indicator and is read with [`owner`](Self::owner).
+///
+/// ```compile_fail
+/// use rin_bevy_ui::segmented_control::SegmentIndicator;
+/// # let control = bevy::prelude::Entity::PLACEHOLDER;
+/// let _ = SegmentIndicator { owner: control };
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::segmented_control::SegmentIndicator;
+/// fn change(mut indicators: Query<&mut SegmentIndicator>) {}
+/// bevy::ecs::system::assert_is_system(change);
+/// ```
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
