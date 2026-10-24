@@ -1,7 +1,5 @@
 //! `TabBar`: a row of tabs, one per item of a [`Selection`], on `bevy_ui_widgets`' tab list.
 
-use std::collections::HashMap;
-
 use bevy::a11y::AccessibilityNode;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::lifecycle::HookContext;
@@ -16,7 +14,7 @@ use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 
 use crate::focus::{AccessibilitySync, is_hidden, sync_label};
 use crate::segmented_control::segment_colors;
-use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
+use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
 use crate::theme::Theme;
 
 /// The height of a tab, in logical pixels.
@@ -465,7 +463,8 @@ fn on_insert_selection(
     bars: Query<(), With<TabBar>>,
     selections: SelectionParam,
     mut commands: Commands,
-    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
+    watches: Query<&ItemsObserver>,
+    observers: Query<(), With<Observer>>,
 ) {
     let bar_ref = t.event().event_target();
     if bars.get(bar_ref).is_err() {
@@ -474,22 +473,19 @@ fn on_insert_selection(
     let Some((values_ref, all_items)) = selections.get_item_values(bar_ref) else {
         return;
     };
-    if existing_values_ref_map.get(&bar_ref) == Some(&values_ref) {
+    let on_changed: fn(&mut Commands, Entity, Vec<Entity>) = |commands, bar_ref, items| {
+        commands.run_system_cached_with(on_items_changed, ItemsChangedInput { bar_ref, items });
+    };
+    if !watch_items(
+        &mut commands,
+        &watches,
+        &observers,
+        bar_ref,
+        values_ref,
+        on_changed,
+    ) {
         return;
     }
-    existing_values_ref_map.insert(bar_ref, values_ref);
-
-    commands
-        .entity(values_ref)
-        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
-            commands.run_system_cached_with(
-                on_items_changed,
-                ItemsChangedInput {
-                    bar_ref,
-                    items: t.event().items.iter().collect(),
-                },
-            );
-        });
 
     commands.run_system_cached_with(
         on_items_changed,

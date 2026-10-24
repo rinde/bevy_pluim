@@ -7702,3 +7702,60 @@ fn removing_a_color_palette_combo_removes_its_button_popup_and_palette() {
     app.update();
     assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
 }
+
+fn observers_of(app: &mut App, entity: Entity) -> usize {
+    app.world_mut()
+        .query::<&Observer>()
+        .iter(app.world())
+        .filter(|observer| observer.descriptor().entities().contains(&entity))
+        .count()
+}
+
+#[test]
+fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_items() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    app.update();
+    let before = observers_of(&mut app, selection);
+
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::reference(selection),
+            ChildOf(root),
+        ))
+        .id();
+    let bar = app
+        .world_mut()
+        .spawn((TabBar, Selection::reference(selection), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(observers_of(&mut app, selection), before + 2);
+
+    // Inserting the selection again does not add a second observer.
+    app.world_mut()
+        .entity_mut(control)
+        .insert(Selection::reference(selection));
+    for _ in 0..2 {
+        app.update();
+    }
+    assert_eq!(observers_of(&mut app, selection), before + 2);
+
+    app.world_mut().entity_mut(control).despawn();
+    app.world_mut().entity_mut(bar).despawn();
+    for _ in 0..2 {
+        app.update();
+    }
+    assert_eq!(observers_of(&mut app, selection), before);
+}

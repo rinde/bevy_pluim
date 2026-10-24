@@ -1,8 +1,6 @@
 //! `SegmentedControl`: a track of segments, one per item of a [`Selection`], that picks one.
 //! A segment shows the item's text, an icon, or both.
 
-use std::collections::HashMap;
-
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
@@ -14,7 +12,7 @@ use bevy::ui_widgets::{Activate, Button};
 
 use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
 use crate::list::sync_selected;
-use crate::select::{Item, ItemsChanged, Selection, SelectionParam};
+use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
@@ -695,7 +693,8 @@ fn on_insert_selection(
     controls: Query<(), With<SegmentedControl>>,
     selections: SelectionParam,
     mut commands: Commands,
-    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
+    watches: Query<&ItemsObserver>,
+    observers: Query<(), With<Observer>>,
 ) {
     let control_ref = t.event().event_target();
     if controls.get(control_ref).is_err() {
@@ -704,22 +703,19 @@ fn on_insert_selection(
     let Some((values_ref, all_items)) = selections.get_item_values(control_ref) else {
         return;
     };
-    if existing_values_ref_map.get(&control_ref) == Some(&values_ref) {
+    let on_changed: fn(&mut Commands, Entity, Vec<Entity>) = |commands, control_ref, items| {
+        commands.run_system_cached_with(on_items_changed, ItemsChangedInput { control_ref, items });
+    };
+    if !watch_items(
+        &mut commands,
+        &watches,
+        &observers,
+        control_ref,
+        values_ref,
+        on_changed,
+    ) {
         return;
     }
-    existing_values_ref_map.insert(control_ref, values_ref);
-
-    commands
-        .entity(values_ref)
-        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
-            commands.run_system_cached_with(
-                on_items_changed,
-                ItemsChangedInput {
-                    control_ref,
-                    items: t.event().items.iter().collect(),
-                },
-            );
-        });
 
     commands.run_system_cached_with(
         on_items_changed,
