@@ -45,7 +45,7 @@ use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueError, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea};
@@ -267,6 +267,12 @@ pub struct SliderChanges {
     pub last: f32,
     /// How many changes were final.
     pub finals: u32,
+}
+
+/// A [`Value`] of a constant range the screens know to be valid.
+#[expect(clippy::unwrap_used, reason = "the screens' constant ranges are valid")]
+fn valid(value: Result<Value, ValueError>) -> Value {
+    value.unwrap()
 }
 
 /// The root a screen of several widgets goes in: the camera and root of
@@ -1300,24 +1306,24 @@ fn numeric_stepper(world: &mut World) {
                 name: Some("Cars".into()),
                 ..default()
             },
-            Value::new_u16(10, 5, 15, 1),
+            valid(Value::new_u16(10, 5, 15, 1)),
             Name::new("u16 stepper"),
         ));
         root.spawn((
             NumericStepper::default(),
-            Value::new_u32(10, 5, 15, 1),
+            valid(Value::new_u32(10, 5, 15, 1)),
             Name::new("u32 stepper"),
         ));
         root.spawn((
             NumericStepper::default(),
-            Value::new_f32(10.0, 5.0, 15.0, 0.5),
+            valid(Value::new_f32(10.0, 5.0, 15.0, 0.5)),
             Name::new("f32 stepper"),
         ));
         // A step that does not divide the range: from 7 one more step would
         // pass the maximum of 8, and from 1 one fewer the minimum of 0.
         root.spawn((
             NumericStepper::default(),
-            Value::new_u8(5, 0, 8, 2),
+            valid(Value::new_u8(5, 0, 8, 2)),
             Name::new("stepper by two"),
         ));
         // One value shown by three steppers: the first holds it, the other two
@@ -1325,7 +1331,7 @@ fn numeric_stepper(world: &mut World) {
         let shared = root
             .spawn((
                 NumericStepper::default(),
-                Value::new_u32(3, 0, 6, 1),
+                valid(Value::new_u32(3, 0, 6, 1)),
                 Name::new("shared stepper"),
             ))
             .id();
@@ -1611,7 +1617,7 @@ fn setting_rows(world: &mut World) {
     if let Some(slot) = slots.get(1).and_then(|row| slot(world, *row)) {
         world.spawn((
             NumericStepper::default(),
-            Value::new_u8(12, 8, 20, 1),
+            valid(Value::new_u8(12, 8, 20, 1)),
             ChildOf(slot),
         ));
     }

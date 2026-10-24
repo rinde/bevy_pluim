@@ -483,6 +483,7 @@ fn hint_bar() -> impl Scene {
 }
 
 /// The Rail tool's options.
+#[expect(clippy::expect_used, reason = "the constant range is valid")]
 fn rail_bar() -> impl Scene {
     option_bar(bsn_list! {
         ~{Label::overline("Tracks")}
@@ -495,7 +496,7 @@ fn rail_bar() -> impl Scene {
         ~{Label::overline("Level")}
         --
         NumericStepper { format: {level as ValueFormat} }
-        ~{Value::new_u8(0, 0, 56, 7)}
+        ~{Value::new_u8(0, 0, 56, 7).expect("0 to 56 in steps of 7 is valid")}
         --
         @{Divider::vertical_scene()}
         --
@@ -726,7 +727,7 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
 fn fill_setting_rows(
     rows: Query<(&SettingRowRefs, &Pref), Added<SettingRowRefs>>,
     mut commands: Commands,
-) {
+) -> Result {
     for (refs, pref) in &rows {
         let options = match pref {
             Pref::Appearance => ["Dark", "Light"],
@@ -739,7 +740,7 @@ fn fill_setting_rows(
                             name: Some("Text size".to_string()),
                             ..default()
                         },
-                        Value::new_u16(100, 75, 150, 25),
+                        Value::new_u16(100, 75, 150, 25)?,
                         ChildOf(refs.control_slot),
                     ))
                     .observe(set_text_size);
@@ -768,6 +769,7 @@ fn fill_setting_rows(
             ChildOf(refs.control_slot),
         ));
     }
+    Ok(())
 }
 
 /// "100%" for a value of 100.

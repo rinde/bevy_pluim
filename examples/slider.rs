@@ -6,7 +6,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::{Activate, SliderValue, ValueChange};
 use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::numeric_stepper::{self, NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{self, FloatValue, NumericStepper, Value};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::slider::Slider;
 use rin_bevy_ui::theme::Theme;
@@ -34,7 +34,8 @@ struct SharedSlider;
 #[derive(Component, Debug, Clone, Copy)]
 struct SharedStepper;
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands) -> Result {
+    let shared_value = Value::new_f32(5.0, 0.0, 20.0, 0.5)?;
     commands.spawn(Camera2d);
     commands.spawn_scene(bsn! {
         Node {
@@ -68,7 +69,7 @@ fn setup(mut commands: Commands) {
                 on(slider_moved)
                 --
                 NumericStepper
-                ~{Value::new_f32(5.0, 0.0, 20.0, 0.5)}
+                ~{shared_value}
                 ~{SharedStepper}
                 on(stepper_stepped)
             ]
@@ -77,6 +78,7 @@ fn setup(mut commands: Commands) {
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
+    Ok(())
 }
 
 /// The speed with its unit.
@@ -94,8 +96,15 @@ fn slider_moved(
     change: On<ValueChange<f32>>,
     mut stepper: Single<&mut Value, With<SharedStepper>>,
 ) {
-    if let Value::F32 { value, .. } = stepper.as_mut() {
-        *value = change.value;
+    if let Value::F32(float_value) = **stepper
+        && let Ok(moved) = FloatValue::new(
+            change.value,
+            float_value.min(),
+            float_value.max(),
+            float_value.step(),
+        )
+    {
+        **stepper = Value::F32(moved);
     }
 }
 
@@ -105,7 +114,7 @@ fn stepper_stepped(
     slider: Single<Entity, With<SharedSlider>>,
     mut commands: Commands,
 ) {
-    if let Value::F32 { value, .. } = change.value {
+    if let Some(value) = change.value.as_f32() {
         commands.entity(*slider).insert(SliderValue(value));
     }
 }
