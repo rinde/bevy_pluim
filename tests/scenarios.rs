@@ -1632,7 +1632,7 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
     let panel = app
         .world_mut()
         .spawn((
-            Panel::new("Trains").with_max_body_height(200.0),
+            Panel::new("Trains").with_max_body_height(200.0).unwrap(),
             ChildOf(root),
         ))
         .id();
