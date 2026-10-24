@@ -312,7 +312,7 @@ fn place(node: &mut Node, orientation: ControlOrientation) {
 }
 
 /// Sets the thickness of a bar across its axis, and lets the other dimension size itself.
-fn size_bar(node: &mut Node, orientation: ControlOrientation, thickness: Val) {
+const fn size_bar(node: &mut Node, orientation: ControlOrientation, thickness: Val) {
     match orientation {
         ControlOrientation::Horizontal => {
             node.height = thickness;
