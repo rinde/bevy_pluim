@@ -700,18 +700,37 @@ drives scripted pointer and keyboard scenarios against the widgets
   none of the four jobs can run for them; that is expected for a private
   project.
 - **In cloud sessions**, `.claude/hooks/session-start.sh` exports the same
-  variable and fetches the dependency with the container's git credentials.
+  variable and persists it through `CLAUDE_ENV_FILE` before setup can fail.
+  Git uses Claude's GitHub proxy. The hook checks live read access with
+  `git ls-remote` before installing tools, even if Cargo has cached the tester.
+  Access to this repository alone does not grant access to the tester:
+  configure the Claude GitHub App at
+  <https://github.com/settings/installations> to include both `rin-bevy-ui`
+  and `rin-bevy-ui-tester`. Alternatively, run `/web-setup` in local Claude
+  Code with a `gh` token that can read both repositories. See
+  [Claude's GitHub authentication options](https://code.claude.com/docs/en/claude-code-on-the-web#github-authentication-options).
+  `TESTER_REPO_TOKEN` is a GitHub Actions secret, not automatically available
+  in Claude Cloud; the cloud hook relies on the proxy's access instead.
+  To verify in a **cloud session**, run
+  `GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code https://github.com/rinde/rin-bevy-ui-tester HEAD`
+  and `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo fetch --locked`. Both must
+  succeed; a local success does not verify cloud permissions. After changing
+  access, rerun `.claude/hooks/session-start.sh` in the cloud session.
 
 ### Claude Code on the web
 
 `.claude/hooks/session-start.sh`, registered in `.claude/settings.json` under
-`SessionStart`, prepares a fresh cloud container: it installs the pinned
-toolchain with `clippy` and `rustfmt`, `just` and `cargo-machete` at pinned
-versions, the Bevy system headers `.github/workflows/ci.yml` also installs,
+`SessionStart`, prepares a fresh cloud container: it checks tester access,
+then installs the pinned toolchain with `clippy` and `rustfmt`, `just` and
+`cargo-machete` at pinned versions, the Bevy system headers
+`.github/workflows/ci.yml` also installs,
 then fetches the dependencies (the private tester included, see above) and
 warms the build cache with `cargo build --all-targets` so the first real
 build isn't a cold Bevy compile. It is a no-op unless `CLAUDE_CODE_REMOTE=true`
 or run with `--force`, and is idempotent, with progress on stderr.
+Repository hooks run in single-repository cloud sessions; Claude's project
+threads and sessions with multiple repositories do not load them (see
+[cloud hook limitations](https://code.claude.com/docs/en/cloud-environments#limitations-in-cloud-sessions)).
 `.claude/settings.json` also sets the auto-compact window to 200k tokens for
 Sonnet 5.5 and Opus 5.5 (`modelSettings.<model>.autoCompactWindow`).
 
