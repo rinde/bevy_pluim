@@ -16,6 +16,7 @@ pub mod color_push_button;
 pub mod combo;
 pub mod divider;
 pub mod filter_chips;
+pub mod filter_combo;
 pub mod float;
 pub(crate) mod focus;
 pub mod gallery;
@@ -64,6 +65,7 @@ use crate::color_push_button::ColorPushButtonPlugin;
 use crate::combo::ComboPlugin;
 use crate::divider::DividerPlugin;
 use crate::filter_chips::FilterChipsPlugin;
+use crate::filter_combo::FilterComboPlugin;
 use crate::float::FloatPlugin;
 use crate::focus::FocusPlugin;
 use crate::gallery::GalleryPlugin;
@@ -112,6 +114,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
+            .add_plugins(FilterComboPlugin)
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(SegmentedControlPlugin)
             .add_plugins(LightDarkTogglePlugin)

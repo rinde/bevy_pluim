@@ -1,0 +1,27 @@
+// A click elsewhere closes the popup without picking, and a click inside the popup, on the
+// search box, does not.
+(
+    format_version: 3,
+    name: "a click outside a filter combo closes it without picking, a click on its search box does not",
+    setup: App(FilterCombos),
+    steps: [
+        MoveTo(Within(Name("filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Type(text: "utr"),
+        Wait(2),
+        Check(App(Active(of: Within(Name("filter combo"), Component("TextInput")), is: Nth(3, Within(Name("filter combo"), Component("ItemView")))))),
+        MoveTo(Within(Name("filter combo"), Component("TextInput"))),
+        Click(Left),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Open))),
+        Check(App(Focused(of: Within(Name("filter combo"), Component("TextInput"))))),
+        MoveTo(Screen((900.0, 500.0))),
+        Click(Left),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("filter combo"), items: []))),
+        Check(App(Focused(of: Within(Name("filter combo"), Component("ComboButton"))))),
+    ],
+    expect: [],
+)

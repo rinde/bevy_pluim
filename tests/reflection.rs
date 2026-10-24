@@ -26,6 +26,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{ChipView, FilterChips};
+use rin_bevy_ui::filter_combo::{FilterCombo, FilterComboRefs};
 use rin_bevy_ui::float::Float;
 use rin_bevy_ui::gallery::{Gallery, GalleryCardView};
 use rin_bevy_ui::icon::Icon;
@@ -111,6 +112,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<BreadCrumb>(registry);
         assert_component::<ColorPalette>(registry);
         assert_component::<ColorPaletteCombo>(registry);
+        assert_component::<FilterCombo>(registry);
         assert_component::<ColorPushButton>(registry);
         assert_component::<ColorSquare>(registry);
         assert_component::<NumericStepper>(registry);
@@ -169,6 +171,7 @@ fn the_widget_states_are_in_the_type_registry() {
         assert_component::<ComboState>(registry);
         assert_component::<ComboPlaceholder>(registry);
         assert_component::<ComboRefs>(registry);
+        assert_component::<FilterComboRefs>(registry);
         assert_component::<ColorPaletteComboRefs>(registry);
         assert_component::<ColorPaletteComboButton>(registry);
         assert_component::<ColorPaletteComboFloat>(registry);
