@@ -5235,6 +5235,48 @@ fn a_setting_row_is_a_group_labelled_with_its_title_and_described_by_its_descrip
 }
 
 #[test]
+fn inserting_a_setting_row_again_changes_its_text_and_keeps_its_control() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let row = app
+        .world_mut()
+        .spawn((SettingRow::new("A", "first"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+    let control = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(refs.control_slot)))
+        .id();
+    let children_before: Vec<Entity> = app.world().get::<Children>(row).unwrap().to_vec();
+
+    app.world_mut()
+        .entity_mut(row)
+        .insert(SettingRow::new("B", "second"));
+    app.update();
+    app.update();
+
+    assert_eq!(app.world().get::<Text>(refs.title_id).unwrap().0, "B");
+    assert_eq!(
+        app.world().get::<Text>(refs.description_id).unwrap().0,
+        "second"
+    );
+    let node = app.world().get::<AccessibilityNode>(row).unwrap();
+    assert_eq!(node.label(), Some("B"));
+    assert_eq!(node.description(), Some("second"));
+    assert_eq!(*app.world().get::<SettingRowRefs>(row).unwrap(), refs);
+    assert_eq!(
+        app.world().get::<Children>(row).unwrap().to_vec(),
+        children_before
+    );
+    assert_eq!(
+        app.world().get::<ChildOf>(control).unwrap().parent(),
+        refs.control_slot
+    );
+}
+
+#[test]
 fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
     let mut app = headless_app();
     let panel = app.world_mut().spawn(Panel::new("Trains")).id();
