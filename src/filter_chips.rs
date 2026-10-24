@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
 use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
-use crate::select::{Item, Selection, SelectionParam};
+use crate::select::{Item, Selection, SelectionParam, structure_may_have_changed};
 use crate::theme::{Theme, ThemeColors};
 
 /// The height of a chip.
@@ -38,7 +38,7 @@ impl Plugin for FilterChipsPlugin {
             .add_systems(
                 Update,
                 (
-                    sync_chips,
+                    sync_chips.run_if(structure_may_have_changed::<FilterChips, Chip>),
                     (|| None::<Entity>)
                         .pipe(theme_chips)
                         .run_if(resource_changed::<Theme>),

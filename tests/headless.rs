@@ -9351,6 +9351,112 @@ fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_
     assert_eq!(observers_of(&mut app, selection), before);
 }
 
+#[test]
+fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let item = app.world().get::<ChipView>(views[1]).unwrap().item;
+
+    // Break the children by hand: a frame with nothing to react to must leave it alone.
+    app.world_mut().entity_mut(views[1]).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(chip_views(&app, chips).len(), 2);
+
+    // A change to an item makes the chips look again, and they are built as they should be.
+    app.world_mut()
+        .get_mut::<Item<Chip>>(item)
+        .unwrap()
+        .set_changed();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(chip_views(&app, chips).len(), 3);
+}
+
+#[test]
+fn a_toolbar_does_not_look_at_its_buttons_in_a_frame_without_a_change() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let buttons = toolbar_buttons(&app, toolbar);
+    let item = app.world().get::<ToolbarButton>(buttons[0]).unwrap().item();
+
+    app.world_mut().entity_mut(buttons[0]).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toolbar_buttons(&app, toolbar).len(), buttons.len() - 1);
+
+    app.world_mut()
+        .get_mut::<Item<Tool>>(item)
+        .unwrap()
+        .set_changed();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toolbar_buttons(&app, toolbar).len(), buttons.len());
+}
+
+#[test]
+fn a_gallery_does_not_look_at_its_items_in_a_frame_without_a_change() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+    assert_eq!(groups.len(), 2);
+    let card = groups[1].1[1];
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+
+    // Move the last card to a group of its own without Bevy noticing: a frame with nothing to
+    // react to must not look at the items, so the gallery stays as it was.
+    app.world_mut()
+        .get_mut::<Item<GalleryCard>>(item)
+        .unwrap()
+        .bypass_change_detection()
+        .data
+        .group = "Specials".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery), groups);
+
+    // A change to an item makes the gallery look again, and the groups are built as they should be.
+    app.world_mut()
+        .get_mut::<Item<GalleryCard>>(item)
+        .unwrap()
+        .set_changed();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery).len(), 3);
+}
+
+#[test]
+fn a_gallery_still_rebuilds_its_groups_when_the_group_of_an_item_changes() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let groups = gallery_groups(&app, gallery);
+    assert_eq!(groups.len(), 2);
+    let card = groups[1].1[1];
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+
+    // The last card moves to a group of its own; quiet frames before and after change nothing.
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery), groups);
+    app.world_mut()
+        .get_mut::<Item<GalleryCard>>(item)
+        .unwrap()
+        .data
+        .group = "Specials".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(gallery_groups(&app, gallery).len(), 3);
+}
+
 /// An entity with the given items, to draw a selection from through `ItemsRef`.
 fn spawn_item_source(app: &mut App, texts: &[&'static str]) -> Entity {
     let source = app.world_mut().spawn_empty().id();
