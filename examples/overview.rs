@@ -547,11 +547,11 @@ fn values(spawner: In<StackChildSpawner>, mut commands: Commands) {
                 row_gap: px(16.0),
             }
             Children [
-                ~{Slider::new(0.5, 0.0, 1.0).with_name("Volume")}
+                ~{valid_slider(0.5, 0.0, 1.0, None).with_name("Volume")}
                 --
-                ~{Slider::new(60.0, 0.0, 120.0).with_step(10.0).with_format(kilometres_per_hour).with_name("Speed")}
+                ~{valid_slider(60.0, 0.0, 120.0, Some(10.0)).with_format(kilometres_per_hour).with_name("Speed")}
                 --
-                ~{Slider::new(4.0, 0.0, 10.0).with_step(1.0).with_name("Locked")}
+                ~{valid_slider(4.0, 0.0, 10.0, Some(1.0)).with_name("Locked")}
                 InteractionDisabled
                 --
                 Node { column_gap: px(16.0), align_items: AlignItems::Center }
@@ -835,4 +835,14 @@ fn feedback(spawner: In<StackChildSpawner>, mut commands: Commands) {
             ]
         },
     );
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

@@ -48,6 +48,35 @@ impl Plugin for SliderPlugin {
 /// How a [`Slider`] shows its value.
 pub type SliderFormat = fn(f32) -> String;
 
+/// Why a [`Slider`] could not be built.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SliderError {
+    /// The initial value is NaN or infinite.
+    NonFiniteValue,
+    /// The minimum or the maximum is NaN or infinite.
+    NonFiniteBound,
+    /// The minimum is greater than the maximum.
+    ReversedBounds,
+    /// The distance between the bounds is not a finite `f32`.
+    RangeTooWide,
+    /// The step is not positive and finite.
+    InvalidStep,
+}
+
+impl std::fmt::Display for SliderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NonFiniteValue => "the slider value must be finite",
+            Self::NonFiniteBound => "the slider bounds must be finite",
+            Self::ReversedBounds => "the slider minimum must not exceed its maximum",
+            Self::RangeTooWide => "the distance between the slider bounds must fit an f32",
+            Self::InvalidStep => "the slider step must be positive and finite",
+        })
+    }
+}
+
+impl std::error::Error for SliderError {}
+
 /// The default minimum width of the value label, in logical pixels, so that the
 /// track does not move as the text changes.
 pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
@@ -84,6 +113,11 @@ const LABEL_GAP_PX: f32 = 12.0;
 /// To a screen reader it is a `Role::Slider` with the value, bounds and step as
 /// numbers, the text `format` shows as its value and `name` as its label. The
 /// fields are read when the component is inserted; insert it again to change them.
+///
+/// The value, bounds and step are validated by [`Slider::new`] and
+/// [`Slider::with_step`] and read through [`Slider::value`], [`Slider::min`],
+/// [`Slider::max`] and [`Slider::step`]. A range of one value (`min == max`) is
+/// valid: the slider then always holds that value.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component, from_reflect = false)]
 #[component(on_insert = Self::on_insert)]
@@ -98,14 +132,10 @@ const LABEL_GAP_PX: f32 = 12.0;
     TabStop
 )]
 pub struct Slider {
-    /// The value it starts at.
-    pub value: f32,
-    /// The value at the left end.
-    pub min: f32,
-    /// The value at the right end.
-    pub max: f32,
-    /// The distance between the values it can take; `None` for any value.
-    pub step: Option<f32>,
+    value: f32,
+    min: f32,
+    max: f32,
+    step: Option<f32>,
     /// Turns the value into the text beside the track; `None` for no text.
     #[reflect(ignore)]
     pub format: Option<SliderFormat>,
@@ -117,24 +147,75 @@ pub struct Slider {
 
 impl Slider {
     /// A continuous slider at `value` between `min` and `max`, without a label.
-    #[must_use]
-    pub const fn new(value: f32, min: f32, max: f32) -> Self {
-        Self {
-            value,
+    ///
+    /// A finite `value` outside the range is clamped into it.
+    ///
+    /// # Errors
+    ///
+    /// [`SliderError::NonFiniteBound`] when a bound is NaN or infinite,
+    /// [`SliderError::ReversedBounds`] when `min > max`,
+    /// [`SliderError::RangeTooWide`] when `max - min` overflows an `f32` and
+    /// [`SliderError::NonFiniteValue`] when `value` is NaN or infinite.
+    pub fn new(value: f32, min: f32, max: f32) -> Result<Self, SliderError> {
+        if !min.is_finite() || !max.is_finite() {
+            return Err(SliderError::NonFiniteBound);
+        }
+        if min > max {
+            return Err(SliderError::ReversedBounds);
+        }
+        if !(max - min).is_finite() {
+            return Err(SliderError::RangeTooWide);
+        }
+        if !value.is_finite() {
+            return Err(SliderError::NonFiniteValue);
+        }
+        Ok(Self {
+            value: value.clamp(min, max),
             min,
             max,
             step: None,
             format: None,
             label_min_width: DEFAULT_LABEL_MIN_WIDTH_PX,
             name: None,
-        }
+        })
     }
 
-    /// The slider moving in steps of `step` from `min`.
+    /// The value it starts at.
     #[must_use]
-    pub const fn with_step(mut self, step: f32) -> Self {
+    pub const fn value(&self) -> f32 {
+        self.value
+    }
+
+    /// The value at the left end.
+    #[must_use]
+    pub const fn min(&self) -> f32 {
+        self.min
+    }
+
+    /// The value at the right end.
+    #[must_use]
+    pub const fn max(&self) -> f32 {
+        self.max
+    }
+
+    /// The distance between the values it can take; `None` for any value.
+    #[must_use]
+    pub const fn step(&self) -> Option<f32> {
+        self.step
+    }
+
+    /// The slider moving in steps of `step` from `min`. A step larger than the
+    /// range is valid: only the minimum can then be picked.
+    ///
+    /// # Errors
+    ///
+    /// [`SliderError::InvalidStep`] unless `step` is positive and finite.
+    pub fn with_step(mut self, step: f32) -> Result<Self, SliderError> {
+        if !(step.is_finite() && step > 0.0) {
+            return Err(SliderError::InvalidStep);
+        }
         self.step = Some(step);
-        self
+        Ok(self)
     }
 
     /// The slider showing its value as `format` gives it, beside the track.
@@ -158,23 +239,34 @@ impl Slider {
         self
     }
 
-    /// `value` within the range, on a step when the slider has one.
+    /// `value` within the range, on a step when the slider has one; the minimum
+    /// for a NaN or infinite `value`.
     #[must_use]
     pub fn snap(&self, value: f32) -> f32 {
-        let clamped = value.max(self.min).min(self.max);
-        let Some(step) = self.step.filter(|step| *step > 0.0) else {
-            return clamped;
+        if !value.is_finite() {
+            return self.min;
+        }
+        // f64 so that a tiny step cannot overflow the step count.
+        let (min, max) = (f64::from(self.min), f64::from(self.max));
+        let clamped = f64::from(value).clamp(min, max);
+        let Some(step) = self.step.map(f64::from) else {
+            return clamped as f32;
         };
-        let steps = ((clamped - self.min) / step).round();
-        let snapped = round_to_decimals(step.mul_add(steps, self.min), decimals_of(step));
-        snapped.max(self.min).min(self.max)
+        let steps = ((clamped - min) / step).round();
+        let mut snapped = step.mul_add(steps, min);
+        if let Some(decimals) = decimals_of(step) {
+            snapped = round_to_decimals(snapped, decimals);
+        }
+        snapped.clamp(min, max) as f32
     }
 
     /// The step the keys move by: `step`, or a hundredth of the range.
     fn key_step(&self) -> f32 {
-        self.step
-            .filter(|step| *step > 0.0)
-            .unwrap_or_else(|| ((self.max - self.min) / 100.0).max(f32::EPSILON))
+        let step = self
+            .step
+            .unwrap_or_else(|| ((self.max - self.min) / 100.0).max(f32::EPSILON));
+        // A step wider than the range moves nothing but must stay finite.
+        step.min(f32::MAX)
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -327,18 +419,17 @@ pub struct SliderRefs {
     pub label: Option<Entity>,
 }
 
-/// The number of decimals in `step`, up to six.
-fn decimals_of(step: f32) -> i32 {
-    (0..6)
-        .find(|decimals| {
-            let scaled = step * 10f32.powi(*decimals);
-            (scaled - scaled.round()).abs() < 1e-3
-        })
-        .unwrap_or(6)
+/// The number of decimals in `step`, up to six; `None` for a step that is not
+/// a multiple of a millionth.
+fn decimals_of(step: f64) -> Option<i32> {
+    (0..=6).find(|decimals| {
+        let scaled = step * 10f64.powi(*decimals);
+        scaled.round() >= 1.0 && (scaled - scaled.round()).abs() < 1e-3
+    })
 }
 
-fn round_to_decimals(value: f32, decimals: i32) -> f32 {
-    let factor = 10f32.powi(decimals);
+fn round_to_decimals(value: f64, decimals: i32) -> f64 {
+    let factor = 10f64.powi(decimals);
     (value * factor).round() / factor
 }
 
@@ -603,12 +694,24 @@ fn sync_accessibility(
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "tests may abort loudly")]
 mod tests {
     use super::*;
 
+    const NAN: f32 = f32::NAN;
+    const INF: f32 = f32::INFINITY;
+
+    fn slider(value: f32, min: f32, max: f32) -> Slider {
+        Slider::new(value, min, max).unwrap()
+    }
+
+    fn stepped(value: f32, min: f32, max: f32, step: f32) -> Slider {
+        slider(value, min, max).with_step(step).unwrap()
+    }
+
     #[test]
     fn a_continuous_slider_only_clamps() {
-        let slider = Slider::new(0.0, 0.0, 1.0);
+        let slider = slider(0.0, 0.0, 1.0);
         assert!((slider.snap(0.123_4) - 0.123_4).abs() < f32::EPSILON);
         assert!((slider.snap(-1.0) - 0.0).abs() < f32::EPSILON);
         assert!((slider.snap(2.0) - 1.0).abs() < f32::EPSILON);
@@ -616,7 +719,7 @@ mod tests {
 
     #[test]
     fn a_stepped_slider_rounds_to_the_nearest_step_from_its_minimum() {
-        let slider = Slider::new(0.0, 1.0, 11.0).with_step(2.0);
+        let slider = stepped(1.0, 1.0, 11.0, 2.0);
         assert!((slider.snap(4.2) - 5.0).abs() < f32::EPSILON);
         assert!((slider.snap(3.9) - 3.0).abs() < f32::EPSILON);
         assert!((slider.snap(100.0) - 11.0).abs() < f32::EPSILON);
@@ -624,10 +727,130 @@ mod tests {
 
     #[test]
     fn a_decimal_step_gives_round_values() {
-        let slider = Slider::new(0.0, 0.0, 1.0).with_step(0.1);
+        let slider = stepped(0.0, 0.0, 1.0, 0.1);
         assert!((slider.snap(0.299_999) - 0.3).abs() < f32::EPSILON);
-        assert_eq!(decimals_of(0.1), 1);
-        assert_eq!(decimals_of(0.25), 2);
-        assert_eq!(decimals_of(5.0), 0);
+        assert_eq!(decimals_of(0.1), Some(1));
+        assert_eq!(decimals_of(0.25), Some(2));
+        assert_eq!(decimals_of(5.0), Some(0));
+        assert_eq!(decimals_of(1e-9), None);
+    }
+
+    #[test]
+    fn a_fractional_step_snaps_from_a_fractional_minimum() {
+        let slider = stepped(0.5, 0.5, 2.0, 0.25);
+        assert!((slider.snap(0.8) - 0.75).abs() < f32::EPSILON);
+        assert!((slider.snap(1.9) - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn reversed_bounds_are_rejected_not_swapped() {
+        assert_eq!(
+            Slider::new(0.5, 1.0, 0.0).err(),
+            Some(SliderError::ReversedBounds)
+        );
+    }
+
+    #[test]
+    fn non_finite_numbers_are_rejected_in_every_argument() {
+        for bad in [NAN, INF, -INF] {
+            assert_eq!(
+                Slider::new(bad, 0.0, 1.0).err(),
+                Some(SliderError::NonFiniteValue)
+            );
+            assert_eq!(
+                Slider::new(0.5, bad, 1.0).err(),
+                Some(SliderError::NonFiniteBound)
+            );
+            assert_eq!(
+                Slider::new(0.5, 0.0, bad).err(),
+                Some(SliderError::NonFiniteBound)
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_steps_are_rejected() {
+        for bad in [0.0, -1.0, -0.0, NAN, INF, -INF] {
+            assert_eq!(
+                slider(0.0, 0.0, 1.0).with_step(bad).err(),
+                Some(SliderError::InvalidStep),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_finite_initial_value_is_clamped_into_the_range() {
+        assert!((slider(5.0, 0.0, 1.0).value() - 1.0).abs() < f32::EPSILON);
+        assert!((slider(-5.0, 0.0, 1.0).value() - 0.0).abs() < f32::EPSILON);
+        assert!((slider(f32::MAX, 0.0, 1.0).value() - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn getters_return_what_was_configured() {
+        let stepped_slider = stepped(2.0, 1.0, 3.0, 0.5);
+        assert!((stepped_slider.value() - 2.0).abs() < f32::EPSILON);
+        assert!((stepped_slider.min() - 1.0).abs() < f32::EPSILON);
+        assert!((stepped_slider.max() - 3.0).abs() < f32::EPSILON);
+        assert_eq!(stepped_slider.step(), Some(0.5));
+        assert_eq!(slider(2.0, 1.0, 3.0).step(), None);
+    }
+
+    #[test]
+    fn equal_bounds_are_valid_and_hold_the_bound() {
+        for slider in [slider(7.0, 3.0, 3.0), stepped(7.0, 3.0, 3.0, 1.0)] {
+            assert!((slider.value() - 3.0).abs() < f32::EPSILON);
+            assert!((slider.snap(100.0) - 3.0).abs() < f32::EPSILON);
+            assert!((slider.snap(-100.0) - 3.0).abs() < f32::EPSILON);
+            assert!(slider.key_step().is_finite() && slider.key_step() > 0.0);
+        }
+    }
+
+    #[test]
+    fn extreme_finite_bounds_are_valid_when_their_span_fits() {
+        let half = f32::MAX / 2.0;
+        let wide = slider(0.0, -half, half);
+        assert!(wide.key_step().is_finite());
+        assert!((wide.snap(f32::MAX) - half).abs() <= f32::EPSILON * half);
+        let whole = slider(0.0, f32::MAX, f32::MAX);
+        assert!((whole.snap(0.0) - f32::MAX).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_range_whose_span_overflows_is_rejected() {
+        assert_eq!(
+            Slider::new(0.0, f32::MIN, f32::MAX).err(),
+            Some(SliderError::RangeTooWide)
+        );
+    }
+
+    #[test]
+    fn a_step_larger_than_the_range_only_allows_the_minimum() {
+        let slider = stepped(0.5, 0.0, 1.0, 10.0);
+        assert!((slider.snap(0.9) - 0.0).abs() < f32::EPSILON);
+        assert!(slider.key_step().is_finite());
+    }
+
+    #[test]
+    fn a_tiny_step_over_a_huge_range_snaps_to_a_finite_value() {
+        let half = f32::MAX / 2.0;
+        let slider = stepped(0.0, -half, half, f32::from_bits(1));
+        for value in [-half, 0.0, 1.0, half] {
+            assert!(slider.snap(value).is_finite());
+        }
+    }
+
+    #[test]
+    fn snapping_a_non_finite_value_gives_the_minimum() {
+        let slider = stepped(0.0, 1.0, 5.0, 1.0);
+        for bad in [NAN, INF, -INF] {
+            assert!((slider.snap(bad) - 1.0).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn errors_display_and_are_errors() {
+        let error: Box<dyn std::error::Error> = Box::new(SliderError::InvalidStep);
+        assert!(error.to_string().contains("step"));
     }
 }

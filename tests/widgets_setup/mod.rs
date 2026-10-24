@@ -1354,7 +1354,7 @@ fn slider(world: &mut World) {
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((
-            Slider::new(0.0, 0.0, 1.0).with_name("Continuous"),
+            valid_slider(0.0, 0.0, 1.0, None).with_name("Continuous"),
             Node {
                 width: px(320),
                 ..default()
@@ -1362,9 +1362,7 @@ fn slider(world: &mut World) {
             Name::new("continuous slider"),
         ));
         root.spawn((
-            Slider::new(0.0, 0.0, 10.0)
-                .with_step(1.0)
-                .with_name("Stepped"),
+            valid_slider(0.0, 0.0, 10.0, Some(1.0)).with_name("Stepped"),
             Name::new("stepped slider"),
         ))
         .observe(
@@ -1374,16 +1372,13 @@ fn slider(world: &mut World) {
             },
         );
         root.spawn((
-            Slider::new(25.0, 0.0, 100.0)
-                .with_step(5.0)
+            valid_slider(25.0, 0.0, 100.0, Some(5.0))
                 .with_format(|value| format!("{value:.0} %"))
                 .with_name("Speed"),
             Name::new("formatted slider"),
         ));
         root.spawn((
-            Slider::new(3.0, 0.0, 10.0)
-                .with_step(1.0)
-                .with_format(|value| format!("{value:.0}")),
+            valid_slider(3.0, 0.0, 10.0, Some(1.0)).with_format(|value| format!("{value:.0}")),
             InteractionDisabled,
             Name::new("disabled slider"),
         ));
@@ -1914,4 +1909,14 @@ fn combo_rows(world: &mut World) {
         ));
         spawn_theme_button(root);
     });
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

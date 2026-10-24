@@ -32,8 +32,8 @@ use bevy::ui::{
 };
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
-    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValueChange, Tab, TabList,
-    ValueChange,
+    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValue, SliderValueChange, Tab,
+    TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
@@ -6528,12 +6528,14 @@ fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     let stepped = world
         .spawn(
             Slider::new(2.0, 0.0, 10.0)
+                .unwrap()
                 .with_step(1.0)
+                .unwrap()
                 .with_format(|value| format!("{value:.0} km"))
                 .with_name("Distance"),
         )
         .id();
-    let continuous = world.spawn(Slider::new(25.0, 0.0, 100.0)).id();
+    let continuous = world.spawn(Slider::new(25.0, 0.0, 100.0).unwrap()).id();
     app.update();
     app.update();
 
@@ -6575,9 +6577,82 @@ fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     // Inserted again without a format, it has no value text left.
     app.world_mut()
         .entity_mut(stepped)
-        .insert(Slider::new(7.0, 0.0, 10.0).with_step(1.0));
+        .insert(Slider::new(7.0, 0.0, 10.0).unwrap().with_step(1.0).unwrap());
     app.update();
     assert_eq!(node(&app, stepped).value(), None);
+}
+
+#[test]
+fn a_zero_range_slider_has_finite_data_and_keys_cannot_change_its_value() {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    #[derive(Resource, Default)]
+    struct Seen(Vec<f32>);
+
+    let mut app = headless_app();
+    app.init_resource::<Seen>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world
+        .spawn(Slider::new(9.0, 3.0, 3.0).unwrap().with_step(1.0).unwrap())
+        .observe(|change: On<ValueChange<f32>>, mut seen: ResMut<Seen>| {
+            seen.0.push(change.value);
+        })
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(slider));
+    for key in [
+        (KeyCode::ArrowRight, Key::ArrowRight),
+        (KeyCode::ArrowLeft, Key::ArrowLeft),
+        (KeyCode::Home, Key::Home),
+        (KeyCode::End, Key::End),
+    ] {
+        app.world_mut().write_message(KeyboardInput {
+            key_code: key.0,
+            logical_key: key.1,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+        app.update();
+        app.update();
+    }
+
+    let entity = app.world().entity(slider);
+    assert!((entity.get::<SliderValue>().unwrap().0 - 3.0).abs() < f32::EPSILON);
+    assert!(
+        app.world()
+            .get_resource::<Seen>()
+            .unwrap()
+            .0
+            .iter()
+            .all(|value| (*value - 3.0).abs() < f32::EPSILON),
+        "no key may report a changed value"
+    );
+    let node = entity.get::<AccessibilityNode>().unwrap();
+    for number in [
+        node.numeric_value(),
+        node.min_numeric_value(),
+        node.max_numeric_value(),
+        node.numeric_value_step(),
+    ] {
+        assert!(number.unwrap().is_finite());
+    }
+    assert_eq!(node.numeric_value(), Some(3.0));
+    let refs = *entity.get::<SliderRefs>().unwrap();
+    let left = app.world().entity(refs.thumb).get::<Node>().unwrap().left;
+    let width = app.world().entity(refs.fill).get::<Node>().unwrap().width;
+    for val in [left, width] {
+        assert!(matches!(val, Val::Percent(percent) if percent.is_finite()));
+    }
 }
 
 #[test]
@@ -6588,7 +6663,7 @@ fn a_slider_without_a_label_leaves_the_apps_right_margin_alone() {
     let margin = UiRect::all(Val::Px(8.0));
     let slider = world
         .spawn((
-            Slider::new(0.0, 0.0, 1.0),
+            Slider::new(0.0, 0.0, 1.0).unwrap(),
             Node {
                 margin,
                 ..default()
@@ -6610,7 +6685,7 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
     let mut app = headless_app();
     let world = app.world_mut();
     world.spawn((Camera2d, UiRoot));
-    let slider = world.spawn(Slider::new(2.0, 0.0, 10.0)).id();
+    let slider = world.spawn(Slider::new(2.0, 0.0, 10.0).unwrap()).id();
     app.update();
     app.update();
     let thumb = app
