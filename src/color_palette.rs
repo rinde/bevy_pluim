@@ -280,7 +280,7 @@ fn theme_items(
     let no_selection = SelectionValue::default();
 
     for (color_palette_ref, children) in it {
-        let Some(children) = children else { return };
+        let Some(children) = children else { continue };
         if (*children).is_empty() {
             continue;
         }
