@@ -7664,6 +7664,32 @@ fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_i
 }
 
 #[test]
+fn a_push_button_inserted_several_times_keeps_one_label_and_one_observer() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+
+    for text in ["One", "Two", "Three"] {
+        app.world_mut()
+            .entity_mut(button)
+            .insert(PushButton::from_label(text));
+        app.update();
+        app.update();
+    }
+
+    let after = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(after, refs);
+    assert_eq!(text_of(&app, after.label()), "Three");
+    assert_eq!(
+        app.world().entity(button).get::<Children>().unwrap().len(),
+        1
+    );
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
+}
+
+#[test]
 fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     let mut app = headless_app();
     let button = spawn_push_button(&mut app);
