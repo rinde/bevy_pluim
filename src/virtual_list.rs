@@ -723,12 +723,9 @@ fn navigate(
         let Some(item) = current.and_then(|index| items.get(index).copied()) else {
             return;
         };
-        if selections
-            .get(list)
-            .is_some_and(|selection| !selection.is_selected(item))
-        {
-            selections.update_selection(list, |selection| selection.toggle_selected(item));
-        }
+        // As for a `List`: a pick on a selected row deselects it as far as the
+        // selection allows (`toggle_selected` is `None` for a `One`).
+        selections.update_selection(list, |selection| selection.toggle_selected(item));
         return;
     }
 
