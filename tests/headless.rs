@@ -10504,3 +10504,75 @@ fn an_app_owned_child_of_a_scroll_bar_survives_theming_and_reinserting_the_marke
     assert_eq!(thumbs_of(&mut app, vertical), 1);
     assert_eq!(app.world().get::<Children>(vertical).unwrap().len(), 2);
 }
+
+#[test]
+fn a_toast_with_no_parent_is_logged_and_despawned() {
+    use bevy::log::tracing::{self, Level};
+    use bevy::log::tracing_subscriber::{self, layer::SubscriberExt};
+    use rin_bevy_ui::toast::Toast;
+    use std::sync::{Arc, Mutex};
+
+    struct Errors(Arc<Mutex<usize>>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Errors {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() == Level::ERROR
+                && let Ok(mut count) = self.0.lock()
+            {
+                *count += 1;
+            }
+        }
+    }
+
+    let count = Arc::new(Mutex::new(0));
+    let subscriber = tracing_subscriber::registry().with(Errors(count.clone()));
+    let mut app = headless_app();
+    // The subscriber is thread-local, so the systems must run on this thread.
+    app.edit_schedule(Update, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let toast = app.world_mut().spawn(Toast::new("Orphan")).id();
+    tracing::subscriber::with_default(subscriber, || {
+        for _ in 0..3 {
+            app.update();
+        }
+    });
+    assert!(
+        app.world().get_entity(toast).is_err(),
+        "a parentless toast stayed"
+    );
+    assert_eq!(*count.lock().unwrap(), 1, "one error should be logged");
+}
+
+#[test]
+fn two_roots_each_get_their_own_toast_stack() {
+    use rin_bevy_ui::toast::{Toast, ToastStack};
+
+    let mut app = headless_app();
+    let first = app.world_mut().spawn(Node::default()).id();
+    let second = app.world_mut().spawn(Node::default()).id();
+    let a = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(first)))
+        .id();
+    app.update();
+    // The second root's toast has the same text and must not join (or be
+    // dropped for) the first root's stack.
+    let b = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(second)))
+        .id();
+    app.update();
+    app.update();
+    let parent_of = |app: &App, entity: Entity| {
+        let stack = app.world().get::<ChildOf>(entity)?.parent();
+        let root = app.world().get::<ChildOf>(stack)?.parent();
+        app.world().get::<ToastStack>(stack)?;
+        Some(root)
+    };
+    assert_eq!(parent_of(&app, a), Some(first));
+    assert_eq!(parent_of(&app, b), Some(second));
+}
