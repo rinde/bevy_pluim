@@ -202,8 +202,8 @@ of them (`just example gallery -- --run-all stack link`).
 | --- | --- |
 | `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
-| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and every `tests/ron/` file played again with the UI drawn to an image (`image_target_app`), and every `tests/ron/` file played under shuffled schedules, see [Determinism](#determinism) |
-| `tests/ron_scenarios.rs` | `harness = false`: one test per `.ron` file in `tests/ron/`, see [Scenario files](#scenario-files) |
+| `tests/scenarios.rs` | Rust scenarios played by `rin_bevy_ui_tester`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and generated per-file tests that play each `tests/ron/` file with the UI drawn to an image (`image_target_app`) and under shuffled schedules, see [Determinism](#determinism) |
+| `tests/ron_scenarios.rs` | Generated libtest cases for every `.ron` file and each of its default, scale 2 and text 1.5x variants, see [Scenario files](#scenario-files) |
 | `tests/recorded_scenarios_gpu.rs` | needs `--features record` and a GPU, and is `#[ignore]`d: records every `tests/ron/` file offscreen, see [Recording the scenarios](#recording-the-scenarios) |
 | `tests/common/mod.rs` | `widgets_app()` and `spawn_camera_and_root`, shared by the scenario targets |
 | `tests/widgets_setup/mod.rs` | `WidgetsSetup`, the screens scenarios start from, one per widget, each started from its example but a fixture of its own |
@@ -811,13 +811,15 @@ person would see after using the UI.
 
 ### Scenario files
 
-A scenario can be data: `tests/ron/NAME.ron` is read by `tests/ron_scenarios.rs`,
-a `harness = false` target (`[[test]]` in `Cargo.toml`) that calls the tester's
-`run_ron_tests`, so every file is one test named after it and the output reads
-like libtest's. `cargo test --test ron_scenarios push_button` runs the files
-whose name contains `push_button`; `just test` runs them with everything else.
-Each file runs in a fresh `common::widgets_app()` after `Registry::install`, so
-a file can check any `Reflect` type of the app by short type path.
+A scenario can be data: `tests/ron/NAME.ron` is compiled into individual
+libtest cases by `build.rs`. Each file gets default, scale 2 and text 1.5x
+cases named with its file and variant, and standard Cargo filters select a
+single case (for example, `cargo test --test ron_scenarios scenario_push_button_scale_2`).
+`just test` runs them with everything else. Each case runs in a fresh
+`common::widgets_app()` after `Registry::install`, so a file can check any
+`Reflect` type of the app by short type path. `skip` and `fixme` scenarios are
+ignored by libtest, variant restrictions leave their out-of-scope cases
+unplayed, and `should_fail` passes only when the scenario fails as expected.
 
 - **The format** is the tester's RON script (`format_version: 3`); see its
   README and `tests/ron/*.ron` there. The same file also plays in the tester's
@@ -1044,13 +1046,9 @@ a file can check any `Reflect` type of the app by short type path.
   text) says `variants: ["default", "scale 2"]` with a comment saying why.
 - **Prove it fails** as with Rust scenarios: change an expected value in the
   file and see the test fail before trusting it.
-- **Every file is played more than once.**
-  - `ron_scenarios` plays it as three variants: `name`, `[scale 2]` and `[text 1.5x]`.
-  - `every_scenario_file_passes_with_the_ui_drawn_to_an_image` in `tests/scenarios.rs`
-    plays it again headless with the camera rendering to an image as in a recording, so
-    a file must pass both ways (see [Recording the scenarios](#recording-the-scenarios)).
-  - `every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` plays it under
-    shuffled schedules (see [Determinism](#determinism)).
+- **Every file is played more than once.** Generated libtest cases play it as
+  three variants, draw it to an image, and run each schedule/seed combination
+  (see [Determinism](#determinism)). Standard test filters select each case.
 - **Targets on the `Combos` screen.** A row of `first combo`, `own combo` and
   `third combo` (`first` and `third` share one selection through
   `Selection::reference`, `own` has a selection of its own over the same
@@ -1174,18 +1172,17 @@ a file can check any `Reflect` type of the app by short type path.
 Since Bevy 0.20 many system sets (the UI's in `PostUpdate`) are ordered only
 where systems' data access conflicts, so a system that runs at the right
 moment only by luck would pass on one order and fail on another.
-`every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed` in
-`tests/scenarios.rs` plays every `tests/ron/` file once for each of
-`PreUpdate`, `Update`, `PostUpdate` and `Last` and each of `SHUFFLE_SEEDS`
-(fixed, never the clock), with that schedule built with
+Generated tests in `tests/scenarios.rs` play every `tests/ron/` file once for
+each of `PreUpdate`, `Update`, `PostUpdate` and `Last` and each of the fixed
+seeds `[1, 2, 3, 0x5eed_cafe]` (never the clock), with that schedule built with
 `ScheduleBuildSettings::shuffle_seed` and the single-threaded executor, so the
 order is the seed's alone. The `debug` Bevy feature that provides the seed is
 in `[dev-dependencies]` only.
 
-- **Reproduce a failure** from the file, schedule and seed it names: call
-  `shuffle(&mut app, schedule, seed)` on a `widgets_app()` after
-  `Registry::install` and play that file with `scenario.run_in(&mut app)`, or
-  narrow the test's loops to that file, schedule and seed.
+- **Reproduce a failure** with the generated test filter, for example
+  `cargo test --test scenarios scenario_combo_opens_list_postupdate_seed_5eedcafe
+  -- --exact`. The test runs that file with `shuffle(&mut app, schedule,
+  seed)` after `Registry::install`, so its name is enough to replay the failure.
 - **Fix it by ordering** the system through the data it touches (`.after(..)`
   or a set). Never widen the seed list or skip the file.
 
@@ -1208,10 +1205,10 @@ recorded_scenarios_gpu --features record`.
   the widgets read hover from picking, which works for any target (see "Is the
   pointer on it?" above). Combos, palette combos and the hover colours of lists
   and palettes used to read `RelativeCursorPosition` and misbehaved in a
-  recording (#100). `every_scenario_file_passes_with_the_ui_drawn_to_an_image`
-  in `tests/scenarios.rs` plays every file headless with the camera aimed at an
-  image, as the recorder does but without a GPU, so this is caught by `just
-  test`. It fails on any file that does not pass; there is no allowlist, so a
+  recording (#100). Generated per-file tests in `tests/scenarios.rs` play each
+  file headless with the camera aimed at an image, as the recorder does but
+  without a GPU, so this is caught by `just test`. A failure names its file;
+  there is no allowlist, so a
   scenario that only fails with the UI drawn to an image is a bug to fix, not a
   name to list.
 - **CI.** The `record` job of `ci.yml` runs `just record` on lavapipe and uploads

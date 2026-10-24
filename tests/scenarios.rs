@@ -1,7 +1,11 @@
 //! Scenario tests: `rin_bevy_ui_tester` drives this crate's widgets with
 //! scripted pointer input in a headless app, and checks what they did.
 
-#![expect(clippy::unwrap_used, reason = "tests may abort loudly")]
+#![expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "tests may abort loudly with a case-specific diagnostic"
+)]
 
 mod common;
 mod widgets_check;
@@ -50,7 +54,7 @@ use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
 use rin_bevy_ui_tester::{
     AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
     Scenario, ScenarioReport, Step, SyntheticInput, Target, WidgetRole, WorldSnapshot,
-    load_ron_file, resolve, ron_files, suggest_checks,
+    load_ron_file, resolve, suggest_checks,
 };
 
 use common::{spawn_camera_and_root, widgets_app};
@@ -1339,26 +1343,32 @@ fn draw_to_the_image(
     }
 }
 
-#[test]
-fn every_scenario_file_passes_with_the_ui_drawn_to_an_image() {
+fn run_image_case(path: &str) {
     // The recorder draws the UI to an image. A widget that asks the window
     // where the cursor is (`RelativeCursorPosition`) finds nothing there, so a
     // combo closed on the release that opened it and hovered items lost their
     // hover colour (#100). Picking works for any render target.
     let registry = Registry::default();
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
-    let mut failed = Vec::new();
-    for path in ron_files(dir).unwrap() {
-        let scenario = load_ron_file(&path, &registry).unwrap();
-        let mut app = image_target_app();
-        registry.install(app.world_mut());
-        let report = scenario.run_in(&mut app);
-        if !report.passed() {
-            failed.push((path.display().to_string(), report.failures().clone()));
-        }
+    let scenario = load_ron_file(path, &registry).unwrap();
+    if scenario.disabled().is_some() {
+        return;
     }
-    assert!(failed.is_empty(), "{failed:#?}");
+    let label = format!("{path} [drawn to image]");
+    let mut app = image_target_app();
+    registry.install(app.world_mut());
+    let report = scenario.run_in(&mut app);
+    assert_eq!(
+        report.passed(),
+        scenario.should_fail_reason().is_none(),
+        "{label}: {}\n{:#?}",
+        scenario
+            .should_fail_reason()
+            .map_or("scenario failed", |reason| reason),
+        report.failures(),
+    );
 }
+
+include!(concat!(env!("OUT_DIR"), "/image_scenario_tests.rs"));
 
 #[test]
 fn the_tooltip_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_second() {
@@ -1402,8 +1412,6 @@ fn the_toast_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_second
 
 /// Fixed seeds for shuffling a schedule: never the clock, so a failure
 /// reproduces from the seed it names.
-const SHUFFLE_SEEDS: [u64; 4] = [1, 2, 3, 0x5eed_cafe];
-
 /// The schedules this crate adds systems to, by name.
 fn shuffled_schedules() -> [(&'static str, InternedScheduleLabel); 4] {
     [
@@ -1426,35 +1434,36 @@ fn shuffle(app: &mut App, schedule: InternedScheduleLabel, seed: u64) {
     });
 }
 
-#[test]
-fn every_scenario_file_passes_with_each_schedule_shuffled_by_each_seed() {
+fn run_shuffled_case(path: &str, schedule_name: &str, seed: u64) {
     // A system that runs at the right moment only because nothing happened to
     // run it earlier passes under one seed and fails under another. A failure
     // names the file, the schedule and the seed, and replays from them.
     let registry = Registry::default();
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
-    let mut failed = Vec::new();
-    for path in ron_files(dir).unwrap() {
-        let scenario = load_ron_file(&path, &registry).unwrap();
-        for (name, schedule) in shuffled_schedules() {
-            for seed in SHUFFLE_SEEDS {
-                let mut app = widgets_app();
-                registry.install(app.world_mut());
-                shuffle(&mut app, schedule, seed);
-                let report = scenario.run_in(&mut app);
-                if !report.passed() {
-                    failed.push((
-                        path.display().to_string(),
-                        name,
-                        seed,
-                        report.failures().clone(),
-                    ));
-                }
-            }
-        }
+    let scenario = load_ron_file(path, &registry).unwrap();
+    if scenario.disabled().is_some() {
+        return;
     }
-    assert!(failed.is_empty(), "{failed:#?}");
+    let label = format!("{path} [schedule {schedule_name}, seed {seed}]");
+    let mut app = widgets_app();
+    registry.install(app.world_mut());
+    let (_, schedule) = shuffled_schedules()
+        .into_iter()
+        .find(|(name, _)| *name == schedule_name)
+        .expect("generated schedule must exist");
+    shuffle(&mut app, schedule, seed);
+    let report = scenario.run_in(&mut app);
+    assert_eq!(
+        report.passed(),
+        scenario.should_fail_reason().is_none(),
+        "{label}: {}\n{:#?}",
+        scenario
+            .should_fail_reason()
+            .map_or("scenario failed", |reason| reason),
+        report.failures(),
+    );
 }
+
+include!(concat!(env!("OUT_DIR"), "/shuffled_scenario_tests.rs"));
 
 /// A combo over a selection that may hold several items: picks in its list
 /// leave it open, and a click elsewhere closes it.
