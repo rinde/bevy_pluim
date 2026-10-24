@@ -1684,6 +1684,59 @@ fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
     );
 }
 
+/// The height of a scroll area with a `max_height` of 200 around a list of `rows` rows, and how
+/// far its contents overflow it (logical pixels).
+fn list_scroll_area_height(rows: usize) -> (f32, f32) {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let area = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: px(200),
+                max_height: px(200),
+                ..default()
+            },
+            ScrollArea::bundle(
+                move |parent: &mut ChildSpawner| {
+                    parent.spawn((
+                        List,
+                        Selection::builder()
+                            .one()
+                            .build_with_items((1..=rows).map(|n| Item::new(format!("Row {n}")))),
+                    ));
+                },
+                true,
+                false,
+            ),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..6 {
+        app.update();
+    }
+    let height = {
+        let computed = app.world().get::<ComputedNode>(area).unwrap();
+        computed.size().y * computed.inverse_scale_factor()
+    };
+    let contents = *app.world().get::<Children>(area).unwrap().first().unwrap();
+    let computed = app.world().get::<ComputedNode>(contents).unwrap();
+    let overflow =
+        (computed.content_size().y - computed.size().y) * computed.inverse_scale_factor();
+    (height, overflow)
+}
+
+#[test]
+fn a_list_in_a_scroll_area_with_a_maximum_height_grows_with_its_rows_and_then_scrolls() {
+    let (short, short_overflow) = list_scroll_area_height(2);
+    assert!(short < 200.0, "grows to its rows: {short}");
+    assert!(short_overflow < 1.0, "nothing to scroll: {short_overflow}");
+
+    let (tall, tall_overflow) = list_scroll_area_height(30);
+    assert!((tall - 200.0).abs() < 1.5, "stops at the maximum: {tall}");
+    assert!(tall_overflow > 100.0, "the rest scrolls: {tall_overflow}");
+}
+
 // ---- Text widgets in the accessibility tree ----
 
 /// An app with a title, a pill, a key cap and an icon button with a badge of 3, all named.

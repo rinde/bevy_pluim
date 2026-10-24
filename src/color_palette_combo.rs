@@ -1,9 +1,8 @@
 //! `ColorPaletteCombo`: a [`ColorPalette`] inside a combo-style popup.
 
-use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
+use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -13,11 +12,9 @@ use itertools::Either;
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::{Float, fit_vertically, keep_in_window_x};
-use crate::focus::{
-    AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
-    sync_role, sync_value,
-};
+use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::list::{ItemView, ListLayout};
+use crate::popup::{self, ButtonLook};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
@@ -59,7 +56,7 @@ impl Plugin for ColorPaletteComboPlugin {
 /// Space work on it. Escape closes it, as does the focus leaving the palette (Tab away, a
 /// click elsewhere); the focus then goes back to the button, unless it moved to another widget.
 ///
-/// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a label:
+/// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a label:
 /// its value is the names of the selected colours joined by `", "` in selection order (empty
 /// for none), it is expanded while the popup is open, and it controls the popup's palette.
 ///
@@ -364,29 +361,13 @@ fn on_insert_state(
     let Ok((&state, &sub_refs)) = state.get(t.event().event_target()) else {
         return;
     };
-    // A closed popup's palette is not a tab stop.
-    match state {
-        ColorPaletteComboState::Open => commands.entity(sub_refs.palette).remove::<Unreachable>(),
-        ColorPaletteComboState::Closed => commands.entity(sub_refs.palette).insert(Unreachable),
-    };
-    match state {
-        ColorPaletteComboState::Open => focus.set(sub_refs.palette, FocusCause::Navigated),
-        // Whoever closed the popup, the focus does not stay on a hidden palette.
-        ColorPaletteComboState::Closed if focus.get() == Some(sub_refs.palette) => {
-            focus.set(sub_refs.button, FocusCause::Navigated);
-        }
-        ColorPaletteComboState::Closed => {}
-    }
-
-    let visibility = match state {
-        ColorPaletteComboState::Open => Visibility::Visible,
-        ColorPaletteComboState::Closed => Visibility::Hidden,
-    };
-    commands.entity(sub_refs.float_id).insert(visibility);
+    let open = state == ColorPaletteComboState::Open;
+    popup::show_popup(&mut commands, open, sub_refs.palette, sub_refs.float_id);
+    popup::move_focus(&mut focus, open, sub_refs.palette, sub_refs.button);
     if let Ok(mut node) = accessibility_nodes.get_mut(sub_refs.button) {
-        node.set_expanded(state == ColorPaletteComboState::Open);
+        popup::set_expanded(&mut node, open);
     }
-    if state == ColorPaletteComboState::Open {
+    if open {
         commands.run_system_cached_with(position_float, sub_refs);
     }
 }
@@ -526,10 +507,7 @@ fn sync_accessibility(
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        sync_role(&mut node, Role::ComboBox);
-        clear_label(&mut node);
-        sync_value(&mut node, &value);
-        sync_controls(&mut node, sub_refs.palette);
+        popup::sync_combo_box(&mut node, &value, sub_refs.palette);
     }
 }
 
@@ -560,7 +538,12 @@ fn close_combos_on_outside_click(
                 continue;
             };
             let over_float = floats.get(subs.float_id).is_ok_and(Hovered::get);
-            if combo_state == ColorPaletteComboState::Open && !over_button.get() && !over_float {
+            // Inside the float counts as inside whatever the selection.
+            if popup::closes_on_outside_release(
+                combo_state == ColorPaletteComboState::Open,
+                over_button.get(),
+                over_float,
+            ) {
                 close(
                     combo_id,
                     &mut background_color,
@@ -581,8 +564,7 @@ fn close(
     theme: &Theme,
     commands: &mut Commands,
 ) {
-    *background_color = BackgroundColor(theme.colors.background_primary);
-    *border_color = BorderColor::all(theme.colors.border);
+    popup::apply_look(ButtonLook::Resting, theme, background_color, border_color);
     commands
         .entity(combo)
         .insert(ColorPaletteComboState::Closed);
@@ -664,21 +646,11 @@ fn handle_combo_button_mouse_events(
         return;
     };
 
-    match (trigger.event().kind, combo_state) {
-        // A drag says nothing new about the pointer being on the button, and can arrive
-        // after the pointer left it, so it does not restyle the button. A release or a
-        // click on a closed combo does not either, so all three share one empty arm.
-        (MouseKind::Drag, _)
-        | (MouseKind::Released | MouseKind::Click(_), ColorPaletteComboState::Closed) => {}
-        (MouseKind::Over | MouseKind::Pressed, _) | (_, ColorPaletteComboState::Open) => {
-            *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor::all(theme.colors.border_highlight);
-        }
-
-        (MouseKind::Out, ColorPaletteComboState::Closed) => {
-            *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor::all(theme.colors.border);
-        }
+    if let Some(look) = popup::button_look(
+        trigger.event().kind,
+        *combo_state == ColorPaletteComboState::Open,
+    ) {
+        popup::apply_look(look, &theme, &mut background_color, &mut border_color);
     }
 }
 
