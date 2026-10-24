@@ -457,6 +457,43 @@ of them (`just example gallery -- --run-all stack link`).
   home-made `Float`, not `bevy_ui_widgets`' `MenuButton` / popover: that would
   change positioning, z-index and outside-click behaviour, so it is a ticket of
   its own if wanted.
+- **A `Float` stays in its window (investigation #506, not built).** Putting a popup in a
+  window of its own, so it can leave the application window, was looked at against Bevy 0.20
+  and not implemented. What the Bevy source says: a UI tree is drawn by the camera of its
+  root. `propagate_ui_target_cameras` (`bevy_ui` `update.rs`) reads `UiTargetCamera` (else the
+  `IsDefaultUiCamera` camera, else the highest-order camera of the primary window) from root
+  nodes only, and propagates the result, `ComputedUiTargetCamera` and the scale factor and
+  size in `ComputedUiRenderTargetInfo`, to every descendant; `UiTargetCamera` on a non-root
+  node "will have no effect". `FixedNode` only makes a node lay out against its camera's
+  viewport rather than its parent, it keeps the parent's camera. So a `Float` that is a
+  child of its widget (what every popup is today) is always in the widget's window, and a
+  popup in another window needs its own `Window`, a `Camera2d` with
+  `RenderTarget::Window(WindowRef::Entity(..))` and a root `Node` with that camera as
+  `UiTargetCamera`, a node that has no parent. `UiRoot` already leaves such a root alone
+  (a `UiTargetCamera` in the bundle means no `UiRoot`, as the tester's cursor overlay shows).
+  What that breaks, and why it is a design of its own rather than a change to `Float`:
+  - the popup is no longer a descendant of its widget, so `Hovered` (the outside-click
+    systems of `Combo` and `ColorPaletteCombo` rely on "the popup is a descendant"),
+    visibility and `Display::None` inheritance (a popup of a hidden `Stack` panel), the
+    `Within(..)` reach of the scenarios, the closing of the popup with its widget and event
+    bubbling from the popup to the combo would all need an explicit link and cleanup;
+  - the popup window takes the OS focus from the application window, so `InputFocus`, the
+    `FocusLost` that closes a combo and the keyboard hand-over of "A combo's popup takes the
+    keyboard focus" change meaning; a tooltip must never take focus at all;
+  - every placement system (`place_open_lists`, the palette combo, `Tooltip`,
+    `VirtualList`'s window height, `float.rs`'s `keep_in_window_x` / `below_or_above`) reads
+    `Single<&Window, With<PrimaryWindow>>` and works in the primary window's logical pixels;
+    a popup window needs screen coordinates (`Window::position` plus the widget's offset,
+    the scale factor of whichever monitor it is on) and a reflow of the window when the popup
+    resizes;
+  - Wayland does not let a client place a toplevel window, so the feature cannot be
+    uniform across platforms, and web/mobile targets have one window only; the in-window
+    `Float` must stay as the fallback;
+  - the headless tester has no real windows, so the scenario files, which pass at scale
+    factors 1 and 2, `[text 1.5x]` and under shuffled schedules, could not cover it without
+    extra support in the tester.
+  If wanted, a first step is an opt-in `PopupWindow` mode on `Tooltip` and `Combo`, with the
+  in-window `Float` as default and fallback; it is tracked as a follow-up ticket, not here.
 - **Selections are immutable components.** Change one by going through
   `SelectionParam::update_selection` / `update_selection_single`, whose
   closures return `Option<SelectionValue>` from methods such as
