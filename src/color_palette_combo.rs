@@ -53,7 +53,6 @@ impl Plugin for ColorPaletteComboPlugin {
 
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
-// #[component(on_add=Self::on_insert)]
 /// A button that opens a [`ColorPalette`] in a popup.
 ///
 /// Opening the popup moves the keyboard focus to its palette, so the arrow keys, Enter and
@@ -108,8 +107,13 @@ fn on_insert_combo(
     list_layouts: Query<&ListLayout>,
     selections: SelectionParam,
     names: Query<&Name>,
+    built: Query<(), With<SubRefs>>,
 ) {
     let combo = t.event().event_target();
+    // Inserting the component again on a live combo keeps what it already built.
+    if built.contains(combo) {
+        return;
+    }
     let popup_name = popup_name(names.get(combo).ok());
 
     let mut button_id = Entity::PLACEHOLDER;
@@ -254,9 +258,14 @@ fn on_remove_combo(
     sub_refs: Query<&SubRefs>,
     mut commands: Commands,
 ) {
-    // The popup is a child of the combo, so it goes with a despawned combo by itself.
-    if let Ok(sub_refs) = sub_refs.get(t.event().event_target()) {
+    // The parts are children of the combo, so they go with a despawned combo by themselves.
+    let combo = t.event().event_target();
+    if let Ok(sub_refs) = sub_refs.get(combo) {
+        // The palette is inside the popup, unless the popup never inserted it.
+        commands.entity(sub_refs.palette).try_despawn();
         commands.entity(sub_refs.float_id).try_despawn();
+        commands.entity(sub_refs.button).try_despawn();
+        commands.entity(combo).try_remove::<(SubRefs, State)>();
     }
 }
 

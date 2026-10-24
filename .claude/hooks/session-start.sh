@@ -6,8 +6,9 @@
 # Bevy's default features need, then warms the build cache so the first real
 # build is not a cold Bevy compile. Cargo fetches the private
 # rin-bevy-ui-tester dev-dependency with the `git` binary, so it uses the
-# container's git credentials. Safe to run more than once: every step
-# checks whether it already has what it needs.
+# container's git credentials. Checks access before installing anything.
+# Safe to run more than once: every step checks whether it already has what
+# it needs.
 #
 # Runs automatically as a SessionStart hook in Claude Code on the web. Pass
 # --force to run it by hand anywhere else.
@@ -29,6 +30,31 @@ mkdir -p "$BIN"
 
 # Progress goes to stderr so it stays out of the session's context.
 log() { printf '  %s\n' "$*" >&2; }
+
+# ----------------------------------------------------------- private sources
+
+# Cargo must use git so Claude's GitHub proxy authenticates the request.
+# Persist this before any fallible setup, so a later cargo command still uses
+# the proxy when an install or fetch failed. Installed tools need PATH here too.
+export PATH="$BIN:$PATH"
+export CARGO_NET_GIT_FETCH_WITH_CLI=true
+export GIT_TERMINAL_PROMPT=0
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    printf 'export PATH=%q:$PATH\n' "$BIN" >>"$CLAUDE_ENV_FILE"
+    echo 'export CARGO_TERM_COLOR=always' >>"$CLAUDE_ENV_FILE"
+    echo 'export CARGO_NET_GIT_FETCH_WITH_CLI=true' >>"$CLAUDE_ENV_FILE"
+fi
+
+# A cached Cargo checkout can hide missing permissions. Check live access on
+# every start, before spending time on the toolchain or a cold Bevy build.
+log "checking read access to the private rin-bevy-ui-tester"
+if ! git ls-remote --exit-code https://github.com/rinde/rin-bevy-ui-tester HEAD >/dev/null; then
+    log "cannot read rinde/rin-bevy-ui-tester; check the git error above"
+    log "for Claude Cloud, grant the Claude GitHub App access to rin-bevy-ui-tester at https://github.com/settings/installations"
+    log "or run /web-setup in a local Claude Code session with a gh token that can read the tester"
+    log "then retry .claude/hooks/session-start.sh in the cloud session"
+    exit 1
+fi
 
 # ---------------------------------------------------------------- toolchain
 
@@ -105,28 +131,18 @@ install_tool cargo-machete "$MACHETE_VERSION" \
 
 # ------------------------------------------------------------------ sources
 
-# The tester is a private git dependency. Cargo's built-in git client ignores
-# the container's git credential configuration; the `git` binary honours it.
-export CARGO_NET_GIT_FETCH_WITH_CLI=true
-
 log "fetching dependencies (including the private rin-bevy-ui-tester)"
 if ! cargo fetch --locked >&2; then
-    log "could not fetch dependencies; if rin-bevy-ui-tester was refused, git has no read access to rinde/rin-bevy-ui-tester"
+    log "could not fetch dependencies; check the Cargo and git errors above"
     exit 1
 fi
 
-# A cold build of the Bevy tree takes minutes. Doing it here means it lands in
-# the cached container image instead of in the first thing the agent runs.
+# A cold build of the Bevy tree takes minutes. Doing it here warms the session's
+# build cache before the first thing the agent runs.
 # Best effort: a failure here must not stop the session from starting.
 log "warming the build cache (a few minutes on a cold container)"
 if ! cargo build --all-targets --locked >&2; then
     log "warm-up did not finish; the first build will just take longer"
-fi
-
-if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-    echo "export PATH=\"$BIN:\$PATH\"" >>"$CLAUDE_ENV_FILE"
-    echo 'export CARGO_TERM_COLOR=always' >>"$CLAUDE_ENV_FILE"
-    echo 'export CARGO_NET_GIT_FETCH_WITH_CLI=true' >>"$CLAUDE_ENV_FILE"
 fi
 
 echo "rin-bevy-ui dev environment ready: rustc $(rustc --version | cut -d' ' -f2), $(just --version), cargo-machete $(cargo machete --version 2>/dev/null | head -1). Run 'just ci' for everything CI checks."
