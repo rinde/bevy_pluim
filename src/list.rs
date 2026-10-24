@@ -83,6 +83,11 @@ impl Plugin for ListPlugin {
 /// A list does not scroll: it is as large as its items. To scroll a list that
 /// does not fit, put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) (see
 /// [`ScrollArea::bundle`](crate::scroll_area::ScrollArea::bundle)).
+///
+/// To cap its height, give that area a `max_height` (not a `height`): the area grows with the
+/// list up to the maximum and then scrolls, as a [`Panel`](crate::panel::Panel) body does. A
+/// list has no maximum height of its own, since a `ScrollArea` already scrolls it, keeps a
+/// focused row in view and draws the scroll bar.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
