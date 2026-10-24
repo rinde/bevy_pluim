@@ -15,7 +15,7 @@ use bevy::ecs::reflect::{AppTypeRegistry, ReflectComponent, ReflectResource};
 use bevy::prelude::*;
 use bevy::reflect::TypeRegistry;
 use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::badge::Badge;
+use rin_bevy_ui::badge::{Badge, BadgeRef, BadgeTone};
 use rin_bevy_ui::breadcrumbs::{BreadCrumb, BreadCrumbs};
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
@@ -26,6 +26,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{ChipCount, ChipLabel, ChipRefs, ChipView, FilterChips};
+use rin_bevy_ui::filter_combo::{FilterCombo, FilterComboRefs};
 use rin_bevy_ui::float::Float;
 use rin_bevy_ui::gallery::{Gallery, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::Icon;
@@ -39,7 +40,7 @@ use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef};
 use rin_bevy_ui::panel::Panel;
-use rin_bevy_ui::pill::Pill;
+use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{
@@ -51,7 +52,7 @@ use rin_bevy_ui::stack::{Stack, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
-use rin_bevy_ui::toast::{Toast, ToastStack};
+use rin_bevy_ui::toast::{Toast, ToastPlacement, ToastStack};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels};
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
 use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
@@ -111,6 +112,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<BreadCrumb>(registry);
         assert_component::<ColorPalette>(registry);
         assert_component::<ColorPaletteCombo>(registry);
+        assert_component::<FilterCombo>(registry);
         assert_component::<ColorPushButton>(registry);
         assert_component::<ColorSquare>(registry);
         assert_component::<NumericStepper>(registry);
@@ -143,6 +145,9 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Kbd>(registry);
         assert_component::<Pill>(registry);
         assert_component::<Badge>(registry);
+        assert_component::<BadgeRef>(registry);
+        assert_registered::<BadgeTone>(registry);
+        assert_registered::<PillTone>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
         assert_component::<ChipRefs>(registry);
@@ -174,6 +179,7 @@ fn the_widget_states_are_in_the_type_registry() {
         assert_component::<ComboState>(registry);
         assert_component::<ComboPlaceholder>(registry);
         assert_component::<ComboRefs>(registry);
+        assert_component::<FilterComboRefs>(registry);
         assert_component::<ColorPaletteComboRefs>(registry);
         assert_component::<ColorPaletteComboButton>(registry);
         assert_component::<ColorPaletteComboFloat>(registry);
@@ -193,6 +199,16 @@ fn the_theme_is_in_the_type_registry_as_a_resource() {
             .expect("Theme is in the type registry");
         assert!(theme.data::<ReflectResource>().is_some());
         assert!(registry.contains(TypeId::of::<ThemeColors>()));
+    });
+}
+
+#[test]
+fn the_toast_placement_is_in_the_type_registry_as_a_resource() {
+    with_registry(|registry| {
+        let registration = registry
+            .get(TypeId::of::<ToastPlacement>())
+            .expect("ToastPlacement is in the type registry");
+        assert!(registration.data::<ReflectResource>().is_some());
     });
 }
 

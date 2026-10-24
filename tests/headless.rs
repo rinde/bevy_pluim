@@ -27,6 +27,7 @@ use bevy::picking::events::{
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
+use bevy::reflect::structs::Struct;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{
     ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
@@ -51,6 +52,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
+use rin_bevy_ui::filter_combo::{FilterCombo, FilterComboRefs};
 use rin_bevy_ui::float::Float;
 use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::{Icon, IconColor};
@@ -4385,7 +4387,7 @@ fn adding_and_removing_items_adds_and_removes_segments() {
     let mut app = headless_app();
     let control = spawn_segmented_control(&mut app);
     let removed = app.world().entity(segments_of(&app, control)[1]);
-    let removed_item = removed.get::<Segment>().unwrap().item_ref;
+    let removed_item = removed.get::<Segment>().unwrap().item();
     // The control's own selection holds its items.
     let items_ref = control;
 
@@ -4837,7 +4839,12 @@ fn activating_a_chip_selects_it_and_fills_it() {
     activate(&mut app, views[1]);
 
     let selection = app.world().entity(chips).get::<Selection>().unwrap();
-    let item = app.world().entity(views[1]).get::<ChipView>().unwrap().item;
+    let item = app
+        .world()
+        .entity(views[1])
+        .get::<ChipView>()
+        .unwrap()
+        .item();
     assert_eq!(selection.as_selection().unwrap().single(), Some(item));
     assert_eq!(background(&app, views[1]), colors.chip_on);
     assert_eq!(background(&app, views[0]), Color::NONE);
@@ -4870,7 +4877,12 @@ fn updating_the_count_of_an_item_changes_the_text_of_its_chip_without_respawning
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
     let views = chip_views(&app, chips);
-    let item = app.world().entity(views[2]).get::<ChipView>().unwrap().item;
+    let item = app
+        .world()
+        .entity(views[2])
+        .get::<ChipView>()
+        .unwrap()
+        .item();
 
     app.world_mut()
         .entity_mut(item)
@@ -4943,7 +4955,12 @@ fn filter_chips_share_a_selection_by_reference() {
 
     activate(&mut app, views[2]);
 
-    let item = app.world().entity(views[2]).get::<ChipView>().unwrap().item;
+    let item = app
+        .world()
+        .entity(views[2])
+        .get::<ChipView>()
+        .unwrap()
+        .item();
     let selected = app.world().entity(selection).get::<Selection>().unwrap();
     assert_eq!(selected.as_selection().unwrap().single(), Some(item));
 }
@@ -5574,7 +5591,7 @@ fn toolbar_buttons_always_have_the_children_of_their_toolbars_style() {
             assert_eq!(refs.label().is_some(), style == ToolbarStyle::Filled);
             assert_eq!(refs.bar().is_some(), style == ToolbarStyle::Underlined);
             assert_eq!(
-                app.world().get::<ToolbarButton>(button).unwrap().toolbar(),
+                app.world().get::<ToolbarButton>(button).unwrap().owner(),
                 toolbar
             );
         }
@@ -5952,7 +5969,7 @@ fn a_selection_changed_through_selection_param_moves_the_ring() {
         .entity(target)
         .get::<GalleryCardView>()
         .unwrap()
-        .item;
+        .item();
     let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     app.world_mut()
@@ -6002,7 +6019,7 @@ fn a_gallery_shares_a_selection_by_reference_and_names_its_cards() {
         .entity(cards[1])
         .get::<GalleryCardView>()
         .unwrap()
-        .item;
+        .item();
     let selected = app.world().entity(selection).get::<Selection>().unwrap();
     assert_eq!(selected.as_selection().unwrap().single(), Some(item));
     let node = app
@@ -6486,6 +6503,71 @@ fn a_badge_on_a_toolbar_item_describes_its_button_for_accessibility() {
     app.world_mut().entity_mut(item).remove::<Badge>();
     settle(&mut app);
     assert_eq!(description(&app, buttons[1]), None);
+}
+
+#[test]
+fn replacing_a_badge_on_a_toolbar_item_updates_its_button_without_a_second_pill() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().one(),
+    );
+    let button = toolbar_buttons(&app, toolbar)[1];
+    let item = app.world().get::<ToolbarButton>(button).unwrap().item();
+    let description = |app: &App| {
+        app.world()
+            .get::<AccessibilityNode>(button)
+            .and_then(|node| node.description().map(str::to_owned))
+    };
+    let pills = |app: &App| {
+        app.world().get::<Children>(button).map_or(0, |children| {
+            children
+                .iter()
+                .filter(|c| {
+                    app.world()
+                        .get::<Name>(*c)
+                        .is_some_and(|n| n.as_str() == "Badge")
+                })
+                .count()
+        })
+    };
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+
+    app.world_mut().entity_mut(item).insert(Badge::count(6));
+    settle(&mut app);
+    let (pill, text) = badge_under(&app, button).unwrap();
+    assert_eq!(text, "6");
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        colors.pill_background
+    );
+
+    // A replacement with another text and tone updates the same pill.
+    app.world_mut()
+        .entity_mut(item)
+        .insert(Badge::new("9+").with_tone(BadgeTone::Warning));
+    settle(&mut app);
+    let (same, text) = badge_under(&app, button).unwrap();
+    assert_eq!((same, text.as_str()), (pill, "9+"));
+    assert_eq!(pills(&app), 1);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(pill).unwrap().0,
+        colors.warning_text
+    );
+    assert_eq!(description(&app).as_deref(), Some("9+"));
+
+    // An empty replacement removes the overlay and the description.
+    app.world_mut().entity_mut(item).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(pills(&app), 0);
+    assert_eq!(description(&app), None);
+
+    app.world_mut().entity_mut(item).insert(Badge::count(2));
+    settle(&mut app);
+    assert_eq!(pills(&app), 1);
+    assert_eq!(badge_under(&app, button).unwrap().1, "2");
+    assert_eq!(description(&app).as_deref(), Some("2"));
 }
 
 fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> Entity {
@@ -8496,7 +8578,7 @@ fn changing_an_items_text_updates_its_segment_in_place() {
         .entity(segments[1])
         .get::<Segment>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(item)
@@ -8544,7 +8626,7 @@ fn reordering_items_reorders_their_segments() {
         .entity(before[2])
         .get::<Segment>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(control)
@@ -8572,7 +8654,7 @@ fn changing_an_items_text_updates_its_tab_in_place() {
         .entity(tabs[1])
         .get::<TabBarTab>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(item)
@@ -8631,7 +8713,7 @@ fn reordering_items_reorders_their_tabs() {
         .entity(before[2])
         .get::<TabBarTab>()
         .unwrap()
-        .item_ref;
+        .item();
 
     app.world_mut()
         .entity_mut(bar)
@@ -9356,7 +9438,7 @@ fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
     let views = chip_views(&app, chips);
-    let item = app.world().get::<ChipView>(views[1]).unwrap().item;
+    let item = app.world().get::<ChipView>(views[1]).unwrap().item();
 
     // Break the children by hand: a frame with nothing to react to must leave it alone.
     app.world_mut().entity_mut(views[1]).despawn();
@@ -9406,7 +9488,7 @@ fn a_gallery_does_not_look_at_its_items_in_a_frame_without_a_change() {
     let groups = gallery_groups(&app, gallery);
     assert_eq!(groups.len(), 2);
     let card = groups[1].1[1];
-    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item();
 
     // Move the last card to a group of its own without Bevy noticing: a frame with nothing to
     // react to must not look at the items, so the gallery stays as it was.
@@ -9439,7 +9521,7 @@ fn a_gallery_still_rebuilds_its_groups_when_the_group_of_an_item_changes() {
     let groups = gallery_groups(&app, gallery);
     assert_eq!(groups.len(), 2);
     let card = groups[1].1[1];
-    let item = app.world().get::<GalleryCardView>(card).unwrap().item;
+    let item = app.world().get::<GalleryCardView>(card).unwrap().item();
 
     // The last card moves to a group of its own; quiet frames before and after change nothing.
     for _ in 0..3 {
@@ -10870,6 +10952,149 @@ fn two_roots_each_get_their_own_toast_stack() {
     assert_eq!(parent_of(&app, b), Some(second));
 }
 
+/// A headless app with a root node, for the toast tests below.
+fn toast_app() -> (App, Entity) {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    (app, root)
+}
+
+fn toast_stacks(app: &mut App) -> Vec<Entity> {
+    use rin_bevy_ui::toast::ToastStack;
+
+    let world = app.world_mut();
+    world
+        .query_filtered::<Entity, With<ToastStack>>()
+        .iter(world)
+        .collect()
+}
+
+#[test]
+fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
+    use rin_bevy_ui::toast::{Toast, ToastPlacement};
+
+    let (mut app, root) = toast_app();
+    assert_eq!(
+        app.world().get_resource::<ToastPlacement>().unwrap().bottom,
+        Val::Px(24.0),
+        "24 px by default"
+    );
+    app.world_mut().spawn((Toast::new("Saved"), ChildOf(root)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let stack = toast_stacks(&mut app)[0];
+    let bottom = |app: &App| app.world().get::<Node>(stack).unwrap().bottom;
+    assert_eq!(bottom(&app), Val::Px(24.0));
+
+    app.world_mut()
+        .get_resource_mut::<ToastPlacement>()
+        .unwrap()
+        .bottom = Val::Px(90.0);
+    app.update();
+    assert_eq!(bottom(&app), Val::Px(90.0), "the existing stack moved");
+
+    // A stack made later starts at the new distance.
+    let other = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((Toast::new("Other"), ChildOf(other)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let later = toast_stacks(&mut app)
+        .into_iter()
+        .find(|s| *s != stack)
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Node>(later).unwrap().bottom,
+        Val::Px(90.0)
+    );
+}
+
+#[test]
+fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let first = app
+        .world_mut()
+        .spawn((Toast::new("One").with_duration(0.0), ChildOf(root)))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(first).is_err(),
+        "the first toast went"
+    );
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 1, "the empty stack stays");
+    assert!(
+        app.world()
+            .get::<Children>(stacks[0])
+            .is_none_or(RelationshipTarget::is_empty)
+    );
+
+    let second = app
+        .world_mut()
+        .spawn((Toast::new("Two"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toast_stacks(&mut app), stacks, "no second stack was made");
+    assert_eq!(
+        app.world().get::<ChildOf>(second).unwrap().parent(),
+        stacks[0]
+    );
+}
+
+#[test]
+fn two_toasts_with_one_text_raised_in_the_same_frame_keep_one_entity() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let a = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    let b = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let alive = [a, b]
+        .into_iter()
+        .filter(|e| app.world().get_entity(*e).is_ok())
+        .count();
+    assert_eq!(alive, 1, "the later duplicate is despawned");
+    let world = app.world_mut();
+    assert_eq!(world.query::<&Toast>().iter(world).count(), 1);
+}
+
+#[test]
+fn the_toast_stack_is_absolute_above_everything_and_ignores_the_pointer() {
+    use rin_bevy_ui::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let toast = app
+        .world_mut()
+        .spawn((Toast::new("Saved"), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let stack = toast_stacks(&mut app)[0];
+    assert_eq!(app.world().get::<GlobalZIndex>(stack).unwrap().0, 1100);
+    assert_eq!(
+        app.world().get::<Node>(stack).unwrap().position_type,
+        PositionType::Absolute
+    );
+    assert_eq!(app.world().get::<Pickable>(stack), Some(&Pickable::IGNORE));
+    assert_eq!(app.world().get::<Pickable>(toast), Some(&Pickable::IGNORE));
+}
+
 /// The accessibility node of `entity`: role, label, value and description.
 fn access_of(
     app: &App,
@@ -11061,4 +11286,1175 @@ fn replacing_a_toast_updates_its_text_and_label_and_keeps_one_entity_in_its_plac
         app.update();
     }
     assert!(app.world().get_entity(second).is_err());
+}
+
+#[test]
+fn a_badge_on_a_host_without_an_accessibility_node_describes_it_once_the_node_appears() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let host = app
+        .world_mut()
+        .spawn((Node::default(), Badge::count(5), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    assert!(app.world().get::<AccessibilityNode>(host).is_none());
+    assert_eq!(badge_under(&app, host).unwrap().1, "5");
+
+    app.world_mut()
+        .entity_mut(host)
+        .insert(AccessibilityNode::from(accesskit::Node::new(
+            accesskit::Role::Button,
+        )));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3.as_deref(), Some("5"));
+
+    // An empty badge then clears the description again.
+    app.world_mut().entity_mut(host).insert(Badge::new(""));
+    settle(&mut app);
+    assert_eq!(access_of(&app, host).3, None);
+}
+
+#[test]
+fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_back() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let label = app
+        .world_mut()
+        .spawn((Label::regular("Locomotives"), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let state = |app: &App| {
+        let e = app.world().entity(label);
+        (
+            e.get::<Text>().unwrap().0.clone(),
+            *e.get::<LetterSpacing>().unwrap(),
+            e.get::<TextFont>().unwrap().weight,
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::overline("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "LOCOMOTIVES".to_string(),
+            LetterSpacing::Px(0.5),
+            FontWeight::SEMIBOLD
+        )
+    );
+
+    app.world_mut()
+        .entity_mut(label)
+        .insert(Label::regular("Locomotives"));
+    settle(&mut app);
+    assert_eq!(
+        state(&app),
+        (
+            "Locomotives".to_string(),
+            LetterSpacing::default(),
+            FontWeight::default()
+        )
+    );
+}
+
+/// The `Entity` in the reflected field `name` of the component `C` on `entity`.
+fn reflected_entity<C: Component + Struct>(
+    app: &App,
+    entity: Entity,
+    name: &str,
+) -> Option<Entity> {
+    app.world()
+        .get::<C>(entity)?
+        .field(name)?
+        .try_downcast_ref::<Entity>()
+        .copied()
+}
+
+#[test]
+fn the_item_and_owner_of_a_selection_view_are_read_by_getters_and_by_reflection() {
+    let mut app = headless_app();
+
+    let control = spawn_segmented_control(&mut app);
+    let segment = segments_of(&app, control)[0];
+    let segment_ref = app.world().get::<Segment>(segment).unwrap();
+    assert_eq!(
+        reflected_entity::<Segment>(&app, segment, "item"),
+        Some(segment_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<Segment>(&app, segment, "owner"),
+        Some(control)
+    );
+    assert_eq!(segment_ref.owner(), control);
+    let indicator = indicator_of(&app, control);
+    assert_eq!(
+        reflected_entity::<SegmentIndicator>(&app, indicator, "owner"),
+        Some(control)
+    );
+    assert_eq!(
+        app.world()
+            .get::<SegmentIndicator>(indicator)
+            .unwrap()
+            .owner(),
+        control
+    );
+
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio"].map(Item::new)),
+    );
+    let tab = tabs_of(&app, bar)[0];
+    let tab_ref = app.world().get::<TabBarTab>(tab).unwrap();
+    assert_eq!(
+        reflected_entity::<TabBarTab>(&app, tab, "item"),
+        Some(tab_ref.item())
+    );
+    assert_eq!(reflected_entity::<TabBarTab>(&app, tab, "owner"), Some(bar));
+    assert_eq!(tab_ref.owner(), bar);
+
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let chip = chip_views(&app, chips)[0];
+    let chip_ref = app.world().get::<ChipView>(chip).unwrap();
+    assert_eq!(
+        reflected_entity::<ChipView>(&app, chip, "item"),
+        Some(chip_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<ChipView>(&app, chip, "owner"),
+        Some(chips)
+    );
+    assert_eq!(chip_ref.owner(), chips);
+
+    let gallery = spawn_gallery(&mut app);
+    let card = gallery_groups(&app, gallery)[0].1[0];
+    let card_ref = app.world().get::<GalleryCardView>(card).unwrap();
+    assert_eq!(
+        reflected_entity::<GalleryCardView>(&app, card, "item"),
+        Some(card_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<GalleryCardView>(&app, card, "owner"),
+        Some(gallery)
+    );
+    assert_eq!(card_ref.owner(), gallery);
+
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let button = toolbar_buttons(&app, toolbar)[0];
+    let button_ref = app.world().get::<ToolbarButton>(button).unwrap();
+    assert_eq!(
+        reflected_entity::<ToolbarButton>(&app, button, "item"),
+        Some(button_ref.item())
+    );
+    assert_eq!(
+        reflected_entity::<ToolbarButton>(&app, button, "owner"),
+        Some(toolbar)
+    );
+    assert_eq!(button_ref.owner(), toolbar);
+}
+
+// ---- FilterCombo ----
+
+const CITIES: [&str; 4] = ["Amsterdam", "Delft", "Den Haag", "Utrecht"];
+
+/// A [`FilterCombo`] over [`CITIES`] (or other names) with its parts, in an app with a window
+/// and a text input.
+struct FilterApp {
+    app: App,
+    window: Entity,
+    root: Entity,
+    combo: Entity,
+    refs: FilterComboRefs,
+}
+
+#[derive(Resource, Default)]
+struct BubbledKeys(Vec<KeyCode>);
+
+fn filter_app_with(
+    names: &[&str],
+    selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
+) -> FilterApp {
+    let mut app = headless_app_with(|app| {
+        app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
+    });
+    app.init_resource::<BubbledKeys>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(Camera2d);
+    let root = app
+        .world_mut()
+        .spawn(Node::default())
+        .observe(
+            |key: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
+             mut log: ResMut<BubbledKeys>| {
+                log.0.push(key.event().input.key_code);
+            },
+        )
+        .id();
+    let items: Vec<Item<String>> = names.iter().map(|name| Item::new(*name)).collect();
+    let combo = app
+        .world_mut()
+        .spawn((
+            FilterCombo::default().with_name("City"),
+            selection(Selection::builder()).build_with_items(items),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    let refs = *app.world().entity(combo).get::<FilterComboRefs>().unwrap();
+    FilterApp {
+        app,
+        window,
+        root,
+        combo,
+        refs,
+    }
+}
+
+fn filter_app() -> FilterApp {
+    filter_app_with(&CITIES, SelectionBuilder::zero_or_one)
+}
+
+impl FilterApp {
+    fn settle(&mut self) {
+        for _ in 0..4 {
+            self.app.update();
+        }
+    }
+
+    fn open(&mut self) {
+        self.app
+            .world_mut()
+            .entity_mut(self.combo)
+            .insert(ComboState::Open);
+        self.settle();
+    }
+
+    fn state(&self) -> ComboState {
+        *self
+            .app
+            .world()
+            .entity(self.combo)
+            .get::<ComboState>()
+            .unwrap()
+    }
+
+    fn focus(&self) -> Option<Entity> {
+        self.app.world().get_resource::<InputFocus>().unwrap().get()
+    }
+
+    fn key_with(
+        &mut self,
+        key_code: KeyCode,
+        key: bevy::input::keyboard::Key,
+        text: Option<&str>,
+        repeat: bool,
+    ) {
+        self.app
+            .world_mut()
+            .write_message(bevy::input::keyboard::KeyboardInput {
+                key_code,
+                logical_key: key,
+                state: bevy::input::ButtonState::Pressed,
+                text: text.map(Into::into),
+                repeat,
+                window: self.window,
+            });
+        self.settle();
+    }
+
+    fn key(&mut self, key_code: KeyCode) {
+        use bevy::input::keyboard::Key;
+        let key = match key_code {
+            KeyCode::ArrowDown => Key::ArrowDown,
+            KeyCode::ArrowUp => Key::ArrowUp,
+            KeyCode::Enter | KeyCode::NumpadEnter => Key::Enter,
+            KeyCode::Escape => Key::Escape,
+            KeyCode::Tab => Key::Tab,
+            KeyCode::Backspace => Key::Backspace,
+            KeyCode::Space => Key::Space,
+            other => {
+                return self.key_with(
+                    other,
+                    Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+                    None,
+                    false,
+                );
+            }
+        };
+        let text = (key_code == KeyCode::Space).then_some(" ");
+        self.key_with(key_code, key, text, false);
+    }
+
+    /// Types `text` one character at a time.
+    fn type_text(&mut self, text: &str) {
+        for character in text.chars() {
+            let s = character.to_string();
+            let code = if character == ' ' {
+                KeyCode::Space
+            } else {
+                KeyCode::KeyA
+            };
+            let key = if character == ' ' {
+                bevy::input::keyboard::Key::Space
+            } else {
+                bevy::input::keyboard::Key::Character(s.as_str().into())
+            };
+            self.key_with(code, key, Some(&s), false);
+        }
+    }
+
+    /// Deletes the last character of the query. The headless app has no font layout, which
+    /// Bevy's own Backspace needs to find the character, so the text is set the way an edit
+    /// that deleted would leave it; the edit system reports the change as it does for typing.
+    fn backspace(&mut self) {
+        let input = self.refs.input();
+        let mut text = self.query_text();
+        text.pop();
+        let mut editable = self
+            .app
+            .world_mut()
+            .entity_mut(input)
+            .into_mut::<bevy::text::EditableText>()
+            .unwrap();
+        editable.pending_edits.clear();
+        editable.editor.set_text(&text);
+        editable.queue_edit(bevy::text::TextEdit::TextEnd(false));
+        self.settle();
+    }
+
+    /// Pastes `text` into the search box as one edit.
+    fn paste(&mut self, text: &str) {
+        let input = self.refs.input();
+        self.app
+            .world_mut()
+            .entity_mut(input)
+            .get_mut::<bevy::text::EditableText>()
+            .unwrap()
+            .queue_edit(bevy::text::TextEdit::Insert(text.into()));
+        self.settle();
+    }
+
+    fn query_text(&self) -> String {
+        input_text(&self.app, self.refs.input())
+    }
+
+    /// The labels of the rows that show, in order.
+    fn shown(&self) -> Vec<String> {
+        self.rows()
+            .into_iter()
+            .filter(|(_, shown)| *shown)
+            .map(|(label, _)| label)
+            .collect()
+    }
+
+    fn rows(&self) -> Vec<(String, bool)> {
+        let world = self.app.world();
+        let list = world.entity(self.refs.list());
+        let Some(children) = list.get::<Children>() else {
+            return Vec::new();
+        };
+        children
+            .iter()
+            .filter_map(|row| {
+                let view = world.entity(row).get::<ItemView>()?;
+                let label = world
+                    .entity(view.item_ref)
+                    .get::<Item<String>>()?
+                    .data
+                    .clone();
+                let shown = world.entity(row).get::<Node>()?.display != Display::None;
+                Some((label, shown))
+            })
+            .collect()
+    }
+
+    fn row_of(&self, label: &str) -> Entity {
+        let world = self.app.world();
+        world
+            .entity(self.refs.list())
+            .get::<Children>()
+            .unwrap()
+            .iter()
+            .find(|row| {
+                world.entity(*row).get::<ItemView>().is_some_and(|view| {
+                    world
+                        .entity(view.item_ref)
+                        .get::<Item<String>>()
+                        .is_some_and(|item| item.data == label)
+                })
+            })
+            .unwrap()
+    }
+
+    fn item_of(&self, label: &str) -> Entity {
+        self.app
+            .world()
+            .entity(self.row_of(label))
+            .get::<ItemView>()
+            .unwrap()
+            .item_ref
+    }
+
+    /// The label of the row marked active, if any.
+    fn active(&mut self) -> Option<String> {
+        let world = self.app.world_mut();
+        let mut query = world.query::<(Entity, &ItemView, &Outline)>();
+        let rows: Vec<(Entity, Entity)> = query
+            .iter(world)
+            .filter(|(row, ..)| {
+                world
+                    .entity(self.refs.list())
+                    .get::<Children>()
+                    .is_some_and(|children| children.contains(row))
+            })
+            .map(|(row, view, _)| (row, view.item_ref))
+            .collect();
+        assert!(rows.len() <= 1, "{} active rows", rows.len());
+        rows.first().map(|(_, item)| {
+            world
+                .entity(*item)
+                .get::<Item<String>>()
+                .unwrap()
+                .data
+                .clone()
+        })
+    }
+
+    fn selected(&self) -> Vec<String> {
+        let world = self.app.world();
+        let selection = world.entity(self.combo).get::<Selection>().unwrap();
+        let value = selection.as_selection().unwrap();
+        value
+            .iter()
+            .map(|item| {
+                world
+                    .entity(item)
+                    .get::<Item<String>>()
+                    .unwrap()
+                    .data
+                    .clone()
+            })
+            .collect()
+    }
+
+    fn button_text(&self) -> String {
+        let world = self.app.world();
+        let button = world
+            .entity(self.refs.button())
+            .get::<PushButtonRefs>()
+            .unwrap()
+            .label();
+        world.entity(button).get::<Text>().unwrap().0.clone()
+    }
+
+    fn node(&self, entity: Entity) -> &AccessibilityNode {
+        self.app
+            .world()
+            .entity(entity)
+            .get::<AccessibilityNode>()
+            .unwrap()
+    }
+
+    fn bubbled_keys(&self) -> Vec<KeyCode> {
+        self.app
+            .world()
+            .get_resource::<BubbledKeys>()
+            .unwrap()
+            .0
+            .clone()
+    }
+}
+
+#[test]
+fn a_filter_combo_opens_with_every_option_an_empty_query_and_the_focus_in_its_search_box() {
+    let mut fa = filter_app();
+    assert_eq!(fa.state(), ComboState::Closed);
+    fa.open();
+    assert_eq!(fa.state(), ComboState::Open);
+    assert_eq!(fa.shown(), CITIES);
+    assert_eq!(fa.query_text(), "");
+    assert_eq!(fa.focus(), Some(fa.refs.input()));
+    assert_eq!(fa.active().as_deref(), Some("Amsterdam"));
+}
+
+#[test]
+fn typing_filters_the_options_by_case_insensitive_substring_in_source_order() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("DEL");
+    assert_eq!(fa.shown(), ["Delft"]);
+    fa.backspace();
+    fa.backspace();
+    fa.backspace();
+    assert_eq!(fa.shown(), CITIES);
+    fa.type_text("e");
+    // Amst(e)rdam, D(e)lft, D(e)n Haag, Utr(e)cht.
+    assert_eq!(fa.shown(), CITIES);
+    fa.type_text("n");
+    assert_eq!(fa.shown(), ["Den Haag"]);
+}
+
+#[test]
+fn a_query_with_a_space_and_a_pasted_query_filter_too() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("n h");
+    assert_eq!(fa.shown(), ["Den Haag"]);
+    fa.backspace();
+    fa.backspace();
+    fa.backspace();
+    assert_eq!(fa.shown(), CITIES);
+    fa.paste("utr");
+    assert_eq!(fa.query_text(), "utr");
+    assert_eq!(fa.shown(), ["Utrecht"]);
+    fa.paste("x");
+    assert_eq!(fa.shown(), Vec::<String>::new());
+}
+
+#[test]
+fn space_types_a_space_in_the_query_and_picks_nothing() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("den");
+    fa.key(KeyCode::Space);
+    assert_eq!(fa.query_text(), "den ");
+    assert_eq!(fa.shown(), ["Den Haag"]);
+    fa.key(KeyCode::Space);
+    assert_eq!(fa.query_text(), "den  ");
+    assert_eq!(fa.shown(), Vec::<String>::new());
+    assert!(fa.selected().is_empty());
+    assert_eq!(fa.state(), ComboState::Open);
+}
+
+#[test]
+fn a_query_with_no_match_shows_the_empty_line_and_enter_does_nothing() {
+    let mut fa = filter_app();
+    fa.open();
+    let empty = fa.refs.empty();
+    let display = |fa: &FilterApp| fa.app.world().entity(empty).get::<Node>().unwrap().display;
+    assert_eq!(display(&fa), Display::None);
+    fa.type_text("zzz");
+    assert_eq!(fa.shown(), Vec::<String>::new());
+    assert_eq!(display(&fa), Display::Flex);
+    assert_eq!(fa.active(), None);
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.state(), ComboState::Open);
+    assert!(fa.selected().is_empty());
+    assert_eq!(fa.focus(), Some(fa.refs.input()));
+    // Clearing the query brings every option back.
+    for _ in 0..3 {
+        fa.backspace();
+    }
+    assert_eq!(fa.shown(), CITIES);
+    assert_eq!(display(&fa), Display::None);
+}
+
+#[test]
+fn arrow_keys_move_the_active_option_through_the_matches_only_and_wrap() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("e");
+    // All four match "e"; narrow to Delft, Den Haag with "de".
+    fa.type_text("d");
+    // "ed" matches nothing; replace it.
+    fa.backspace();
+    fa.backspace();
+    fa.type_text("de");
+    assert_eq!(fa.shown(), ["Delft", "Den Haag"]);
+    assert_eq!(fa.active().as_deref(), Some("Delft"));
+    fa.key(KeyCode::ArrowDown);
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"));
+    fa.key(KeyCode::ArrowDown);
+    assert_eq!(fa.active().as_deref(), Some("Delft"));
+    fa.key(KeyCode::ArrowUp);
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"));
+    // Navigation alone selects nothing, and typing goes on after it.
+    assert!(fa.selected().is_empty());
+    fa.type_text("n");
+    assert_eq!(fa.query_text(), "den");
+    assert_eq!(fa.shown(), ["Den Haag"]);
+}
+
+#[test]
+fn a_held_arrow_key_repeats_and_no_navigation_key_reaches_the_application() {
+    let mut fa = filter_app();
+    fa.open();
+    for _ in 0..2 {
+        fa.key_with(
+            KeyCode::ArrowDown,
+            bevy::input::keyboard::Key::ArrowDown,
+            None,
+            true,
+        );
+    }
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"));
+    fa.key(KeyCode::ArrowUp);
+    fa.key(KeyCode::Enter);
+    let bubbled = fa.bubbled_keys();
+    assert!(
+        !bubbled
+            .iter()
+            .any(|key| matches!(key, KeyCode::ArrowDown | KeyCode::ArrowUp | KeyCode::Enter)),
+        "{bubbled:?}"
+    );
+}
+
+#[test]
+fn enter_picks_the_original_item_of_a_single_selection_and_closes_with_the_focus_on_the_button() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("utr");
+    let utrecht = fa.item_of("Utrecht");
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.selected(), ["Utrecht"]);
+    let selection = fa.app.world().entity(fa.combo).get::<Selection>().unwrap();
+    assert_eq!(selection.as_selection().unwrap().single(), Some(utrecht));
+    assert_eq!(fa.state(), ComboState::Closed);
+    assert_eq!(fa.focus(), Some(fa.refs.button()));
+    assert_eq!(fa.button_text(), "Utrecht");
+    // Reopening starts unfiltered, with the selected option active.
+    fa.open();
+    assert_eq!(fa.query_text(), "");
+    assert_eq!(fa.shown(), CITIES);
+    assert_eq!(fa.active().as_deref(), Some("Utrecht"));
+}
+
+#[test]
+fn the_numpad_enter_picks_too() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.key_with(
+        KeyCode::NumpadEnter,
+        bevy::input::keyboard::Key::Enter,
+        None,
+        false,
+    );
+    assert_eq!(fa.selected(), ["Amsterdam"]);
+    assert_eq!(fa.state(), ComboState::Closed);
+}
+
+#[test]
+fn a_selection_of_many_stays_open_with_its_query_after_enter() {
+    let mut fa = filter_app_with(&CITIES, SelectionBuilder::zero_or_more);
+    fa.open();
+    fa.type_text("de");
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.selected(), ["Delft"]);
+    assert_eq!(fa.state(), ComboState::Open);
+    assert_eq!(fa.query_text(), "de");
+    fa.key(KeyCode::ArrowDown);
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.selected(), ["Delft", "Den Haag"]);
+    assert_eq!(fa.state(), ComboState::Open);
+    // Enter on a selected option deselects it, as a click does.
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.selected(), ["Delft"]);
+}
+
+#[test]
+fn every_selection_cardinality_picks_through_the_filter() {
+    for (name, multiple) in [
+        ("one", false),
+        ("zero_or_one", false),
+        ("one_or_more", true),
+        ("zero_or_more", true),
+    ] {
+        let mut fa = filter_app_with(&CITIES, |b| match name {
+            "one" => b.one(),
+            "zero_or_one" => b.zero_or_one(),
+            "one_or_more" => b.one_or_more(),
+            _ => b.zero_or_more(),
+        });
+        fa.open();
+        fa.type_text("utr");
+        fa.key(KeyCode::Enter);
+        assert!(fa.selected().contains(&"Utrecht".to_string()), "{name}");
+        assert_eq!(fa.state() == ComboState::Open, multiple, "{name}");
+    }
+}
+
+#[test]
+fn filtering_never_changes_the_selection_and_a_hidden_selected_option_stays_selected() {
+    let mut fa = filter_app();
+    let delft = fa.item_of("Delft");
+    fa.app
+        .world_mut()
+        .entity_mut(fa.combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(delft))));
+    fa.settle();
+    assert_eq!(fa.selected(), ["Delft"]);
+    fa.open();
+    assert_eq!(fa.active().as_deref(), Some("Delft"));
+    fa.type_text("utr");
+    assert_eq!(fa.shown(), ["Utrecht"]);
+    assert_eq!(fa.selected(), ["Delft"]);
+    assert!(
+        fa.app
+            .world()
+            .entity(fa.row_of("Delft"))
+            .contains::<Selected>()
+    );
+    assert!(
+        !fa.app
+            .world()
+            .entity(fa.row_of("Utrecht"))
+            .contains::<Selected>()
+    );
+    // Arrow keys and clearing the query change nothing either.
+    fa.key(KeyCode::ArrowDown);
+    for _ in 0..3 {
+        fa.backspace();
+    }
+    assert_eq!(fa.selected(), ["Delft"]);
+    assert!(
+        fa.app
+            .world()
+            .entity(fa.row_of("Delft"))
+            .contains::<Selected>()
+    );
+    assert_eq!(fa.button_text(), "Delft");
+}
+
+#[test]
+fn the_active_option_stays_while_it_matches_and_moves_to_the_first_match_when_it_does_not() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.key(KeyCode::ArrowDown);
+    fa.key(KeyCode::ArrowDown);
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"));
+    fa.type_text("e");
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"), "still matches");
+    fa.type_text("n");
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"));
+    fa.backspace();
+    fa.backspace();
+    fa.type_text("lf");
+    assert_eq!(fa.shown(), ["Delft"]);
+    assert_eq!(fa.active().as_deref(), Some("Delft"), "first match");
+}
+
+#[test]
+fn escape_closes_without_picking_and_reopening_starts_unfiltered() {
+    let mut fa = filter_app_with(&CITIES, SelectionBuilder::zero_or_more);
+    fa.open();
+    fa.type_text("del");
+    fa.key(KeyCode::Enter);
+    fa.type_text("f");
+    fa.key(KeyCode::Escape);
+    assert_eq!(fa.state(), ComboState::Closed);
+    // The earlier pick stays; the unconfirmed active option was not applied.
+    assert_eq!(fa.selected(), ["Delft"]);
+    assert_eq!(fa.focus(), Some(fa.refs.button()));
+    fa.open();
+    assert_eq!(fa.query_text(), "");
+    assert_eq!(fa.shown(), CITIES);
+}
+
+#[test]
+fn tab_closes_without_picking_and_the_focus_goes_where_tab_sent_it() {
+    let mut fa = filter_app();
+    let other = fa
+        .app
+        .world_mut()
+        .spawn((PushButton::from_label("After"), ChildOf(fa.root)))
+        .id();
+    fa.settle();
+    fa.open();
+    fa.type_text("utr");
+    fa.key(KeyCode::Tab);
+    assert_eq!(fa.state(), ComboState::Closed);
+    assert!(fa.selected().is_empty());
+    assert_ne!(fa.focus(), Some(fa.refs.input()));
+    assert_ne!(fa.focus(), None);
+    let _ = other;
+}
+
+#[test]
+fn losing_the_focus_to_something_else_closes_the_popup_without_taking_the_focus_back() {
+    let mut fa = filter_app();
+    let other = fa
+        .app
+        .world_mut()
+        .spawn((PushButton::from_label("Other"), ChildOf(fa.root)))
+        .id();
+    fa.settle();
+    fa.open();
+    fa.app
+        .world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(other, bevy::input_focus::FocusCause::Navigated);
+    fa.settle();
+    assert_eq!(fa.state(), ComboState::Closed);
+    assert_eq!(fa.focus(), Some(other));
+    assert!(fa.selected().is_empty());
+}
+
+#[test]
+fn closing_never_leaves_the_focus_on_the_hidden_search_box() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.app
+        .world_mut()
+        .entity_mut(fa.combo)
+        .insert(ComboState::Closed);
+    fa.settle();
+    assert_eq!(fa.focus(), Some(fa.refs.button()));
+}
+
+#[test]
+fn the_other_widgets_on_the_same_items_stay_unfiltered() {
+    let mut fa = filter_app();
+    let list = fa
+        .app
+        .world_mut()
+        .spawn((List, Selection::reference(fa.combo), ChildOf(fa.root)))
+        .id();
+    fa.settle();
+    fa.open();
+    fa.type_text("utr");
+    let rows = fa.app.world().entity(list).get::<Children>().unwrap().len();
+    assert_eq!(rows, CITIES.len());
+    assert!(
+        fa.app
+            .world()
+            .entity(list)
+            .get::<Children>()
+            .unwrap()
+            .iter()
+            .all(|row| fa.app.world().entity(row).get::<Node>().unwrap().display != Display::None)
+    );
+}
+
+#[test]
+fn a_pending_one_selection_is_repaired_by_the_first_item_and_filtering_leaves_it_alone() {
+    let mut fa = filter_app_with(&[], SelectionBuilder::one);
+    fa.open();
+    assert_eq!(fa.shown(), Vec::<String>::new());
+    let empty = fa.refs.empty();
+    assert_eq!(
+        fa.app.world().entity(empty).get::<Node>().unwrap().display,
+        Display::Flex
+    );
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.state(), ComboState::Open);
+    let item = fa
+        .app
+        .world_mut()
+        .spawn((Item::new("Leiden"), ItemOf(fa.combo)))
+        .id();
+    fa.settle();
+    assert_eq!(fa.shown(), ["Leiden"]);
+    assert_eq!(fa.selected(), ["Leiden"]);
+    assert_eq!(fa.active().as_deref(), Some("Leiden"));
+    assert_eq!(
+        fa.app.world().entity(empty).get::<Node>().unwrap().display,
+        Display::None
+    );
+    let _ = item;
+}
+
+#[test]
+fn added_removed_and_renamed_items_are_filtered_while_the_popup_is_open() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("de");
+    assert_eq!(fa.shown(), ["Delft", "Den Haag"]);
+    // A new item that matches shows; one that does not stays hidden.
+    fa.app
+        .world_mut()
+        .spawn((Item::new("Deventer"), ItemOf(fa.combo)));
+    fa.app
+        .world_mut()
+        .spawn((Item::new("Zwolle"), ItemOf(fa.combo)));
+    fa.settle();
+    assert_eq!(fa.shown(), ["Delft", "Den Haag", "Deventer"]);
+    // A rename brings an item in and takes another out.
+    let utrecht = fa.item_of("Utrecht");
+    let delft = fa.item_of("Delft");
+    fa.app
+        .world_mut()
+        .entity_mut(utrecht)
+        .get_mut::<Item<String>>()
+        .unwrap()
+        .data = "Delden".to_string();
+    fa.app
+        .world_mut()
+        .entity_mut(delft)
+        .get_mut::<Item<String>>()
+        .unwrap()
+        .data = "Gouda".to_string();
+    fa.settle();
+    assert_eq!(fa.shown(), ["Den Haag", "Delden", "Deventer"]);
+    // The active option going away moves it to the first match.
+    assert_eq!(fa.active().as_deref(), Some("Den Haag"));
+    let den_haag = fa.item_of("Den Haag");
+    fa.app.world_mut().entity_mut(den_haag).despawn();
+    fa.settle();
+    assert_eq!(fa.shown(), ["Delden", "Deventer"]);
+    assert_eq!(fa.active().as_deref(), Some("Delden"));
+}
+
+#[test]
+fn pointing_the_combo_at_other_items_filters_the_new_ones() {
+    let mut fa = filter_app();
+    let other = fa
+        .app
+        .world_mut()
+        .spawn(Selection::builder().zero_or_one().build_with_items(vec![
+            Item::new("Berlin"),
+            Item::new("Bern"),
+            Item::new("Paris"),
+        ]))
+        .id();
+    fa.open();
+    fa.type_text("ber");
+    fa.app
+        .world_mut()
+        .entity_mut(fa.combo)
+        .insert(Selection::reference(other));
+    fa.settle();
+    assert_eq!(fa.shown(), ["Berlin", "Bern"]);
+    assert_eq!(fa.active().as_deref(), Some("Berlin"));
+    fa.key(KeyCode::ArrowDown);
+    fa.key(KeyCode::Enter);
+    let selection = fa.app.world().entity(other).get::<Selection>().unwrap();
+    let picked = selection.as_selection().unwrap().single().unwrap();
+    assert_eq!(
+        fa.app
+            .world()
+            .entity(picked)
+            .get::<Item<String>>()
+            .unwrap()
+            .data,
+        "Bern"
+    );
+}
+
+#[test]
+fn a_clicked_option_picks_by_the_same_rules_and_a_click_outside_closes_without_picking() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("utr");
+    let row = fa.row_of("Utrecht");
+    click_row(&mut fa.app, row);
+    fa.settle();
+    assert_eq!(fa.selected(), ["Utrecht"]);
+
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("utr");
+    // A press and release on nothing: the pointer is on neither the button nor the popup.
+    for state in [
+        bevy::input::ButtonState::Pressed,
+        bevy::input::ButtonState::Released,
+    ] {
+        fa.app
+            .world_mut()
+            .write_message(bevy::input::mouse::MouseButtonInput {
+                button: MouseButton::Left,
+                state,
+                window: fa.window,
+            });
+        fa.app.update();
+    }
+    fa.settle();
+    assert_eq!(fa.state(), ComboState::Closed);
+    assert!(fa.selected().is_empty());
+}
+
+#[test]
+fn the_search_box_and_the_button_tell_a_screen_reader_how_they_belong_together() {
+    let mut fa = filter_app();
+    let (button, input, list) = (fa.refs.button(), fa.refs.input(), fa.refs.list());
+    let id = |e: Entity| accesskit::NodeId(e.to_bits());
+    // Closed: the button is a collapsed combo box with the selection as its value.
+    assert_eq!(fa.node(button).role(), accesskit::Role::ComboBox);
+    assert_eq!(fa.node(button).is_expanded(), Some(false));
+    assert_eq!(fa.node(button).controls(), [id(list)]);
+    assert_eq!(fa.node(button).label(), Some("City"));
+    assert!(
+        fa.node(input).is_hidden(),
+        "the closed search box is out of the tree"
+    );
+    fa.open();
+    assert_eq!(fa.node(button).is_expanded(), Some(true));
+    assert!(!fa.node(input).is_hidden());
+    assert_eq!(fa.node(input).role(), accesskit::Role::ComboBox);
+    assert_eq!(fa.node(input).label(), Some("City"));
+    assert_eq!(fa.node(input).value(), Some(""));
+    assert_eq!(fa.node(input).controls(), [id(list)]);
+    assert_eq!(fa.node(input).is_expanded(), Some(true));
+    assert_eq!(
+        fa.node(input).active_descendant(),
+        Some(id(fa.row_of("Amsterdam")))
+    );
+    fa.type_text("del");
+    assert_eq!(fa.node(input).value(), Some("del"));
+    assert_eq!(
+        fa.node(input).active_descendant(),
+        Some(id(fa.row_of("Delft")))
+    );
+    // Excluded rows are out of the tree; the shown one is in it.
+    assert!(fa.node(fa.row_of("Amsterdam")).is_hidden());
+    assert!(!fa.node(fa.row_of("Delft")).is_hidden());
+    // Zero results: no active descendant, and a status line in the tree.
+    fa.type_text("x");
+    assert_eq!(fa.node(input).active_descendant(), None);
+    let empty = fa.refs.empty();
+    assert!(!fa.node(empty).is_hidden());
+    assert_eq!(fa.node(empty).role(), accesskit::Role::Status);
+    assert_eq!(fa.node(empty).label(), Some("No matching items"));
+    // Closed again: nothing points at a row.
+    fa.key(KeyCode::Escape);
+    assert_eq!(fa.node(input).active_descendant(), None);
+    assert_eq!(fa.node(button).is_expanded(), Some(false));
+    assert!(fa.node(input).is_hidden());
+    assert!(fa.node(empty).is_hidden());
+}
+
+#[test]
+fn the_selected_options_are_selected_for_a_screen_reader_and_the_button_says_which() {
+    let mut fa = filter_app_with(&CITIES, SelectionBuilder::zero_or_more);
+    fa.open();
+    fa.type_text("de");
+    fa.key(KeyCode::Enter);
+    fa.key(KeyCode::ArrowDown);
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.node(fa.refs.button()).value(), Some("Delft, Den Haag"));
+    assert!(
+        fa.app
+            .world()
+            .entity(fa.row_of("Delft"))
+            .contains::<Selected>()
+    );
+    assert!(
+        fa.app
+            .world()
+            .entity(fa.row_of("Den Haag"))
+            .contains::<Selected>()
+    );
+}
+
+#[test]
+fn the_popup_follows_the_theme_in_both_modes() {
+    let mut fa = filter_app();
+    fa.open();
+    for dark in [false, true] {
+        if dark {
+            fa.app
+                .world_mut()
+                .get_resource_mut::<Theme>()
+                .unwrap()
+                .light_dark_toggle();
+            fa.settle();
+        }
+        let colors = *fa.app.world().get_resource::<Theme>().unwrap().colors();
+        let world = fa.app.world();
+        let popup = world.entity(fa.refs.popup());
+        assert_eq!(
+            popup.get::<BackgroundColor>().unwrap().0,
+            colors.background_primary
+        );
+        assert_eq!(popup.get::<BorderColor>().unwrap().top, colors.border);
+        let outline = world
+            .entity(fa.row_of("Amsterdam"))
+            .get::<Outline>()
+            .unwrap()
+            .color;
+        assert_eq!(outline, colors.focus_ring);
+    }
+}
+
+#[test]
+fn despawning_a_filter_combo_leaves_nothing_behind() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("de");
+    let (combo, input) = (fa.combo, fa.refs.input());
+    fa.app.world_mut().entity_mut(combo).despawn();
+    fa.settle();
+    assert!(fa.app.world().get_entity(input).is_err());
+    // Keys with the old focus do nothing and do not panic.
+    fa.key(KeyCode::ArrowDown);
+    fa.key(KeyCode::Enter);
+    let mut parts = fa.app.world_mut().query::<&FilterComboRefs>();
+    assert_eq!(parts.iter(fa.app.world()).count(), 0);
+}
+
+#[test]
+fn an_ordinary_combo_is_unchanged_next_to_a_filter_combo() {
+    let mut fa = filter_app();
+    let combo = fa
+        .app
+        .world_mut()
+        .spawn((Combo, Selection::reference(fa.combo), ChildOf(fa.root)))
+        .id();
+    fa.settle();
+    let list = fa
+        .app
+        .world()
+        .entity(combo)
+        .get::<ComboRefs>()
+        .unwrap()
+        .list();
+    fa.app
+        .world_mut()
+        .entity_mut(combo)
+        .insert(ComboState::Open);
+    fa.settle();
+    // Its focus is on its own list; the filter combo's search box is untouched.
+    assert_eq!(fa.focus(), Some(list));
+    fa.key(KeyCode::ArrowDown);
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.selected().len(), 1);
+    assert_eq!(
+        fa.app.world().entity(combo).get::<ComboState>(),
+        Some(&ComboState::Closed)
+    );
+    assert_eq!(fa.state(), ComboState::Closed);
+}
+
+#[test]
+fn spawning_a_filter_combo_does_not_move_the_keyboard_focus_into_itself() {
+    let fa = filter_app();
+    assert_ne!(fa.focus(), Some(fa.refs.button()));
+    assert_ne!(fa.focus(), Some(fa.refs.input()));
+}
+
+#[test]
+fn shift_tab_to_the_button_closes_the_popup_without_picking_but_a_press_on_it_does_not() {
+    let mut fa = filter_app();
+    fa.open();
+    fa.type_text("utr");
+    fa.app
+        .world_mut()
+        .get_resource_mut::<ButtonInput<KeyCode>>()
+        .unwrap()
+        .press(KeyCode::ShiftLeft);
+    fa.key(KeyCode::Tab);
+    fa.app
+        .world_mut()
+        .get_resource_mut::<ButtonInput<KeyCode>>()
+        .unwrap()
+        .release(KeyCode::ShiftLeft);
+    assert_eq!(fa.state(), ComboState::Closed);
+    assert!(fa.selected().is_empty());
+    assert_eq!(fa.focus(), Some(fa.refs.button()));
 }

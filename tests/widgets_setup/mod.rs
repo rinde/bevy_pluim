@@ -37,6 +37,7 @@ use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::Combo;
 use rin_bevy_ui::filter_chips::{Chip, FilterChips};
+use rin_bevy_ui::filter_combo::FilterCombo;
 use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::label::Label;
@@ -202,6 +203,13 @@ pub enum WidgetsSetup {
     /// nothing selected), each holding a `combo in row a` (b, c) over the stations Alpha,
     /// Beta and Gamma with a selection of its own, then "Change theme".
     ComboRows,
+    /// A `filter combo` (named "City") and an `ordinary combo` over the same cities, sharing one
+    /// `ZeroOrOne` selection with a `city list` below them (which is never filtered), and "Change
+    /// theme"; then, absolutely placed and spawned last, a `multi filter combo` (`ZeroOrMore`,
+    /// own items), a `one filter combo` (`One`, own items), a `long filter combo` (80 options
+    /// low in the window, so its popup opens upward, capped and scrolling) and an `empty filter
+    /// combo` (`One`, no items).
+    FilterCombos,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -234,6 +242,7 @@ impl AppSetup for WidgetsSetup {
             Self::VirtualList => virtual_list(world, false),
             Self::SeparatedVirtualList => virtual_list(world, true),
             Self::ComboRows => combo_rows(world),
+            Self::FilterCombos => filter_combos(world),
         }
         Ok(())
     }
@@ -1983,4 +1992,87 @@ fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
             None => Ok(slider),
         })
         .unwrap_or_else(|_| std::process::abort())
+}
+
+/// The cities the filter combos choose from.
+fn cities() -> [Item<String>; 5] {
+    ["Amsterdam", "Delft", "Den Haag", "Utrecht", "Rotterdam"].map(Item::new)
+}
+
+fn filter_combos(world: &mut World) {
+    let root = spawn_camera_and_root(world);
+    let selection_ref = world
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(cities()),
+        )
+        .id();
+    world.entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                FilterCombo::default().with_name("City"),
+                Name::new("filter combo"),
+                Selection::reference(selection_ref),
+            ));
+            row.spawn((
+                Combo,
+                Name::new("ordinary combo"),
+                Selection::reference(selection_ref),
+            ));
+            spawn_theme_button(row);
+        });
+        // Below the combos, so the popups they open float over them.
+        root.spawn(PushButton::from_label("Underneath"));
+        root.spawn((
+            List,
+            Name::new("city list"),
+            Selection::reference(selection_ref),
+        ));
+        // Out of the flow and last, so that nothing moves and the tab order stays.
+        let placed = |left: f32, top: f32| Node {
+            position_type: PositionType::Absolute,
+            flex_direction: FlexDirection::Column,
+            width: px(200),
+            left: px(left),
+            top: px(top),
+            ..default()
+        };
+        root.spawn((
+            FilterCombo::default().with_name("Cities"),
+            Name::new("multi filter combo"),
+            placed(300.0, 300.0),
+            Selection::builder()
+                .zero_or_more()
+                .build_with_items(cities()),
+        ));
+        root.spawn((
+            FilterCombo::default(),
+            Name::new("one filter combo"),
+            placed(550.0, 300.0),
+            Selection::builder().one().build_with_items(cities()),
+        ));
+        root.spawn((
+            FilterCombo::default(),
+            Name::new("long filter combo"),
+            placed(800.0, 600.0),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items((1..=80).map(|n| Item::new(format!("Option {n}")))),
+        ));
+        root.spawn((
+            FilterCombo::default(),
+            Name::new("empty filter combo"),
+            placed(1050.0, 300.0),
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<Item<String>>::new()),
+        ));
+    });
 }
