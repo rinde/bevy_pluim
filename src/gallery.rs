@@ -128,7 +128,8 @@ pub struct GalleryCardView {
 }
 
 /// The children of a [`GalleryCardView`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct GalleryCardRefs {
     /// The [`Icon`] showing the image.
     pub image: Entity,

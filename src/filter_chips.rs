@@ -131,7 +131,8 @@ impl ChipView {
 }
 
 /// The text children of a [`ChipView`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ChipRefs {
     /// The label, marked [`ChipLabel`].
     pub label: Entity,
@@ -140,11 +141,13 @@ pub struct ChipRefs {
 }
 
 /// Marks the label text of a chip.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ChipLabel;
 
 /// Marks the count text of a chip.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ChipCount;
 
 /// Spawns a chip for every item of a [`FilterChips`] that has none, and drops the chips of
