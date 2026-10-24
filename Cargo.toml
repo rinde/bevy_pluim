@@ -31,11 +31,10 @@ bevy = { version = "0.20.0", features = ["bevy_ui_debug", "debug"] }
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
 rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "7e733ae3f3462caeb15c7a1dfdf848727c2ee959", features = ["gallery"] }
 
-# Plays every `.ron` file in tests/ron, one test per file, with the tester's own
-# `main` instead of libtest.
+# Plays every `.ron` file and variant in tests/ron as an individual libtest
+# case. `build.rs` generates the cases so libtest can schedule them in parallel.
 [[test]]
 name = "ron_scenarios"
-harness = false
 
 # Renders every scenario of tests/ron offscreen. Needs a (software) GPU, so it
 # is only built with the `record` feature, and its test is `#[ignore]`d.
