@@ -30,9 +30,24 @@ impl Plugin for KbdPlugin {
 ///
 /// The border is the theme's `border` colour, the text its `text_secondary`
 /// colour, in the caption size. For a screen reader it is a label with the key as its value. It reuses those two slots and has none of its own.
+///
+/// Insert a new `Kbd` to change the key. Empty text keeps the empty box (at its minimum width)
+/// and an empty value; it is not hidden.
+///
+/// The component is immutable: build or clone a value, edit it outside the world and insert it
+/// again to update a live widget. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::kbd::Kbd;
+/// fn edit(mut widgets: Query<&mut Kbd>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
-#[component(on_insert=Self::on_insert)]
+#[component(immutable, on_insert=Self::on_insert)]
 #[require(
     Name::new("Kbd"),
     Node {

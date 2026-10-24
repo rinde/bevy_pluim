@@ -50,9 +50,24 @@ pub enum BadgeTone {
 /// tool's button. The badge is 16 px high with a minimum width of 16 px, and does not block the
 /// pointer from the button under it. It is not in the accessibility tree itself: its text is the
 /// description of the button's accessibility node. The application sets and updates the text by inserting a
-/// new `Badge`; removing the component, or an empty text, shows nothing.
+/// new `Badge`; removing the component, or an empty text, shows nothing (no overlay is drawn and
+/// the host's description is cleared), and inserting a nonempty one again brings it back. A
+/// badge mirrored from an `Item<Tool>` is updated by inserting a new `Badge` on the item.
+///
+/// The component is immutable: build or clone a value, edit it outside the world and insert it
+/// again to update a live widget. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::badge::Badge;
+/// fn edit(mut widgets: Query<&mut Badge>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
+#[component(immutable)]
 pub struct Badge {
     /// The text of the badge, usually a count. Empty shows no badge.
     pub text: String,
