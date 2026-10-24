@@ -1,7 +1,5 @@
 //! `List`: renders the items of a [`Selection`] as views and keeps them in sync.
 
-use std::collections::HashMap;
-
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
@@ -910,39 +908,76 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
+/// The `ItemsChanged` observer that keeps a list or palette in step with the
+/// items entity its selection draws from.
+///
+/// Kept on the list, so it goes with it and a list pointed at other items can
+/// drop the observer of the old ones.
+#[derive(Component, Debug, Clone, Copy)]
+#[component(immutable)]
+pub(crate) struct ItemsWatch {
+    /// The items entity being watched.
+    values: Entity,
+    /// The observer on `values`.
+    observer: Entity,
+}
+
 fn on_insert_selection(
     t: On<Insert<Selection>>,
-    lists: Query<(), (With<List>, With<Selection>, Without<NoDefaultItems>)>,
+    lists: Query<Option<&ItemsWatch>, (With<List>, With<Selection>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
-    mut commands: Commands,
-    mut existing_values_ref_map: Local<HashMap<Entity, Entity>>,
+    commands: Commands,
 ) {
     let list_ref = t.event().event_target();
-    if lists.get(list_ref).is_err() {
+    let Ok(watch) = lists.get(list_ref) else {
         return;
-    }
+    };
+    watch_items(list_ref, watch, &selections, commands, on_items_changed);
+}
 
+/// Makes `on_items_changed` run for `list_ref` whenever the items of its
+/// selection change, and once now. Used by [`List`] and the colour palette, so
+/// their copies cannot drift.
+///
+/// Does nothing when the list already watches those items. When it was
+/// pointed at other items, the observer on the old ones is despawned.
+pub(crate) fn watch_items<M: 'static>(
+    list_ref: Entity,
+    watch: Option<&ItemsWatch>,
+    selections: &SelectionParam,
+    mut commands: Commands,
+    on_items_changed: impl IntoSystem<In<ItemsChangedInput>, (), M> + Copy + Send + Sync + 'static,
+) {
     let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
         return;
     };
-    if existing_values_ref_map.get(&list_ref) == Some(&values_ref) {
+    if watch.is_some_and(|watch| watch.values == values_ref) {
         // no change in items ref
         return;
     }
-    existing_values_ref_map.insert(list_ref, values_ref);
+    if let Some(old) = watch {
+        commands.entity(old.observer).despawn();
+    }
 
     // register observer for items change event
-    commands
-        .entity(values_ref)
-        .observe(move |t: On<ItemsChanged>, mut commands: Commands| {
-            commands.run_system_cached_with(
-                on_items_changed,
-                ItemsChangedInput {
-                    list_ref,
-                    items: t.event().items.iter().collect(),
-                },
-            );
-        });
+    let observer = commands
+        .spawn(
+            Observer::new(move |t: On<ItemsChanged>, mut commands: Commands| {
+                commands.run_system_cached_with(
+                    on_items_changed,
+                    ItemsChangedInput {
+                        list_ref,
+                        items: t.event().items.iter().collect(),
+                    },
+                );
+            })
+            .with_entity(values_ref),
+        )
+        .id();
+    commands.entity(list_ref).insert(ItemsWatch {
+        values: values_ref,
+        observer,
+    });
 
     // update all items now
     commands.run_system_cached_with(
