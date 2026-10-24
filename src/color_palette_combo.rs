@@ -422,10 +422,11 @@ fn on_selection_change(
                     .insert(Selection::reference(selection_ref));
             }
 
-            let Ok(ColorSquareRef(color_square_id)) = color_square_refs.get(sub_refs.button) else {
+            let Ok(color_square_ref) = color_square_refs.get(sub_refs.button) else {
                 continue;
             };
-            let Ok(mut color_square_background) = color_squares.get_mut(*color_square_id) else {
+            let Ok(mut color_square_background) = color_squares.get_mut(color_square_ref.entity())
+            else {
                 continue;
             };
 

@@ -1803,7 +1803,7 @@ fn button_names(world: &mut World) {
         .query_filtered::<&ColorSquareRef, With<ColorPushButton>>()
         .iter(world)
         .next()
-        .map(|square| square.0);
+        .map(ColorSquareRef::entity);
     if let Some(mut color) = button.and_then(|square| world.get_mut::<BackgroundColor>(square)) {
         color.0 = RED_500.into();
     }
