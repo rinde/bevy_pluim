@@ -627,7 +627,7 @@ fn fill_panels(
                     .spawn((
                         FilterChips,
                         Selection::builder().one().build_with_items(chips),
-                        ChildOf(refs.strip),
+                        ChildOf(refs.strip()),
                     ))
                     .id();
                 commands.spawn((
@@ -638,17 +638,17 @@ fn fill_panels(
                         .zero_or_one()
                         .build_with_items(TRAINS.map(|train| Item { data: train })),
                     TrainFilter(filter),
-                    ChildOf(refs.body),
+                    ChildOf(refs.body()),
                 ));
                 commands.spawn((
                     Label::caption("Select a train to follow it"),
-                    ChildOf(refs.footer),
+                    ChildOf(refs.footer()),
                 ));
             }
-            PanelKind::Stops => spawn_show_rows(&mut commands, refs.body, &STOPS),
-            PanelKind::Warnings => spawn_show_rows(&mut commands, refs.body, &WARNINGS),
+            PanelKind::Stops => spawn_show_rows(&mut commands, refs.body(), &STOPS),
+            PanelKind::Warnings => spawn_show_rows(&mut commands, refs.body(), &WARNINGS),
             PanelKind::Schedules => {
-                commands.spawn((Label::secondary("No schedules yet."), ChildOf(refs.body)));
+                commands.spawn((Label::secondary("No schedules yet."), ChildOf(refs.body())));
             }
             PanelKind::Preferences => {
                 let rows = [
@@ -676,7 +676,7 @@ fn fill_panels(
                 .collect::<Vec<_>>();
                 commands
                     // Parented before the scene adds its `Node`, or it would be taken for a `UiRoot`.
-                    .spawn(ChildOf(refs.body))
+                    .spawn(ChildOf(refs.body()))
                     .apply_scene(bsn! {
                         SettingRows
                         Children [ {rows} ]
