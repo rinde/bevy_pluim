@@ -63,7 +63,7 @@ use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
-use rin_bevy_ui::virtual_list::VirtualList;
+use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 use rin_bevy_ui_tester::{AppSetup, ReflectAppSetup};
 
 use crate::common::spawn_camera_and_root;
@@ -1835,9 +1835,9 @@ const VIRTUAL_LIST_ROWS: usize = 10_000;
 fn virtual_list(world: &mut World, separated: bool) {
     let root = row_root(world);
     let (prefix, list) = if separated {
-        ("separated ", VirtualList::separated(44.0))
+        ("separated ", separated_virtual_list(44.0))
     } else {
-        ("", VirtualList::new(28.0))
+        ("", VirtualList::new(row_height(28.0)))
     };
     world.entity_mut(root).with_children(|root| {
         root.spawn((
@@ -1863,6 +1863,14 @@ fn virtual_list(world: &mut World, separated: bool) {
         ));
         spawn_theme_button(root);
     });
+}
+
+fn row_height(height: f32) -> RowHeight {
+    RowHeight::new(height).unwrap_or_else(|_| std::process::abort())
+}
+
+fn separated_virtual_list(height: f32) -> VirtualList {
+    VirtualList::separated(row_height(height)).unwrap_or_else(|_| std::process::abort())
 }
 
 /// A custom item view of the [`WidgetsSetup::ComboRows`] screen: the item's text and a
