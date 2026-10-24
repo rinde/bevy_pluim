@@ -127,7 +127,7 @@ fn spawn_editor(mut commands: Commands, theme: Res<Theme>) {
                 .build_with_items(COLORS.iter().map(|c| Item { data: c.color })),
         )
         .id();
-    let current = theme.colors;
+    let current = *theme.colors();
     let rows = move |rows: &mut ChildSpawner| {
         for slot in editable_slots() {
             rows.spawn(row(items, &slot, &current));
@@ -254,7 +254,7 @@ fn show_theme(
     mut labels: Query<&mut Text, With<ModeLabel>>,
 ) {
     for (swatch, mut background) in &mut swatches {
-        if let Some(color) = slot_color(&theme.colors, &swatch.0) {
+        if let Some(color) = slot_color(theme.colors(), &swatch.0) {
             background.0 = color;
         }
     }

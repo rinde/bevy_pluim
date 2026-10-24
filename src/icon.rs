@@ -128,6 +128,6 @@ fn theme_icons(
     };
 
     for (icon, mut image) in iter {
-        image.color = icon.color.color(&theme.colors);
+        image.color = icon.color.color(theme.colors());
     }
 }

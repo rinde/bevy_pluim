@@ -66,9 +66,25 @@ impl Default for ToastPlacement {
 /// stack instead of stacking. A toast with no parent has no stack to join: an
 /// `error!` is logged and it is despawned. It never takes the pointer and is no tab stop. For a screen
 /// reader it is a status (a polite live region) with the text.
+///
+/// Insert a new `Toast` on a live entity to change its text or duration: the text and the
+/// accessibility label follow and the timer restarts with the new duration, but the toast keeps
+/// its entity and its place in the stack. Empty text keeps the card and its normal lifetime.
+///
+/// The component is immutable: build or clone a value, edit it outside the world and insert it
+/// again to update a live widget. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::toast::Toast;
+/// fn edit(mut widgets: Query<&mut Toast>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_insert=Self::on_insert)]
+#[component(immutable, on_insert=Self::on_insert)]
 #[require(
     Name::new("Toast"),
     Card = Card,
@@ -260,7 +276,7 @@ fn theme_toasts(
     };
 
     for (mut color, mut font) in iter {
-        color.0 = theme.colors.text_primary;
+        color.0 = theme.colors().text_primary;
         *font = TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_body),

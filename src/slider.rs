@@ -525,7 +525,7 @@ impl SliderStyler<'_, '_> {
         (_, slider, refs, value, range, hovered, drag, pressed, disabled): <SliderState as bevy::ecs::query::QueryData>::Item<'_, '_>,
     ) {
         let look = look(
-            &self.theme.colors,
+            self.theme.colors(),
             disabled,
             pressed || drag.dragging,
             hovered.get(),

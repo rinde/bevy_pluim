@@ -389,7 +389,7 @@ fn handle_hover(
     } else {
         commands.entity(thumb).remove::<Pressed>();
     }
-    *background = BackgroundColor(thumb_background(&theme.colors, hovered, pressed));
+    *background = BackgroundColor(thumb_background(theme.colors(), hovered, pressed));
 }
 
 /// Restyles a thumb whose drag started or ended: a drag that ends with the pointer away from the
@@ -407,7 +407,7 @@ fn restyle_thumbs_on_drag_change(
     theme: Res<Theme>,
 ) {
     for (drag, hovered, mut background, pressed) in &mut thumbs {
-        let color = thumb_background(&theme.colors, hovered.get(), pressed || drag.dragging);
+        let color = thumb_background(theme.colors(), hovered.get(), pressed || drag.dragging);
         background.set_if_neq(BackgroundColor(color));
     }
 }
@@ -623,7 +623,7 @@ fn theme_scroll_area(
     };
 
     for (mut background_color, refs) in it {
-        background_color.0 = theme.colors.background_primary;
+        background_color.0 = theme.colors().background_primary;
         for entity in [refs.v_scrollbar, refs.h_scrollbar].into_iter().flatten() {
             let Ok((scrollbar, mut sb_node, mut sb_background_color, children)) =
                 scroll_bars.get_mut(entity)
@@ -632,7 +632,7 @@ fn theme_scroll_area(
             };
 
             size_bar(&mut sb_node, scrollbar.orientation, theme.scroll_bar_width);
-            sb_background_color.0 = theme.colors.background_secondary;
+            sb_background_color.0 = theme.colors().background_secondary;
             sb_node.border_radius = BorderRadius::all(theme.control_radius);
 
             // Only the marked thumb is ours; other children of the bar are the app's.
@@ -650,12 +650,12 @@ fn theme_scroll_area(
                 };
                 // The thumb is as thick as its scroll bar: the `Scrollbar` sizes it.
                 thumb_background_color.0 = thumb_background(
-                    &theme.colors,
+                    theme.colors(),
                     hovered.get(),
                     pressed || drag.is_some_and(|drag| drag.dragging),
                 );
                 thumb.border_radius = BorderRadius::all(theme.control_radius);
-                thumb_border_color.set_all(theme.colors.border);
+                thumb_border_color.set_all(theme.colors().border);
             }
         }
     }

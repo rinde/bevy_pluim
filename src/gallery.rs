@@ -128,7 +128,8 @@ pub struct GalleryCardView {
 }
 
 /// The children of a [`GalleryCardView`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct GalleryCardRefs {
     /// The [`Icon`] showing the image.
     pub image: Entity,
@@ -265,8 +266,8 @@ fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Enti
             flex_shrink: 0.0,
             ..default()
         },
-        BackgroundColor(theme.colors.card_surface),
-        BorderColor::all(theme.colors.border),
+        BackgroundColor(theme.colors().card_surface),
+        BorderColor::all(theme.colors().border),
         ChildOf(row),
     ));
 }
@@ -325,7 +326,7 @@ fn update_cards(
         let picked = selections
             .get(view.gallery)
             .is_some_and(|selection| selection.is_selected(view.item));
-        let look = card_look(&theme.colors, picked, hovered.get());
+        let look = card_look(theme.colors(), picked, hovered.get());
         background.set_if_neq(BackgroundColor(look.background));
         border.set_if_neq(BorderColor::all(look.border));
         let thickness = if look.ring {
@@ -350,9 +351,9 @@ fn update_cards(
                 item.data.label.clone_into(&mut text.0);
             }
             color.set_if_neq(TextColor(if picked || hovered.get() {
-                theme.colors.text_primary
+                theme.colors().text_primary
             } else {
-                theme.colors.text_secondary
+                theme.colors().text_secondary
             }));
             if theme.is_changed() || refs.is_added() {
                 *font = label_font(&theme);

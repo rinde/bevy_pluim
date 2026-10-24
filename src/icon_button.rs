@@ -382,7 +382,7 @@ fn handle_hover(
             hovered,
             on,
         };
-        let look = look(&theme.colors, button.tone, button.size, state);
+        let look = look(theme.colors(), button.tone, button.size, state);
         *background = BackgroundColor(look.background);
         border.set_all(look.border.unwrap_or(Color::NONE));
         commands
@@ -471,7 +471,7 @@ fn theme_icon_buttons(
             border: border_color,
             icon: icon_color,
             bar: bar_look,
-        } = look(&theme.colors, button.tone, button.size, state);
+        } = look(theme.colors(), button.tone, button.size, state);
         background.0 = color;
         border.set_all(border_color.unwrap_or(Color::NONE));
         node.border = if border_color.is_some() {
@@ -504,7 +504,7 @@ fn theme_icon_buttons(
                 ..default()
             };
             let bar_color = BackgroundColor(
-                bar_look.map_or(theme.colors.accent_subtle_bar, |(color, _)| color),
+                bar_look.map_or_else(|| theme.colors().accent_subtle_bar, |(color, _)| color),
             );
             match bar.and_then(|b| bars.get_mut(b.0).ok()) {
                 Some((mut n, mut c)) => {

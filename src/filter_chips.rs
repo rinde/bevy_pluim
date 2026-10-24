@@ -131,7 +131,8 @@ impl ChipView {
 }
 
 /// The text children of a [`ChipView`].
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ChipRefs {
     /// The label, marked [`ChipLabel`].
     pub label: Entity,
@@ -140,11 +141,13 @@ pub struct ChipRefs {
 }
 
 /// Marks the label text of a chip.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ChipLabel;
 
 /// Marks the count text of a chip.
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
 pub struct ChipCount;
 
 /// Spawns a chip for every item of a [`FilterChips`] that has none, and drops the chips of
@@ -234,7 +237,7 @@ fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entit
             ..default()
         },
         BackgroundColor(Color::NONE),
-        BorderColor::all(theme.colors.chip_border),
+        BorderColor::all(theme.colors().chip_border),
         ChildOf(chips),
     ));
 }
@@ -297,7 +300,7 @@ fn theme_chips(
         let active = selections
             .get(view.chips)
             .is_some_and(|selection| selection.is_selected(view.item));
-        let style = chip_style(&theme.colors, active, hovered.get());
+        let style = chip_style(theme.colors(), active, hovered.get());
         background.set_if_neq(BackgroundColor(style.background));
         border.set_if_neq(BorderColor::all(style.border));
 

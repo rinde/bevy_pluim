@@ -155,7 +155,7 @@ fn on_insert_combo(
                     border: UiRect::all(Val::Px(1.0)),
                     ..default()
                 },
-                BorderColor::all(theme.colors.border_highlight),
+                BorderColor::all(theme.colors().border_highlight),
                 Visibility::Hidden,
                 ScrollArea::bundle(
                     move |parent| {
@@ -682,6 +682,6 @@ fn theme_floats(
     };
 
     for mut border_color in it {
-        *border_color = BorderColor::all(theme.colors.border_highlight);
+        *border_color = BorderColor::all(theme.colors().border_highlight);
     }
 }

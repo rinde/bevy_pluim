@@ -607,13 +607,13 @@ fn show_rows(
                 .is_some_and(|item| selection.is_some_and(|selection| selection.is_selected(item)));
             sync_selected(&mut commands, row, was_selected, is_selected);
             background.set_if_neq(BackgroundColor(item_background(
-                &theme.colors,
+                theme.colors(),
                 virtual_list.style(),
                 is_selected,
                 hovered.get(),
             )));
             border.set_if_neq(BorderColor::all(item_border(
-                &theme.colors,
+                theme.colors(),
                 virtual_list.style(),
                 is_selected,
             )));
@@ -875,7 +875,7 @@ fn theme_virtual_lists(
         None => Either::Right(lists.iter_mut()),
     };
     for (mut background, virtual_list, state) in it {
-        background.0 = theme.colors.background_primary;
+        background.0 = theme.colors().background_primary;
         for &row in &state.rows {
             if let Ok(mut node) = rows.get_mut(row) {
                 virtual_list.style_row(&mut node, &theme);
