@@ -1345,7 +1345,11 @@ fn color_palette(world: &mut World) {
 fn numeric_stepper(world: &mut World) {
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
-        root.spawn((NumericStepper::default(), Name::new("default stepper")));
+        root.spawn((
+            NumericStepper::default(),
+            valid(Value::new_u32(1, 0, 10, 1)),
+            Name::new("default stepper"),
+        ));
         root.spawn((
             NumericStepper {
                 name: Some("Cars".into()),
