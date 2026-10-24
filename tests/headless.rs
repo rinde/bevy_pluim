@@ -32,8 +32,8 @@ use bevy::ui::{
 };
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
-    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValue, SliderValueChange, Tab,
-    TabList, ValueChange,
+    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderRange, SliderStep, SliderValue,
+    SliderValueChange, Tab, TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
@@ -9051,5 +9051,158 @@ fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_sele
             vec![items[0]],
             "a `One` keeps its item"
         );
+    }
+}
+
+#[test]
+fn reinserting_a_numeric_stepper_updates_every_setting_without_duplicating_its_parts() {
+    let mut app = headless_app();
+    let (stepper, old_decrease, _) = spawn_stepper(&mut app, 0);
+    let icon = Handle::<Image>::default();
+
+    app.world_mut().entity_mut(stepper).insert(NumericStepper {
+        format: level_text,
+        decrease_icon: icon.clone(),
+        increase_icon: icon.clone(),
+        decrease_name: "Lower".into(),
+        increase_name: "Raise".into(),
+        label_min_width: 90.0,
+        name: Some("Level".into()),
+    });
+    app.update();
+    app.update();
+
+    let children: Vec<Entity> = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .collect();
+    assert_eq!(children.len(), 3, "no duplicate buttons or label");
+    assert!(
+        app.world().get_entity(old_decrease).is_err(),
+        "the old buttons are gone"
+    );
+    assert_eq!(
+        app.world().get::<IconButton>(children[0]).unwrap().name,
+        "Lower"
+    );
+    assert_eq!(
+        app.world().get::<IconButton>(children[2]).unwrap().name,
+        "Raise"
+    );
+    assert_eq!(
+        app.world().get::<IconButton>(children[0]).unwrap().icon,
+        icon
+    );
+    assert_eq!(
+        app.world().get::<IconButton>(children[2]).unwrap().icon,
+        icon
+    );
+    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "Ground");
+    assert_eq!(
+        app.world().get::<Node>(children[1]).unwrap().min_width,
+        Val::Px(90.0)
+    );
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.label(), Some("Level"));
+    assert_eq!(node.value(), Some("Ground"));
+
+    // The new buttons step the value once each, through one observer.
+    activate(&mut app, children[2]);
+    assert_eq!(stepper_value(&app, stepper), 1);
+    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "+1");
+    assert!(!is_disabled(&app, children[0]));
+    activate(&mut app, children[0]);
+    assert_eq!(stepper_value(&app, stepper), 0);
+}
+
+#[test]
+fn reinserting_a_mirror_numeric_stepper_keeps_its_value_ref() {
+    let mut app = headless_app();
+    let (shared, _, _) = spawn_stepper_of(&mut app, Value::new_u8(1, 0, 3, 1).unwrap());
+    let mirror = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(shared)))
+        .id();
+    app.update();
+    app.update();
+
+    app.world_mut().entity_mut(mirror).insert(NumericStepper {
+        format: level_text,
+        increase_name: "Raise".into(),
+        ..default()
+    });
+    app.update();
+    app.update();
+
+    assert_eq!(
+        app.world().get::<ValueRef>(mirror).map(|v| v.0),
+        Some(shared)
+    );
+    let children: Vec<Entity> = app
+        .world()
+        .entity(mirror)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .collect();
+    assert_eq!(children.len(), 3);
+    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "+1");
+    activate(&mut app, children[2]);
+    assert_eq!(stepper_value(&app, shared), 2);
+    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "+2");
+}
+
+#[test]
+fn reinserting_a_slider_updates_its_range_format_name_and_value() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Camera2d, UiRoot));
+    let slider = app
+        .world_mut()
+        .spawn(
+            Slider::new(2.0, 0.0, 10.0)
+                .unwrap()
+                .with_step(1.0)
+                .unwrap()
+                .with_format(|value| format!("{value:.0} km"))
+                .with_name("Distance"),
+        )
+        .id();
+    app.update();
+    app.update();
+    let parts_before = app.world().get::<SliderRefs>(slider).unwrap().label;
+
+    app.world_mut().entity_mut(slider).insert(
+        Slider::new(50.0, 0.0, 100.0)
+            .unwrap()
+            .with_step(10.0)
+            .unwrap()
+            .with_format(|value| format!("{value:.0} %"))
+            .with_name("Speed"),
+    );
+    app.update();
+    app.update();
+
+    let world = app.world();
+    assert_eq!(world.get::<SliderValue>(slider), Some(&SliderValue(50.0)));
+    assert_eq!(
+        world.get::<SliderRange>(slider),
+        Some(&SliderRange::new(0.0, 100.0))
+    );
+    assert_eq!(world.get::<SliderStep>(slider), Some(&SliderStep(10.0)));
+    let node = world.get::<AccessibilityNode>(slider).unwrap();
+    assert_eq!(node.label(), Some("Speed"));
+    assert_eq!(node.value(), Some("50 %"));
+    assert_eq!(node.max_numeric_value(), Some(100.0));
+    let parts_after = world.get::<SliderRefs>(slider).unwrap().label;
+    assert_ne!(parts_before, parts_after, "the parts are rebuilt");
+    if let Some(old) = parts_before {
+        assert!(world.get_entity(old).is_err(), "no stale label");
     }
 }

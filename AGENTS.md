@@ -587,6 +587,16 @@ of them (`just example gallery -- --run-all stack link`).
   immutable, queryable records with private fields and no public constructor; read them through
   `PushButtonRefs::label()` / `icon()`, `IconButtonRefs::icon()` and `ColorSquareRef::entity()`.
   `compile_fail` doctests on the types guard both.
+- **Configuration is immutable; live state is not.** `Slider`, `NumericStepper` and
+  `TextField` are `#[component(immutable)]`: their fields are read by the insert hook, and
+  changing a setting (range, format, names, icons, widths, placeholder, initial text) means
+  inserting a new component, which rebuilds the parts and syncs the accessibility node (the
+  stepper keeps its `ValueRef`, a `TextField` sets its text without a `TextFieldChange`). The
+  live data stays mutable where it already is: the stepper's `Value` / `UIntValue` (through
+  its validated operations, observed by `on_change`), Bevy's `SliderValue`, and the
+  `EditableText` of `TextFieldRefs::input`. A system never takes the three as `&mut` (a
+  `compile_fail` doctest on each guards it) and none syncs them with a per-frame `Changed`
+  query. A new configuration component follows the same split.
 - **State is an immutable component**; a transition inserts a new value
   (`ComboState`, `LinkState`, `Selection`, the palette combo's `State`).
 - **Composite widgets keep their children in a refs component**

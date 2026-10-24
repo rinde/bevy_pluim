@@ -118,9 +118,23 @@ const LABEL_GAP_PX: f32 = 12.0;
 /// [`Slider::with_step`] and read through [`Slider::value`], [`Slider::min`],
 /// [`Slider::max`] and [`Slider::step`]. A range of one value (`min == max`) is
 /// valid: the slider then always holds that value.
+///
+/// `Slider` is an immutable component: it is configuration, replaced by inserting a new
+/// one, never edited in place, so a system cannot take it as `&mut`:
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::slider::Slider;
+///
+/// fn edit(mut widgets: Query<&mut Slider>) {
+///     for mut widget in &mut widgets {
+///         let _ = &mut *widget;
+///     }
+/// }
+/// ```
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component, from_reflect = false)]
-#[component(on_insert = Self::on_insert)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[require(
     Node,
     Name::new("Slider"),
