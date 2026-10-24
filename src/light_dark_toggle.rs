@@ -12,7 +12,9 @@ use bevy::ui::Selected;
 use bevy::ui_widgets::{Activate, Button};
 use bevy::window::{PrimaryWindow, WindowTheme, WindowThemeChanged};
 
-use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role, sync_toggled};
+use crate::focus::{
+    AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
+};
 use crate::list::sync_selected;
 use crate::segmented_control::segment_colors;
 use crate::theme::{Theme, ThemeMode};
@@ -206,7 +208,8 @@ fn apply_window_theme(
 /// [`Theme`]'s mode, and the primary window, if there is one, adopts light or dark with it.
 /// The icons (sun, computer and moon) are drawn by the library. To a screen reader the toggle
 /// is a radio group named "Theme" and each option a radio button, toggled while it is the
-/// preference; each option is a tab stop and Enter or Space picks it.
+/// preference; the options are one tab stop: the arrow keys, Home and End move between them and pick the option
+/// they land on, and Enter or Space picks the focused one.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -223,6 +226,7 @@ fn apply_window_theme(
     },
     BackgroundColor::default(),
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::RadioGroup)),
+    RovingGroup = RovingGroup::marked_radio(),
 )]
 pub struct LightDarkToggle;
 
@@ -278,8 +282,13 @@ impl LightDarkToggle {
         .into_iter()
         .zip(icons)
         {
-            let mut option = commands.spawn((
+            // The option is its own roving item: the toggle's state is the preference, not a
+            // selection of items.
+            let option_id = commands.spawn_empty().id();
+            let mut option = commands.entity(option_id);
+            option.insert((
                 LightDarkOption { preference },
+                RovingItem::new(toggle, option_id),
                 Node::default(),
                 ChildOf(toggle),
             ));
