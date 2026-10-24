@@ -7367,6 +7367,146 @@ fn resolve_marked(app: &mut App, entity: Entity) -> (Option<Entity>, bool, Optio
         .unwrap()
 }
 
+/// An icon button in a root node, counting its [`Activate`]s in [`Activations`].
+fn spawn_counting_icon_button(app: &mut App, tone: Tone, toggle: Option<bool>) -> Entity {
+    app.init_resource::<Activations>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let mut entity = app.world_mut().spawn((
+        IconButton::new(Handle::default(), "Go", IconButtonSize::Regular).with_tone(tone),
+        ChildOf(root),
+    ));
+    if let Some(on) = toggle {
+        entity.insert(ToggleState(on));
+    }
+    let button = entity
+        .observe(|_: On<Activate>, mut activations: ResMut<Activations>| activations.0 += 1)
+        .id();
+    app.update();
+    app.update();
+    button
+}
+
+#[test]
+fn a_disabled_icon_button_rests_dimmed_ignores_the_pointer_and_does_not_toggle() {
+    let mut app = headless_app();
+    let button = spawn_counting_icon_button(&mut app, Tone::Neutral, Some(false));
+    let light = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(icon_tint(&app, button), light.text_primary);
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+    app.update();
+    assert_eq!(background(&app, button), light.background_primary);
+    assert_eq!(icon_tint(&app, button), light.text_disabled);
+
+    // Neither hover nor press changes the colours.
+    pointer_over_or_out(&mut app, button, true);
+    assert_eq!(background(&app, button), light.background_primary);
+    assert_eq!(icon_tint(&app, button), light.text_disabled);
+    press(&mut app, button);
+    assert!(!app.world().entity(button).contains::<Pressed>());
+    assert_eq!(background(&app, button), light.background_primary);
+    click_and_release(&mut app, button);
+    assert_eq!(background(&app, button), light.background_primary);
+
+    // An Activate does not flip the toggle.
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert_eq!(
+        app.world().get::<ToggleState>(button),
+        Some(&ToggleState(false))
+    );
+
+    // Once enabled, the button is restyled and toggles again.
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<InteractionDisabled>();
+    app.update();
+    app.update();
+    assert_eq!(icon_tint(&app, button), light.text_primary);
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert_eq!(
+        app.world().get::<ToggleState>(button),
+        Some(&ToggleState(true))
+    );
+    assert_eq!(background(&app, button), light.accent_subtle);
+}
+
+#[test]
+fn a_disabled_warning_icon_button_that_is_on_has_no_bar_and_no_border() {
+    let mut app = headless_app();
+    let button = spawn_counting_icon_button(&mut app, Tone::Warning, Some(true));
+    let light = DEFAULT_LIGHT_THEME_COLORS;
+    let bar = app.world().get::<Children>(button).unwrap()[1];
+    assert_eq!(app.world().get::<Node>(bar).unwrap().display, Display::Flex);
+    assert_eq!(border_top(&app, button), light.warning_border);
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(InteractionDisabled);
+    app.update();
+    app.update();
+    assert_eq!(background(&app, button), light.background_primary);
+    assert_eq!(border_top(&app, button), Color::NONE);
+    assert_eq!(
+        app.world().get::<Node>(button).unwrap().border,
+        UiRect::ZERO
+    );
+    assert_eq!(icon_tint(&app, button), light.text_disabled);
+    assert_eq!(app.world().get::<Node>(bar).unwrap().display, Display::None);
+
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<InteractionDisabled>();
+    app.update();
+    app.update();
+    assert_eq!(app.world().get::<Node>(bar).unwrap().display, Display::Flex);
+    assert_eq!(border_top(&app, button), light.warning_border);
+    assert_eq!(icon_tint(&app, button), light.warning_text);
+}
+
+#[test]
+fn a_push_button_with_no_default_hover_rests_at_the_primary_background() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let owned = app
+        .world_mut()
+        .spawn((
+            PushButton::from_label("Owned"),
+            NoDefaultHover,
+            ChildOf(root),
+        ))
+        .id();
+    let plain = app
+        .world_mut()
+        .spawn((PushButton::from_label("Plain"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let light = DEFAULT_LIGHT_THEME_COLORS;
+    let dark = DEFAULT_DARK_THEME_COLORS;
+
+    pointer_over_or_out(&mut app, owned, true);
+    pointer_over_or_out(&mut app, plain, true);
+    assert_eq!(background(&app, owned), light.background_primary);
+    assert_eq!(background(&app, plain), light.hovered_item);
+
+    press(&mut app, owned);
+    press(&mut app, plain);
+    assert!(app.world().entity(owned).contains::<Pressed>());
+    assert_eq!(background(&app, owned), light.background_primary);
+    assert_eq!(background(&app, plain), light.selected_hovered_item);
+
+    // A theme change under the pointer keeps the owned button at rest too.
+    app.world_mut().entity_mut(plain).insert(Hovered(true));
+    hover_and_toggle_theme(&mut app, owned);
+    assert_eq!(background(&app, owned), dark.background_primary);
+    assert_eq!(background(&app, plain), dark.selected_hovered_item);
+}
+
 /// The string of the `Text` on `entity`.
 fn text_of(app: &App, entity: Entity) -> String {
     app.world().entity(entity).get::<Text>().unwrap().0.clone()
