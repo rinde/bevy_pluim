@@ -10939,7 +10939,7 @@ fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_b
         let e = app.world().entity(label);
         (
             e.get::<Text>().unwrap().0.clone(),
-            e.get::<LetterSpacing>().unwrap().clone(),
+            *e.get::<LetterSpacing>().unwrap(),
             e.get::<TextFont>().unwrap().weight,
         )
     };
