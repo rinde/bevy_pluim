@@ -410,6 +410,171 @@ fn a_stack_shows_only_the_selected_child_and_switches_on_selection_change() {
     assert_eq!(node_display(&app, panel_b), Display::None);
 }
 
+fn item_entities_of(app: &App, owner: Entity) -> Vec<Entity> {
+    app.world()
+        .get::<ItemValues>(owner)
+        .unwrap()
+        .iter()
+        .collect()
+}
+
+fn count_entities_with<C: Component>(app: &mut App) -> usize {
+    let world = app.world_mut();
+    world.query_filtered::<(), With<C>>().iter(world).count()
+}
+
+fn select_one(app: &mut App, selection_ref: Entity, item: Entity) {
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::One(item)));
+    app.update();
+    app.update();
+}
+
+#[test]
+fn stack_item_accessors_tell_a_creator_from_a_reference() {
+    let mut app = headless_app();
+    let create = app.world_mut().register_system(spawn_panel_a);
+
+    let direct = StackItem::new(create);
+    assert_eq!(direct.creator(), Some(create));
+    assert_eq!(direct.reference_id(), None);
+
+    let reusable = StackItem::new_with_reference(7, create);
+    assert_eq!(reusable.creator(), Some(create));
+    assert_eq!(reusable.reference_id(), Some(7));
+
+    let reference = StackItem::new_reference(7);
+    assert_eq!(reference.creator(), None);
+    assert_eq!(reference.reference_id(), Some(7));
+}
+
+#[test]
+fn a_stack_reference_reuses_the_creator_and_the_child_of_its_item() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new_with_reference(0, create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+            (Item::new("a again"), StackItem::new_reference(0)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    select_one(&mut app, selection_ref, items[1]);
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+
+    // The reference shows the child its creator's item already made; nothing new is spawned.
+    select_one(&mut app, selection_ref, items[2]);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    assert_eq!(node_display(&app, panel_b), Display::None);
+
+    // And back to the item itself: still the one child.
+    select_one(&mut app, selection_ref, items[1]);
+    select_one(&mut app, selection_ref, items[0]);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+}
+
+#[test]
+fn a_stack_reference_selected_first_creates_the_child_with_the_referenced_creator() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("b"), StackItem::new(create_b)),
+            (Item::new("a"), StackItem::new_with_reference(0, create_a)),
+            (Item::new("a again"), StackItem::new_reference(0)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 0);
+
+    select_one(&mut app, selection_ref, items[2]);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+}
+
+#[test]
+fn a_stack_reference_without_a_matching_creator_hides_the_current_child() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("orphan"), StackItem::new_reference(3)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(node_display(&app, panel_a), Display::None, "no stale panel");
+
+    // The stack still works afterwards.
+    select_one(&mut app, selection_ref, items[0]);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+}
+
+#[test]
+fn a_stack_over_a_pending_selection_shows_nothing_until_the_first_item_arrives() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let selection_ref = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<(Item<String>, StackItem)>::new()),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 0);
+
+    app.world_mut().spawn((
+        Item::new("a"),
+        StackItem::new(create_a),
+        ItemOf(selection_ref),
+    ));
+    app.update();
+    app.update();
+    app.update();
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+}
+
 #[test]
 fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is_skipped() {
     let mut app = headless_app();
