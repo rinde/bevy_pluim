@@ -1206,7 +1206,7 @@ fn a_press_on_a_link_restyles_it() {
         .world()
         .get_resource::<Theme>()
         .unwrap()
-        .colors
+        .colors()
         .background_secondary;
     assert_ne!(before.0, expected);
     assert_eq!(after.0, expected);
@@ -1338,7 +1338,7 @@ fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
         app.world()
             .get_resource::<Theme>()
             .unwrap()
-            .colors
+            .colors()
             .text_primary
     );
 }
@@ -1348,7 +1348,7 @@ fn inserting_and_removing_the_marker_on_a_live_link_restyles_it_under_the_pointe
     let mut app = headless_app();
     let link = spawn_link(&mut app, false);
     app.world_mut().entity_mut(link).insert(Hovered(true));
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     app.world_mut().entity_mut(link).insert(InteractionDisabled);
     app.world_mut().run_schedule(Update);
@@ -1367,7 +1367,7 @@ fn inserting_and_removing_the_marker_on_a_live_link_restyles_it_under_the_pointe
 fn a_link_enabled_again_reacts_to_the_pointer_again() {
     let mut app = headless_app();
     let link = spawn_link(&mut app, true);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     press(&mut app, link);
     assert_eq!(background(&app, link), colors.background_primary);
 
@@ -1486,7 +1486,7 @@ fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
 
     press(&mut app, button);
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert!(app.world().entity(button).contains::<Pressed>());
     assert_eq!(
         background(&app, button),
@@ -1594,7 +1594,7 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
     app.update();
     app.update();
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let label = app
         .world()
         .entity(button)
@@ -1745,7 +1745,7 @@ fn a_disabled_color_push_button_shows_the_disabled_border_and_does_not_activate(
         .observe(|_: On<Activate>, mut n: ResMut<Activations>| n.0 += 1);
     app.update();
     app.update();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let border = |app: &App| app.world().entity(button).get::<BorderColor>().unwrap().top;
     assert_eq!(border(&app), colors.border);
 
@@ -1788,7 +1788,7 @@ fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
     app.update();
 
     let ring = app.world().entity(focused).get::<Outline>().unwrap();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(ring.color, colors.focus_ring);
     assert_eq!(ring.width, Val::Px(2.0));
     assert_eq!(ring.offset, Val::Px(1.0));
@@ -1826,7 +1826,7 @@ fn the_focus_ring_keeps_an_outline_the_app_set_and_gives_it_back() {
     app.world_mut().insert_resource(InputFocusVisible(true));
     app.update();
     app.update();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let ring = app.world().entity(with_outline).get::<Outline>().unwrap();
     assert_eq!(ring.color, colors.focus_ring);
 
@@ -1866,7 +1866,7 @@ fn the_focus_ring_keeps_an_outline_on_a_lists_active_row() {
     app.world_mut().insert_resource(InputFocusVisible(true));
     app.update();
     app.update();
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(
         app.world().entity(row).get::<Outline>().unwrap().color,
         colors.focus_ring
@@ -2433,7 +2433,7 @@ fn assert_popup_borders_are_highlight(app: &mut App, count: usize) {
         app.world()
             .get_resource::<Theme>()
             .unwrap()
-            .colors
+            .colors()
             .border_highlight,
     );
     let floats = palette_combo_floats(app);
@@ -3914,7 +3914,7 @@ fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() 
     };
     let check = |app: &App| {
         let theme = app.world().get_resource::<Theme>().unwrap();
-        let c = theme.colors;
+        let c = theme.colors();
         assert_eq!(
             look(app, title),
             (
@@ -4097,7 +4097,7 @@ fn selecting_a_custom_view_restyles_it_like_a_default_one() {
     let mut app = headless_app();
     let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
     let views = item_views(&app, list);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert!(app.world().entity(views[0]).contains::<Selected>());
     assert_eq!(background(&app, views[0]), colors.selected_item);
     assert_eq!(background(&app, views[1]), colors.background_primary);
@@ -4115,7 +4115,7 @@ fn a_press_on_a_nested_button_leaves_the_custom_view_and_the_selection_alone() {
     let mut app = headless_app();
     let (list, selection_ref) = spawn_custom_list(&mut app, Selection::builder().one());
     let views = item_views(&app, list);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let (_, button) = nested(&app, views[1]);
 
     press(&mut app, button);
@@ -4132,7 +4132,7 @@ fn a_press_on_the_text_of_a_custom_view_presses_the_row() {
     let mut app = headless_app();
     let (list, _) = spawn_custom_list(&mut app, Selection::builder().one());
     let views = item_views(&app, list);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let (text, _) = nested(&app, views[1]);
 
     press(&mut app, text);
@@ -4813,7 +4813,7 @@ fn filter_chips_show_a_chip_per_item_with_label_and_count_and_the_first_active()
         ("Problems".into(), String::new())
     );
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, views[0]), colors.chip_on);
     assert_eq!(background(&app, views[1]), Color::NONE);
     let label = app
@@ -4831,7 +4831,7 @@ fn activating_a_chip_selects_it_and_fills_it() {
     let mut app = headless_app();
     let (_, chips) = spawn_chips(&mut app, three_chips());
     let views = chip_views(&app, chips);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     activate(&mut app, views[1]);
 
@@ -5356,7 +5356,7 @@ fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
     assert_eq!(text(refs.description_id), "Light or dark");
     assert!(app.world().get::<Node>(refs.control_slot).is_some());
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(
         app.world().get::<TextColor>(refs.title_id).unwrap().0,
         colors.text_primary
@@ -5640,7 +5640,7 @@ fn a_toolbar_has_a_button_per_item_with_a_divider_between_groups() {
         [false, true, false, false, true, false]
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, buttons[0]), colors.accent);
     assert_eq!(background(&app, buttons[1]), Color::NONE);
     let node = app.world().entity(buttons[0]).get::<Node>().unwrap();
@@ -5652,7 +5652,7 @@ fn clicking_a_tool_of_a_one_toolbar_selects_it_and_fills_it() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     activate(&mut app, buttons[2]);
     assert_eq!(selected_label(&app, toolbar).as_deref(), Some("Signal"));
@@ -5670,7 +5670,7 @@ fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_colour_whe
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let label = |app: &App, b: Entity| {
         let refs = app.world().entity(b).get::<ToolbarButtonRefs>().unwrap();
         let e = app.world().entity(refs.label().unwrap());
@@ -5698,7 +5698,7 @@ fn clicking_the_open_panel_of_a_zero_or_one_toolbar_closes_it() {
         Selection::builder().zero_or_one(),
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(selected_label(&app, toolbar), None);
 
     activate(&mut app, buttons[1]);
@@ -5722,7 +5722,7 @@ fn a_selection_changed_through_the_selection_param_restyles_the_buttons() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     let target = app
         .world()
         .entity(buttons[3])
@@ -5771,7 +5771,7 @@ fn a_toolbar_shares_a_selection_by_reference() {
     activate(&mut app, buttons[3]);
 
     assert_eq!(selected_label(&app, selection).as_deref(), Some("Train"));
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, buttons[3]), colors.accent);
 }
 
@@ -5925,7 +5925,7 @@ fn clicking_a_card_in_the_second_group_deselects_the_one_in_the_first() {
     let groups = gallery_groups(&app, gallery);
     let first = groups[0].1[0];
     let wagon = groups[1].1[1];
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(picked_card_label(&app, gallery).as_deref(), Some("Steam"));
     assert_eq!(border_top(&app, first), colors.selection_ring);
 
@@ -5952,7 +5952,7 @@ fn a_selection_changed_through_selection_param_moves_the_ring() {
         .get::<GalleryCardView>()
         .unwrap()
         .item;
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
 
     app.world_mut()
         .run_system_once(move |mut selections: SelectionParam| {
@@ -6800,7 +6800,7 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let theme = app.world().get_resource::<Theme>().unwrap();
     let mode = theme.mode();
     assert_eq!(
-        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        theme_editor_ui::slot_color(theme.colors(), "accent"),
         Some(items)
     );
     assert_eq!(
@@ -6875,7 +6875,7 @@ fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
         Some(red)
     );
     assert_eq!(
-        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        theme_editor_ui::slot_color(theme.colors(), "accent"),
         Some(red)
     );
     assert_eq!(
@@ -9077,7 +9077,7 @@ fn no_default_hover_inserted_after_spawn_stops_the_hover_colours() {
 
     press(&mut app, button);
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, button), colors.background_primary);
 }
 
@@ -9098,7 +9098,7 @@ fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
 
     press(&mut app, button);
 
-    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, button), colors.selected_hovered_item);
 }
 

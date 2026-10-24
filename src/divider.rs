@@ -110,6 +110,6 @@ fn theme_dividers(
     };
 
     for mut background_color in iter {
-        background_color.0 = theme.colors.divider;
+        background_color.0 = theme.colors().divider;
     }
 }

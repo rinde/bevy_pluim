@@ -127,27 +127,27 @@ fn theme_labels(
             Label::Title(_) => (
                 &theme.display_font,
                 theme.font_size_title,
-                theme.colors.text_primary,
+                theme.colors().text_primary,
             ),
             Label::Regular(_) => (
                 &theme.body_font,
                 theme.font_size_secondary,
-                theme.colors.text_primary,
+                theme.colors().text_primary,
             ),
             Label::Secondary(_) => (
                 &theme.body_font,
                 theme.font_size_secondary,
-                theme.colors.text_secondary,
+                theme.colors().text_secondary,
             ),
             Label::Caption(_) => (
                 &theme.body_font,
                 theme.font_size_small,
-                theme.colors.text_tertiary,
+                theme.colors().text_tertiary,
             ),
             Label::Overline(_) => (
                 &theme.body_font,
                 theme.font_size_overline,
-                theme.colors.text_secondary,
+                theme.colors().text_secondary,
             ),
         };
         let overline = matches!(label, Label::Overline(_));

@@ -21,7 +21,7 @@ impl Plugin for ThemePlugin {
 }
 
 fn update_theme(mut clear_color: ResMut<ClearColor>, theme: Res<Theme>) {
-    clear_color.0 = theme.colors.background_primary;
+    clear_color.0 = theme.colors().background_primary;
 }
 
 /// How every widget looks.
@@ -47,10 +47,12 @@ pub struct Theme {
 
     /// The colours in use: the light or the dark set, as [`mode`](Self::mode) says.
     ///
-    /// Widgets read this one place. Change the mode with [`set_mode`](Self::set_mode) or
-    /// [`light_dark_toggle`](Self::light_dark_toggle) rather than assigning here, or it falls out
-    /// of step with the mode.
-    pub colors: ThemeColors,
+    /// Private so that it cannot fall out of step with the mode: read it with
+    /// [`colors`](Self::colors) and change it with [`set_mode`](Self::set_mode),
+    /// [`light_dark_toggle`](Self::light_dark_toggle) or [`set_colors`](Self::set_colors).
+    /// Reflection still reaches it (`Theme.colors`), as an inspection facility, not an
+    /// invariant boundary.
+    colors: ThemeColors,
     /// The colours of the light mode.
     #[educe(Default = DEFAULT_LIGHT_THEME_COLORS)]
     light_colors: ThemeColors,
@@ -146,9 +148,40 @@ impl Theme {
     /// It is a [`FontSize::Rem`], so the text follows the [`RemSize`]
     /// resource: at Bevy's default of [`DEFAULT_REM_SIZE_PX`] (20 px) it is `px` logical pixels,
     /// and an application that raises `RemSize` scales every widget's text with it.
+    ///
+    /// The `font_size_*` fields are public, so a value that cannot be a text size (NaN, an
+    /// infinity, zero or a negative number) can reach this function. It is the boundary to text
+    /// layout, so it returns [`FALLBACK_FONT_SIZE_PX`] (the body size, 15 px) instead of passing
+    /// the value on.
     #[must_use]
     pub const fn font_size(px: f32) -> FontSize {
+        // `px > 0.0` is false for NaN and zero; the upper bound excludes infinity.
+        let px = if px > 0.0 && px < f32::INFINITY {
+            px
+        } else {
+            FALLBACK_FONT_SIZE_PX
+        };
         FontSize::Rem(px / DEFAULT_REM_SIZE_PX)
+    }
+
+    /// The colours in use: the light or the dark set, as [`mode`](Self::mode) says.
+    ///
+    /// Widgets read their colours here. There is no mutable access: change the set with
+    /// [`set_mode`](Self::set_mode), [`light_dark_toggle`](Self::light_dark_toggle) or
+    /// [`set_colors`](Self::set_colors), and pick the pair with
+    /// [`with_colors`](Self::with_colors).
+    ///
+    /// The field itself is private; assigning to it does not compile:
+    ///
+    /// ```compile_fail
+    /// use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, Theme};
+    ///
+    /// let mut theme = Theme::default();
+    /// theme.colors = DEFAULT_DARK_THEME_COLORS;
+    /// ```
+    #[must_use]
+    pub const fn colors(&self) -> &ThemeColors {
+        &self.colors
     }
 
     /// A light-mode theme with the given pair of colour sets, everything else default.
@@ -209,6 +242,10 @@ impl Theme {
         });
     }
 }
+
+/// The text size in logical pixels that [`Theme::font_size`] uses for a value that is not a
+/// positive finite number: the body size.
+pub const FALLBACK_FONT_SIZE_PX: f32 = 15.0;
 
 /// Whether a [`Theme`] uses its light or its dark colours.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
@@ -558,20 +595,20 @@ mod tests {
     fn a_default_theme_is_the_light_defaults() {
         let theme = Theme::default();
         assert_eq!(theme.mode(), ThemeMode::Light);
-        assert_eq!(theme.colors, DEFAULT_LIGHT_THEME_COLORS);
+        assert_eq!(*theme.colors(), DEFAULT_LIGHT_THEME_COLORS);
     }
 
     #[test]
     fn set_mode_switches_between_a_custom_pair() {
         let (light, dark) = custom_pair();
         let mut theme = Theme::with_colors(light, dark);
-        assert_eq!(theme.colors, light);
+        assert_eq!(*theme.colors(), light);
         theme.set_mode(ThemeMode::Dark);
-        assert_eq!((theme.mode(), theme.colors), (ThemeMode::Dark, dark));
+        assert_eq!((theme.mode(), *theme.colors()), (ThemeMode::Dark, dark));
         theme.set_mode(ThemeMode::Dark);
-        assert_eq!(theme.colors, dark);
+        assert_eq!(*theme.colors(), dark);
         theme.set_mode(ThemeMode::Light);
-        assert_eq!((theme.mode(), theme.colors), (ThemeMode::Light, light));
+        assert_eq!((theme.mode(), *theme.colors()), (ThemeMode::Light, light));
     }
 
     #[test]
@@ -582,16 +619,16 @@ mod tests {
         edited.border = Color::WHITE;
         // The mode in use is not the edited one: `colors` stays, the dark half changes.
         theme.set_colors(ThemeMode::Dark, edited);
-        assert_eq!(theme.colors, light);
+        assert_eq!(*theme.colors(), light);
         assert_eq!(theme.colors_of(ThemeMode::Dark), edited);
         assert_eq!(theme.colors_of(ThemeMode::Light), light);
         theme.light_dark_toggle();
-        assert_eq!(theme.colors, edited);
+        assert_eq!(*theme.colors(), edited);
         // The mode in use is the edited one: `colors` follows at once.
         let mut edited_again = edited;
         edited_again.border = Color::BLACK;
         theme.set_colors(ThemeMode::Dark, edited_again);
-        assert_eq!(theme.colors, edited_again);
+        assert_eq!(*theme.colors(), edited_again);
     }
 
     #[test]
@@ -599,9 +636,59 @@ mod tests {
         let (light, dark) = custom_pair();
         let mut theme = Theme::with_colors(light, dark);
         theme.light_dark_toggle();
-        assert_eq!(theme.colors, dark);
+        assert_eq!(*theme.colors(), dark);
         theme.light_dark_toggle();
-        assert_eq!(theme.colors, light);
+        assert_eq!(*theme.colors(), light);
+    }
+
+    #[test]
+    fn repeated_toggling_keeps_the_colours_in_step_with_the_mode() {
+        let (light, dark) = custom_pair();
+        let mut theme = Theme::with_colors(light, dark);
+        for round in 0..5 {
+            theme.light_dark_toggle();
+            assert_eq!(
+                (theme.mode(), *theme.colors()),
+                (ThemeMode::Dark, dark),
+                "{round}"
+            );
+            theme.light_dark_toggle();
+            assert_eq!(
+                (theme.mode(), *theme.colors()),
+                (ThemeMode::Light, light),
+                "{round}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_font_size_that_is_positive_and_finite_keeps_its_rem_value() {
+        assert_eq!(Theme::font_size(20.0), FontSize::Rem(1.0));
+        assert_eq!(Theme::font_size(15.0), FontSize::Rem(0.75));
+        assert_eq!(Theme::font_size(12.5), FontSize::Rem(0.625));
+        assert_eq!(Theme::font_size(0.5), FontSize::Rem(0.025));
+        assert_eq!(
+            Theme::font_size(f32::MAX),
+            FontSize::Rem(f32::MAX / DEFAULT_REM_SIZE_PX)
+        );
+    }
+
+    #[test]
+    fn a_font_size_that_cannot_be_a_text_size_falls_back_to_the_body_size() {
+        let body = FontSize::Rem(FALLBACK_FONT_SIZE_PX / DEFAULT_REM_SIZE_PX);
+        assert_eq!(body, FontSize::Rem(0.75));
+        for px in [
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            0.0,
+            -0.0,
+            -1.0,
+            -15.0,
+            f32::MIN,
+        ] {
+            assert_eq!(Theme::font_size(px), body, "{px}");
+        }
     }
 
     #[test]

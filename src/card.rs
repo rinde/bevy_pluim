@@ -68,9 +68,9 @@ fn theme_cards(
 
     for (mut node, mut background_color, mut border_color, mut box_shadow) in iter {
         node.border = UiRect::all(theme.border_thickness);
-        background_color.0 = theme.colors.background_primary;
+        background_color.0 = theme.colors().background_primary;
         node.border_radius = BorderRadius::all(theme.panel_radius);
-        border_color.set_all(theme.colors.border);
+        border_color.set_all(theme.colors().border);
         *box_shadow = theme.large_shadow().into();
     }
 }

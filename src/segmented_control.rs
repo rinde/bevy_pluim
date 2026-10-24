@@ -258,7 +258,7 @@ fn theme_segmented_controls(
             continue;
         }
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors.segmented_track;
+        background.0 = theme.colors().segmented_track;
     }
 
     for (segment, mut node, mut background) in &mut segments {
@@ -280,7 +280,7 @@ fn theme_segmented_controls(
             continue;
         }
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors.segmented_selected;
+        background.0 = theme.colors().segmented_selected;
     }
 
     for (child_of, mut text_color, mut text_font) in &mut labels {
@@ -293,7 +293,7 @@ fn theme_segmented_controls(
         let selected = selections
             .get(segment.control_ref)
             .is_some_and(|selection| selection.is_selected(segment.item_ref));
-        text_color.0 = segment_colors(&theme.colors, selected, hovered.get()).1;
+        text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(SEGMENT_FONT_SIZE),
@@ -312,7 +312,7 @@ fn theme_segmented_controls(
         let selected = selections
             .get(segment.control_ref)
             .is_some_and(|selection| selection.is_selected(segment.item_ref));
-        let color = segment_colors(&theme.colors, selected, hovered.get()).1;
+        let color = segment_colors(theme.colors(), selected, hovered.get()).1;
         if image.color != color {
             image.color = color;
         }
@@ -462,7 +462,7 @@ fn spawn_indicators(
                 border_radius: BorderRadius::all(theme.control_radius),
                 ..default()
             },
-            BackgroundColor(theme.colors.segmented_selected),
+            BackgroundColor(theme.colors().segmented_selected),
             ZIndex(-1),
             Pickable::IGNORE,
         ));

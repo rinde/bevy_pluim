@@ -234,7 +234,7 @@ fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entit
             ..default()
         },
         BackgroundColor(Color::NONE),
-        BorderColor::all(theme.colors.chip_border),
+        BorderColor::all(theme.colors().chip_border),
         ChildOf(chips),
     ));
 }
@@ -297,7 +297,7 @@ fn theme_chips(
         let active = selections
             .get(view.chips)
             .is_some_and(|selection| selection.is_selected(view.item));
-        let style = chip_style(&theme.colors, active, hovered.get());
+        let style = chip_style(theme.colors(), active, hovered.get());
         background.set_if_neq(BackgroundColor(style.background));
         border.set_if_neq(BorderColor::all(style.border));
 

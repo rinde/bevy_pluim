@@ -338,7 +338,7 @@ fn note_ink_follows_row(
     for (background, children) in &rows {
         for child in children {
             if let Ok((ItemNoteView(tone), mut color)) = notes.get_mut(*child) {
-                color.set_if_neq(TextColor(note_ink(&theme.colors, *tone, background.0)));
+                color.set_if_neq(TextColor(note_ink(theme.colors(), *tone, background.0)));
             }
         }
     }
@@ -372,7 +372,7 @@ fn sync_item_notes(
             .flatten()
             .copied()
             .find(|child| note_texts.contains(*child));
-        let color = |note: &ItemNote| note_ink(&theme.colors, note.tone, background.0);
+        let color = |note: &ItemNote| note_ink(theme.colors(), note.tone, background.0);
         let font = || TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_caption),
@@ -485,7 +485,7 @@ fn handle_mouse_events(
     let hovered = !matches!(t.event().kind, MouseKind::Out);
     let pressed = matches!(t.event().kind, MouseKind::Pressed);
     let style = styles.get(*list_ref).copied().unwrap_or(CornerStyle::None);
-    background_color.0 = item_background(&theme.colors, style, is_selected || pressed, hovered);
+    background_color.0 = item_background(theme.colors(), style, is_selected || pressed, hovered);
 }
 
 /// The [`ItemView`] a pointer event on `target` belongs to, if `target` is a custom view or
@@ -565,11 +565,11 @@ fn handle_custom_view_mouse_events(
         .copied()
         .unwrap_or(CornerStyle::None);
     if matches!(kind, MouseKind::Pressed) {
-        background_color.0 = item_background(&theme.colors, style, true, hovered.get());
+        background_color.0 = item_background(theme.colors(), style, true, hovered.get());
         return;
     }
     // Deselecting is the `ListBox`'s event, see `on_reselect_row`.
-    background_color.0 = item_background(&theme.colors, style, is_selected, hovered.get());
+    background_color.0 = item_background(theme.colors(), style, is_selected, hovered.get());
 }
 
 /// Colours a custom view when the pointer enters or leaves it or anything inside it.
@@ -590,7 +590,7 @@ fn custom_view_hover(
         let is_selected = selections
             .get(item_view.list_ref)
             .is_some_and(|selection| selection.is_selected(item_view.item_ref));
-        background_color.0 = item_background(&theme.colors, style, is_selected, hovered.get());
+        background_color.0 = item_background(theme.colors(), style, is_selected, hovered.get());
     }
 }
 
@@ -847,8 +847,8 @@ fn selection_change(
 
                     let is_selected = selection.is_selected(item_view.item_ref);
                     sync_selected(&mut commands, item_view_id, was_selected, is_selected);
-                    bg.0 = item_background(&theme.colors, *style, is_selected, hovered.get());
-                    border_color.set_all(item_border(&theme.colors, *style, is_selected));
+                    bg.0 = item_background(theme.colors(), *style, is_selected, hovered.get());
+                    border_color.set_all(item_border(theme.colors(), *style, is_selected));
                 }
             }
         }
@@ -1072,8 +1072,8 @@ fn theme_items(
 
             let is_selected = selection.is_selected(*item_ref);
 
-            bg.0 = item_background(&theme.colors, *corner_style, is_selected, hovered.get());
-            border_color.set_all(item_border(&theme.colors, *corner_style, is_selected));
+            bg.0 = item_background(theme.colors(), *corner_style, is_selected, hovered.get());
+            border_color.set_all(item_border(theme.colors(), *corner_style, is_selected));
 
             node.padding = theme.item_padding;
             theme_item_border(&mut node, *corner_style, *layout, i, last, &theme);
@@ -1093,7 +1093,7 @@ fn theme_item_labels(
     };
 
     for (mut text_color, mut text_font) in it {
-        text_color.0 = theme.colors.text_primary;
+        text_color.0 = theme.colors().text_primary;
         text_font.font = theme.body_font.clone().into();
         text_font.font_size = Theme::font_size(theme.font_size_secondary);
     }
@@ -1128,9 +1128,9 @@ fn theme_lists(
             node.row_gap = SEPARATED_ROW_GAP;
             node.column_gap = SEPARATED_ROW_GAP;
         } else {
-            bg.0 = theme.colors.background_primary;
+            bg.0 = theme.colors().background_primary;
         }
-        bc.set_all(theme.colors.border);
+        bc.set_all(theme.colors().border);
 
         let radius = match corner_style {
             CornerStyle::FollowLayout => BorderRadius::all(theme.control_radius),

@@ -582,7 +582,7 @@ fn theme_numeric_stepper(
         if numeric_stepper_ref.is_some_and(|stepper| stepper != label.0) {
             continue;
         }
-        *text_color = TextColor(theme.colors.text_primary);
+        *text_color = TextColor(theme.colors().text_primary);
         *text_font = TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_secondary),
@@ -600,7 +600,7 @@ fn theme_numeric_stepper(
         node.column_gap = Val::Px(10.0);
         node.border = UiRect::all(theme.border_thickness);
         node.border_radius = BorderRadius::all(theme.control_radius);
-        border_color.set_all(theme.colors.border);
+        border_color.set_all(theme.colors().border);
     }
 }
 fn on_activate(

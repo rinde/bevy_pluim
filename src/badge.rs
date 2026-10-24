@@ -159,7 +159,7 @@ fn sync_badges(
     >,
     mut commands: Commands,
 ) {
-    let colors = &theme.colors;
+    let colors = theme.colors();
     for (host, badge, badge_ref, mut access) in &mut hosts {
         let badge = badge.filter(|b| !b.text.is_empty());
         // The badge node stays out of the accessibility tree; its text describes the host.
