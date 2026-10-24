@@ -31,8 +31,9 @@ use bevy::ui::{
     ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
 };
 use bevy::ui_widgets::{
-    Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab,
-    SetSliderValue, SliderValueChange, Tab, TabList, ValueChange,
+    Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
+    Scrollbar, ScrollbarThumb, SelectedTab, SetSliderValue, SliderValue, SliderValueChange, Tab,
+    TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
 use rin_bevy_ui::UiRoot;
@@ -41,9 +42,12 @@ use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
+use rin_bevy_ui::color_palette_combo::{
+    ColorPaletteCombo, ColorPaletteComboButton, ColorPaletteComboFloat, ColorPaletteComboRefs,
+    ColorPaletteComboState as PaletteComboState,
+};
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
-use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
+use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
@@ -59,7 +63,7 @@ use rin_bevy_ui::link::{Link, LinkState};
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
 use rin_bevy_ui::push_button::{
@@ -70,20 +74,26 @@ use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
 };
 use rin_bevy_ui::select::{
-    Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
+    Item, ItemOf, ItemValues, ItemsRef, Selection, SelectionBuilder, SelectionBuilderWithValue,
+    SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::slider::{Slider, SliderRefs};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
+use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
+use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
+
+#[path = "../examples/theme_editor/ui.rs"]
+mod theme_editor_ui;
 
 #[path = "../examples/overview.rs"]
 #[expect(
@@ -292,6 +302,36 @@ fn a_panel_spawned_through_a_stack_keeps_its_own_width() {
     assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));
 }
 
+#[test]
+fn a_panel_scene_with_an_invalid_maximum_body_height_fails_to_build_and_spawns_no_panel() {
+    for height in [f32::NAN, f32::INFINITY, 0.0, -5.0] {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(WindowPlugin {
+            primary_window: None,
+            ..default()
+        });
+        app.add_plugins(InputPlugin);
+        app.add_plugins(DefaultPickingPlugins);
+        app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+        app.init_resource::<ClearColor>();
+        app.init_resource::<Assets<Image>>();
+        app.add_plugins(WidgetsPlugin);
+        app.finish();
+        app.cleanup();
+        let result = app
+            .world_mut()
+            .spawn_scene(bsn! { Panel { title: "Bad", max_body_height: {height} } });
+        assert!(result.is_err(), "height {height} should not build");
+        for _ in 0..3 {
+            app.update();
+        }
+        let world = app.world_mut();
+        assert_eq!(world.query::<&Panel>().iter(world).count(), 0);
+        assert_eq!(world.query::<&PanelRefs>().iter(world).count(), 0);
+    }
+}
+
 fn spawn_real_panel_scene(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(&mut commands, bsn! { Panel { title: "Trains" } });
 }
@@ -377,6 +417,171 @@ fn a_stack_shows_only_the_selected_child_and_switches_on_selection_change() {
 
     assert_eq!(node_display(&app, panel_a), Display::Flex);
     assert_eq!(node_display(&app, panel_b), Display::None);
+}
+
+fn item_entities_of(app: &App, owner: Entity) -> Vec<Entity> {
+    app.world()
+        .get::<ItemValues>(owner)
+        .unwrap()
+        .iter()
+        .collect()
+}
+
+fn count_entities_with<C: Component>(app: &mut App) -> usize {
+    let world = app.world_mut();
+    world.query_filtered::<(), With<C>>().iter(world).count()
+}
+
+fn select_one(app: &mut App, selection_ref: Entity, item: Entity) {
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::One(item)));
+    app.update();
+    app.update();
+}
+
+#[test]
+fn stack_item_accessors_tell_a_creator_from_a_reference() {
+    let mut app = headless_app();
+    let create = app.world_mut().register_system(spawn_panel_a);
+
+    let direct = StackItem::new(create);
+    assert_eq!(direct.creator(), Some(create));
+    assert_eq!(direct.reference_id(), None);
+
+    let reusable = StackItem::new_with_reference(7, create);
+    assert_eq!(reusable.creator(), Some(create));
+    assert_eq!(reusable.reference_id(), Some(7));
+
+    let reference = StackItem::new_reference(7);
+    assert_eq!(reference.creator(), None);
+    assert_eq!(reference.reference_id(), Some(7));
+}
+
+#[test]
+fn a_stack_reference_reuses_the_creator_and_the_child_of_its_item() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new_with_reference(0, create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+            (Item::new("a again"), StackItem::new_reference(0)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    select_one(&mut app, selection_ref, items[1]);
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+
+    // The reference shows the child its creator's item already made; nothing new is spawned.
+    select_one(&mut app, selection_ref, items[2]);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    assert_eq!(node_display(&app, panel_b), Display::None);
+
+    // And back to the item itself: still the one child.
+    select_one(&mut app, selection_ref, items[1]);
+    select_one(&mut app, selection_ref, items[0]);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+}
+
+#[test]
+fn a_stack_reference_selected_first_creates_the_child_with_the_referenced_creator() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("b"), StackItem::new(create_b)),
+            (Item::new("a"), StackItem::new_with_reference(0, create_a)),
+            (Item::new("a again"), StackItem::new_reference(0)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 0);
+
+    select_one(&mut app, selection_ref, items[2]);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+}
+
+#[test]
+fn a_stack_reference_without_a_matching_creator_hides_the_current_child() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("orphan"), StackItem::new_reference(3)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(node_display(&app, panel_a), Display::None, "no stale panel");
+
+    // The stack still works afterwards.
+    select_one(&mut app, selection_ref, items[0]);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+}
+
+#[test]
+fn a_stack_over_a_pending_selection_shows_nothing_until_the_first_item_arrives() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let selection_ref = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<(Item<String>, StackItem)>::new()),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)));
+    app.update();
+    app.update();
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 0);
+
+    app.world_mut().spawn((
+        Item::new("a"),
+        StackItem::new(create_a),
+        ItemOf(selection_ref),
+    ));
+    app.update();
+    app.update();
+    app.update();
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
 }
 
 #[test]
@@ -705,7 +910,7 @@ fn an_icon_button_spawns_a_sized_icon_and_follows_its_image_and_name() {
     app.update();
     app.update();
 
-    let icon_of = |app: &App, e: Entity| app.world().get::<IconButtonRefs>(e).unwrap().icon_id;
+    let icon_of = |app: &App, e: Entity| app.world().get::<IconButtonRefs>(e).unwrap().icon();
     let side = |app: &App, e: Entity| {
         let node = app.world().get::<Node>(e).unwrap();
         (node.width, node.height)
@@ -771,7 +976,7 @@ fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
 
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     let tint = |app: &App, e: Entity| {
-        let icon = app.world().get::<IconButtonRefs>(e).unwrap().icon_id;
+        let icon = app.world().get::<IconButtonRefs>(e).unwrap().icon();
         app.world().get::<ImageNode>(icon).unwrap().color
     };
     let state = |app: &App, e: Entity| app.world().get::<ToggleState>(e).copied();
@@ -839,7 +1044,7 @@ fn activating_a_toggle_push_button_flips_its_state_restyles_it_and_sets_its_togg
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     let state = |app: &App, e: Entity| app.world().get::<ToggleState>(e).copied();
     let label_color = |app: &App, e: Entity| {
-        let label = app.world().get::<PushButtonRefs>(e).unwrap().label_id;
+        let label = app.world().get::<PushButtonRefs>(e).unwrap().label();
         app.world().get::<TextColor>(label).unwrap().0
     };
     let toggled = |app: &App, e: Entity| app.world().get::<AccessibilityNode>(e).unwrap().toggled();
@@ -1352,7 +1557,7 @@ fn a_disabled_push_button_is_dimmed_and_does_not_activate() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
     let label_color = |app: &App| app.world().entity(label).get::<TextColor>().unwrap().0;
     assert_eq!(label_color(&app), colors.text_disabled);
 
@@ -1413,7 +1618,7 @@ fn a_compact_push_button_is_small_and_keeps_it_after_a_theme_change() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
     let check = |app: &App| {
         let theme = app.world().get_resource::<Theme>().unwrap();
         let node = app.world().entity(button).get::<Node>().unwrap();
@@ -1796,9 +2001,9 @@ fn spawn_combo(app: &mut App) -> (Entity, Entity) {
     let button = app
         .world()
         .entity(combo)
-        .get::<ComboSubRefs>()
+        .get::<ComboRefs>()
         .unwrap()
-        .button_id;
+        .button();
     (combo, button)
 }
 
@@ -1818,17 +2023,11 @@ fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
         .id();
     app.update();
     app.update();
-    let refs = *app.world().entity(combo).get::<ComboSubRefs>().unwrap();
-    click(&mut app, refs.button_id);
+    let refs = *app.world().entity(combo).get::<ComboRefs>().unwrap();
+    click(&mut app, refs.button());
     app.update();
     app.update();
-    let list_index = |app: &App| {
-        app.world()
-            .entity(refs.list_id)
-            .get::<TabIndex>()
-            .unwrap()
-            .0
-    };
+    let list_index = |app: &App| app.world().entity(refs.list()).get::<TabIndex>().unwrap().0;
     assert_eq!(
         app.world().entity(combo).get::<ComboState>(),
         Some(&ComboState::Open)
@@ -1867,6 +2066,66 @@ fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
     app.update();
     app.update();
     (combo, single_entity_with::<ColorPushButton>(app))
+}
+
+#[test]
+fn the_root_refs_of_a_combo_point_at_its_live_parts() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    let refs = *app.world().get::<ComboRefs>(combo).unwrap();
+    assert_eq!(refs.button(), button);
+    assert!(app.world().entity(button).contains::<ComboButton>());
+    assert!(app.world().entity(refs.list()).contains::<ComboList>());
+
+    // Inserting the component again keeps one parts tree.
+    app.world_mut().entity_mut(combo).insert(Combo);
+    app.update();
+    assert_eq!(
+        app.world().get::<ComboRefs>(combo).unwrap().button(),
+        button
+    );
+    let mut buttons = app.world_mut().query::<&ComboButton>();
+    assert_eq!(buttons.iter(app.world()).count(), 1);
+
+    app.world_mut().entity_mut(combo).despawn();
+    app.update();
+    assert_eq!(buttons.iter(app.world()).count(), 0);
+    let mut lists = app.world_mut().query::<&ComboList>();
+    assert_eq!(lists.iter(app.world()).count(), 0);
+}
+
+#[test]
+fn the_root_refs_of_a_palette_combo_point_at_its_live_parts() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_palette_combo(&mut app);
+    let refs = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
+    assert_eq!(refs.button(), button);
+    let world = app.world();
+    assert!(world.entity(button).contains::<ColorPaletteComboButton>());
+    assert_eq!(
+        world.get::<Name>(button).map(Name::as_str),
+        Some("ColorPaletteComboButton")
+    );
+    assert!(
+        world
+            .entity(refs.popup())
+            .contains::<ColorPaletteComboFloat>()
+    );
+    assert!(world.entity(refs.palette()).contains::<ColorPalette>());
+
+    // Inserting the component again keeps one parts tree.
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    let again = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
+    assert_eq!(again.popup(), refs.popup());
+    let mut popups = app.world_mut().query::<&ColorPaletteComboFloat>();
+    assert_eq!(popups.iter(app.world()).count(), 1);
+
+    app.world_mut().entity_mut(combo).despawn();
+    app.update();
+    assert_eq!(popups.iter(app.world()).count(), 0);
+    let mut palettes = app.world_mut().query::<&ColorPalette>();
+    assert_eq!(palettes.iter(app.world()).count(), 0);
 }
 
 #[test]
@@ -1951,7 +2210,7 @@ fn controls(app: &App, entity: Entity) -> Vec<u64> {
 fn a_combo_button_controls_its_list() {
     let mut app = headless_app();
     let (combo, button) = spawn_combo(&mut app);
-    let list = app.world().get::<ComboSubRefs>(combo).unwrap().list_id;
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
     assert_eq!(controls(&app, button), vec![list.to_bits()]);
 }
 
@@ -2043,7 +2302,7 @@ fn a_color_push_button_outside_a_combo_is_named_after_its_colour() {
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app.world_mut().spawn((ColorPushButton, ChildOf(root))).id();
     app.update();
-    let square = app.world().get::<ColorSquareRef>(button).unwrap().0;
+    let square = app.world().get::<ColorSquareRef>(button).unwrap().entity();
     app.world_mut().entity_mut(square).insert(BackgroundColor(
         bevy::color::palettes::tailwind::RED_500.into(),
     ));
@@ -2096,6 +2355,52 @@ fn a_color_palette_combo_gets_its_popup_when_the_app_has_two_ui_roots() {
     );
     let floats = palette_combo_floats(&mut app);
     assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
+}
+
+#[test]
+fn a_color_palette_combo_popup_border_is_the_themes_highlight_when_spawned_and_after_a_change() {
+    let mut app = headless_app();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+    // No update since the spawn: the popup is themed when it is spawned.
+    assert_popup_borders_are_highlight(&mut app, 1);
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Light);
+    app.update();
+    app.update();
+    assert_popup_borders_are_highlight(&mut app, 1);
+
+    // A combo spawned after the theme changed is themed as well.
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+    assert_popup_borders_are_highlight(&mut app, 2);
+}
+
+/// Every palette combo popup has the active theme's `border_highlight` border.
+fn assert_popup_borders_are_highlight(app: &mut App, count: usize) {
+    let expected = BorderColor::all(
+        app.world()
+            .get_resource::<Theme>()
+            .unwrap()
+            .colors
+            .border_highlight,
+    );
+    let floats = palette_combo_floats(app);
+    assert_eq!(floats.len(), count);
+    for float in floats {
+        assert_eq!(
+            app.world().entity(float).get::<BorderColor>(),
+            Some(&expected)
+        );
+    }
 }
 
 #[test]
@@ -2474,7 +2779,7 @@ fn spawn_stepper(app: &mut App, initial: u8) -> (Entity, Entity, Entity) {
         .world_mut()
         .spawn((
             NumericStepper::default(),
-            Value::new_u8(initial, 0, 3, 1),
+            Value::new_u8(initial, 0, 3, 1).unwrap(),
             ChildOf(root),
         ))
         .id();
@@ -2515,6 +2820,73 @@ fn activating_the_buttons_of_a_numeric_stepper_steps_its_value() {
     assert_eq!(stepper_value(&app, stepper), 0);
 }
 
+#[derive(Resource, Default)]
+struct StepperChanges(Vec<u8>);
+
+fn count_stepper_changes(app: &mut App) {
+    app.init_resource::<StepperChanges>();
+    app.add_observer(
+        |change: On<rin_bevy_ui::numeric_stepper::ValueChange>,
+         mut seen: ResMut<StepperChanges>| {
+            seen.0.push(change.value.as_u8().unwrap());
+        },
+    );
+}
+
+#[test]
+fn a_value_change_is_sent_for_a_step_only_not_for_spawning_or_setting_the_value() {
+    let mut app = headless_app();
+    count_stepper_changes(&mut app);
+    let (stepper, _, increase) = spawn_stepper(&mut app, 1);
+    assert!(
+        app.world()
+            .get_resource::<StepperChanges>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(Value::new_u8(3, 0, 3, 1).unwrap());
+    app.update();
+    app.update();
+    assert!(
+        app.world()
+            .get_resource::<StepperChanges>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(Value::new_u8(1, 0, 3, 1).unwrap());
+    app.update();
+    activate(&mut app, increase);
+    assert_eq!(
+        app.world().get_resource::<StepperChanges>().unwrap().0,
+        vec![2]
+    );
+}
+
+#[test]
+fn a_stepper_without_a_value_or_with_a_value_ref_to_none_is_not_built_and_gets_no_default() {
+    let mut app = headless_app();
+    let bare = app.world_mut().spawn(NumericStepper::default()).id();
+    let target = app.world_mut().spawn_empty().id();
+    let dangling = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(target)))
+        .id();
+    app.update();
+    app.update();
+    for stepper in [bare, dangling] {
+        assert!(app.world().entity(stepper).get::<Value>().is_none());
+        assert!(app.world().entity(stepper).get::<Children>().is_none());
+    }
+}
+
 fn level_text(value: &Value) -> String {
     match value.as_u8() {
         Some(0) => "Ground".to_string(),
@@ -2535,7 +2907,7 @@ fn a_numeric_stepper_shows_its_custom_format_and_updates_it_on_a_change() {
                 increase_name: "Raise the level".into(),
                 ..default()
             },
-            Value::new_u8(0, 0, 14, 7),
+            Value::new_u8(0, 0, 14, 7).unwrap(),
         ))
         .id();
     app.update();
@@ -3468,7 +3840,7 @@ fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
     assert_eq!(
         font_of(&app, button_label),
         (body.clone().into(), FontSize::Rem(1.0))
@@ -4570,24 +4942,24 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
     let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
     let display = |app: &App, e: Entity| app.world().get::<Node>(e).unwrap().display;
-    assert_eq!(text(&app, refs.title), "Trains");
-    assert_eq!(text(&app, refs.subtitle), "4 on the network");
-    assert_eq!(display(&app, refs.subtitle), Display::Flex);
-    assert_eq!(display(&app, refs.close), Display::Flex);
+    assert_eq!(text(&app, refs.title()), "Trains");
+    assert_eq!(text(&app, refs.subtitle()), "4 on the network");
+    assert_eq!(display(&app, refs.subtitle()), Display::Flex);
+    assert_eq!(display(&app, refs.close()), Display::Flex);
     let close_icon = app
         .world()
-        .get::<IconButtonRefs>(refs.close)
+        .get::<IconButtonRefs>(refs.close())
         .unwrap()
-        .icon_id;
+        .icon();
     assert_eq!(
         app.world().get::<ImageNode>(close_icon).unwrap().image,
         icon
     );
-    assert_eq!(display(&app, refs.strip), Display::None);
-    assert_eq!(display(&app, refs.footer), Display::None);
+    assert_eq!(display(&app, refs.strip()), Display::None);
+    assert_eq!(display(&app, refs.footer()), Display::None);
     assert_eq!(
         app.world()
-            .get::<Node>(refs.scroll_area)
+            .get::<Node>(refs.scroll_area())
             .unwrap()
             .max_height,
         // The 620 px of the body plus the 12 px corner radius it stops short of the bottom edge.
@@ -4596,20 +4968,20 @@ fn a_panel_spawns_its_header_parts_and_hides_the_empty_sections() {
 
     let footer_text = app
         .world_mut()
-        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer)))
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
         .id();
     app.update();
-    assert_eq!(display(&app, refs.footer), Display::Flex);
+    assert_eq!(display(&app, refs.footer()), Display::Flex);
     app.world_mut().despawn(footer_text);
     app.update();
-    assert_eq!(display(&app, refs.footer), Display::None);
+    assert_eq!(display(&app, refs.footer()), Display::None);
 
     let plain = app.world_mut().spawn(Panel::new("Stops")).id();
     app.update();
     app.update();
     let plain_refs = *app.world().get::<PanelRefs>(plain).unwrap();
-    assert_eq!(display(&app, plain_refs.subtitle), Display::None);
-    assert_eq!(display(&app, plain_refs.close), Display::None);
+    assert_eq!(display(&app, plain_refs.subtitle()), Display::None);
+    assert_eq!(display(&app, plain_refs.close()), Display::None);
 }
 
 #[test]
@@ -4622,7 +4994,7 @@ fn a_panel_body_stops_a_corner_radius_short_of_the_bottom_unless_a_footer_holds_
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
     let margin = |app: &App| {
         app.world()
-            .get::<Node>(refs.scroll_area)
+            .get::<Node>(refs.scroll_area())
             .unwrap()
             .margin
             .bottom
@@ -4632,7 +5004,7 @@ fn a_panel_body_stops_a_corner_radius_short_of_the_bottom_unless_a_footer_holds_
 
     let footer_text = app
         .world_mut()
-        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer)))
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
         .id();
     app.update();
     assert_eq!(margin(&app), Val::ZERO);
@@ -4659,7 +5031,7 @@ fn activating_the_close_button_of_a_panel_triggers_panel_closed_on_it() {
     app.update();
     app.update();
 
-    let close = app.world().get::<PanelRefs>(panel).unwrap().close;
+    let close = app.world().get::<PanelRefs>(panel).unwrap().close();
     app.world_mut().trigger(Activate { entity: close });
     app.update();
 
@@ -4681,17 +5053,17 @@ fn changing_the_subtitle_of_a_live_panel_updates_its_text() {
     app.update();
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
     let text = |app: &App, e: Entity| app.world().get::<Text>(e).unwrap().0.clone();
-    assert_eq!(text(&app, refs.subtitle), "3 open");
+    assert_eq!(text(&app, refs.subtitle()), "3 open");
 
     app.world_mut()
         .entity_mut(panel)
         .insert(Panel::new("Alerts").with_subtitle("2 open"));
     app.update();
     app.update();
-    assert_eq!(text(&app, refs.subtitle), "2 open");
-    assert_eq!(text(&app, refs.title), "Alerts");
+    assert_eq!(text(&app, refs.subtitle()), "2 open");
+    assert_eq!(text(&app, refs.title()), "Alerts");
     assert_eq!(
-        app.world().get::<Children>(refs.header).unwrap().len(),
+        app.world().get::<Children>(refs.header()).unwrap().len(),
         3,
         "the parts are spawned once"
     );
@@ -4702,9 +5074,226 @@ fn changing_the_subtitle_of_a_live_panel_updates_its_text() {
     app.update();
     app.update();
     assert_eq!(
-        app.world().get::<Node>(refs.subtitle).unwrap().display,
+        app.world().get::<Node>(refs.subtitle()).unwrap().display,
         Display::None
     );
+}
+
+#[test]
+fn a_panels_close_button_is_named_close_unless_the_app_names_it() {
+    let mut app = headless_app();
+    let close_label = |app: &App, panel: Entity| {
+        let close = app.world().get::<PanelRefs>(panel).unwrap().close();
+        app.world()
+            .get::<AccessibilityNode>(close)
+            .unwrap()
+            .label()
+            .map(str::to_owned)
+    };
+    let plain = app
+        .world_mut()
+        .spawn(Panel::new("A").with_close_icon(Handle::default()))
+        .id();
+    let named = app
+        .world_mut()
+        .spawn(
+            Panel::new("B")
+                .with_close_icon(Handle::default())
+                .with_close_name("Sluiten"),
+        )
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(close_label(&app, plain).as_deref(), Some("Close"));
+    assert_eq!(close_label(&app, named).as_deref(), Some("Sluiten"));
+
+    app.world_mut().entity_mut(plain).insert(
+        Panel::new("A")
+            .with_close_icon(Handle::default())
+            .with_close_name("Fermer"),
+    );
+    app.update();
+    app.update();
+    assert_eq!(close_label(&app, plain).as_deref(), Some("Fermer"));
+
+    app.world_mut()
+        .entity_mut(plain)
+        .insert(Panel::new("A").with_close_icon(Handle::default()));
+    app.update();
+    app.update();
+    assert_eq!(close_label(&app, plain).as_deref(), Some("Close"));
+}
+
+#[test]
+fn inserting_a_panel_again_keeps_its_parts_content_and_one_close_notification() {
+    let mut app = headless_app();
+    app.init_resource::<PanelsClosed>();
+    app.add_observer(|t: On<PanelClosed>, mut closed: ResMut<PanelsClosed>| {
+        closed.0.push(t.event().event_target());
+    });
+    let panel = app
+        .world_mut()
+        .spawn(Panel::new("Trains").with_close_icon(Handle::default()))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let content = app
+        .world_mut()
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
+        .id();
+
+    app.world_mut().entity_mut(panel).insert(
+        Panel::new("Stops")
+            .with_subtitle("6 stops")
+            .with_close_icon(Handle::default())
+            .with_close_name("Sluiten")
+            .with_max_body_height(200.0)
+            .unwrap(),
+    );
+    app.update();
+    app.update();
+
+    assert_eq!(*app.world().get::<PanelRefs>(panel).unwrap(), refs);
+    assert_eq!(app.world().get::<Text>(refs.title()).unwrap().0, "Stops");
+    assert_eq!(
+        app.world().get::<Text>(refs.subtitle()).unwrap().0,
+        "6 stops"
+    );
+    assert!(
+        app.world()
+            .get::<Children>(refs.footer())
+            .unwrap()
+            .contains(&content)
+    );
+    assert!(matches!(
+        app.world().get::<Node>(refs.scroll_area()).unwrap().max_height,
+        Val::Px(px) if (200.0..200.0 + 100.0).contains(&px)
+    ));
+    app.world_mut().trigger(Activate {
+        entity: refs.close(),
+    });
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<PanelsClosed>().unwrap().0,
+        vec![panel],
+        "one notification per activation"
+    );
+}
+
+#[test]
+fn inserting_a_panel_again_sets_the_body_maximum_height_and_keeps_the_corner_margin() {
+    let mut app = headless_app();
+    let radius = app.world().get_resource::<Theme>().unwrap().panel_radius;
+    let radius_px = 12.0;
+    assert_eq!(radius, Val::Px(radius_px));
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let area = |app: &App| {
+        let node = app.world().get::<Node>(refs.scroll_area()).unwrap();
+        (node.max_height, node.margin.bottom)
+    };
+    assert_eq!(area(&app), (Val::Px(620.0 + radius_px), radius));
+
+    // A new maximum reaches the scroll area, with the margin of the corners added to it.
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(150.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(150.0 + radius_px), radius));
+
+    // With a footer holding the corners there is no margin to add.
+    let footer_text = app
+        .world_mut()
+        .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
+        .id();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(150.0), Val::ZERO));
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(90.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(90.0), Val::ZERO));
+
+    // Without the footer again, a re-insert does not drop the margin.
+    app.world_mut().despawn(footer_text);
+    app.update();
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(70.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(area(&app), (Val::Px(70.0 + radius_px), radius));
+}
+
+#[test]
+fn inserting_a_panel_again_adds_and_removes_its_close_button() {
+    let mut app = headless_app();
+    let icon: Handle<Image> = bevy::asset::uuid_handle!("2d8e3f40-5162-4c73-8da4-9fa5fb607a18");
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let display = |app: &App| app.world().get::<Node>(refs.close()).unwrap().display;
+    assert_eq!(display(&app), Display::None);
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_close_icon(icon.clone()));
+    app.update();
+    app.update();
+    assert_eq!(display(&app), Display::Flex);
+    let close_icon = app
+        .world()
+        .get::<IconButtonRefs>(refs.close())
+        .unwrap()
+        .icon();
+    assert_eq!(
+        app.world().get::<ImageNode>(close_icon).unwrap().image,
+        icon
+    );
+
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains"));
+    app.update();
+    app.update();
+    assert_eq!(display(&app), Display::None);
+    assert_eq!(*app.world().get::<PanelRefs>(panel).unwrap(), refs);
+}
+
+#[test]
+fn a_panel_stays_labelled_by_its_title_after_it_is_inserted_again_with_other_parts() {
+    let mut app = headless_app();
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    app.update();
+    app.update();
+    let title = app.world().get::<PanelRefs>(panel).unwrap().title();
+
+    app.world_mut().entity_mut(panel).insert(
+        Panel::new("Stops")
+            .with_subtitle("6 stops")
+            .with_close_icon(Handle::default())
+            .with_max_body_height(200.0)
+            .unwrap(),
+    );
+    app.update();
+    app.update();
+
+    let node = app.world().get::<AccessibilityNode>(panel).unwrap();
+    assert_eq!(node.role(), accesskit::Role::Group);
+    assert_eq!(node.label(), None);
+    assert_eq!(node.labelled_by(), [accesskit::NodeId(title.to_bits())]);
+    assert_eq!(
+        app.world().get::<PanelRefs>(panel).unwrap().title(),
+        title,
+        "the title is the same entity"
+    );
+    assert_eq!(app.world().get::<Text>(title).unwrap().0, "Stops");
 }
 
 #[test]
@@ -4764,6 +5353,48 @@ fn a_setting_row_is_a_group_labelled_with_its_title_and_described_by_its_descrip
 }
 
 #[test]
+fn inserting_a_setting_row_again_changes_its_text_and_keeps_its_control() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let row = app
+        .world_mut()
+        .spawn((SettingRow::new("A", "first"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+    let control = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(refs.control_slot)))
+        .id();
+    let children_before: Vec<Entity> = app.world().get::<Children>(row).unwrap().to_vec();
+
+    app.world_mut()
+        .entity_mut(row)
+        .insert(SettingRow::new("B", "second"));
+    app.update();
+    app.update();
+
+    assert_eq!(app.world().get::<Text>(refs.title_id).unwrap().0, "B");
+    assert_eq!(
+        app.world().get::<Text>(refs.description_id).unwrap().0,
+        "second"
+    );
+    let node = app.world().get::<AccessibilityNode>(row).unwrap();
+    assert_eq!(node.label(), Some("B"));
+    assert_eq!(node.description(), Some("second"));
+    assert_eq!(*app.world().get::<SettingRowRefs>(row).unwrap(), refs);
+    assert_eq!(
+        app.world().get::<Children>(row).unwrap().to_vec(),
+        children_before
+    );
+    assert_eq!(
+        app.world().get::<ChildOf>(control).unwrap().parent(),
+        refs.control_slot
+    );
+}
+
+#[test]
 fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
     let mut app = headless_app();
     let panel = app.world_mut().spawn(Panel::new("Trains")).id();
@@ -4771,7 +5402,7 @@ fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
     app.update();
     let node = |app: &App| {
         let node = app.world().get::<AccessibilityNode>(panel).unwrap();
-        let title = app.world().get::<PanelRefs>(panel).unwrap().title;
+        let title = app.world().get::<PanelRefs>(panel).unwrap().title();
         (
             node.role(),
             node.label().map(str::to_owned),
@@ -5828,7 +6459,7 @@ fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> E
 }
 
 fn icon_tint(app: &App, button: Entity) -> Color {
-    let icon = app.world().get::<IconButtonRefs>(button).unwrap().icon_id;
+    let icon = app.world().get::<IconButtonRefs>(button).unwrap().icon();
     app.world().get::<ImageNode>(icon).unwrap().color
 }
 
@@ -6040,6 +6671,115 @@ fn the_hud_example_builds_and_runs() {
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
 }
 
+fn theme_editor_app() -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins((WidgetsPlugin, theme_editor_ui::ThemeEditorPlugin));
+    app.finish();
+    app.cleanup();
+    for _ in 0..6 {
+        app.update();
+    }
+    app
+}
+
+#[test]
+fn the_theme_editor_example_has_a_row_for_each_editable_slot() {
+    let mut app = theme_editor_app();
+    assert_eq!(ui_root_count(&mut app), 1);
+    let slots = theme_editor_ui::editable_slots();
+    assert!(slots.len() > 20);
+    let world = app.world_mut();
+    assert_eq!(
+        world
+            .query::<&theme_editor_ui::ThemeSlot>()
+            .iter(world)
+            .count(),
+        slots.len()
+    );
+    assert_eq!(
+        world
+            .query::<&theme_editor_ui::SlotSwatch>()
+            .iter(world)
+            .count(),
+        slots.len()
+    );
+}
+
+#[test]
+fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
+    let mut app = theme_editor_app();
+    let (combo, items) = {
+        let world = app.world_mut();
+        let combo = world
+            .query::<(Entity, &theme_editor_ui::ThemeSlot)>()
+            .iter(world)
+            .find(|(_, slot)| slot.0 == "accent")
+            .map(|(e, _)| e)
+            .unwrap();
+        let red = world
+            .query::<&Item<Color>>()
+            .iter(world)
+            .map(|i| i.data)
+            .nth(60)
+            .unwrap();
+        (combo, red)
+    };
+    let picked = {
+        let world = app.world_mut();
+        world
+            .query::<(Entity, &Item<Color>)>()
+            .iter(world)
+            .find(|(_, i)| i.data == items)
+            .map(|(e, _)| e)
+            .unwrap()
+    };
+    let dark_before = app
+        .world()
+        .get_resource::<Theme>()
+        .unwrap()
+        .colors_of(ThemeMode::Dark);
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(picked))));
+    for _ in 0..3 {
+        app.update();
+    }
+    let theme = app.world().get_resource::<Theme>().unwrap();
+    let mode = theme.mode();
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors, "accent"),
+        Some(items)
+    );
+    assert_eq!(
+        theme_editor_ui::slot_color(&theme.colors_of(mode), "accent"),
+        Some(items)
+    );
+    if mode == ThemeMode::Light {
+        assert_eq!(theme.colors_of(ThemeMode::Dark), dark_before);
+    }
+}
+
+#[test]
+fn the_theme_editor_exports_every_colour_slot_as_rust_text() {
+    use bevy::reflect::structs::Struct as _;
+    let source = theme_editor_ui::colors_source("LIGHT", &DEFAULT_LIGHT_THEME_COLORS);
+    assert!(source.starts_with("const LIGHT: ThemeColors = ThemeColors {\n"));
+    assert!(source.ends_with("};\n"));
+    let lines = source.lines().count();
+    assert_eq!(lines, DEFAULT_LIGHT_THEME_COLORS.field_len() + 2);
+    assert!(source.contains("    accent: Color::srgba("));
+}
+
 #[test]
 fn the_overview_example_builds_and_every_page_runs() {
     let mut app = App::new();
@@ -6144,7 +6884,7 @@ fn widgets_with_handles_and_scene_constructors_are_written_directly_in_a_scene()
     let panel = world.query::<&Panel>().single(world).unwrap();
     assert_eq!(panel.close_icon.as_ref(), Some(&icon));
     // What is not written is as `Panel::new` has it.
-    assert!((panel.max_body_height - Panel::new("").max_body_height).abs() < f32::EPSILON);
+    assert!((panel.max_body_height() - Panel::new("").max_body_height()).abs() < f32::EPSILON);
     let stepper = world.query::<&NumericStepper>().single(world).unwrap();
     assert_eq!(stepper.decrease_name, "Lower");
     assert_eq!(stepper.increase_name, "Increase");
@@ -6183,12 +6923,14 @@ fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
             Node
             Children [
                 @ScrollArea::scene(
-                    bsn_list! {
-                        Node
-                        --
-                        Node
-                        --
-                        Node
+                    || {
+                        bsn_list! {
+                            Node
+                            --
+                            Node
+                            --
+                            Node
+                        }
                     },
                     true,
                     true,
@@ -6213,6 +6955,165 @@ fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
     assert_eq!(contents.len(), 3);
     assert_eq!(world.query::<&ScrollBar>().iter(world).count(), 2);
     assert_eq!(ui_root_count_world(world), 1);
+}
+
+fn scene_app() -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    app.world_mut().spawn(Camera2d);
+    app
+}
+
+/// Each area's contents entity with the entities below it, and the targets of its scroll bars.
+fn scroll_areas_of(world: &mut World) -> Vec<(Entity, Vec<Entity>, Vec<Entity>)> {
+    let areas: Vec<Entity> = world
+        .query_filtered::<Entity, With<ScrollArea>>()
+        .iter(world)
+        .collect();
+    areas
+        .into_iter()
+        .map(|area| {
+            let contents = world
+                .query_filtered::<(Entity, &ChildOf), With<ScrollContents>>()
+                .iter(world)
+                .find(|(_, parent)| parent.parent() == area)
+                .map(|(entity, _)| entity)
+                .unwrap();
+            let children = world
+                .get::<Children>(contents)
+                .map(|children| children.iter().collect())
+                .unwrap_or_default();
+            let targets = world
+                .query::<(&ChildOf, &Scrollbar)>()
+                .iter(world)
+                .filter(|(parent, _)| parent.parent() == area)
+                .map(|(_, bar)| bar.target)
+                .collect();
+            (contents, children, targets)
+        })
+        .collect()
+}
+
+fn assert_two_distinct_areas(world: &mut World, children: usize) {
+    let areas = scroll_areas_of(world);
+    assert_eq!(areas.len(), 2);
+    let (first, second) = (&areas[0], &areas[1]);
+    assert_ne!(first.0, second.0);
+    for (contents, kids, targets) in &areas {
+        assert_eq!(kids.len(), children);
+        assert_eq!(targets.len(), 2);
+        assert!(targets.iter().all(|target| target == contents));
+    }
+    assert!(first.1.iter().all(|kid| !second.1.contains(kid)));
+}
+
+#[test]
+fn a_scroll_area_scene_gives_every_build_its_own_fresh_contents() {
+    let mut app = scene_app();
+    let area = || {
+        ScrollArea::scene(
+            || {
+                bsn_list! {
+                    Node
+                    --
+                    Node
+                    --
+                    Node
+                }
+            },
+            true,
+            true,
+        )
+    };
+    app.world_mut()
+        .spawn_scene(bsn! { Node Children [ @area() -- @area() ] })
+        .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_two_distinct_areas(app.world_mut(), 3);
+}
+
+#[test]
+fn a_cached_scroll_area_scene_builds_fresh_contents_each_time_it_is_spawned() {
+    let mut app = scene_app();
+    let server = app.world().get_resource::<AssetServer>().unwrap().clone();
+    let mut patch = bevy::scene::ScenePatch::load(
+        &server,
+        bsn! {
+            Node
+            Children [
+                @ScrollArea::scene(
+                    || bsn_list! { Node -- Node },
+                    true,
+                    true,
+                )
+            ]
+        },
+    );
+    patch
+        .resolve(
+            &server,
+            app.world()
+                .get_resource::<Assets<bevy::scene::ScenePatch>>()
+                .unwrap(),
+        )
+        .unwrap();
+    // One resolved scene, applied twice: the contents are made again for each.
+    patch.spawn(app.world_mut()).unwrap();
+    patch.spawn(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_two_distinct_areas(app.world_mut(), 2);
+}
+
+#[test]
+fn a_scroll_area_factory_with_a_captured_handle_builds_asset_scenes_again_and_again() {
+    let mut app = scene_app();
+    let icon = app
+        .world_mut()
+        .get_resource_mut::<Assets<Image>>()
+        .unwrap()
+        .add(Image::default());
+    let area = move || {
+        let icon = icon.clone();
+        ScrollArea::scene(
+            move || {
+                bsn_list! {
+                    IconButton { icon: {icon.clone()}, name: "Close", size: IconButtonSize::Regular }
+                }
+            },
+            true,
+            true,
+        )
+    };
+    app.world_mut()
+        .spawn_scene(bsn! { Node Children [ @area() -- @area() ] })
+        .unwrap();
+    for _ in 0..6 {
+        app.update();
+    }
+    let world = app.world_mut();
+    assert_two_distinct_areas(world, 1);
+    let names: Vec<String> = world
+        .query::<&IconButton>()
+        .iter(world)
+        .map(|button| button.name.clone())
+        .collect();
+    assert_eq!(names, ["Close", "Close"]);
 }
 
 fn ui_root_count_world(world: &mut World) -> usize {
@@ -6304,6 +7205,89 @@ fn a_numeric_stepper_is_a_spin_button_with_numeric_bounds_and_step() {
     assert_eq!(node.value(), Some("2"));
 }
 
+/// A stepper over `value`, returning it and its decrease and increase buttons.
+fn spawn_stepper_of(app: &mut App, value: Value) -> (Entity, Entity, Entity) {
+    let stepper = app
+        .world_mut()
+        .spawn((NumericStepper::default(), value))
+        .id();
+    app.update();
+    app.update();
+    let children = app.world().entity(stepper).get::<Children>().unwrap();
+    (stepper, children[0], children[2])
+}
+
+#[test]
+fn a_stepper_with_equal_bounds_disables_both_buttons_and_reports_its_numbers() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) =
+        spawn_stepper_of(&mut app, Value::new_u8(5, 5, 5, 1).unwrap());
+
+    assert!(is_disabled(&app, decrease));
+    assert!(is_disabled(&app, increase));
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(5.0));
+    assert_eq!(node.min_numeric_value(), Some(5.0));
+    assert_eq!(node.max_numeric_value(), Some(5.0));
+    assert_eq!(node.numeric_value_step(), Some(1.0));
+    assert_eq!(node.value(), Some("5"));
+}
+
+#[test]
+fn a_stepper_with_a_step_larger_than_its_range_disables_both_buttons() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) =
+        spawn_stepper_of(&mut app, Value::new_u16(2, 0, 3, 10).unwrap());
+
+    assert!(is_disabled(&app, decrease));
+    assert!(is_disabled(&app, increase));
+    let node = app
+        .world()
+        .entity(stepper)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(2.0));
+    assert_eq!(node.min_numeric_value(), Some(0.0));
+    assert_eq!(node.max_numeric_value(), Some(3.0));
+    assert_eq!(node.numeric_value_step(), Some(10.0));
+
+    let (_, decrease, increase) =
+        spawn_stepper_of(&mut app, Value::new_f32(0.5, 0.0, 1.0, 2.0).unwrap());
+    assert!(is_disabled(&app, decrease));
+    assert!(is_disabled(&app, increase));
+}
+
+#[test]
+fn mirrors_of_a_shared_stepper_value_follow_it_and_disable_at_its_limits() {
+    let mut app = headless_app();
+    let (shared, _, _) = spawn_stepper_of(&mut app, Value::new_u8(1, 0, 2, 1).unwrap());
+    let mirror = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(shared)))
+        .id();
+    app.update();
+    app.update();
+    let children = app.world().entity(mirror).get::<Children>().unwrap();
+    let (decrease, increase) = (children[0], children[2]);
+
+    activate(&mut app, increase);
+    assert_eq!(stepper_value(&app, shared), 2);
+    assert!(is_disabled(&app, increase));
+    assert!(!is_disabled(&app, decrease));
+    let node = app
+        .world()
+        .entity(mirror)
+        .get::<AccessibilityNode>()
+        .unwrap();
+    assert_eq!(node.numeric_value(), Some(2.0));
+    assert_eq!(node.max_numeric_value(), Some(2.0));
+    assert_eq!(node.value(), Some("2"));
+}
+
 #[test]
 fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     let mut app = headless_app();
@@ -6312,12 +7296,14 @@ fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     let stepped = world
         .spawn(
             Slider::new(2.0, 0.0, 10.0)
+                .unwrap()
                 .with_step(1.0)
+                .unwrap()
                 .with_format(|value| format!("{value:.0} km"))
                 .with_name("Distance"),
         )
         .id();
-    let continuous = world.spawn(Slider::new(25.0, 0.0, 100.0)).id();
+    let continuous = world.spawn(Slider::new(25.0, 0.0, 100.0).unwrap()).id();
     app.update();
     app.update();
 
@@ -6359,9 +7345,82 @@ fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     // Inserted again without a format, it has no value text left.
     app.world_mut()
         .entity_mut(stepped)
-        .insert(Slider::new(7.0, 0.0, 10.0).with_step(1.0));
+        .insert(Slider::new(7.0, 0.0, 10.0).unwrap().with_step(1.0).unwrap());
     app.update();
     assert_eq!(node(&app, stepped).value(), None);
+}
+
+#[test]
+fn a_zero_range_slider_has_finite_data_and_keys_cannot_change_its_value() {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    #[derive(Resource, Default)]
+    struct Seen(Vec<f32>);
+
+    let mut app = headless_app();
+    app.init_resource::<Seen>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world
+        .spawn(Slider::new(9.0, 3.0, 3.0).unwrap().with_step(1.0).unwrap())
+        .observe(|change: On<ValueChange<f32>>, mut seen: ResMut<Seen>| {
+            seen.0.push(change.value);
+        })
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(slider));
+    for key in [
+        (KeyCode::ArrowRight, Key::ArrowRight),
+        (KeyCode::ArrowLeft, Key::ArrowLeft),
+        (KeyCode::Home, Key::Home),
+        (KeyCode::End, Key::End),
+    ] {
+        app.world_mut().write_message(KeyboardInput {
+            key_code: key.0,
+            logical_key: key.1,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+        app.update();
+        app.update();
+    }
+
+    let entity = app.world().entity(slider);
+    assert!((entity.get::<SliderValue>().unwrap().0 - 3.0).abs() < f32::EPSILON);
+    assert!(
+        app.world()
+            .get_resource::<Seen>()
+            .unwrap()
+            .0
+            .iter()
+            .all(|value| (*value - 3.0).abs() < f32::EPSILON),
+        "no key may report a changed value"
+    );
+    let node = entity.get::<AccessibilityNode>().unwrap();
+    for number in [
+        node.numeric_value(),
+        node.min_numeric_value(),
+        node.max_numeric_value(),
+        node.numeric_value_step(),
+    ] {
+        assert!(number.unwrap().is_finite());
+    }
+    assert_eq!(node.numeric_value(), Some(3.0));
+    let refs = *entity.get::<SliderRefs>().unwrap();
+    let left = app.world().entity(refs.thumb).get::<Node>().unwrap().left;
+    let width = app.world().entity(refs.fill).get::<Node>().unwrap().width;
+    for val in [left, width] {
+        assert!(matches!(val, Val::Percent(percent) if percent.is_finite()));
+    }
 }
 
 #[test]
@@ -6372,7 +7431,7 @@ fn a_slider_without_a_label_leaves_the_apps_right_margin_alone() {
     let margin = UiRect::all(Val::Px(8.0));
     let slider = world
         .spawn((
-            Slider::new(0.0, 0.0, 1.0),
+            Slider::new(0.0, 0.0, 1.0).unwrap(),
             Node {
                 margin,
                 ..default()
@@ -6394,7 +7453,7 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
     let mut app = headless_app();
     let world = app.world_mut();
     world.spawn((Camera2d, UiRoot));
-    let slider = world.spawn(Slider::new(2.0, 0.0, 10.0)).id();
+    let slider = world.spawn(Slider::new(2.0, 0.0, 10.0).unwrap()).id();
     app.update();
     app.update();
     let thumb = app
@@ -6846,6 +7905,129 @@ fn a_light_dark_toggle_is_a_radio_group_whose_toggle_follows_the_preference() {
         assert_eq!(node.label(), Some(label));
         assert_eq!(node.toggled(), Some(accesskit::Toggled::from(toggled)));
     }
+}
+
+fn two_axis_scroll_area(app: &mut App) -> (Entity, Entity) {
+    app.world_mut().spawn((
+        Node::default(),
+        ScrollArea::bundle(|_: &mut ChildSpawner| {}, true, true),
+    ));
+    app.update();
+    app.update();
+    let bar = |app: &mut App, orientation| {
+        let world = app.world_mut();
+        world
+            .query_filtered::<(Entity, &Scrollbar), With<ScrollBar>>()
+            .iter(world)
+            .find(|(_, scrollbar)| scrollbar.orientation == orientation)
+            .map(|(entity, _)| entity)
+            .unwrap()
+    };
+    let vertical = bar(app, ControlOrientation::Vertical);
+    (vertical, bar(app, ControlOrientation::Horizontal))
+}
+
+fn thumbs_of(app: &mut App, bar: Entity) -> usize {
+    let world = app.world_mut();
+    world
+        .get::<Children>(bar)
+        .map(|children| children.iter().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|child| world.get::<ScrollbarThumb>(*child).is_some())
+        .count()
+}
+
+fn cell(app: &App, bar: Entity) -> (GridPlacement, GridPlacement) {
+    let node = app.world().get::<Node>(bar).unwrap();
+    (node.grid_row, node.grid_column)
+}
+
+#[test]
+fn scroll_bars_sit_in_the_grid_cell_of_their_headless_orientation_with_one_thumb_each() {
+    let mut app = headless_app();
+    let (vertical, horizontal) = two_axis_scroll_area(&mut app);
+    assert_eq!(
+        cell(&app, vertical),
+        (GridPlacement::start(1), GridPlacement::start(2))
+    );
+    assert_eq!(
+        cell(&app, horizontal),
+        (GridPlacement::start(2), GridPlacement::start(1))
+    );
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+    assert_eq!(thumbs_of(&mut app, horizontal), 1);
+}
+
+#[test]
+fn reinserting_the_scroll_bar_marker_keeps_exactly_one_thumb() {
+    let mut app = headless_app();
+    let (vertical, _) = two_axis_scroll_area(&mut app);
+
+    // Across frames.
+    app.world_mut().entity_mut(vertical).insert(ScrollBar);
+    app.update();
+    app.update();
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+
+    // Twice before the commands are applied.
+    app.world_mut()
+        .entity_mut(vertical)
+        .insert(ScrollBar)
+        .insert(ScrollBar);
+    app.update();
+    app.update();
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+    assert_eq!(app.world().get::<Children>(vertical).unwrap().len(), 1);
+}
+
+#[test]
+fn a_bar_without_a_thumb_gets_exactly_one_when_the_marker_is_inserted_twice_at_once() {
+    let mut app = headless_app();
+    let target = app.world_mut().spawn(Node::default()).id();
+    let bar = app
+        .world_mut()
+        .spawn(Scrollbar::new(target, ControlOrientation::Horizontal, 0.0))
+        .id();
+    app.world_mut()
+        .entity_mut(bar)
+        .insert(ScrollBar)
+        .insert(ScrollBar);
+    app.update();
+    app.update();
+    assert_eq!(thumbs_of(&mut app, bar), 1);
+    assert_eq!(
+        cell(&app, bar),
+        (GridPlacement::start(2), GridPlacement::start(1))
+    );
+}
+
+#[test]
+fn changing_the_headless_orientation_moves_and_resizes_the_bar_and_keeps_its_thumb() {
+    let mut app = headless_app();
+    let (vertical, _) = two_axis_scroll_area(&mut app);
+    let thickness = app
+        .world()
+        .get_resource::<Theme>()
+        .unwrap()
+        .scroll_bar_width;
+    assert_eq!(app.world().get::<Node>(vertical).unwrap().width, thickness);
+
+    app.world_mut()
+        .get_mut::<Scrollbar>(vertical)
+        .unwrap()
+        .orientation = ControlOrientation::Horizontal;
+    app.update();
+    app.update();
+
+    let node = app.world().get::<Node>(vertical).unwrap();
+    assert_eq!(node.height, thickness);
+    assert_eq!(node.width, Val::Auto);
+    assert_eq!(
+        cell(&app, vertical),
+        (GridPlacement::start(2), GridPlacement::start(1))
+    );
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
 }
 
 #[test]
@@ -7580,7 +8762,7 @@ fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_i
 
     let after = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
     assert_eq!(after, refs, "no respawn, refs kept");
-    assert_eq!(text_of(&app, after.label_id), "Stop");
+    assert_eq!(text_of(&app, after.label()), "Stop");
     assert_eq!(accessible_label(&app, button).as_deref(), Some("Stop"));
     assert_eq!(
         app.world().entity(button).get::<Children>().unwrap().len(),
@@ -7595,6 +8777,32 @@ fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_i
 }
 
 #[test]
+fn a_push_button_inserted_several_times_keeps_one_label_and_one_observer() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+
+    for text in ["One", "Two", "Three"] {
+        app.world_mut()
+            .entity_mut(button)
+            .insert(PushButton::from_label(text));
+        app.update();
+        app.update();
+    }
+
+    let after = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(after, refs);
+    assert_eq!(text_of(&app, after.label()), "Three");
+    assert_eq!(
+        app.world().entity(button).get::<Children>().unwrap().len(),
+        1
+    );
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
+}
+
+#[test]
 fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     let mut app = headless_app();
     let button = spawn_push_button(&mut app);
@@ -7603,7 +8811,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
         .entity(button)
         .get::<PushButtonRefs>()
         .unwrap()
-        .label_id;
+        .label();
 
     app.world_mut()
         .entity_mut(button)
@@ -7612,8 +8820,8 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     app.update();
 
     let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
-    assert_eq!(refs.label_id, label_id);
-    let icon = refs.icon_id.unwrap();
+    assert_eq!(refs.label(), label_id);
+    let icon = refs.icon().unwrap();
     assert_eq!(text_of(&app, icon), "+");
     assert_eq!(accessible_label(&app, button).as_deref(), Some("Go"));
     assert!(
@@ -7627,7 +8835,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     app.update();
     app.update();
     let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
-    assert_eq!(refs.icon_id, Some(icon));
+    assert_eq!(refs.icon(), Some(icon));
     assert_eq!(text_of(&app, icon), "-");
 
     app.world_mut()
@@ -7636,7 +8844,7 @@ fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
     app.update();
     app.update();
     let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
-    assert_eq!(refs.icon_id, None);
+    assert_eq!(refs.icon(), None);
     assert!(app.world().get_entity(icon).is_err(), "the icon is gone");
     assert_eq!(
         app.world().entity(button).get::<Children>().unwrap().len(),
@@ -7942,4 +9150,977 @@ fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_
         app.update();
     }
     assert_eq!(observers_of(&mut app, selection), before);
+}
+
+/// An entity with the given items, to draw a selection from through `ItemsRef`.
+fn spawn_item_source(app: &mut App, texts: &[&'static str]) -> Entity {
+    let source = app.world_mut().spawn_empty().id();
+    for text in texts {
+        app.world_mut().spawn((Item::new(*text), ItemOf(source)));
+    }
+    app.update();
+    source
+}
+
+fn source_texts(app: &App, source: Entity) -> Vec<String> {
+    app.world()
+        .get::<ItemValues>(source)
+        .map(|values| values.iter().map(|item| item_label(app, item)).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_changed_item_data_still_updates_an_existing_view() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let first = item_entities_of(&app, control)[0];
+
+    app.world_mut()
+        .entity_mut(first)
+        .get_mut::<Item<String>>()
+        .unwrap()
+        .data = "Changed".to_string();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let texts: Vec<_> = segments_of(&app, control)
+        .iter()
+        .map(|s| segment_text(&app, *s))
+        .collect();
+    assert_eq!(texts, ["Changed", "Manual", "Off"]);
+}
+
+#[test]
+fn reinserting_item_of_moves_an_item_between_item_values() {
+    let mut app = headless_app();
+    let old = spawn_item_source(&mut app, &["a", "b"]);
+    let new = spawn_item_source(&mut app, &["c"]);
+    let moved = item_entities_of(&app, old)[0];
+
+    app.world_mut().entity_mut(moved).insert(ItemOf(new));
+    app.update();
+
+    assert_eq!(source_texts(&app, old), ["b"]);
+    assert_eq!(source_texts(&app, new), ["c", "a"]);
+
+    // The last item leaving removes the collection, as Bevy's relationships do.
+    let last = item_entities_of(&app, old)[0];
+    app.world_mut().entity_mut(last).insert(ItemOf(new));
+    app.update();
+    assert!(source_texts(&app, old).is_empty());
+    assert_eq!(source_texts(&app, new), ["c", "a", "b"]);
+}
+
+fn spawn_control_over(app: &mut App, source: Entity) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::builder().one().build_with_items_ref(source),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    control
+}
+
+fn segment_texts(app: &App, control: Entity) -> Vec<String> {
+    segments_of(app, control)
+        .iter()
+        .map(|s| segment_text(app, *s))
+        .collect()
+}
+
+#[test]
+fn replacing_items_ref_refreshes_the_selection_and_the_widget() {
+    let mut app = headless_app();
+    let old = spawn_item_source(&mut app, &["a", "b"]);
+    let new = spawn_item_source(&mut app, &["c", "d"]);
+    let control = spawn_control_over(&mut app, old);
+    assert_eq!(segment_texts(&app, control), ["a", "b"]);
+    select_by_text(&mut app, control, "b");
+    assert_eq!(selected_segments(&app, control), ["b"]);
+
+    app.world_mut().entity_mut(control).insert(ItemsRef(new));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(segment_texts(&app, control), ["c", "d"]);
+    assert_eq!(selection_labels(&app, control), ["c"]);
+    assert_eq!(selected_segments(&app, control), ["c"]);
+
+    // Items of the former source no longer touch the control.
+    app.world_mut().spawn((Item::new("e"), ItemOf(old)));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(segment_texts(&app, control), ["c", "d"]);
+    // And items of the new one do.
+    app.world_mut().spawn((Item::new("f"), ItemOf(new)));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(segment_texts(&app, control), ["c", "d", "f"]);
+}
+
+#[test]
+fn replacing_items_ref_with_a_source_whose_items_arrive_later_selects_the_first_of_them() {
+    let mut app = headless_app();
+    let old = spawn_item_source(&mut app, &["a", "b"]);
+    let empty = app.world_mut().spawn_empty().id();
+    let control = spawn_control_over(&mut app, old);
+
+    app.world_mut().entity_mut(control).insert(ItemsRef(empty));
+    for _ in 0..3 {
+        app.update();
+    }
+    // Nothing is selected while the source has no items (the selection waits for its first).
+    assert!(selection_labels(&app, control).is_empty());
+    assert!(selected_segments(&app, control).is_empty());
+
+    app.world_mut().spawn((Item::new("x"), ItemOf(empty)));
+    app.world_mut().spawn((Item::new("y"), ItemOf(empty)));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(segment_texts(&app, control), ["x", "y"]);
+    assert_eq!(selection_labels(&app, control), ["x"]);
+    assert_eq!(selected_segments(&app, control), ["x"]);
+}
+
+fn stack_over(app: &mut App, selection_ref: Entity) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stack = app
+        .world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    stack
+}
+
+#[test]
+fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the_old() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let first = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), StackItem::new(create_a))]),
+        )
+        .id();
+    let second = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("b"), StackItem::new(create_b))]),
+        )
+        .id();
+    let stack = stack_over(&mut app, first);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert!(no_entity_with::<PanelB>(&mut app));
+
+    app.world_mut().entity_mut(stack).insert(Stack {
+        selection_ref: second,
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+    assert_eq!(node_display(&app, panel_b), Display::Flex);
+
+    // The former source no longer switches the stack.
+    let item_a = item_entities_of(&app, first)[0];
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(None)));
+    select_one(&mut app, first, item_a);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+    assert_eq!(node_display(&app, panel_b), Display::Flex);
+
+    // Pointing back shows the kept child again, without creating another.
+    app.world_mut().entity_mut(stack).insert(Stack {
+        selection_ref: first,
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(node_display(&app, panel_a), Display::Flex);
+    assert_eq!(node_display(&app, panel_b), Display::None);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+}
+
+#[test]
+fn replacing_a_stacks_selection_ref_with_an_entity_without_a_selection_hides_the_children() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let first = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items([(Item::new("a"), StackItem::new(create_a))]),
+        )
+        .id();
+    let stack = stack_over(&mut app, first);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    let nothing = app.world_mut().spawn_empty().id();
+
+    app.world_mut().entity_mut(stack).insert(Stack {
+        selection_ref: nothing,
+    });
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(node_display(&app, panel_a), Display::None);
+}
+
+// ---- ColorPaletteCombo over a selection of many ----
+
+/// Red, blue and green, in that order.
+fn three_colors() -> Vec<Item<Color>> {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
+    [RED_500, BLUE_500, GREEN_500]
+        .into_iter()
+        .map(|data| Item { data: data.into() })
+        .collect()
+}
+
+/// The items of the selection entity `selection_ref`, in order.
+fn items_of(app: &App, selection_ref: Entity) -> Vec<Entity> {
+    app.world()
+        .entity(selection_ref)
+        .get::<ItemValues>()
+        .unwrap()
+        .iter()
+        .collect()
+}
+
+/// The colour of the square in the palette combo's button.
+fn combo_square(app: &App, button: Entity) -> Color {
+    let square = app.world().get::<ColorSquareRef>(button).unwrap().entity();
+    app.world().get::<BackgroundColor>(square).unwrap().0
+}
+
+/// The value the palette combo's button tells a screen reader.
+fn combo_value(app: &App, button: Entity) -> String {
+    app.world()
+        .get::<AccessibilityNode>(button)
+        .unwrap()
+        .value()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn select_items(app: &mut App, selection_ref: Entity, items: &[Entity]) {
+    let items = items.to_vec();
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(selection_ref, |s| s.set_selection(items.clone()));
+        })
+        .unwrap();
+    app.update();
+    app.update();
+}
+
+#[test]
+fn a_color_palette_combo_over_many_shows_the_first_selected_colour_and_names_them_all() {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
+    let none = Color::Srgba(Srgba::NONE);
+    let (red, blue, green): (Color, Color, Color) =
+        (RED_500.into(), BLUE_500.into(), GREEN_500.into());
+    for (name, builder, first) in [
+        ("ZeroOrMore", Selection::builder().zero_or_more(), none),
+        ("OneOrMore", Selection::builder().one_or_more(), red),
+    ] {
+        let mut app = headless_app();
+        let (combo, button) = {
+            app.world_mut().spawn((Window::default(), PrimaryWindow));
+            let root = app.world_mut().spawn(Node::default()).id();
+            let combo = app
+                .world_mut()
+                .spawn((
+                    ColorPaletteCombo,
+                    builder.build_with_items(three_colors()),
+                    ChildOf(root),
+                ))
+                .id();
+            app.update();
+            app.update();
+            (combo, single_entity_with::<ColorPushButton>(&mut app))
+        };
+        let items = items_of(&app, combo);
+        assert_eq!(combo_square(&app, button), first, "{name}: initial");
+        assert_eq!(
+            combo_value(&app, button),
+            if first == none { "" } else { "red-500" },
+            "{name}: initial value"
+        );
+
+        select_items(&mut app, combo, &[items[1], items[0]]);
+        assert_eq!(combo_square(&app, button), blue, "{name}: first selected");
+        assert_eq!(
+            combo_value(&app, button),
+            "blue-500, red-500",
+            "{name}: order"
+        );
+
+        select_items(&mut app, combo, &[items[0], items[1], items[2]]);
+        assert_eq!(combo_square(&app, button), red, "{name}");
+        assert_eq!(combo_value(&app, button), "red-500, blue-500, green-500");
+
+        select_items(&mut app, combo, &[items[1], items[2]]);
+        assert_eq!(combo_square(&app, button), blue, "{name}: red deselected");
+        assert_eq!(combo_value(&app, button), "blue-500, green-500");
+
+        select_items(&mut app, combo, &[items[2]]);
+        assert_eq!(combo_square(&app, button), green, "{name}");
+        assert_eq!(combo_value(&app, button), "green-500");
+
+        if name == "ZeroOrMore" {
+            select_items(&mut app, combo, &[]);
+            assert_eq!(combo_square(&app, button), none, "{name}: nothing selected");
+            assert_eq!(combo_value(&app, button), "");
+        }
+        let accessible = app.world().get::<AccessibilityNode>(button).unwrap();
+        assert_eq!(accessible.label(), None, "{name}: no label");
+    }
+}
+
+#[test]
+fn a_color_palette_combo_over_a_shared_selection_of_many_follows_it() {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500};
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let shared = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .zero_or_more()
+                .build_with_items(three_colors()),
+        )
+        .id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((
+        ColorPaletteCombo,
+        Selection::reference(shared),
+        ChildOf(root),
+    ));
+    app.update();
+    app.update();
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    let items = items_of(&app, shared);
+    assert_eq!(combo_square(&app, button), Color::Srgba(Srgba::NONE));
+    assert_eq!(combo_value(&app, button), "");
+
+    select_items(&mut app, shared, &[items[2], items[1]]);
+    assert_eq!(combo_square(&app, button), Color::from(GREEN_500));
+    assert_eq!(combo_value(&app, button), "green-500, blue-500");
+
+    select_items(&mut app, shared, &[items[1]]);
+    assert_eq!(combo_square(&app, button), Color::from(BLUE_500));
+    assert_eq!(combo_value(&app, button), "blue-500");
+}
+
+#[test]
+fn a_color_palette_combo_with_a_mandatory_selection_that_is_pending_is_transparent_and_unnamed() {
+    for (name, builder) in [
+        ("One", Selection::builder().one()),
+        ("OneOrMore", Selection::builder().one_or_more()),
+    ] {
+        let mut app = headless_app();
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        let root = app.world_mut().spawn(Node::default()).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                ColorPaletteCombo,
+                builder.build_with_items(Vec::<Item<Color>>::new()),
+                ChildOf(root),
+            ))
+            .id();
+        app.update();
+        app.update();
+        let button = single_entity_with::<ColorPushButton>(&mut app);
+        assert_eq!(
+            combo_square(&app, button),
+            Color::Srgba(Srgba::NONE),
+            "{name}"
+        );
+        assert_eq!(combo_value(&app, button), "", "{name}");
+
+        // The first item arrives and the pending selection takes it.
+        app.world_mut().spawn((
+            Item {
+                data: Color::from(bevy::color::palettes::tailwind::RED_500),
+            },
+            ItemOf(combo),
+        ));
+        app.update();
+        app.update();
+        app.update();
+        assert_eq!(
+            combo_square(&app, button),
+            Color::from(bevy::color::palettes::tailwind::RED_500),
+            "{name}"
+        );
+        assert_eq!(combo_value(&app, button), "red-500", "{name}");
+    }
+}
+
+#[test]
+fn a_swatch_click_leaves_the_popup_of_a_palette_combo_over_many_open() {
+    for (name, builder) in [
+        ("ZeroOrMore", Selection::builder().zero_or_more()),
+        ("OneOrMore", Selection::builder().one_or_more()),
+    ] {
+        let mut app = headless_app();
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        let root = app.world_mut().spawn(Node::default()).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                ColorPaletteCombo,
+                builder.build_with_items(three_colors()),
+                ChildOf(root),
+            ))
+            .id();
+        app.update();
+        app.update();
+        let button = single_entity_with::<ColorPushButton>(&mut app);
+        click(&mut app, button);
+        assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);
+        let palette = single_entity_with::<ColorPalette>(&mut app);
+        let swatches = item_views(&app, palette);
+        assert_eq!(swatches.len(), 3);
+
+        click_row(&mut app, swatches[1]);
+        click_row(&mut app, swatches[2]);
+
+        assert_eq!(
+            palette_combo_state(&app, combo),
+            PaletteComboState::Open,
+            "{name}"
+        );
+        assert!(selection_colors(&app, combo).len() >= 2, "{name}");
+        assert_eq!(
+            combo_value(&app, button).split(", ").count(),
+            selection_colors(&app, combo).len(),
+            "{name}"
+        );
+    }
+}
+
+/// Presses `key_code` once with `list` focused, as a keyboard would.
+fn press_key_on(app: &mut App, key_code: KeyCode) {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().write_message(KeyboardInput {
+        key_code,
+        logical_key: Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    });
+    app.update();
+    app.update();
+}
+
+/// A focused `VirtualList` of three rows over a selection built by `selection`, with the
+/// first row active, and the rows' items.
+fn focused_virtual_list(
+    selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
+) -> (App, Entity, Vec<Entity>) {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            VirtualList::new(RowHeight::new(28.0).unwrap()),
+            selection(Selection::builder()).build_with_items(Vec::<Item<String>>::new()),
+            ChildOf(root),
+        ))
+        .id();
+    let items: Vec<Entity> = (1..=3)
+        .map(|index| {
+            app.world_mut()
+                .spawn((Item::new(format!("Row {index}")), ItemOf(list)))
+                .id()
+        })
+        .collect();
+    for _ in 0..3 {
+        app.update();
+    }
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, bevy::input_focus::FocusCause::Navigated);
+    app.update();
+    (app, list, items)
+}
+
+/// The items the selection of `list` holds.
+fn selected_items(app: &App, list: Entity) -> Vec<Entity> {
+    match app.world().get::<Selection>(list) {
+        Some(Selection::Value(value)) => value.iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[test]
+fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_selection_allows() {
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_one);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "{key:?} selects"
+        );
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            Vec::<Entity>::new(),
+            "{key:?} again"
+        );
+
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_more);
+        press_key_on(&mut app, key);
+        press_key_on(&mut app, KeyCode::ArrowDown);
+        press_key_on(&mut app, key);
+        assert_eq!(selected_items(&app, list), vec![items[0], items[1]]);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "only the active row goes"
+        );
+
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::one);
+        press_key_on(&mut app, key);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "a `One` keeps its item"
+        );
+    }
+}
+
+/// What the events of a [`TextField`] and the keys that bubbled past it came to.
+#[derive(Resource, Default)]
+struct TextFieldLog {
+    changes: Vec<String>,
+    commits: Vec<String>,
+    bubbled_keys: Vec<KeyCode>,
+}
+
+/// An app with a primary window, a root and one [`TextField`] holding `value`, which logs its
+/// events into [`TextFieldLog`]. The root counts the keys that reach it.
+fn text_field_app(value: &str) -> (App, Entity, Entity, Entity) {
+    let mut app = headless_app_with(|app| {
+        app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
+    });
+    app.init_resource::<TextFieldLog>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(Camera2d);
+    let root = app
+        .world_mut()
+        .spawn(Node::default())
+        .observe(
+            |key: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
+             mut log: ResMut<TextFieldLog>| {
+                log.bubbled_keys.push(key.event().input.key_code);
+            },
+        )
+        .id();
+    let field = app
+        .world_mut()
+        .spawn((TextField::new(value), ChildOf(root)))
+        .observe(
+            |change: On<TextFieldChange>, mut log: ResMut<TextFieldLog>| {
+                log.changes.push(change.value.clone());
+            },
+        )
+        .observe(
+            |commit: On<TextFieldCommit>, mut log: ResMut<TextFieldLog>| {
+                log.commits.push(commit.value.clone());
+            },
+        )
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let input = app
+        .world()
+        .entity(field)
+        .get::<TextFieldRefs>()
+        .unwrap()
+        .input;
+    (app, window, field, input)
+}
+
+fn input_text(app: &App, input: Entity) -> String {
+    app.world()
+        .entity(input)
+        .get::<bevy::text::EditableText>()
+        .unwrap()
+        .value()
+        .to_string()
+}
+
+fn focus_text_input(app: &mut App, input: Entity) {
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(input, bevy::input_focus::FocusCause::Navigated);
+    for _ in 0..2 {
+        app.update();
+    }
+}
+
+fn press_text_key(
+    app: &mut App,
+    window: Entity,
+    key_code: KeyCode,
+    logical_key: bevy::input::keyboard::Key,
+) {
+    app.world_mut()
+        .write_message(bevy::input::keyboard::KeyboardInput {
+            key_code,
+            logical_key,
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
+fn inserting_a_new_text_field_sets_the_text_without_a_change_event() {
+    let (mut app, _, field, input) = text_field_app("alpha");
+    assert_eq!(input_text(&app, input), "alpha");
+    app.world_mut()
+        .entity_mut(field)
+        .insert(TextField::new("beta").with_placeholder("Name"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(input_text(&app, input), "beta");
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert!(log.changes.is_empty(), "set by the app: {:?}", log.changes);
+    assert!(log.commits.is_empty());
+}
+
+#[test]
+fn enter_and_numpad_enter_commit_the_text_and_stop_there() {
+    use bevy::input::keyboard::Key;
+    for (key_code, key) in [
+        (KeyCode::Enter, Key::Enter),
+        (KeyCode::NumpadEnter, Key::Enter),
+    ] {
+        let (mut app, window, _, input) = text_field_app("alpha");
+        focus_text_input(&mut app, input);
+        press_text_key(&mut app, window, key_code, key);
+        let log = app.world().get_resource::<TextFieldLog>().unwrap();
+        assert_eq!(log.commits, vec!["alpha"], "{key_code:?} commits");
+        assert!(log.bubbled_keys.is_empty(), "{key_code:?} stops");
+        assert_eq!(
+            app.world().get_resource::<InputFocus>().unwrap().get(),
+            None
+        );
+    }
+}
+
+#[test]
+fn tab_commits_the_text_even_when_it_did_not_change() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, field, input) = text_field_app("alpha");
+    app.world_mut()
+        .spawn((Node::default(), Button, TabIndex(1), ChildOf(field)));
+    focus_text_input(&mut app, input);
+    press_text_key(&mut app, window, KeyCode::Tab, Key::Tab);
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert_eq!(log.commits, vec!["alpha"]);
+    assert!(log.changes.is_empty());
+    assert_ne!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(input)
+    );
+}
+
+#[test]
+fn escape_puts_the_text_back_without_a_commit_and_stops_like_enter() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, _, input) = text_field_app("alpha");
+    focus_text_input(&mut app, input);
+    app.world_mut()
+        .entity_mut(input)
+        .get_mut::<bevy::text::EditableText>()
+        .unwrap()
+        .queue_edit(bevy::text::TextEdit::Insert("!".into()));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(input_text(&app, input), "alpha!");
+    assert_eq!(
+        app.world().get_resource::<TextFieldLog>().unwrap().changes,
+        vec!["alpha!"]
+    );
+    press_text_key(&mut app, window, KeyCode::Escape, Key::Escape);
+    assert_eq!(input_text(&app, input), "alpha");
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert!(log.commits.is_empty(), "Escape does not commit");
+    assert!(log.bubbled_keys.is_empty(), "Escape stops like Enter");
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        None
+    );
+}
+
+#[test]
+fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world
+        .spawn(
+            Slider::new(1.0, 0.0, 10.0)
+                .unwrap()
+                .with_format(|v| format!("{v}")),
+        )
+        .id();
+    app.update();
+    app.update();
+    let margin = |app: &App| {
+        app.world()
+            .entity(slider)
+            .get::<Node>()
+            .unwrap()
+            .margin
+            .right
+    };
+    assert!(matches!(margin(&app), Val::Px(px) if px > 0.0));
+    app.world_mut()
+        .entity_mut(slider)
+        .insert(Slider::new(1.0, 0.0, 10.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(margin(&app), Val::Px(0.0));
+}
+
+/// The accessible value of `entity`.
+fn accessible_value(app: &App, entity: Entity) -> Option<String> {
+    app.world()
+        .get::<AccessibilityNode>(entity)
+        .unwrap()
+        .value()
+        .map(str::to_string)
+}
+
+/// The text of a combo button's label.
+fn combo_label(app: &App, button: Entity) -> String {
+    let label = app.world().get::<PushButtonRefs>(button).unwrap().label();
+    app.world().get::<Text>(label).unwrap().0.clone()
+}
+
+#[test]
+fn a_combo_shows_select_dots_by_default_while_nothing_is_selected() {
+    let mut app = headless_app();
+    let (_, button) = spawn_combo(&mut app);
+    assert_eq!(combo_label(&app, button), "Select..");
+}
+
+#[test]
+fn a_combo_shows_its_placeholder_while_nothing_is_selected_and_the_selection_after() {
+    let mut app = headless_app();
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            ComboPlaceholder("Pick a country".to_string()),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let button = app.world().get::<ComboRefs>(combo).unwrap().button();
+    assert_eq!(combo_label(&app, button), "Pick a country");
+    assert_eq!(accessible_value(&app, button), Some(String::new()));
+
+    // Select the first item through the open popup.
+    click(&mut app, button);
+    app.update();
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
+    let item = app.world().get::<Children>(list).unwrap()[0];
+    click(&mut app, item);
+    app.update();
+    app.update();
+    assert_eq!(combo_label(&app, button), "a");
+}
+
+#[test]
+fn inserting_a_placeholder_changes_the_text_of_a_live_combo() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(ComboPlaceholder("Nothing yet".to_string()));
+    app.update();
+    app.update();
+    assert_eq!(combo_label(&app, button), "Nothing yet");
+    assert_eq!(accessible_value(&app, button), Some(String::new()));
+}
+
+/// The `ScrollContents` of the area `two_axis_scroll_area` spawned, given a laid-out `size` and
+/// `content_size` (headless apps have no layout).
+fn lay_out_scroll_contents(app: &mut App, size: Vec2, content_size: Vec2) {
+    let contents = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<ScrollContents>>()
+            .single(world)
+            .unwrap()
+    };
+    app.world_mut().entity_mut(contents).insert(ComputedNode {
+        size,
+        content_size,
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+}
+
+fn bar_visibility(app: &App, bar: Entity) -> Visibility {
+    *app.world().get::<Visibility>(bar).unwrap()
+}
+
+#[test]
+fn changing_the_headless_orientation_shows_or_hides_the_bar_by_its_new_axis() {
+    let mut app = headless_app();
+    let (vertical, horizontal) = two_axis_scroll_area(&mut app);
+    // Taller than the area, no wider than it.
+    lay_out_scroll_contents(&mut app, Vec2::new(100.0, 100.0), Vec2::new(100.0, 300.0));
+    app.update();
+    app.update();
+    assert_eq!(bar_visibility(&app, vertical), Visibility::Inherited);
+    assert_eq!(bar_visibility(&app, horizontal), Visibility::Hidden);
+
+    // Swap the axes of the two bars without the contents changing at all.
+    app.world_mut()
+        .get_mut::<Scrollbar>(vertical)
+        .unwrap()
+        .orientation = ControlOrientation::Horizontal;
+    app.world_mut()
+        .get_mut::<Scrollbar>(horizontal)
+        .unwrap()
+        .orientation = ControlOrientation::Vertical;
+    app.update();
+    app.update();
+
+    assert_eq!(
+        bar_visibility(&app, vertical),
+        Visibility::Hidden,
+        "now horizontal, and the contents fit across"
+    );
+    assert_eq!(
+        bar_visibility(&app, horizontal),
+        Visibility::Inherited,
+        "now vertical, and the contents overflow down"
+    );
+}
+
+#[derive(Component)]
+struct AppBarChild;
+
+#[test]
+fn an_app_owned_child_of_a_scroll_bar_survives_theming_and_reinserting_the_marker() {
+    let mut app = headless_app();
+    let (vertical, _) = two_axis_scroll_area(&mut app);
+    let node = Node {
+        width: px(7),
+        ..default()
+    };
+    let child = app
+        .world_mut()
+        .spawn((
+            AppBarChild,
+            node.clone(),
+            BackgroundColor(Color::WHITE),
+            ChildOf(vertical),
+        ))
+        .id();
+    app.update();
+
+    let unchanged = |app: &App| {
+        let world = app.world();
+        assert!(
+            world
+                .get::<Children>(vertical)
+                .unwrap()
+                .iter()
+                .any(|c| c == child),
+            "the child is still under the bar"
+        );
+        assert_eq!(world.get::<Node>(child).unwrap(), &node);
+        assert_eq!(world.get::<BackgroundColor>(child).unwrap().0, Color::WHITE);
+        assert!(
+            world
+                .get::<ChildOf>(child)
+                .is_some_and(|c| c.parent() == vertical)
+        );
+    };
+
+    // A theme change restyles the bar and its thumb, not the app's child.
+    let mode = app.world().get_resource::<Theme>().unwrap().mode();
+    let other = if mode == ThemeMode::Light {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(other);
+    app.update();
+    app.update();
+    unchanged(&app);
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+
+    // So does inserting the marker again.
+    app.world_mut().entity_mut(vertical).insert(ScrollBar);
+    app.update();
+    app.update();
+    unchanged(&app);
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+    assert_eq!(app.world().get::<Children>(vertical).unwrap().len(), 2);
 }

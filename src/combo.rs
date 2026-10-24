@@ -3,13 +3,12 @@
 //! The popup closes again on a click outside of it. From the keyboard, opening it puts the
 //! focus on its list and Escape closes it again.
 
-use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
+use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
@@ -18,17 +17,15 @@ use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use itertools::Itertools;
 
+use crate::MouseEvent;
 use crate::float::{Float, fit_vertically, keep_in_window_x};
-use crate::focus::{
-    AccessibilitySync, Unreachable, clear_label, popup_focus_lost, popup_key_closes, sync_controls,
-    sync_role, sync_value,
-};
+use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
+use crate::popup::{self, ButtonLook};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
-use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Combo`].
 ///
@@ -46,7 +43,8 @@ impl Plugin for ComboPlugin {
                     place_open_lists.before(UiSystems::Layout),
                 ),
             )
-            .add_observer(on_insert_combo);
+            .add_observer(on_insert_combo)
+            .add_observer(on_insert_placeholder);
     }
 }
 
@@ -55,7 +53,7 @@ impl Plugin for ComboPlugin {
 /// The popup closes again on a click outside of it. The button toggles it when
 /// it is [`Activate`]d (a click, or Enter or Space on a focused button).
 ///
-/// To assistive technology the button is a combo box ([`Role::ComboBox`]) without a
+/// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a
 /// label: its value is the text of the selected items joined with ", " (empty for none),
 /// it is expanded while the popup is open, and it controls the popup's list.
 ///
@@ -84,13 +82,44 @@ pub struct Combo;
 #[require(Name::new("ComboButton"), Hovered)]
 pub struct ComboButton;
 
-/// The children of a [`Combo`].
-#[derive(Component, Debug, Copy, Clone)]
-pub struct ComboSubRefs {
+/// The text a [`Combo`]'s button shows while nothing is selected, "Select.." by default.
+///
+/// Put it on the combo, with it or later; inserting it again changes the text of a live
+/// combo. To a screen reader a combo with no selection still has an empty value, not this
+/// text. Removing it does not change the button; insert `ComboPlaceholder::default()` to
+/// restore the default.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct ComboPlaceholder(pub String);
+
+impl Default for ComboPlaceholder {
+    fn default() -> Self {
+        Self(PLACEHOLDER_TEXT.to_string())
+    }
+}
+
+/// The parts of a [`Combo`], on the combo itself. Only the widget builds it.
+#[derive(Component, Debug, Copy, Clone, Reflect)]
+#[reflect(Component)]
+#[component(immutable)]
+pub struct ComboRefs {
+    button_id: Entity,
+    list_id: Entity,
+}
+
+impl ComboRefs {
     /// The button that opens and closes the popup.
-    pub button_id: Entity,
+    #[must_use]
+    pub const fn button(&self) -> Entity {
+        self.button_id
+    }
+
     /// The list inside the popup.
-    pub list_id: Entity,
+    #[must_use]
+    pub const fn list(&self) -> Entity {
+        self.list_id
+    }
 }
 
 /// Marks the list inside the popup of a [`Combo`].
@@ -124,37 +153,20 @@ impl ComboState {
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = world.entity(context.entity);
-        // Not a live `Combo` (no `ComboSubRefs`): there is no popup to show or hide.
-        let (Some(&state), Some(&ComboSubRefs { list_id, button_id })) =
-            (entity.get::<Self>(), entity.get::<ComboSubRefs>())
+        // Not a live `Combo` (no `ComboRefs`): there is no popup to show or hide.
+        let (Some(&state), Some(&ComboRefs { list_id, button_id })) =
+            (entity.get::<Self>(), entity.get::<ComboRefs>())
         else {
             return;
         };
 
-        let visibility = match state {
-            Self::Open => Visibility::Visible,
-            Self::Closed => Visibility::Hidden,
-        };
-        world.commands().entity(list_id).insert(visibility);
-        // A closed popup's list is not a tab stop.
-        match state {
-            Self::Open => world.commands().entity(list_id).remove::<Unreachable>(),
-            Self::Closed => world.commands().entity(list_id).insert(Unreachable),
-        };
+        let open = state == Self::Open;
+        popup::show_popup(&mut world.commands(), open, list_id, list_id);
         if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
-            match state {
-                Self::Open => {
-                    focus.set(list_id, FocusCause::Navigated);
-                }
-                // Whoever closed the popup, the focus does not stay on a hidden list.
-                Self::Closed if focus.get() == Some(list_id) => {
-                    focus.set(button_id, FocusCause::Navigated);
-                }
-                Self::Closed => {}
-            }
+            popup::move_focus(&mut focus, open, list_id, button_id);
         }
         if let Some(mut node) = world.get_mut::<AccessibilityNode>(button_id) {
-            node.set_expanded(state == Self::Open);
+            popup::set_expanded(&mut node, open);
         }
     }
 }
@@ -194,13 +206,16 @@ impl Combo {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let mut button_id = Entity::PLACEHOLDER;
         let mut list_id = Entity::PLACEHOLDER;
+        let placeholder = world
+            .get::<ComboPlaceholder>(context.entity)
+            .map_or_else(|| PLACEHOLDER_TEXT.to_string(), |p| p.0.clone());
         let chevron = world
             .get_resource_mut::<Assets<Image>>()
             .map_or_else(Handle::default, |mut images| images.add(chevron()));
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((
-                    PushButton::from_label(PLACEHOLDER_TEXT),
+                    PushButton::from_label(placeholder),
                     ComboButton,
                     NoDefaultHover,
                     // allow mouse events to pass through to parent
@@ -243,7 +258,7 @@ impl Combo {
         world
             .commands()
             .entity(combo_id)
-            .insert((ComboState::Closed, ComboSubRefs { button_id, list_id }))
+            .insert((ComboState::Closed, ComboRefs { button_id, list_id }))
             .observe(handle_combo_button_mouse_events);
         world.commands().entity(button_id).observe(
             move |_: On<Activate>, states: Query<&ComboState>, mut commands: Commands| {
@@ -273,7 +288,7 @@ fn close_on_focus_lost(
     combo_id: Entity,
 ) -> impl Fn(
     On<FocusLost>,
-    Query<(&ComboState, &ComboSubRefs)>,
+    Query<(&ComboState, &ComboRefs)>,
     Query<&Hovered, With<ComboList>>,
     ResMut<InputFocus>,
     Commands,
@@ -309,7 +324,7 @@ fn close_on_focus_lost(
 /// around the combo scrolling, say).
 fn place_open_lists(
     window: Single<&Window, With<PrimaryWindow>>,
-    combos: Query<(&ComboState, &ComboSubRefs)>,
+    combos: Query<(&ComboState, &ComboRefs)>,
     buttons: Query<(&ComputedNode, &UiGlobalTransform), With<ComboButton>>,
     mut lists: Query<(&mut Node, &ComputedNode), With<ComboList>>,
 ) {
@@ -364,6 +379,18 @@ fn on_insert_combo(t: On<Insert<Combo>>, selections: SelectionParam, mut command
     commands.run_system_cached_with(update_selection, (combo_selection, combo_ref));
 }
 
+fn on_insert_placeholder(
+    t: On<Insert<ComboPlaceholder>>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let combo_ref = t.event().event_target();
+    let Some(combo_selection) = selections.get_ref(combo_ref) else {
+        return;
+    };
+    commands.run_system_cached_with(update_selection, (combo_selection, combo_ref));
+}
+
 fn selection_change(
     q: Query<Entity, Changed<Selection>>,
     combos: Query<(Entity, &Selection), (With<Combo>, Without<NoDefaultItems>)>,
@@ -386,9 +413,10 @@ fn selection_change(
 fn update_selection(
     input: In<(Entity, Entity)>,
     selections: SelectionParam,
-    combo_sub_refs: Query<&ComboSubRefs>,
+    combo_sub_refs: Query<&ComboRefs>,
     pblr: Query<&PushButtonRefs>,
     items: Query<&Item<String>>,
+    placeholders: Query<&ComboPlaceholder>,
     mut labels: Query<&mut Text, With<PushButtonLabel>>,
     mut commands: Commands,
 ) {
@@ -409,14 +437,16 @@ fn update_selection(
             .insert(Selection::reference(selection_ref));
     }
 
-    let Ok(PushButtonRefs { label_id, .. }) = pblr.get(sub_refs.button_id) else {
+    let Ok(refs) = pblr.get(sub_refs.button_id) else {
         return;
     };
-    let Ok(mut text) = labels.get_mut(*label_id) else {
+    let Ok(mut text) = labels.get_mut(refs.label()) else {
         return;
     };
     let label = if selection.is_empty() {
-        PLACEHOLDER_TEXT.to_string()
+        placeholders
+            .get(combo_ref)
+            .map_or_else(|_| PLACEHOLDER_TEXT.to_string(), |p| p.0.clone())
     } else {
         selected_text(selection, &items)
     };
@@ -427,13 +457,7 @@ fn update_selection(
 fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> String {
     selection
         .iter()
-        .map(|item| {
-            if item == Entity::PLACEHOLDER {
-                ""
-            } else {
-                items.get(item).map_or("", |item| item.data.as_str())
-            }
-        })
+        .map(|item| items.get(item).map_or("", |item| item.data.as_str()))
         .join(", ")
 }
 
@@ -442,7 +466,7 @@ fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> St
 /// nor the placeholder is part of it: with nothing selected the value is empty. Bevy makes a
 /// node a button again when its `Button` changes, so this runs after it.
 fn sync_accessibility(
-    combos: Query<(Entity, &ComboSubRefs), With<Combo>>,
+    combos: Query<(Entity, &ComboRefs), With<Combo>>,
     selections: SelectionParam,
     items: Query<&Item<String>>,
     mut nodes: Query<&mut AccessibilityNode>,
@@ -454,10 +478,7 @@ fn sync_accessibility(
         let value = selections
             .get(combo)
             .map_or_else(String::new, |selection| selected_text(selection, &items));
-        sync_role(&mut node, Role::ComboBox);
-        clear_label(&mut node);
-        sync_value(&mut node, &value);
-        sync_controls(&mut node, sub_refs.list_id);
+        popup::sync_combo_box(&mut node, &value, sub_refs.list_id);
     }
 }
 
@@ -470,7 +491,7 @@ fn sync_accessibility(
 /// to, a window or an image.
 fn close_combos_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
-    combos: Query<(Entity, &ComboState, &ComboSubRefs), With<Combo>>,
+    combos: Query<(Entity, &ComboState, &ComboRefs), With<Combo>>,
     selections: SelectionParam,
     mut combo_buttons: Query<(&Hovered, &mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     combo_lists: Query<&Hovered, With<ComboList>>,
@@ -488,12 +509,18 @@ fn close_combos_on_outside_click(
                 continue;
             };
             let over_list = combo_lists.get(subs.list_id).is_ok_and(Hovered::get);
-            if combo_state == ComboState::Open
-                && !over_button.get()
-                && !(selection_value.allow_multiple() && over_list)
-            {
-                *background_color = BackgroundColor(theme.colors.background_primary);
-                *border_color = BorderColor::all(theme.colors.border);
+            // A pick in the list of a selection of many keeps the popup open.
+            if popup::closes_on_outside_release(
+                combo_state == ComboState::Open,
+                over_button.get(),
+                selection_value.allow_multiple() && over_list,
+            ) {
+                popup::apply_look(
+                    ButtonLook::Resting,
+                    &theme,
+                    &mut background_color,
+                    &mut border_color,
+                );
                 commands.entity(combo_ref).insert(ComboState::Closed);
             }
         }
@@ -502,12 +529,11 @@ fn close_combos_on_outside_click(
 
 fn handle_combo_button_mouse_events(
     trigger: On<MouseEvent>,
-    combos: Query<(&ComboSubRefs, &ComboState), With<Combo>>,
+    combos: Query<(&ComboRefs, &ComboState), With<Combo>>,
     mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
 ) {
-    let Ok((ComboSubRefs { button_id, .. }, combo_state)) =
-        combos.get(trigger.event().event_target())
+    let Ok((ComboRefs { button_id, .. }, combo_state)) = combos.get(trigger.event().event_target())
     else {
         return;
     };
@@ -515,19 +541,7 @@ fn handle_combo_button_mouse_events(
         return;
     };
 
-    match (trigger.event().kind, combo_state) {
-        // A drag says nothing new about the pointer being on the button, and can arrive
-        // after the pointer left it, so it does not restyle the button. A release or a
-        // click on a closed combo does not either, so all three share one empty arm.
-        (MouseKind::Drag, _) | (MouseKind::Released | MouseKind::Click(_), ComboState::Closed) => {}
-        (MouseKind::Over | MouseKind::Pressed, _) | (_, ComboState::Open) => {
-            *background_color = BackgroundColor(theme.colors.background_secondary);
-            *border_color = BorderColor::all(theme.colors.border_highlight);
-        }
-
-        (MouseKind::Out, ComboState::Closed) => {
-            *background_color = BackgroundColor(theme.colors.background_primary);
-            *border_color = BorderColor::all(theme.colors.border);
-        }
+    if let Some(look) = popup::button_look(trigger.event().kind, *combo_state == ComboState::Open) {
+        popup::apply_look(look, &theme, &mut background_color, &mut border_color);
     }
 }

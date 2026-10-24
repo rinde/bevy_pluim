@@ -32,14 +32,14 @@ impl Plugin for PanelPlugin {
 /// The width of a [`Panel`], in logical pixels.
 pub const PANEL_WIDTH_PX: f32 = 380.0;
 
-/// The default [`Panel::max_body_height`], in logical pixels.
+/// The default [`Panel::max_body_height()`], in logical pixels.
 pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 
 /// A card with a header, a body that scrolls past a maximum height, and a footer.
 ///
 /// The header holds a title, an optional subtitle beside it and an optional
 /// close button, with an optional strip under it and a divider. The body grows
-/// with its content up to [`Panel::max_body_height`] and then scrolls; an
+/// with its content up to [`Panel::max_body_height()`] and then scrolls; an
 /// optional footer sits above a divider.
 ///
 /// The app spawns the contents of the body, the strip and the footer as
@@ -47,13 +47,33 @@ pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 /// children is not shown. The close button triggers [`PanelClosed`] on the
 /// panel; the panel does not remove itself, the app decides what closing means.
 ///
-/// Insert a `Panel` again to change the title, the subtitle, the close button or
-/// the maximum height of a live panel.
+/// A `Panel` is an immutable component: insert a new one to change the title, the
+/// subtitle, the close button (icon and name) or the maximum height of a live panel.
+/// The parts are updated in place, the children the app put in the strip, body and
+/// footer stay, and [`PanelClosed`] still arrives once per activation. Nothing watches
+/// `Changed<Panel>`.
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::panel::Panel;
+///
+/// // A panel cannot be edited in place: `&mut Panel` is not a valid query.
+/// fn edit(mut panels: Query<&mut Panel>) {}
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::panel::Panel;
+///
+/// fn edit(world: &mut World, panel: Entity) {
+///     let _ = world.entity_mut(panel).get_mut::<Panel>();
+/// }
+/// ```
 ///
 /// To assistive technology it is a group, as a [`Card`] is, labelled with its title.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_insert = Self::on_insert)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[require(
     Card = Card,
     Node {
@@ -70,30 +90,126 @@ pub struct Panel {
     pub subtitle: Option<String>,
     /// The icon of the close button; with `None` the panel has no close button.
     pub close_icon: Option<Handle<Image>>,
-    /// The height, in logical pixels, up to which the body grows before it scrolls.
-    pub max_body_height: f32,
+    /// The accessible name (and tooltip) of the close button, `"Close"` by default;
+    /// an app passes its translation. It does not decide whether the button is shown,
+    /// [`Panel::close_icon`] does.
+    pub close_name: String,
+    /// The height, in logical pixels, up to which the body grows before it scrolls;
+    /// always finite and above zero (see [`Panel::with_max_body_height`]).
+    max_body_height: f32,
+}
+
+/// A maximum body height [`Panel`] cannot use: it must be finite and above zero.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PanelHeightError {
+    /// The rejected height.
+    pub height: f32,
+}
+
+impl core::fmt::Display for PanelHeightError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "a panel's maximum body height must be finite and above zero, not {}",
+            self.height
+        )
+    }
+}
+
+impl core::error::Error for PanelHeightError {}
+
+/// `height` if a panel can use it as its maximum body height.
+fn validate_max_body_height(height: f32) -> core::result::Result<f32, PanelHeightError> {
+    if height.is_finite() && height > 0.0 {
+        Ok(height)
+    } else {
+        Err(PanelHeightError { height })
+    }
 }
 
 /// The entities of a [`Panel`], set when the panel is spawned.
+///
+/// Read-only: only the widget builds it, and it is an immutable component, so an app
+/// reads the entities through the getters and adds its content as their children.
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::panel::PanelRefs;
+///
+/// // The fields are private: use `PanelRefs::body()`.
+/// fn body(refs: &PanelRefs) -> Entity {
+///     refs.body
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use bevy::prelude::*;
+/// use rin_bevy_ui::panel::PanelRefs;
+///
+/// fn edit(mut refs: Query<&mut PanelRefs>) {}
+/// ```
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[component(immutable)]
 pub struct PanelRefs {
-    /// The header row.
-    pub header: Entity,
-    /// The title [`Label`].
-    pub title: Entity,
-    /// The subtitle [`Label`], not shown while the panel has no subtitle.
-    pub subtitle: Entity,
-    /// The close [`IconButton`], not shown while the panel has no close icon.
-    pub close: Entity,
-    /// The strip under the header: spawn its contents as its children.
-    pub strip: Entity,
-    /// The [`ScrollArea`] around the body.
-    pub scroll_area: Entity,
-    /// The body: spawn its contents as its children.
-    pub body: Entity,
-    /// The footer: spawn its contents as its children.
-    pub footer: Entity,
+    header: Entity,
+    title: Entity,
+    subtitle: Entity,
+    close: Entity,
+    strip: Entity,
+    scroll_area: Entity,
+    body: Entity,
+    footer: Entity,
     footer_divider: Entity,
+}
+
+impl PanelRefs {
+    /// The header row.
+    #[must_use]
+    pub const fn header(&self) -> Entity {
+        self.header
+    }
+
+    /// The title [`Label`].
+    #[must_use]
+    pub const fn title(&self) -> Entity {
+        self.title
+    }
+
+    /// The subtitle [`Label`], not shown while the panel has no subtitle.
+    #[must_use]
+    pub const fn subtitle(&self) -> Entity {
+        self.subtitle
+    }
+
+    /// The close [`IconButton`], not shown while the panel has no close icon.
+    #[must_use]
+    pub const fn close(&self) -> Entity {
+        self.close
+    }
+
+    /// The strip under the header: spawn its contents as its children.
+    #[must_use]
+    pub const fn strip(&self) -> Entity {
+        self.strip
+    }
+
+    /// The [`ScrollArea`] around the body.
+    #[must_use]
+    pub const fn scroll_area(&self) -> Entity {
+        self.scroll_area
+    }
+
+    /// The body: spawn its contents as its children.
+    #[must_use]
+    pub const fn body(&self) -> Entity {
+        self.body
+    }
+
+    /// The footer: spawn its contents as its children.
+    #[must_use]
+    pub const fn footer(&self) -> Entity {
+        self.footer
+    }
 }
 
 /// Triggered on a [`Panel`] when its close button is activated.
@@ -113,6 +229,8 @@ pub struct PanelTemplate {
     pub subtitle: Option<String>,
     /// The icon of the close button; none, no close button.
     pub close_icon: OptionTemplate<HandleTemplate<Image>>,
+    /// The accessible name of the close button.
+    pub close_name: String,
     /// The height up to which the body grows before it scrolls.
     pub max_body_height: f32,
 }
@@ -130,7 +248,8 @@ impl Default for PanelTemplate {
             title: panel.title,
             subtitle: panel.subtitle,
             close_icon: OptionTemplate::None,
-            max_body_height: panel.max_body_height,
+            close_name: panel.close_name,
+            max_body_height: DEFAULT_MAX_BODY_HEIGHT_PX,
         }
     }
 }
@@ -139,11 +258,13 @@ impl Template for PanelTemplate {
     type Output = Panel;
 
     fn build_template(&self, context: &mut TemplateContext) -> Result<Panel> {
+        let max_body_height = validate_max_body_height(self.max_body_height)?;
         Ok(Panel {
             title: self.title.clone(),
             subtitle: self.subtitle.clone(),
             close_icon: self.close_icon.build_template(context)?,
-            max_body_height: self.max_body_height,
+            close_name: self.close_name.clone(),
+            max_body_height,
         })
     }
 
@@ -152,6 +273,7 @@ impl Template for PanelTemplate {
             title: self.title.clone(),
             subtitle: self.subtitle.clone(),
             close_icon: self.close_icon.clone_template(),
+            close_name: self.close_name.clone(),
             max_body_height: self.max_body_height,
         }
     }
@@ -169,6 +291,7 @@ impl Panel {
             title: title.into(),
             subtitle: None,
             close_icon: None,
+            close_name: "Close".to_owned(),
             max_body_height: DEFAULT_MAX_BODY_HEIGHT_PX,
         }
     }
@@ -187,11 +310,31 @@ impl Panel {
         self
     }
 
-    /// This panel whose body grows up to `max_body_height` logical pixels.
+    /// This panel whose close button is named `name` for assistive technology.
     #[must_use]
-    pub const fn with_max_body_height(mut self, max_body_height: f32) -> Self {
-        self.max_body_height = max_body_height;
+    pub fn with_close_name(mut self, name: impl Into<String>) -> Self {
+        self.close_name = name.into();
         self
+    }
+
+    /// The height, in logical pixels, up to which the body grows before it scrolls.
+    #[must_use]
+    pub const fn max_body_height(&self) -> f32 {
+        self.max_body_height
+    }
+
+    /// This panel whose body grows up to `max_body_height` logical pixels.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PanelHeightError`] unless the height is finite and above zero (NaN,
+    /// infinities, zero and negative heights are rejected; nothing is clamped).
+    pub fn with_max_body_height(
+        mut self,
+        max_body_height: f32,
+    ) -> core::result::Result<Self, PanelHeightError> {
+        self.max_body_height = validate_max_body_height(max_body_height)?;
+        Ok(self)
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -354,7 +497,7 @@ fn sync_panel(
         .insert(Label::secondary(panel.subtitle.clone().unwrap_or_default()));
     commands.entity(refs.close).insert(IconButton::new(
         panel.close_icon.clone().unwrap_or_default(),
-        "Close",
+        panel.close_name.clone(),
         IconButtonSize::Small,
     ));
     if let Ok(mut node) = nodes.get_mut(refs.subtitle) {
@@ -364,7 +507,7 @@ fn sync_panel(
         node.display = show(panel.close_icon.is_some());
     }
     if let Ok(mut node) = nodes.get_mut(refs.scroll_area) {
-        node.max_height = Val::Px(panel.max_body_height);
+        node.max_height = Val::Px(panel.max_body_height());
     }
 }
 
@@ -402,7 +545,7 @@ fn sync_optional_sections(
         };
         // The margin counts against the maximum height, which is for the body alone.
         let max_height = Val::Px(
-            panel.max_body_height
+            panel.max_body_height()
                 + match margin {
                     Val::Px(px) => px,
                     _ => 0.0,
@@ -414,5 +557,37 @@ fn sync_optional_sections(
             node.margin.bottom = margin;
             node.max_height = max_height;
         }
+    }
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "tests may abort loudly")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_panel_rejects_a_maximum_body_height_that_is_not_finite_and_above_zero() {
+        for height in [
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            0.0,
+            -0.0,
+            -1.0,
+            f32::MIN,
+        ] {
+            let error = Panel::new("").with_max_body_height(height).unwrap_err();
+            assert_eq!(error.height.to_bits(), height.to_bits());
+            assert!(error.to_string().contains("finite and above zero"));
+        }
+    }
+
+    #[test]
+    fn a_panel_accepts_a_fractional_or_custom_maximum_body_height_and_defaults_to_620() {
+        assert!((Panel::new("").max_body_height() - 620.0).abs() < f32::EPSILON);
+        let tiny = Panel::new("").with_max_body_height(0.001).unwrap();
+        assert!((tiny.max_body_height() - 0.001).abs() < f32::EPSILON);
+        let custom = Panel::new("").with_max_body_height(250.5).unwrap();
+        assert!((custom.max_body_height() - 250.5).abs() < f32::EPSILON);
     }
 }

@@ -1,4 +1,15 @@
 //! `NumericStepper`: a value with a decrease and an increase button.
+//!
+//! # Migrating from the unvalidated `Value`
+//!
+//! - `Value::new_u8` / `new_u16` / `new_u32` / `new_f32` return `Result<Value, ValueError>`;
+//!   handle or `?` the result. Reversed bounds, a zero integer step and non-finite or
+//!   non-positive float input are errors, no longer silently repaired.
+//! - `Value::F32` holds a [`FloatValue`], not a tuple of `f32`s; `UIntValue` and
+//!   `FloatValue` fields are private. Read them with `value()`, `min()`, `max()` and
+//!   `step()`; to change bounds or step, build a new value with `FloatValue::new` or
+//!   `UIntValue::new` and wrap it in `Value::F32` / `Value::U8` / ..
+//! - `increment` and `decrement` leave a float unchanged when it cannot strictly move.
 
 use accesskit::{Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
@@ -47,12 +58,13 @@ impl Plugin for NumericStepperPlugin {
 pub type ValueFormat = fn(&Value) -> String;
 
 /// The default width of the value label, in logical pixels, so that the buttons
-/// do not move as the text changes.
-pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
+/// do not move as the text changes. It is the one constant [`Slider`](crate::slider::Slider)
+/// shares for its own label.
+pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 
 /// A [`Value`] with a decrease and an increase button.
 ///
-/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
+/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when the user steps it with a button or an arrow key, not when the stepper is spawned or the app sets the value itself (the display follows those too). A stepper without a [`Value`], or whose [`ValueRef`] target has none, logs an `error!` and stays unbuilt.
 ///
 /// The buttons are small [`IconButton`]s that change the value when they are
 /// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
@@ -236,18 +248,20 @@ impl NumericStepper {
             (*value, ValueRef(context.entity))
         } else if let Some(value_ref) = world.entity(context.entity).get::<ValueRef>().copied() {
             let Some(value) = world.entity(value_ref.0).get::<Value>().copied() else {
+                error!(
+                    "NumericStepper {} points to {} through ValueRef, which has no Value",
+                    context.entity, value_ref.0
+                );
                 return;
             };
             world.commands().entity(context.entity).insert(value_ref);
             (value, value_ref)
         } else {
-            let default_value = Value::new_u32(1, 0, 10, 1);
-            let value_ref = ValueRef(context.entity);
-            world
-                .commands()
-                .entity(context.entity)
-                .insert((default_value, value_ref));
-            (default_value, value_ref)
+            error!(
+                "NumericStepper {} has neither a Value nor a ValueRef; insert one with the stepper",
+                context.entity
+            );
+            return;
         };
 
         let mut decrease_icon = stepper.decrease_icon.clone();
@@ -345,24 +359,50 @@ fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
 }
 
 /// Points a [`NumericStepper`] to the entity holding its [`Value`].
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub struct ValueRef(pub Entity);
 
+/// Why a [`Value`], [`UIntValue`] or [`FloatValue`] could not be built.
+///
+/// The configuration is rejected as given: bounds are never swapped and a step is never
+/// replaced.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueError {
+    /// The minimum is above the maximum.
+    MinAboveMax,
+    /// An integer step is zero.
+    ZeroStep,
+    /// A float step is not finite or not greater than zero.
+    InvalidStep,
+    /// A float initial value, minimum or maximum is NaN or infinite.
+    NotFinite,
+}
+
+impl std::fmt::Display for ValueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::MinAboveMax => "the minimum is above the maximum",
+            Self::ZeroStep => "the step is zero",
+            Self::InvalidStep => "the step is not a finite number above zero",
+            Self::NotFinite => "the value or a bound is not finite",
+        })
+    }
+}
+
+impl std::error::Error for ValueError {}
+
 /// A number with bounds and a step size.
+///
+/// A `Value` is live data: the stepper and its mirrors change it in place with
+/// [`Self::increment`] and [`Self::decrement`], and an app replaces it as a whole. The
+/// payloads can only be built through their validating constructors, so the value always
+/// lies within its bounds and a step is always positive.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 pub enum Value {
     /// A floating point value.
-    F32 {
-        /// The current value.
-        value: f32,
-        /// The lowest value.
-        min: f32,
-        /// The highest value.
-        max: f32,
-        /// The amount one press adds or subtracts.
-        step: f32,
-    },
+    F32(FloatValue),
     /// An unsigned 8-bit value.
     U8(UIntValue<u8>),
     /// An unsigned 16-bit value.
@@ -372,81 +412,60 @@ pub enum Value {
 }
 
 impl Value {
-    /// A `u8` value starting at `initial_value`, between `min` and `max`, moving by `step`.
-    #[must_use]
-    pub const fn new_u8(initial_value: u8, min: u8, max: u8, step: u8) -> Self {
-        Self::U8(UIntValue {
-            value: initial_value,
-            min,
-            max,
-            step,
-        })
-    }
-    /// A `u16` value starting at `initial_value`, between `min` and `max`, moving by `step`.
-    #[must_use]
-    pub const fn new_u16(initial_value: u16, min: u16, max: u16, step: u16) -> Self {
-        Self::U16(UIntValue {
-            value: initial_value,
-            min,
-            max,
-            step,
-        })
+    /// A `u8` value starting at `initial_value` (clamped to the range), between `min` and `max`,
+    /// moving by `step`.
+    ///
+    /// # Errors
+    /// [`ValueError::MinAboveMax`] if `min > max`, [`ValueError::ZeroStep`] if `step` is zero.
+    pub fn new_u8(initial_value: u8, min: u8, max: u8, step: u8) -> Result<Self, ValueError> {
+        UIntValue::new(initial_value, min, max, step).map(Self::U8)
     }
 
-    /// A `u32` value starting at `initial_value`, between `min` and `max`, moving by `step`.
-    #[must_use]
-    pub const fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Self {
-        Self::U32(UIntValue {
-            value: initial_value,
-            min,
-            max,
-            step,
-        })
+    /// A `u16` value starting at `initial_value` (clamped to the range), between `min` and `max`,
+    /// moving by `step`.
+    ///
+    /// # Errors
+    /// [`ValueError::MinAboveMax`] if `min > max`, [`ValueError::ZeroStep`] if `step` is zero.
+    pub fn new_u16(initial_value: u16, min: u16, max: u16, step: u16) -> Result<Self, ValueError> {
+        UIntValue::new(initial_value, min, max, step).map(Self::U16)
     }
 
-    /// An `f32` value starting at `initial_value`, between `min` and `max`, moving by `step`.
-    #[must_use]
-    pub const fn new_f32(initial_value: f32, min: f32, max: f32, step: f32) -> Self {
-        Self::F32 {
-            value: initial_value,
-            min,
-            max,
-            step,
-        }
+    /// A `u32` value starting at `initial_value` (clamped to the range), between `min` and `max`,
+    /// moving by `step`.
+    ///
+    /// # Errors
+    /// [`ValueError::MinAboveMax`] if `min > max`, [`ValueError::ZeroStep`] if `step` is zero.
+    pub fn new_u32(initial_value: u32, min: u32, max: u32, step: u32) -> Result<Self, ValueError> {
+        UIntValue::new(initial_value, min, max, step).map(Self::U32)
     }
 
-    /// Adds one step. Returns `false`, leaving the value as it is, if that would pass the maximum.
+    /// An `f32` value starting at `initial_value` (clamped to the range), between `min` and `max`,
+    /// moving by `step`.
+    ///
+    /// # Errors
+    /// [`ValueError::NotFinite`] if the value or a bound is NaN or infinite,
+    /// [`ValueError::MinAboveMax`] if `min > max`, [`ValueError::InvalidStep`] if `step` is not
+    /// finite and above zero.
+    pub fn new_f32(initial_value: f32, min: f32, max: f32, step: f32) -> Result<Self, ValueError> {
+        FloatValue::new(initial_value, min, max, step).map(Self::F32)
+    }
+
+    /// Adds one step. Returns `false`, leaving the value as it is, if that would pass the
+    /// maximum, overflow, or (for a float) not change the value.
     pub fn increment(&mut self) -> bool {
         match self {
-            Self::F32 {
-                value, max, step, ..
-            } => {
-                let new_value = *value + *step;
-                if new_value <= *max {
-                    *value = new_value;
-                    return true;
-                }
-                false
-            }
+            Self::F32(float_value) => float_value.increment(),
             Self::U8(uint_value) => uint_value.increment(),
             Self::U16(uint_value) => uint_value.increment(),
             Self::U32(uint_value) => uint_value.increment(),
         }
     }
 
-    /// Subtracts one step. Returns `false`, leaving the value as it is, if that would pass the minimum.
+    /// Subtracts one step. Returns `false`, leaving the value as it is, if that would pass the
+    /// minimum, overflow, or (for a float) not change the value.
     pub fn decrement(&mut self) -> bool {
         match self {
-            Self::F32 {
-                value, min, step, ..
-            } => {
-                let new_value = *value - *step;
-                if new_value >= *min {
-                    *value = new_value;
-                    return true;
-                }
-                false
-            }
+            Self::F32(float_value) => float_value.decrement(),
             Self::U8(uint_value) => uint_value.decrement(),
             Self::U16(uint_value) => uint_value.decrement(),
             Self::U32(uint_value) => uint_value.decrement(),
@@ -470,16 +489,11 @@ impl Value {
     /// The value, minimum, maximum and step as `f64`s.
     fn numbers(&self) -> (f64, f64, f64, f64) {
         match self {
-            Self::F32 {
-                value,
-                min,
-                max,
-                step,
-            } => (
-                f64::from(*value),
-                f64::from(*min),
-                f64::from(*max),
-                f64::from(*step),
+            Self::F32(v) => (
+                f64::from(v.value),
+                f64::from(v.min),
+                f64::from(v.max),
+                f64::from(v.step),
             ),
             Self::U8(v) => (
                 f64::from(v.value),
@@ -506,7 +520,7 @@ impl Value {
     #[must_use]
     pub const fn as_f32(&self) -> Option<f32> {
         match self {
-            Self::F32 { value, .. } => Some(*value),
+            Self::F32(float_value) => Some(float_value.value),
             _ => None,
         }
     }
@@ -542,7 +556,7 @@ impl Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::F32 { value, .. } => write!(f, "{value:.1}"),
+            Self::F32(float_value) => write!(f, "{:.1}", float_value.value),
             Self::U8(uint_value) => write!(f, "{}", uint_value.value),
             Self::U16(uint_value) => write!(f, "{}", uint_value.value),
             Self::U32(uint_value) => write!(f, "{}", uint_value.value),
@@ -594,6 +608,7 @@ fn on_activate(
     decrease: Query<&ValueRef, With<Decrease>>,
     increase: Query<&ValueRef, With<Increase>>,
     mut values: Query<&mut Value>,
+    mut commands: Commands,
 ) {
     let button = trigger.event().event_target();
     if let Ok(vr) = decrease.get(button) {
@@ -602,6 +617,10 @@ fn on_activate(
         };
         if value.can_decrement() {
             value.decrement();
+            commands.trigger(ValueChange {
+                entity: vr.0,
+                value: *value,
+            });
         }
     } else if let Ok(vr) = increase.get(button) {
         let Ok(mut value) = values.get_mut(vr.0) else {
@@ -609,6 +628,10 @@ fn on_activate(
         };
         if value.can_increment() {
             value.increment();
+            commands.trigger(ValueChange {
+                entity: vr.0,
+                value: *value,
+            });
         }
     }
 }
@@ -623,6 +646,7 @@ fn on_key_input(
     steppers: Query<(), With<NumericStepper>>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
+    mut commands: Commands,
 ) {
     let stepper = trigger.event_target();
     if !steppers.contains(stepper) {
@@ -649,7 +673,13 @@ fn on_key_input(
         value.increment();
     } else if !up && value.can_decrement() {
         value.decrement();
+    } else {
+        return;
     }
+    commands.trigger(ValueChange {
+        entity: value_entity,
+        value: *value,
+    });
 }
 
 fn on_change(
@@ -691,10 +721,6 @@ fn on_change(
                 set_disabled(&mut commands, button, disabled, !value.can_increment());
             }
         }
-        commands.trigger(ValueChange {
-            entity: value_ref,
-            value: *value,
-        });
     }
 }
 
@@ -707,7 +733,8 @@ fn set_disabled(commands: &mut Commands, button: Entity, is_disabled: bool, shou
     }
 }
 
-/// Triggered on the entity holding a [`Value`] after a stepper button changed it.
+/// Triggered on the entity holding a [`Value`] after the user stepped it with a stepper button or
+/// an arrow key. Not triggered when the stepper spawns or the app sets the value.
 #[derive(EntityEvent, Debug, Clone, Copy)]
 pub struct ValueChange {
     /// The entity holding the [`Value`].
@@ -716,20 +743,138 @@ pub struct ValueChange {
     pub value: Value,
 }
 
-/// An unsigned integer with bounds and a step size.
+/// A float with bounds and a step size, built only by [`Self::new`].
+#[derive(Debug, Clone, Copy, Reflect)]
+pub struct FloatValue {
+    value: f32,
+    min: f32,
+    max: f32,
+    step: f32,
+}
+
+impl FloatValue {
+    /// A float starting at `initial_value` (clamped to the range), between `min` and `max`,
+    /// moving by `step`.
+    ///
+    /// # Errors
+    /// [`ValueError::NotFinite`] if the value or a bound is NaN or infinite,
+    /// [`ValueError::MinAboveMax`] if `min > max`, [`ValueError::InvalidStep`] if `step` is not
+    /// finite and above zero.
+    pub fn new(initial_value: f32, min: f32, max: f32, step: f32) -> Result<Self, ValueError> {
+        if !(initial_value.is_finite() && min.is_finite() && max.is_finite()) {
+            return Err(ValueError::NotFinite);
+        }
+        if min > max {
+            return Err(ValueError::MinAboveMax);
+        }
+        if !(step.is_finite() && step > 0.0) {
+            return Err(ValueError::InvalidStep);
+        }
+        Ok(Self {
+            value: initial_value.clamp(min, max),
+            min,
+            max,
+            step,
+        })
+    }
+
+    /// The current value.
+    #[must_use]
+    pub const fn value(&self) -> f32 {
+        self.value
+    }
+
+    /// The lowest value.
+    #[must_use]
+    pub const fn min(&self) -> f32 {
+        self.min
+    }
+
+    /// The highest value.
+    #[must_use]
+    pub const fn max(&self) -> f32 {
+        self.max
+    }
+
+    /// The amount one press adds or subtracts.
+    #[must_use]
+    pub const fn step(&self) -> f32 {
+        self.step
+    }
+
+    fn increment(&mut self) -> bool {
+        let new_value = self.value + self.step;
+        if new_value.is_finite() && new_value <= self.max && new_value > self.value {
+            self.value = new_value;
+            return true;
+        }
+        false
+    }
+
+    fn decrement(&mut self) -> bool {
+        let new_value = self.value - self.step;
+        if new_value.is_finite() && new_value >= self.min && new_value < self.value {
+            self.value = new_value;
+            return true;
+        }
+        false
+    }
+}
+
+/// An unsigned integer with bounds and a step size, built only by [`Self::new`].
 #[derive(Debug, Clone, Copy, Reflect)]
 pub struct UIntValue<T> {
-    /// The current value.
-    pub value: T,
-    /// The lowest value.
-    pub min: T,
-    /// The highest value.
-    pub max: T,
-    /// The amount one press adds or subtracts.
-    pub step: T,
+    value: T,
+    min: T,
+    max: T,
+    step: T,
 }
 
 impl<T: UInt> UIntValue<T> {
+    /// An integer starting at `initial_value` (clamped to the range), between `min` and `max`,
+    /// moving by `step`.
+    ///
+    /// # Errors
+    /// [`ValueError::MinAboveMax`] if `min > max`, [`ValueError::ZeroStep`] if `step` is zero.
+    pub fn new(initial_value: T, min: T, max: T, step: T) -> Result<Self, ValueError> {
+        if min > max {
+            return Err(ValueError::MinAboveMax);
+        }
+        if step.is_zero() {
+            return Err(ValueError::ZeroStep);
+        }
+        Ok(Self {
+            value: initial_value.clamp(min, max),
+            min,
+            max,
+            step,
+        })
+    }
+
+    /// The current value.
+    #[must_use]
+    pub const fn value(&self) -> T {
+        self.value
+    }
+
+    /// The lowest value.
+    #[must_use]
+    pub const fn min(&self) -> T {
+        self.min
+    }
+
+    /// The highest value.
+    #[must_use]
+    pub const fn max(&self) -> T {
+        self.max
+    }
+
+    /// The amount one press adds or subtracts.
+    #[must_use]
+    pub const fn step(&self) -> T {
+        self.step
+    }
+
     fn increment(&mut self) -> bool {
         let new_value = self.value.checked_add(self.step);
         if let Some(new_value) = new_value
@@ -755,6 +900,8 @@ impl<T: UInt> UIntValue<T> {
 
 /// An unsigned integer type usable in a [`UIntValue`].
 pub trait UInt: Sized + Ord + Copy {
+    /// Whether this is zero.
+    fn is_zero(self) -> bool;
     /// Adds, or `None` on overflow.
     fn checked_add(self, rhs: Self) -> Option<Self>;
     /// Subtracts, or `None` on underflow.
@@ -765,6 +912,9 @@ macro_rules! impl_uint {
     ($($i:ty),+ $(,)?) => {
         $(
             impl UInt for $i {
+                fn is_zero(self) -> bool {
+                    self == 0
+                }
                 fn checked_add(self, rhs: Self) -> Option<Self> {
                     self.checked_add(rhs)
                 }
@@ -777,3 +927,223 @@ macro_rules! impl_uint {
     };
 }
 impl_uint!(u8, u16, u32, u64);
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "tests may abort loudly")]
+mod tests {
+    use super::*;
+
+    macro_rules! integer_tests {
+        ($($name:ident: $ty:ty, $new:ident, $as:ident;)+) => {
+            $(
+                #[test]
+                fn $name() {
+                    assert_eq!(Value::$new(1, 5, 4, 1).unwrap_err(), ValueError::MinAboveMax);
+                    assert_eq!(Value::$new(1, 0, 4, 0).unwrap_err(), ValueError::ZeroStep);
+                    assert_eq!(Value::$new(1, 5, 4, 0).unwrap_err(), ValueError::MinAboveMax);
+                    // The initial value is clamped to the inclusive range.
+                    assert_eq!(Value::$new(0, 2, 4, 1).unwrap().$as(), Some(2));
+                    assert_eq!(Value::$new(9, 2, 4, 1).unwrap().$as(), Some(4));
+                    // Equal bounds and an oversized step are valid but cannot step.
+                    for value in [Value::$new(3, 3, 3, 1).unwrap(), Value::$new(1, 0, 2, 5).unwrap()] {
+                        assert!(!value.can_increment() && !value.can_decrement());
+                        let mut stepped = value;
+                        assert!(!stepped.increment() && !stepped.decrement());
+                        assert_eq!(stepped.$as(), value.$as());
+                    }
+                    // Overflow and underflow leave the value alone.
+                    let mut top = Value::$new(<$ty>::MAX, 0, <$ty>::MAX, 2).unwrap();
+                    assert!(!top.increment() && top.$as() == Some(<$ty>::MAX));
+                    assert!(top.decrement() && top.$as() == Some(<$ty>::MAX - 2));
+                    let mut bottom = Value::$new(1, 0, <$ty>::MAX, 2).unwrap();
+                    assert!(!bottom.decrement() && bottom.$as() == Some(1));
+                }
+            )+
+        };
+    }
+
+    integer_tests! {
+        a_u8_value_is_validated_clamped_and_steps_checked: u8, new_u8, as_u8;
+        a_u16_value_is_validated_clamped_and_steps_checked: u16, new_u16, as_u16;
+        a_u32_value_is_validated_clamped_and_steps_checked: u32, new_u32, as_u32;
+    }
+
+    #[test]
+    fn a_float_value_rejects_non_finite_numbers_and_bad_steps() {
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                Value::new_f32(bad, 0.0, 1.0, 0.1).unwrap_err(),
+                ValueError::NotFinite
+            );
+            assert_eq!(
+                Value::new_f32(0.5, bad, 1.0, 0.1).unwrap_err(),
+                ValueError::NotFinite
+            );
+            assert_eq!(
+                Value::new_f32(0.5, 0.0, bad, 0.1).unwrap_err(),
+                ValueError::NotFinite
+            );
+            assert_eq!(
+                Value::new_f32(0.5, 0.0, 1.0, bad).unwrap_err(),
+                ValueError::InvalidStep
+            );
+        }
+        for step in [0.0, -0.0, -1.0] {
+            assert_eq!(
+                Value::new_f32(0.5, 0.0, 1.0, step).unwrap_err(),
+                ValueError::InvalidStep
+            );
+        }
+        assert_eq!(
+            Value::new_f32(0.5, 2.0, 1.0, 0.1).unwrap_err(),
+            ValueError::MinAboveMax
+        );
+        assert!(FloatValue::new(0.5, 0.0, 1.0, f32::MIN_POSITIVE).is_ok());
+    }
+
+    #[test]
+    fn a_float_value_is_clamped_and_equal_or_oversized_ranges_cannot_step() {
+        assert_eq!(
+            Value::new_f32(-3.0, 0.0, 1.0, 0.5).unwrap().as_f32(),
+            Some(0.0)
+        );
+        assert_eq!(
+            Value::new_f32(3.0, 0.0, 1.0, 0.5).unwrap().as_f32(),
+            Some(1.0)
+        );
+        for value in [
+            Value::new_f32(2.0, 2.0, 2.0, 0.5).unwrap(),
+            Value::new_f32(0.5, 0.0, 1.0, 4.0).unwrap(),
+        ] {
+            assert!(!value.can_increment() && !value.can_decrement());
+        }
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.5).unwrap();
+        assert!(value.increment() && value.increment() && !value.increment());
+        assert_eq!(value.as_f32(), Some(1.0));
+        assert!(value.decrement());
+        assert_eq!(value.as_f32(), Some(0.5));
+    }
+
+    #[test]
+    fn a_float_step_that_rounds_to_the_same_value_is_not_a_step() {
+        // 1e8 + 1 is 1e8 in f32, so the step changes nothing in either direction.
+        let value = Value::new_f32(1.0e8, 0.0, 2.0e8, 1.0).unwrap();
+        assert!(!value.can_increment() && !value.can_decrement());
+        let mut stepped = value;
+        assert!(!stepped.increment() && !stepped.decrement());
+        assert_eq!(stepped.as_f32(), Some(1.0e8));
+    }
+
+    #[test]
+    fn a_float_step_that_overflows_is_not_a_step() {
+        let mut value = Value::new_f32(f32::MAX, -f32::MAX, f32::MAX, f32::MAX).unwrap();
+        assert!(!value.increment());
+        assert_eq!(value.as_f32(), Some(f32::MAX));
+        assert!(value.decrement());
+        assert_eq!(value.as_f32(), Some(0.0));
+        let mut low = Value::new_f32(-f32::MAX, -f32::MAX, f32::MAX, f32::MAX).unwrap();
+        assert!(!low.decrement());
+    }
+
+    #[test]
+    fn a_value_shows_integers_whole_and_floats_with_one_decimal() {
+        assert_eq!(Value::new_u8(7, 0, 9, 1).unwrap().to_string(), "7");
+        assert_eq!(Value::new_u16(700, 0, 900, 1).unwrap().to_string(), "700");
+        assert_eq!(
+            Value::new_u32(70_000, 0, 90_000, 1).unwrap().to_string(),
+            "70000"
+        );
+        assert_eq!(
+            Value::new_f32(0.25, 0.0, 1.0, 0.25).unwrap().to_string(),
+            "0.2"
+        );
+        assert_eq!(
+            Value::new_f32(0.35, 0.0, 1.0, 0.25).unwrap().to_string(),
+            "0.3"
+        );
+        assert_eq!(
+            Value::new_f32(2.0, 0.0, 5.0, 1.0).unwrap().to_string(),
+            "2.0"
+        );
+        assert_eq!(
+            Value::new_f32(-1.46, -5.0, 5.0, 1.0).unwrap().to_string(),
+            "-1.5"
+        );
+    }
+
+    #[test]
+    fn repeated_tenth_steps_show_every_tenth_despite_accumulated_error() {
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.1).unwrap();
+        let mut shown = vec![value.to_string()];
+        while value.increment() {
+            shown.push(value.to_string());
+        }
+        // The display rounds the accumulated error away, whatever the step count.
+        let expected: Vec<String> = (0..shown.len())
+            .map(|i| format!("{:.1}", i as f32 / 10.0))
+            .collect();
+        assert_eq!(shown, expected);
+        // Rounding error may cost the last step, never more than that.
+        assert!(shown.len() >= 10, "{shown:?}");
+        let mut last = value;
+        while last.decrement() {}
+        assert!(last.as_f32().unwrap() <= 0.1 + 1e-6);
+    }
+
+    #[test]
+    fn stepping_up_and_down_a_float_stays_inside_the_range() {
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.1).unwrap();
+        for _ in 0..30 {
+            value.increment();
+            let now = value.as_f32().unwrap();
+            assert!((0.0..=1.0).contains(&now), "{now}");
+        }
+        for _ in 0..30 {
+            value.decrement();
+            let now = value.as_f32().unwrap();
+            assert!((0.0..=1.0).contains(&now), "{now}");
+        }
+    }
+
+    #[test]
+    fn a_step_larger_than_the_range_cannot_step_any_value_type() {
+        for mut value in [
+            Value::new_u8(2, 1, 3, 200).unwrap(),
+            Value::new_u16(2, 1, 3, 60_000).unwrap(),
+            Value::new_u32(2, 1, 3, 4_000_000_000).unwrap(),
+            Value::new_f32(2.0, 1.0, 3.0, 10.0).unwrap(),
+        ] {
+            assert!(!value.can_increment() && !value.can_decrement());
+            assert!(!value.increment() && !value.decrement());
+        }
+    }
+
+    #[test]
+    fn an_integer_value_steps_exactly_to_both_limits_and_back() {
+        let mut value = Value::new_u8(8, 5, 11, 3).unwrap();
+        assert!(value.increment() && value.as_u8() == Some(11));
+        assert!(!value.can_increment() && value.can_decrement());
+        assert!(value.decrement() && value.decrement() && value.as_u8() == Some(5));
+        assert!(!value.can_decrement() && value.can_increment());
+        // A step that does not reach the maximum stops short of it.
+        let mut short = Value::new_u8(5, 5, 10, 3).unwrap();
+        assert!(short.increment() && !short.increment() && short.as_u8() == Some(8));
+    }
+
+    #[test]
+    fn a_wide_integer_step_that_overflows_or_underflows_changes_nothing() {
+        let mut high = UIntValue::<u8>::new(250, 0, 255, 10).unwrap();
+        assert!(!high.increment() && high.value() == 250);
+        let mut low = UIntValue::<u8>::new(5, 0, 255, 10).unwrap();
+        assert!(!low.decrement() && low.value() == 5);
+        assert!(u8::MAX.checked_add(1).is_none() && 0_u32.checked_sub(1).is_none());
+        assert!(UInt::checked_add(250_u8, 10).is_none() && UInt::checked_sub(5_u8, 10).is_none());
+    }
+
+    #[test]
+    fn a_value_error_has_a_message() {
+        assert_eq!(ValueError::ZeroStep.to_string(), "the step is zero");
+        let error: &dyn std::error::Error = &ValueError::MinAboveMax;
+        assert!(!error.to_string().is_empty());
+    }
+}

@@ -44,9 +44,21 @@ impl Plugin for LinkPlugin {
 ///
 /// Insert a `Link` again to change the label of a live link: its text is updated in place, so
 /// the text on screen always equals the accessible label.
+///
+/// The component is immutable: build or clone a value, edit it outside the world and insert it.
+/// It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::link::Link;
+/// fn edit(mut links: Query<&mut Link>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_insert = Self::on_insert)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[require(BoxShadow::default(),
     Node {
         align_self: AlignSelf::Center,

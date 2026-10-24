@@ -61,7 +61,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         let panels: Vec<(Entity, usize)> = world
             .query::<(&PanelRefs, &Lines)>()
             .iter(world)
-            .map(|(refs, lines)| (refs.body, lines.0))
+            .map(|(refs, lines)| (refs.body(), lines.0))
             .collect();
         for (body, lines) in panels {
             for line in 1..=lines {

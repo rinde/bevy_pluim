@@ -89,9 +89,21 @@ fn sync_accessibility(
 /// Insert a `PushButton` again to change the label or add or remove the icon of a live button:
 /// the existing text children are updated in place (the icon child is spawned or despawned and
 /// [`PushButtonRefs`] follows), so the text on screen always equals the accessible label.
+///
+/// The component is immutable: its configuration is read when it is inserted, so clone or build
+/// a value, edit it outside the world and insert it again. It cannot be queried mutably:
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::push_button::PushButton;
+/// fn edit(mut buttons: Query<&mut PushButton>) {}
+/// # let mut app = App::new();
+/// # app.add_systems(Update, edit);
+/// # app.update();
+/// ```
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_insert = Self::on_insert)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[require(BoxShadow::default(),
     Node {
         justify_content: JustifyContent::SpaceBetween,
@@ -163,13 +175,33 @@ impl IconPlacement {
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonLabel;
 
-/// The children of a [`PushButton`].
+/// The children of a [`PushButton`], for reading. Only the widget builds and updates it; the
+/// component is immutable and its fields are private.
+///
+/// ```compile_fail
+/// # use bevy::prelude::*;
+/// # use rin_bevy_ui::push_button::PushButtonRefs;
+/// let _ = PushButtonRefs { label_id: Entity::PLACEHOLDER, icon_id: None };
+/// ```
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[component(immutable)]
 pub struct PushButtonRefs {
+    label_id: Entity,
+    icon_id: Option<Entity>,
+}
+
+impl PushButtonRefs {
     /// The label text.
-    pub label_id: Entity,
+    #[must_use]
+    pub const fn label(&self) -> Entity {
+        self.label_id
+    }
+
     /// The icon text, if the button has an icon.
-    pub icon_id: Option<Entity>,
+    #[must_use]
+    pub const fn icon(&self) -> Option<Entity> {
+        self.icon_id
+    }
 }
 
 /// Marks the icon text of a [`PushButton`].

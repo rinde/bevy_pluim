@@ -45,7 +45,7 @@ use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{
     CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
+use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueError, ValueRef};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea};
@@ -123,7 +123,8 @@ pub enum WidgetsSetup {
     /// steps of 5, at 25, its value shown as "25 %", "Speed") and `disabled
     /// slider` (0 to 10 at 3, shown as "3", `InteractionDisabled`), then
     /// "Change theme". [`SliderChanges`] keeps the `ValueChange`s of `stepped
-    /// slider`.
+    /// slider`. `zero range slider` (320 px wide, 3 to 3 in steps of 1, at 3,
+    /// spawned last) has [`ZeroRangeChanges`] count its `ValueChange`s.
     Slider,
     /// Segmented controls, each with a `Name`: `own segmented control`
     /// (Auto, Manual, with a selection of its own) and `first shared
@@ -267,6 +268,23 @@ pub struct SliderChanges {
     pub last: f32,
     /// How many changes were final.
     pub finals: u32,
+}
+
+/// The `ValueChange<f32>`s of the `zero range slider` of the `Slider` screen:
+/// how many it sent and how many reported a value other than its bound of 3.
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct ZeroRangeChanges {
+    /// How many changes were sent.
+    pub count: u32,
+    /// How many of them reported a value other than 3.
+    pub off_bound: u32,
+}
+
+/// A [`Value`] of a constant range the screens know to be valid.
+#[expect(clippy::unwrap_used, reason = "the screens' constant ranges are valid")]
+fn valid(value: Result<Value, ValueError>) -> Value {
+    value.unwrap()
 }
 
 /// The root a screen of several widgets goes in: the camera and root of
@@ -1288,36 +1306,73 @@ fn color_palette(world: &mut World) {
                 false,
             ),
         ));
+        // Combos over a selection of many, out of the flow and last for the same reasons:
+        // `zero or more palette combo` starts with nothing selected, `one or more palette
+        // combo` with slate-50, the first colour.
+        for (name, left, selection) in [
+            (
+                "zero or more palette combo",
+                1000,
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items_ref(selection_ref),
+            ),
+            (
+                "one or more palette combo",
+                1100,
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items_ref(selection_ref),
+            ),
+        ] {
+            root.spawn((
+                ColorPaletteCombo,
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    position_type: PositionType::Absolute,
+                    top: px(250),
+                    left: px(left),
+                    ..default()
+                },
+                ListLayout::VerticalGrid { columns: 11 },
+                selection,
+                Name::new(name),
+            ));
+        }
     });
 }
 
 fn numeric_stepper(world: &mut World) {
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
-        root.spawn((NumericStepper::default(), Name::new("default stepper")));
+        root.spawn((
+            NumericStepper::default(),
+            valid(Value::new_u32(1, 0, 10, 1)),
+            Name::new("default stepper"),
+        ));
         root.spawn((
             NumericStepper {
                 name: Some("Cars".into()),
                 ..default()
             },
-            Value::new_u16(10, 5, 15, 1),
+            valid(Value::new_u16(10, 5, 15, 1)),
             Name::new("u16 stepper"),
         ));
         root.spawn((
             NumericStepper::default(),
-            Value::new_u32(10, 5, 15, 1),
+            valid(Value::new_u32(10, 5, 15, 1)),
             Name::new("u32 stepper"),
         ));
         root.spawn((
             NumericStepper::default(),
-            Value::new_f32(10.0, 5.0, 15.0, 0.5),
+            valid(Value::new_f32(10.0, 5.0, 15.0, 0.5)),
             Name::new("f32 stepper"),
         ));
         // A step that does not divide the range: from 7 one more step would
         // pass the maximum of 8, and from 1 one fewer the minimum of 0.
         root.spawn((
             NumericStepper::default(),
-            Value::new_u8(5, 0, 8, 2),
+            valid(Value::new_u8(5, 0, 8, 2)),
             Name::new("stepper by two"),
         ));
         // One value shown by three steppers: the first holds it, the other two
@@ -1325,7 +1380,7 @@ fn numeric_stepper(world: &mut World) {
         let shared = root
             .spawn((
                 NumericStepper::default(),
-                Value::new_u32(3, 0, 6, 1),
+                valid(Value::new_u32(3, 0, 6, 1)),
                 Name::new("shared stepper"),
             ))
             .id();
@@ -1345,10 +1400,11 @@ fn numeric_stepper(world: &mut World) {
 
 fn slider(world: &mut World) {
     world.init_resource::<SliderChanges>();
+    world.init_resource::<ZeroRangeChanges>();
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((
-            Slider::new(0.0, 0.0, 1.0).with_name("Continuous"),
+            valid_slider(0.0, 0.0, 1.0, None).with_name("Continuous"),
             Node {
                 width: px(320),
                 ..default()
@@ -1356,9 +1412,7 @@ fn slider(world: &mut World) {
             Name::new("continuous slider"),
         ));
         root.spawn((
-            Slider::new(0.0, 0.0, 10.0)
-                .with_step(1.0)
-                .with_name("Stepped"),
+            valid_slider(0.0, 0.0, 10.0, Some(1.0)).with_name("Stepped"),
             Name::new("stepped slider"),
         ))
         .observe(
@@ -1368,20 +1422,31 @@ fn slider(world: &mut World) {
             },
         );
         root.spawn((
-            Slider::new(25.0, 0.0, 100.0)
-                .with_step(5.0)
+            valid_slider(25.0, 0.0, 100.0, Some(5.0))
                 .with_format(|value| format!("{value:.0} %"))
                 .with_name("Speed"),
             Name::new("formatted slider"),
         ));
         root.spawn((
-            Slider::new(3.0, 0.0, 10.0)
-                .with_step(1.0)
-                .with_format(|value| format!("{value:.0}")),
+            valid_slider(3.0, 0.0, 10.0, Some(1.0)).with_format(|value| format!("{value:.0}")),
             InteractionDisabled,
             Name::new("disabled slider"),
         ));
         spawn_theme_button(root);
+        root.spawn((
+            valid_slider(3.0, 3.0, 3.0, Some(1.0)),
+            Node {
+                width: px(320),
+                ..default()
+            },
+            Name::new("zero range slider"),
+        ))
+        .observe(
+            |change: On<ValueChange<f32>>, mut changes: ResMut<ZeroRangeChanges>| {
+                changes.count += 1;
+                changes.off_bound += u32::from((change.value - 3.0).abs() > f32::EPSILON);
+            },
+        );
     });
 }
 
@@ -1546,20 +1611,21 @@ fn panel(world: &mut World) {
             commands.entity(closed.entity).despawn();
         })
         .id();
+    let tall_panel = Panel::new("Stops").with_close_icon(Handle::default());
+    let tall_panel = match tall_panel.with_max_body_height(100.0) {
+        Ok(panel) => panel,
+        Err(error) => {
+            error!("the tall panel keeps its default maximum body height: {error}");
+            Panel::new("Stops").with_close_icon(Handle::default())
+        }
+    };
     let tall = world
-        .spawn((
-            Panel::new("Stops")
-                .with_close_icon(Handle::default())
-                .with_max_body_height(100.0),
-            Name::new("tall panel"),
-            top,
-            ChildOf(root),
-        ))
+        .spawn((tall_panel, Name::new("tall panel"), top, ChildOf(root)))
         .id();
     world.entity_mut(root).with_children(spawn_theme_button);
     world.flush();
     for (panel, lines) in [(closable, 3), (tall, 12)] {
-        let Some(body) = world.get::<PanelRefs>(panel).map(|refs| refs.body) else {
+        let Some(body) = world.get::<PanelRefs>(panel).map(PanelRefs::body) else {
             continue;
         };
         for line in 1..=lines {
@@ -1611,7 +1677,7 @@ fn setting_rows(world: &mut World) {
     if let Some(slot) = slots.get(1).and_then(|row| slot(world, *row)) {
         world.spawn((
             NumericStepper::default(),
-            Value::new_u8(12, 8, 20, 1),
+            valid(Value::new_u8(12, 8, 20, 1)),
             ChildOf(slot),
         ));
     }
@@ -1796,7 +1862,7 @@ fn button_names(world: &mut World) {
         .query_filtered::<&ColorSquareRef, With<ColorPushButton>>()
         .iter(world)
         .next()
-        .map(|square| square.0);
+        .map(ColorSquareRef::entity);
     if let Some(mut color) = button.and_then(|square| world.get_mut::<BackgroundColor>(square)) {
         color.0 = RED_500.into();
     }
@@ -1907,4 +1973,14 @@ fn combo_rows(world: &mut World) {
         ));
         spawn_theme_button(root);
     });
+}
+
+/// A slider with a valid range and step, or an abort: these are fixed values.
+fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
+    Slider::new(value, min, max)
+        .and_then(|slider| match step {
+            Some(step) => slider.with_step(step),
+            None => Ok(slider),
+        })
+        .unwrap_or_else(|_| std::process::abort())
 }

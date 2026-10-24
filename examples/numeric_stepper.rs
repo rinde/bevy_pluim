@@ -23,7 +23,11 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands) -> Result {
+    let u16_value = Value::new_u16(10, 5, 15, 1)?;
+    let u32_value = Value::new_u32(10, 5, 15, 1)?;
+    let f32_value = Value::new_f32(10.0, 5.0, 15.0, 0.5)?;
+    let level_value = Value::new_u8(0, 0, 56, 7)?;
     commands.spawn(Camera2d);
     commands.spawn_scene(bsn! {
         Node {
@@ -41,21 +45,22 @@ fn setup(mut commands: Commands) {
             NumericStepper
             --
             NumericStepper
-            ~{Value::new_u16(10, 5, 15, 1)}
+            ~{u16_value}
             --
             NumericStepper
-            ~{Value::new_u32(10, 5, 15, 1)}
+            ~{u32_value}
             --
             NumericStepper
-            ~{Value::new_f32(10.0, 5.0, 15.0, 0.5)}
+            ~{f32_value}
             --
             NumericStepper { format: {level as ValueFormat}, decrease_name: "Lower the level", increase_name: "Raise the level" }
-            ~{Value::new_u8(0, 0, 56, 7)}
+            ~{level_value}
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
+    Ok(())
 }
 
 /// "Ground" at 0 and "+7", "+14", ... above it.
