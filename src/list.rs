@@ -20,7 +20,7 @@ use itertools::Either;
 use crate::combo::Combo;
 use crate::focus::{AccessibilitySync, TabStop, sync_label};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
-use crate::theme::{Theme, ThemeColors};
+use crate::theme::{Theme, ThemeColors, contrast_ratio};
 use crate::{MouseEvent, MouseKind};
 
 /// Padding around a [`CornerStyle::Separated`] list.
@@ -53,6 +53,7 @@ impl Plugin for ListPlugin {
                     selection_change,
                     custom_view_hover,
                     sync_item_notes.run_if(item_notes_changed),
+                    note_ink_follows_row.after(selection_change),
                 ),
             )
             .add_systems(PostUpdate, sync_item_labels.in_set(AccessibilitySync))
@@ -303,7 +304,40 @@ pub enum NoteTone {
 
 /// Marks the text of an [`ItemNote`] inside a default [`ItemView`].
 #[derive(Component, Debug, Clone, Copy)]
-struct ItemNoteView;
+struct ItemNoteView(NoteTone);
+
+/// The ink of a note of `tone` on a row drawn on `background`: the tone's own colour when
+/// it reads at 4.5:1 there, else `text_primary`, which does on every row background. A
+/// transparent row sits on the surface, where the tone's colour is meant to be read.
+pub(crate) fn note_ink(colors: &ThemeColors, tone: NoteTone, background: Color) -> Color {
+    let own = match tone {
+        NoteTone::Secondary => colors.text_secondary,
+        NoteTone::Warning => colors.warning_text,
+    };
+    // A transparent (alpha 0) row has no colour of its own to measure against, so a
+    // note on it always keeps its own colour.
+    if background.alpha() == 0.0 || contrast_ratio(own, background) >= 4.5 {
+        own
+    } else {
+        colors.text_primary
+    }
+}
+
+/// Keeps the note of a row readable when the row's background changes (hover, selection,
+/// theme).
+fn note_ink_follows_row(
+    rows: Query<(&BackgroundColor, &Children), (With<ItemView>, Changed<BackgroundColor>)>,
+    mut notes: Query<(&ItemNoteView, &mut TextColor)>,
+    theme: Res<Theme>,
+) {
+    for (background, children) in &rows {
+        for child in children {
+            if let Ok((ItemNoteView(tone), mut color)) = notes.get_mut(*child) {
+                color.set_if_neq(TextColor(note_ink(&theme.colors, *tone, background.0)));
+            }
+        }
+    }
+}
 
 /// Whether a note, or a view that may show one, changed since the last run.
 fn item_notes_changed(
@@ -317,13 +351,13 @@ fn item_notes_changed(
 /// Shows, updates and removes the note text in each default view to match the item's
 /// [`ItemNote`].
 fn sync_item_notes(
-    views: Query<(Entity, &ItemView, Option<&Children>), Without<CustomView>>,
+    views: Query<(Entity, &ItemView, Option<&Children>, &BackgroundColor), Without<CustomView>>,
     notes: Query<&ItemNote>,
-    mut note_texts: Query<(&mut Text, &mut TextColor, &mut TextFont), With<ItemNoteView>>,
+    mut note_texts: Query<(&mut Text, &mut TextColor, &mut TextFont, &mut ItemNoteView)>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (view, ItemView { item_ref, .. }, children) in &views {
+    for (view, ItemView { item_ref, .. }, children, background) in &views {
         let wanted = notes
             .get(*item_ref)
             .ok()
@@ -333,10 +367,7 @@ fn sync_item_notes(
             .flatten()
             .copied()
             .find(|child| note_texts.contains(*child));
-        let color = |note: &ItemNote| match note.tone {
-            NoteTone::Secondary => theme.colors.text_secondary,
-            NoteTone::Warning => theme.colors.warning_text,
-        };
+        let color = |note: &ItemNote| note_ink(&theme.colors, note.tone, background.0);
         let font = || TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_caption),
@@ -344,7 +375,12 @@ fn sync_item_notes(
         };
         match (wanted, existing) {
             (Some(note), Some(child)) => {
-                if let Ok((mut text, mut text_color, mut text_font)) = note_texts.get_mut(child) {
+                if let Ok((mut text, mut text_color, mut text_font, mut view_tone)) =
+                    note_texts.get_mut(child)
+                {
+                    if view_tone.0 != note.tone {
+                        view_tone.0 = note.tone;
+                    }
                     if text.0 != note.text {
                         text.0.clone_from(&note.text);
                     }
@@ -356,7 +392,7 @@ fn sync_item_notes(
                 commands.entity(view).with_children(|parent| {
                     parent.spawn((
                         Text(note.text.clone()),
-                        ItemNoteView,
+                        ItemNoteView(note.tone),
                         TextColor(color(note)),
                         font(),
                         Node {
@@ -1176,6 +1212,31 @@ fn theme_item_border(
             node.border = UiRect::all(SEPARATED_RING_WIDTH);
             node.border_radius = BorderRadius::all(theme.control_radius);
             node.padding = SEPARATED_ITEM_PADDING;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS};
+
+    #[test]
+    fn a_note_keeps_its_tone_on_a_resting_row_and_turns_primary_on_a_selected_one() {
+        for c in [DEFAULT_LIGHT_THEME_COLORS, DEFAULT_DARK_THEME_COLORS] {
+            assert_eq!(note_ink(&c, NoteTone::Warning, Color::NONE), c.warning_text);
+            assert_eq!(
+                note_ink(&c, NoteTone::Secondary, c.background_primary),
+                c.text_secondary
+            );
+            assert_eq!(
+                note_ink(&c, NoteTone::Secondary, c.selected_item),
+                c.text_primary
+            );
+            assert_eq!(
+                note_ink(&c, NoteTone::Warning, c.selected_hovered_item),
+                c.text_primary
+            );
         }
     }
 }
