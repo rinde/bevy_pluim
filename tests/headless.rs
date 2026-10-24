@@ -71,7 +71,8 @@ use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
 };
 use rin_bevy_ui::select::{
-    Item, ItemOf, ItemValues, Selection, SelectionBuilderWithValue, SelectionParam, SelectionValue,
+    Item, ItemOf, ItemValues, Selection, SelectionBuilder, SelectionBuilderWithValue,
+    SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::slider::{Slider, SliderRefs};
@@ -82,6 +83,7 @@ use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
+use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
@@ -8898,6 +8900,110 @@ fn a_swatch_click_leaves_the_popup_of_a_palette_combo_over_many_open() {
             combo_value(&app, button).split(", ").count(),
             selection_colors(&app, combo).len(),
             "{name}"
+        );
+    }
+}
+
+/// Presses `key_code` once with `list` focused, as a keyboard would.
+fn press_key_on(app: &mut App, key_code: KeyCode) {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().write_message(KeyboardInput {
+        key_code,
+        logical_key: Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    });
+    app.update();
+    app.update();
+}
+
+/// A focused `VirtualList` of three rows over a selection built by `selection`, with the
+/// first row active, and the rows' items.
+fn focused_virtual_list(
+    selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
+) -> (App, Entity, Vec<Entity>) {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            VirtualList::new(RowHeight::new(28.0).unwrap()),
+            selection(Selection::builder()).build_with_items(Vec::<Item<String>>::new()),
+            ChildOf(root),
+        ))
+        .id();
+    let items: Vec<Entity> = (1..=3)
+        .map(|index| {
+            app.world_mut()
+                .spawn((Item::new(format!("Row {index}")), ItemOf(list)))
+                .id()
+        })
+        .collect();
+    for _ in 0..3 {
+        app.update();
+    }
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, bevy::input_focus::FocusCause::Navigated);
+    app.update();
+    (app, list, items)
+}
+
+/// The items the selection of `list` holds.
+fn selected_items(app: &App, list: Entity) -> Vec<Entity> {
+    match app.world().get::<Selection>(list) {
+        Some(Selection::Value(value)) => value.iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[test]
+fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_selection_allows() {
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_one);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "{key:?} selects"
+        );
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            Vec::<Entity>::new(),
+            "{key:?} again"
+        );
+
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_more);
+        press_key_on(&mut app, key);
+        press_key_on(&mut app, KeyCode::ArrowDown);
+        press_key_on(&mut app, key);
+        assert_eq!(selected_items(&app, list), vec![items[0], items[1]]);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "only the active row goes"
+        );
+
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::one);
+        press_key_on(&mut app, key);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "a `One` keeps its item"
         );
     }
 }
