@@ -331,11 +331,17 @@ type SelectionVec = SmallVec<[Entity; 4]>;
 #[educe(Default)]
 pub enum SelectionValue {
     /// Exactly one item.
+    ///
+    /// `One(Entity::PLACEHOLDER)` is the *pending* state of a selection whose item source has no
+    /// first item yet (see [`SelectionValue::is_pending`]); it selects nothing.
     One(Entity),
     /// At most one item.
     #[educe(Default)]
     ZeroOrOne(Option<Entity>),
     /// At least one item.
+    ///
+    /// An empty `OneOrMore` is the *pending* state of a selection whose item source has no first
+    /// item yet (see [`SelectionValue::is_pending`]); it selects nothing.
     OneOrMore(SelectionVec),
     /// Any number of items.
     ZeroOrMore(SelectionVec),
@@ -357,11 +363,30 @@ impl SelectionValue {
         }
     }
 
+    /// Whether this is a mandatory selection ([`SelectionValue::One`] or
+    /// [`SelectionValue::OneOrMore`]) still waiting for its first item: `One(Entity::PLACEHOLDER)`
+    /// or an empty `OneOrMore`.
+    ///
+    /// Pending is not an error: it is how a selection over items that are spawned later starts.
+    /// A pending selection has no selected items (`iter` yields nothing, `len` is 0, `is_empty`
+    /// is true, `single` and `last` are `None`, nothing `is_selected`), and consumers treat it
+    /// as empty and never look up a view for the placeholder. The first `ItemsChanged` that
+    /// brings an item selects it, keeping the variant, and the normal update methods never
+    /// return to pending: `One` and `OneOrMore` refuse to clear an initialised selection.
+    #[must_use]
+    pub fn is_pending(&self) -> bool {
+        match self {
+            Self::One(selected) => *selected == Entity::PLACEHOLDER,
+            Self::OneOrMore(items) => items.is_empty(),
+            Self::ZeroOrOne(_) | Self::ZeroOrMore(_) => false,
+        }
+    }
+
     /// Whether `item` is selected.
     #[must_use]
     pub fn is_selected(&self, item: Entity) -> bool {
         match self {
-            Self::One(selected) => selected == &item,
+            Self::One(selected) => *selected != Entity::PLACEHOLDER && selected == &item,
             Self::ZeroOrOne(selected) => selected.is_some_and(|s| s == item),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.contains(&item),
         }
@@ -370,7 +395,11 @@ impl SelectionValue {
     /// The selected items, in selection order.
     pub fn iter(&self) -> impl Iterator<Item = Entity> {
         match self {
-            Self::One(selected) => Either::Left(Some(*selected).into_iter()),
+            Self::One(selected) => Either::Left(
+                Some(*selected)
+                    .filter(|selected| *selected != Entity::PLACEHOLDER)
+                    .into_iter(),
+            ),
             Self::ZeroOrOne(selected) => Either::Left((*selected).into_iter()),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => {
                 Either::Right(items.iter().copied())
@@ -382,7 +411,7 @@ impl SelectionValue {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
-            Self::One(_) => false,
+            Self::One(selected) => *selected == Entity::PLACEHOLDER,
             Self::ZeroOrOne(selected) => selected.is_none(),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.is_empty(),
         }
@@ -392,7 +421,7 @@ impl SelectionValue {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
-            Self::One(_) => 1,
+            Self::One(selected) => usize::from(*selected != Entity::PLACEHOLDER),
             Self::ZeroOrOne(selected) => usize::from(selected.is_some()),
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.len(),
         }
@@ -402,7 +431,7 @@ impl SelectionValue {
     #[must_use]
     pub fn single(&self) -> Option<Entity> {
         match self {
-            Self::One(selected) => Some(*selected),
+            Self::One(selected) => Some(*selected).filter(|s| *s != Entity::PLACEHOLDER),
             Self::ZeroOrOne(selected) => *selected,
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => match items.as_slice() {
                 [only] => Some(*only),
@@ -415,7 +444,7 @@ impl SelectionValue {
     #[must_use]
     pub fn last(&self) -> Option<Entity> {
         match self {
-            Self::One(selected) => Some(*selected),
+            Self::One(selected) => Some(*selected).filter(|s| *s != Entity::PLACEHOLDER),
             Self::ZeroOrOne(selected) => *selected,
             Self::OneOrMore(items) | Self::ZeroOrMore(items) if items.is_empty() => None,
             Self::OneOrMore(items) | Self::ZeroOrMore(items) => items.last().copied(),
@@ -1446,6 +1475,114 @@ mod tests {
     #[test]
     fn appending_to_one_is_refused() {
         assert_eq!(SelectionValue::One(entity(1)).append([entity(2)]), None);
+    }
+
+    // Pending selections
+
+    fn pending_values() -> [SelectionValue; 2] {
+        [
+            SelectionValue::One(Entity::PLACEHOLDER),
+            SelectionValue::OneOrMore(smallvec![]),
+        ]
+    }
+
+    #[test]
+    fn pending_selections_have_no_selected_items() {
+        for value in pending_values() {
+            assert!(value.is_pending(), "{value:?}");
+            assert_eq!(value.iter().count(), 0, "{value:?}");
+            assert_eq!(value.len(), 0, "{value:?}");
+            assert!(value.is_empty(), "{value:?}");
+            assert_eq!(value.single(), None, "{value:?}");
+            assert_eq!(value.last(), None, "{value:?}");
+            assert!(!value.is_selected(Entity::PLACEHOLDER), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn initialised_selections_are_not_pending() {
+        for value in [
+            SelectionValue::One(entity(1)),
+            SelectionValue::OneOrMore(smallvec![entity(1)]),
+            SelectionValue::ZeroOrOne(None),
+            SelectionValue::ZeroOrMore(smallvec![]),
+        ] {
+            assert!(!value.is_pending(), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_pending_selection_cannot_be_cleared_back_to_pending_by_the_update_methods() {
+        let initialised = [
+            SelectionValue::One(entity(1)),
+            SelectionValue::OneOrMore(smallvec![entity(1)]),
+        ];
+        for value in initialised {
+            assert_eq!(value.clear(), None);
+            assert_eq!(value.pop(), None);
+            assert_eq!(value.trim_to_length(0), None);
+            assert_eq!(value.set_selection([]), None);
+            assert_eq!(value.toggle_selected(entity(1)), None);
+        }
+    }
+
+    #[test]
+    fn a_pending_selection_is_given_an_item_of_the_same_variant() {
+        assert_eq!(
+            SelectionValue::One(Entity::PLACEHOLDER).toggle_selected(entity(1)),
+            Some(SelectionValue::One(entity(1)))
+        );
+        assert_eq!(
+            SelectionValue::OneOrMore(smallvec![]).push(entity(1)),
+            Some(SelectionValue::OneOrMore(smallvec![entity(1)]))
+        );
+    }
+
+    #[test]
+    fn a_pending_one_or_more_is_repaired_by_the_first_item_and_keeps_its_cardinality() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one_or_more()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert!(selection_value(&app, id).is_some_and(|v| v.is_pending() && v.is_empty()));
+
+        let first = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        let repaired = SelectionValue::OneOrMore(smallvec![first]);
+        assert_eq!(selection_value(&app, id), Some(repaired.clone()));
+        assert!(!repaired.is_pending());
+        // Still a `OneOrMore`: it refuses to clear.
+        assert_eq!(repaired.clear(), None);
+        assert_eq!(repaired.pop(), None);
+        assert!(repaired.allow_multiple());
+    }
+
+    #[test]
+    fn a_pending_one_repaired_by_the_first_item_stays_a_one() {
+        let mut app = items_app();
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .one()
+                    .build_with_items(std::iter::empty::<Item<String>>()),
+            )
+            .id();
+        app.update();
+        assert!(selection_value(&app, id).is_some_and(|v| v.is_pending()));
+        let first = app.world_mut().spawn((Item::new("a"), ItemOf(id))).id();
+        app.update();
+        let repaired = SelectionValue::One(first);
+        assert_eq!(selection_value(&app, id), Some(repaired.clone()));
+        assert_eq!(repaired.single(), Some(first));
+        assert!(!repaired.allow_multiple());
+        assert_eq!(repaired.clear(), None);
     }
 
     // The builder, the items and `ItemParam`, in an app with the selection model
