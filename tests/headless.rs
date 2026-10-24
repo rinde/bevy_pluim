@@ -7516,6 +7516,8 @@ fn a_palette_pointed_at_other_items_ignores_changes_to_the_old_ones() {
     app.update();
     app.update();
     assert_eq!(item_views(&app, palette).len(), 5);
+}
+
 /// How many buttons, popups and palettes are descendants of the combo.
 fn palette_combo_parts(app: &mut App, combo: Entity) -> (usize, usize, usize) {
     let world = app.world_mut();
