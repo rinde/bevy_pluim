@@ -427,13 +427,7 @@ fn update_selection(
 fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> String {
     selection
         .iter()
-        .map(|item| {
-            if item == Entity::PLACEHOLDER {
-                ""
-            } else {
-                items.get(item).map_or("", |item| item.data.as_str())
-            }
-        })
+        .map(|item| items.get(item).map_or("", |item| item.data.as_str()))
         .join(", ")
 }
 
