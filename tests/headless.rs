@@ -27,7 +27,9 @@ use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
-use bevy::ui::{FixedNode, InteractionDisabled, Pressed, Selected};
+use bevy::ui::{
+    ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
+};
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, SelectedTab,
     SetSliderValue, SliderValueChange, Tab, TabList, ValueChange,
@@ -44,6 +46,7 @@ use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
 use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
+use rin_bevy_ui::float::Float;
 use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
 use rin_bevy_ui::icon::{Icon, IconColor};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
@@ -53,11 +56,15 @@ use rin_bevy_ui::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
 use rin_bevy_ui::link::{Link, LinkState};
-use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List};
+use rin_bevy_ui::list::{
+    CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
+};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton, PushButtonRefs};
+use rin_bevy_ui::push_button::{
+    ButtonSize, IconPlacement, NoDefaultHover, PushButton, PushButtonRefs,
+};
 use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
 use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
@@ -370,6 +377,99 @@ fn a_stack_shows_only_the_selected_child_and_switches_on_selection_change() {
 
     assert_eq!(node_display(&app, panel_a), Display::Flex);
     assert_eq!(node_display(&app, panel_b), Display::None);
+}
+
+#[test]
+fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is_skipped() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one_or_more()
+                .build_with_items([(Item::new("a"),), (Item::new("b"),)]),
+        )
+        .id();
+    // A third item has no text, so it gets no crumb.
+    let no_text = app
+        .world_mut()
+        .spawn(Item::<Color> { data: Color::WHITE })
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((
+        Node::default(),
+        BreadCrumbs,
+        Selection::reference(selection),
+        ChildOf(root),
+    ));
+    app.update();
+
+    app.world_mut()
+        .entity_mut(selection)
+        .insert(Selection::Value(SelectionValue::OneOrMore(
+            smallvec::smallvec![items[0], items[1], no_text],
+        )));
+    app.update();
+    app.update();
+
+    let world = app.world_mut();
+    let mut links = world.query::<(&Link, &LinkState)>();
+    let states = links
+        .iter(world)
+        .map(|(_, state)| *state)
+        .collect::<Vec<_>>();
+    assert_eq!(states.len(), 2);
+    assert_eq!(
+        states
+            .iter()
+            .filter(|state| matches!(state, LinkState::Disabled))
+            .count(),
+        1,
+        "exactly the last crumb is current"
+    );
+}
+
+#[test]
+fn a_despawned_stack_does_not_react_to_its_selection_changing() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection_ref)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stack = app
+        .world_mut()
+        .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+
+    app.world_mut().entity_mut(stack).despawn();
+    app.world_mut()
+        .entity_mut(selection_ref)
+        .insert(Selection::Value(SelectionValue::One(items[1])));
+    app.update();
+    app.update();
+
+    assert!(no_entity_with::<PanelB>(&mut app));
 }
 
 #[test]
@@ -907,6 +1007,74 @@ fn a_press_on_a_link_restyles_it() {
         .background_secondary;
     assert_ne!(before.0, expected);
     assert_eq!(after.0, expected);
+}
+
+/// A link in a root node, after two updates.
+fn spawn_link(app: &mut App, state: LinkState) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let link = app
+        .world_mut()
+        .spawn((Link::new("link"), state, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    link
+}
+
+/// The text colour of a link.
+fn link_text_color(app: &App, link: Entity) -> Color {
+    let text = app.world().entity(link).get::<Children>().unwrap()[0];
+    app.world().entity(text).get::<TextColor>().unwrap().0
+}
+
+#[test]
+fn changing_the_theme_under_a_hovered_link_keeps_it_hovered() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+
+    hover_and_toggle_theme(&mut app, link);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_secondary);
+    assert_eq!(link_text_color(&app, link), dark.link);
+}
+
+#[test]
+fn changing_the_theme_under_a_pressed_link_keeps_it_pressed() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+    press(&mut app, link);
+
+    hover_and_toggle_theme(&mut app, link);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_secondary);
+    assert_eq!(link_text_color(&app, link), dark.link_selected);
+}
+
+#[test]
+fn changing_the_theme_under_a_link_the_pointer_is_not_on_leaves_it_at_rest() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+
+    toggle_theme(&mut app);
+    app.update();
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_primary);
+    assert_eq!(link_text_color(&app, link), dark.link);
+}
+
+#[test]
+fn a_disabled_link_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Disabled);
+
+    hover_and_toggle_theme(&mut app, link);
+
+    let dark = DEFAULT_DARK_THEME_COLORS;
+    assert_eq!(background(&app, link), dark.background_primary);
+    assert_eq!(link_text_color(&app, link), dark.text_primary);
 }
 
 #[test]
@@ -1699,6 +1867,30 @@ fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
     app.update();
     app.update();
     (combo, single_entity_with::<ColorPushButton>(app))
+}
+
+#[test]
+fn a_combo_state_on_an_entity_that_is_not_a_combo_does_nothing() {
+    let mut app = headless_app();
+    let plain = app.world_mut().spawn(Node::default()).id();
+    let other = app.world_mut().spawn(Node::default()).id();
+    let before = app.world().entity(other).get::<Visibility>().copied();
+    app.world_mut().entity_mut(plain).insert(ComboState::Open);
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().entity(plain).get::<ComboState>(),
+        Some(&ComboState::Open)
+    );
+    assert_eq!(
+        app.world().entity(other).get::<Visibility>().copied(),
+        before
+    );
+    assert!(
+        app.world()
+            .get_resource::<InputFocus>()
+            .is_none_or(|focus| focus.get().is_none())
+    );
 }
 
 #[test]
@@ -2498,6 +2690,131 @@ fn spawn_list_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
     app.update();
     app.update();
     list
+}
+
+#[test]
+fn a_list_grid_with_zero_columns_does_not_panic_and_acts_as_one_column() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            ListLayout::VerticalGrid { columns: 0 },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let palette = app
+        .world_mut()
+        .spawn((
+            ColorPalette,
+            ListLayout::VerticalGrid { columns: 0 },
+            Selection::builder().one().build_with_items(
+                [Color::WHITE, Color::BLACK, Color::NONE].map(|data| Item { data }),
+            ),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    app.update();
+    for widget in [list, palette] {
+        assert_eq!(item_views(&app, widget).len(), 3);
+        let node = app.world().entity(widget).get::<Node>().unwrap();
+        assert_eq!(node.grid_template_columns.len(), 1, "one column track");
+    }
+}
+
+#[test]
+fn a_list_keeps_the_node_fields_the_app_gave_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            Node {
+                width: Val::Px(120.0),
+                margin: UiRect::all(Val::Px(7.0)),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    // Inserting the zero-sized `List` again must not reset the node either.
+    app.world_mut().entity_mut(list).insert(List);
+    app.update();
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.width, Val::Px(120.0));
+    assert_eq!(node.margin, UiRect::all(Val::Px(7.0)));
+    assert_eq!(node.display, Display::Grid);
+    assert_eq!(node.position_type, PositionType::Relative);
+}
+
+#[test]
+fn changing_the_layout_of_a_live_list_updates_its_grid() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            Node {
+                width: Val::Px(120.0),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let reference = app
+        .world_mut()
+        .spawn((
+            List,
+            ListLayout::VerticalGrid { columns: 3 },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::VerticalGrid { columns: 3 });
+    app.update();
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    let expected = app.world().entity(reference).get::<Node>().unwrap();
+    assert_eq!(node.grid_auto_flow, expected.grid_auto_flow);
+    assert_eq!(node.grid_template_columns, expected.grid_template_columns);
+    assert_eq!(node.grid_template_columns.len(), 1);
+    assert_eq!(node.width, Val::Px(120.0), "the app's width survives");
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::Horizontal);
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
+    assert!(node.grid_template_columns.is_empty());
 }
 
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
@@ -4525,6 +4842,34 @@ fn selected_label(app: &App, selection_holder: Entity) -> Option<String> {
 }
 
 #[test]
+fn toolbar_buttons_always_have_the_children_of_their_toolbars_style() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let check = |app: &App, style: ToolbarStyle| {
+        let buttons = toolbar_buttons(app, toolbar);
+        assert!(!buttons.is_empty());
+        for button in buttons {
+            let refs = app.world().get::<ToolbarButtonRefs>(button).unwrap();
+            assert_eq!(refs.style(), style);
+            assert_eq!(refs.label().is_some(), style == ToolbarStyle::Filled);
+            assert_eq!(refs.bar().is_some(), style == ToolbarStyle::Underlined);
+            assert_eq!(
+                app.world().get::<ToolbarButton>(button).unwrap().toolbar(),
+                toolbar
+            );
+        }
+    };
+    check(&app, ToolbarStyle::Filled);
+    app.world_mut()
+        .entity_mut(toolbar)
+        .insert(Toolbar::new(ToolbarStyle::Underlined));
+    for _ in 0..3 {
+        app.update();
+    }
+    check(&app, ToolbarStyle::Underlined);
+}
+
+#[test]
 fn a_tool_with_a_key_hint_gets_a_positioned_hint_text_and_one_without_gets_none() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -4551,7 +4896,7 @@ fn a_tool_with_a_key_hint_gets_a_positioned_hint_text_and_one_without_gets_none(
             .entity(button)
             .get::<ToolbarButtonRefs>()
             .unwrap()
-            .hint
+            .hint()
     };
     let hint = hint_of(buttons[0]).unwrap();
     assert_eq!(hint_of(buttons[1]), None);
@@ -4609,7 +4954,7 @@ fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_colour_whe
     let colors = app.world().get_resource::<Theme>().unwrap().colors;
     let label = |app: &App, b: Entity| {
         let refs = app.world().entity(b).get::<ToolbarButtonRefs>().unwrap();
-        let e = app.world().entity(refs.label.unwrap());
+        let e = app.world().entity(refs.label().unwrap());
         (
             e.get::<Text>().unwrap().0.clone(),
             e.get::<TextColor>().unwrap().0,
@@ -4645,12 +4990,12 @@ fn clicking_the_open_panel_of_a_zero_or_one_toolbar_closes_it() {
         .entity(buttons[1])
         .get::<ToolbarButtonRefs>()
         .unwrap();
-    assert_eq!(node_display(&app, refs.bar.unwrap()), Display::Flex);
+    assert_eq!(node_display(&app, refs.bar().unwrap()), Display::Flex);
 
     activate(&mut app, buttons[1]);
     assert_eq!(selected_label(&app, toolbar), None);
     assert_eq!(background(&app, buttons[1]), Color::NONE);
-    assert_eq!(node_display(&app, refs.bar.unwrap()), Display::None);
+    assert_eq!(node_display(&app, refs.bar().unwrap()), Display::None);
 }
 
 #[test]
@@ -4664,7 +5009,7 @@ fn a_selection_changed_through_the_selection_param_restyles_the_buttons() {
         .entity(buttons[3])
         .get::<ToolbarButton>()
         .unwrap()
-        .item;
+        .item();
 
     app.world_mut()
         .run_system_once(move |mut selections: SelectionParam| {
@@ -4972,7 +5317,7 @@ fn hiding_the_tool_labels_shrinks_the_buttons_and_showing_them_restores_it() {
         let world = app.world();
         let node = world.entity(buttons[0]).get::<Node>().unwrap();
         let refs = world.entity(buttons[0]).get::<ToolbarButtonRefs>().unwrap();
-        let label = world.entity(refs.label.unwrap()).get::<Node>().unwrap();
+        let label = world.entity(refs.label().unwrap()).get::<Node>().unwrap();
         (node.width, node.height, label.display)
     };
     assert_eq!(state(&app), (Val::Px(66.0), Val::Px(60.0), Display::Flex));
@@ -5101,6 +5446,120 @@ fn a_tooltip_popup_is_a_fixed_child_of_its_node() {
         .map(|(parent, fixed)| (parent.map(ChildOf::parent), fixed))
         .collect();
     assert_eq!(popups, [(Some(button), true)]);
+}
+
+/// A tooltip app with a primary window of `window` logical pixels and a laid-out node centred at
+/// `center`, `size` big: the headless app has no layout, so the sizes are set by hand.
+fn placement_app(window: (u32, u32), center: Vec2, size: Vec2) -> (App, Entity) {
+    let mut app = headless_app();
+    app.world_mut().spawn((
+        Window {
+            resolution: window.into(),
+            ..default()
+        },
+        PrimaryWindow,
+    ));
+    let node = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            Tooltip::new("Tip"),
+            ComputedNode {
+                size,
+                inverse_scale_factor: 1.0,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(center),
+        ))
+        .id();
+    app.world_mut().entity_mut(node).insert(Hovered(true));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    (app, node)
+}
+
+/// Gives the popup a laid-out size of `popup`, places it and returns its `left` and `top`.
+fn placed_popup(app: &mut App, popup_size: Vec2) -> (f32, f32) {
+    let popup = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<TooltipPopup>>()
+            .single(world)
+            .unwrap()
+    };
+    app.world_mut().entity_mut(popup).insert(ComputedNode {
+        size: popup_size,
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+    tick(app);
+    let node = app.world().get::<Node>(popup).unwrap();
+    let px = |val: Val| match val {
+        Val::Px(px) => Some(px),
+        _ => None,
+    };
+    (px(node.left).unwrap(), px(node.top).unwrap())
+}
+
+#[test]
+fn a_tooltip_popup_keeps_six_pixels_from_the_left_and_right_window_edges() {
+    let popup = Vec2::new(100.0, 20.0);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(10.0, 100.0), Vec2::new(20.0, 20.0));
+    assert!((placed_popup(&mut app, popup).0 - 6.0).abs() < 0.01);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(790.0, 100.0), Vec2::new(20.0, 20.0));
+    let (left, _) = placed_popup(&mut app, popup);
+    assert!(
+        (left + popup.x - (800.0 - 6.0)).abs() < 0.01,
+        "left {left} leaves less than 6 px at the right edge"
+    );
+    let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
+    assert!(
+        (placed_popup(&mut app, popup).0 - 350.0).abs() < 0.01,
+        "a node away from the edges has its popup centred"
+    );
+}
+
+#[test]
+fn a_tooltip_popup_is_below_its_node_or_above_it_when_it_would_run_off_the_bottom() {
+    let popup = Vec2::new(100.0, 20.0);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
+    // Below: the node's bottom (110) and the 6 px gap.
+    assert!((placed_popup(&mut app, popup).1 - 116.0).abs() < 0.01);
+    let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 580.0), Vec2::new(20.0, 20.0));
+    // Above: the node's top (570), the gap and the popup's height.
+    assert!((placed_popup(&mut app, popup).1 - 544.0).abs() < 0.01);
+}
+
+#[test]
+fn a_tooltip_popup_above_a_node_in_a_short_window_stays_below_the_window_margin() {
+    let (mut app, _) = placement_app((800, 60), Vec2::new(400.0, 30.0), Vec2::new(20.0, 20.0));
+    let (_, top) = placed_popup(&mut app, Vec2::new(100.0, 40.0));
+    assert!(top >= 6.0, "top {top} is above the window margin");
+}
+
+#[test]
+fn a_tooltip_with_empty_text_shows_no_popup() {
+    let (mut app, node) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
+    app.world_mut().entity_mut(node).insert(Tooltip::new(""));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    let world = app.world_mut();
+    assert_eq!(
+        world
+            .query_filtered::<Entity, With<TooltipPopup>>()
+            .iter(world)
+            .count(),
+        0,
+        "an empty tooltip shows a popup"
+    );
+    app.world_mut()
+        .entity_mut(node)
+        .insert(Tooltip::new("Back"));
+    tick(&mut app);
+    tick(&mut app);
+    assert_eq!(tooltip_popups(&mut app), ["Back"]);
 }
 
 #[test]
@@ -5259,7 +5718,7 @@ fn a_badge_on_a_toolbar_item_shows_on_its_button_and_follows_the_item() {
         Selection::builder().one(),
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item;
+    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item();
     assert_eq!(badge_under(&app, buttons[1]), None);
 
     app.world_mut().entity_mut(item).insert(Badge::count(6));
@@ -5285,7 +5744,7 @@ fn a_badge_on_a_toolbar_item_describes_its_button_for_accessibility() {
         Selection::builder().one(),
     );
     let buttons = toolbar_buttons(&app, toolbar);
-    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item;
+    let item = app.world().get::<ToolbarButton>(buttons[1]).unwrap().item();
     let description = |app: &App, button: Entity| {
         app.world()
             .get::<AccessibilityNode>(button)
@@ -5434,7 +5893,7 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
         let buttons = toolbar_buttons(&app, toolbar);
         let bulldoze = buttons[1];
         let tint = |app: &App, b: Entity| {
-            let icon = app.world().get::<ToolbarButtonRefs>(b).unwrap().icon;
+            let icon = app.world().get::<ToolbarButtonRefs>(b).unwrap().icon();
             app.world().get::<ImageNode>(icon).unwrap().color
         };
         let light = DEFAULT_LIGHT_THEME_COLORS;
@@ -5446,7 +5905,7 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
         assert_eq!(background(&app, bulldoze), light.hovered_item);
         assert_eq!(tint(&app, bulldoze), light.danger_hover_text);
         let refs = *app.world().get::<ToolbarButtonRefs>(bulldoze).unwrap();
-        if let Some(label) = refs.label {
+        if let Some(label) = refs.label() {
             assert_eq!(
                 app.world().get::<TextColor>(label).unwrap().0,
                 light.danger_hover_text
@@ -6712,4 +7171,379 @@ fn reordering_items_reorders_their_tabs() {
     }
 
     assert_eq!(tabs_of(&app, bar), [before[2], before[0], before[1]]);
+}
+
+#[test]
+fn a_one_and_a_one_or_more_selection_are_repaired_when_their_items_arrive_later() {
+    let mut app = headless_app();
+    let one = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(Vec::<Item<String>>::new()),
+        )
+        .id();
+    let one_or_more = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one_or_more()
+                .build_with_items(Vec::<Item<String>>::new()),
+        )
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let first_of_one = app.world_mut().spawn((Item::new("a"), ItemOf(one))).id();
+    let first_of_many = app
+        .world_mut()
+        .spawn((Item::new("b"), ItemOf(one_or_more)))
+        .id();
+    app.world_mut().spawn((Item::new("c"), ItemOf(one)));
+    app.world_mut().spawn((Item::new("d"), ItemOf(one_or_more)));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    assert_eq!(
+        app.world().entity(one).get::<Selection>(),
+        Some(&Selection::Value(SelectionValue::One(first_of_one)))
+    );
+    assert_eq!(
+        app.world().entity(one_or_more).get::<Selection>(),
+        Some(&Selection::Value(SelectionValue::OneOrMore(
+            std::iter::once(first_of_many).collect()
+        )))
+    );
+}
+
+/// A `Selection::Ref` that points to a holder of a value is followed.
+#[test]
+fn a_selection_ref_to_a_value_resolves_to_its_holder() {
+    let mut app = headless_app();
+    let holder = app
+        .world_mut()
+        .spawn(Selection::Value(SelectionValue::ZeroOrOne(None)))
+        .id();
+    let reference = app.world_mut().spawn(Selection::Ref(holder)).id();
+    app.update();
+    // `SelectionParam<Entity>` filters on `Entity`, which matches both.
+    let got = app
+        .world_mut()
+        .run_system_once(move |param: SelectionParam| {
+            (
+                param.get_ref(reference),
+                param.get_with_ref(reference).map(|(e, _)| e),
+            )
+        })
+        .unwrap();
+    assert_eq!(got, (Some(holder), Some(holder)));
+}
+
+/// A `Ref` to an entity without a `Selection` resolves to nothing.
+#[test]
+fn a_selection_ref_to_an_entity_without_a_selection_resolves_to_nothing() {
+    let mut app = headless_app();
+    let target = app.world_mut().spawn_empty().id();
+    let reference = app.world_mut().spawn((Selection::Ref(target), Marker)).id();
+    app.update();
+    assert_eq!(
+        resolve_marked(&mut app, reference),
+        (None, false, None, false)
+    );
+}
+
+/// A `Ref` to a despawned entity resolves to nothing.
+#[test]
+fn a_selection_ref_to_a_despawned_entity_resolves_to_nothing() {
+    let mut app = headless_app();
+    let target = app.world_mut().spawn_empty().id();
+    app.world_mut().despawn(target);
+    let reference = app.world_mut().spawn((Selection::Ref(target), Marker)).id();
+    app.update();
+    assert_eq!(
+        resolve_marked(&mut app, reference),
+        (None, false, None, false)
+    );
+}
+
+/// A `Ref` to its own entity resolves to nothing.
+#[test]
+fn a_selection_ref_to_itself_resolves_to_nothing() {
+    let mut app = headless_app();
+    let reference = app.world_mut().spawn(Marker).id();
+    app.world_mut()
+        .entity_mut(reference)
+        .insert(Selection::Ref(reference));
+    app.update();
+    assert_eq!(
+        resolve_marked(&mut app, reference),
+        (None, false, None, false)
+    );
+}
+
+/// A two-hop chain is not followed: the first `Ref` points to a `Ref`.
+#[test]
+fn a_selection_ref_chain_is_not_followed() {
+    let mut app = headless_app();
+    let holder = app
+        .world_mut()
+        .spawn(Selection::Value(SelectionValue::ZeroOrOne(None)))
+        .id();
+    let middle = app.world_mut().spawn(Selection::Ref(holder)).id();
+    let first = app.world_mut().spawn((Selection::Ref(middle), Marker)).id();
+    app.update();
+    assert_eq!(resolve_marked(&mut app, first), (None, false, None, false));
+    // One hop still works for the middle `Ref`.
+    let middle_ref = app
+        .world_mut()
+        .run_system_once(move |param: SelectionParam| param.get_ref(middle))
+        .unwrap();
+    assert_eq!(middle_ref, Some(holder));
+}
+
+/// Marks the one `Ref` entity that `resolve_marked` looks at.
+#[derive(Component)]
+struct Marker;
+
+/// [`resolve_selection`] over the `Marker` entity only, so `single` sees one.
+fn resolve_marked(app: &mut App, entity: Entity) -> (Option<Entity>, bool, Option<Entity>, bool) {
+    app.world_mut()
+        .run_system_once(move |param: SelectionParam<With<Marker>>| {
+            (
+                param.iter().next().map(|(holder, _)| holder),
+                param.single().is_ok(),
+                param.get_ref(entity),
+                param.get_with_ref(entity).is_some(),
+            )
+        })
+        .unwrap()
+}
+
+/// The string of the `Text` on `entity`.
+fn text_of(app: &App, entity: Entity) -> String {
+    app.world().entity(entity).get::<Text>().unwrap().0.clone()
+}
+
+/// The accessible label of `entity`.
+fn accessible_label(app: &App, entity: Entity) -> Option<String> {
+    app.world()
+        .entity(entity)
+        .get::<AccessibilityNode>()
+        .unwrap()
+        .label()
+        .map(str::to_owned)
+}
+
+#[test]
+fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_in_step() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::from_label("Stop"));
+    app.update();
+    app.update();
+
+    let after = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(after, refs, "no respawn, refs kept");
+    assert_eq!(text_of(&app, after.label_id), "Stop");
+    assert_eq!(accessible_label(&app, button).as_deref(), Some("Stop"));
+    assert_eq!(
+        app.world().entity(button).get::<Children>().unwrap().len(),
+        1,
+        "no second label"
+    );
+
+    // The observers were not registered twice.
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
+}
+
+#[test]
+fn a_push_button_gains_and_loses_its_icon_when_inserted_again() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    let label_id = app
+        .world()
+        .entity(button)
+        .get::<PushButtonRefs>()
+        .unwrap()
+        .label_id;
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::new("Go", "+"));
+    app.update();
+    app.update();
+
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(refs.label_id, label_id);
+    let icon = refs.icon_id.unwrap();
+    assert_eq!(text_of(&app, icon), "+");
+    assert_eq!(accessible_label(&app, button).as_deref(), Some("Go"));
+    assert!(
+        app.world().entity(icon).get::<TextFont>().is_some(),
+        "the new icon is themed"
+    );
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::new("Go", "-"));
+    app.update();
+    app.update();
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(refs.icon_id, Some(icon));
+    assert_eq!(text_of(&app, icon), "-");
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(PushButton::from_label("Go"));
+    app.update();
+    app.update();
+    let refs = *app.world().entity(button).get::<PushButtonRefs>().unwrap();
+    assert_eq!(refs.icon_id, None);
+    assert!(app.world().get_entity(icon).is_err(), "the icon is gone");
+    assert_eq!(
+        app.world().entity(button).get::<Children>().unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn inserting_a_link_again_changes_its_text_in_place_and_keeps_its_label_in_step() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, LinkState::Enabled);
+    let text = app.world().entity(link).get::<Children>().unwrap()[0];
+    assert_eq!(text_of(&app, text), "link");
+
+    app.world_mut().entity_mut(link).insert(Link::new("other"));
+    app.update();
+    app.update();
+
+    let children = app.world().entity(link).get::<Children>().unwrap();
+    assert_eq!(children.len(), 1, "no second text");
+    assert_eq!(children[0], text, "the text is kept");
+    assert_eq!(text_of(&app, text), "other");
+    assert_eq!(accessible_label(&app, link).as_deref(), Some("other"));
+}
+
+#[test]
+fn no_default_hover_inserted_after_spawn_stops_the_hover_colours() {
+    let mut app = headless_app();
+    let button = spawn_push_button(&mut app);
+    app.world_mut().entity_mut(button).insert(NoDefaultHover);
+    app.update();
+
+    press(&mut app, button);
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, button), colors.background_primary);
+}
+
+#[test]
+fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("Go"), NoDefaultHover, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<NoDefaultHover>();
+    app.update();
+
+    press(&mut app, button);
+
+    let colors = app.world().get_resource::<Theme>().unwrap().colors;
+    assert_eq!(background(&app, button), colors.selected_hovered_item);
+}
+
+/// How many buttons, popups and palettes are descendants of the combo.
+fn palette_combo_parts(app: &mut App, combo: Entity) -> (usize, usize, usize) {
+    let world = app.world_mut();
+    let entities: Vec<Entity> = world.query::<Entity>().iter(world).collect();
+    let below = |has: fn(EntityRef) -> bool| {
+        entities
+            .iter()
+            .filter(|&&e| has(world.entity(e)) && is_below(world, e, combo))
+            .count()
+    };
+    (
+        below(|e| e.contains::<ColorPushButton>()),
+        below(|e| e.contains::<Float>()),
+        below(|e| e.contains::<ColorPalette>()),
+    )
+}
+
+/// Whether `entity` is a descendant of `ancestor`.
+fn is_below(world: &World, entity: Entity, ancestor: Entity) -> bool {
+    let mut current = entity;
+    while let Some(child_of) = world.entity(current).get::<ChildOf>() {
+        current = child_of.parent();
+        if current == ancestor {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn inserting_a_color_palette_combo_again_keeps_one_button_one_popup_and_one_palette() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    app.update();
+
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+}
+
+#[test]
+fn removing_a_color_palette_combo_removes_its_button_popup_and_palette() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
+
+    app.world_mut()
+        .entity_mut(combo)
+        .remove::<ColorPaletteCombo>();
+    app.update();
+    app.update();
+
+    assert_eq!(palette_combo_parts(&mut app, combo), (0, 0, 0));
+    let has_children = app
+        .world()
+        .entity(combo)
+        .get::<Children>()
+        .is_some_and(|c| !c.is_empty());
+    assert!(!has_children, "no children left");
+
+    // And it can be inserted again.
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    app.update();
+    assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
 }

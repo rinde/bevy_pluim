@@ -123,9 +123,13 @@ impl ComboState {
     }
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        let (&state, &ComboSubRefs { list_id, button_id }) = world
-            .entity(context.entity)
-            .components::<(&Self, &ComboSubRefs)>();
+        let entity = world.entity(context.entity);
+        // Not a live `Combo` (no `ComboSubRefs`): there is no popup to show or hide.
+        let (Some(&state), Some(&ComboSubRefs { list_id, button_id })) =
+            (entity.get::<Self>(), entity.get::<ComboSubRefs>())
+        else {
+            return;
+        };
 
         let visibility = match state {
             Self::Open => Visibility::Visible,

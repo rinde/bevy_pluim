@@ -4,13 +4,14 @@ use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::InteractionDisabled;
+use bevy::ui::{InteractionDisabled, Pressed};
 use bevy::ui_widgets::Button;
 use itertools::Either;
 
 use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role};
-use crate::theme::Theme;
+use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Link`].
@@ -40,9 +41,12 @@ impl Plugin for LinkPlugin {
 /// instead, so it never activates and does not react to the pointer.
 ///
 /// To assistive technology it is a link ([`Role::Link`]), not a button.
+///
+/// Insert a `Link` again to change the label of a live link: its text is updated in place, so
+/// the text on screen always equals the accessible label.
 #[derive(Component, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
-#[component(on_add = Self::on_add)]
+#[component(on_insert = Self::on_insert)]
 #[require(BoxShadow::default(),
     Node {
         align_self: AlignSelf::Center,
@@ -54,6 +58,7 @@ impl Plugin for LinkPlugin {
     },
     Name::new("Link"),
     Button,
+    Hovered,
     LinkState::Enabled,
     TabStop,
 )]
@@ -84,18 +89,39 @@ impl Link {
         }
     }
 
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let Some(link) = world.entity(context.entity).get::<Self>() else {
+    /// Spawns the text and registers the hover observer once; on every later insert sets the
+    /// text of the existing child. Runs as one queued command so two inserts before a flush
+    /// cannot both spawn a text.
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let entity = context.entity;
+        let Some(link) = world.get::<Self>(entity) else {
             return;
         };
-        let text = Text::new(&link.label);
+        let label = link.label.clone();
         let mut commands = world.commands();
-        let mut entity_commands = commands.entity(context.entity);
-        entity_commands.with_child((text, LinkText, Pickable::IGNORE));
-        entity_commands.observe(handle_hover);
-        world
-            .commands()
-            .run_system_cached_with(theme_link, Some(context.entity));
+        commands.queue(move |world: &mut World| {
+            let existing = world.get::<Children>(entity).and_then(|children| {
+                children
+                    .iter()
+                    .find(|child| world.get::<LinkText>(*child).is_some())
+            });
+            if let Some(text_id) = existing {
+                if let Some(mut text) = world.get_mut::<Text>(text_id)
+                    && text.0 != label
+                {
+                    text.0 = label;
+                }
+            } else if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
+                entity_mut.observe(handle_hover);
+                world.spawn((
+                    Text::new(label),
+                    LinkText,
+                    Pickable::IGNORE,
+                    ChildOf(entity),
+                ));
+            }
+        });
+        commands.run_system_cached_with(theme_link, Some(entity));
     }
 }
 
@@ -129,6 +155,32 @@ fn sync_accessibility(mut links: Query<(&Link, &mut AccessibilityNode)>) {
     }
 }
 
+/// What a [`Link`] is doing, which decides its colours.
+#[derive(Clone, Copy)]
+struct LinkLook {
+    disabled: bool,
+    pressed: bool,
+    hovered: bool,
+}
+
+/// The background and the text colour of a [`Link`], from its state.
+const fn colors_for(colors: &ThemeColors, look: LinkLook) -> (Color, Color) {
+    let LinkLook {
+        disabled,
+        pressed,
+        hovered,
+    } = look;
+    if disabled {
+        (colors.background_primary, colors.text_primary)
+    } else if pressed {
+        (colors.background_secondary, colors.link_selected)
+    } else if hovered {
+        (colors.background_secondary, colors.link)
+    } else {
+        (colors.background_primary, colors.link)
+    }
+}
+
 fn handle_hover(
     trigger: On<MouseEvent>,
     mut links: Query<(&mut BackgroundColor, &Children), Without<InteractionDisabled>>,
@@ -138,18 +190,19 @@ fn handle_hover(
     // A click and a drag say nothing new about the pointer being on the link: the over,
     // press, release and out events around them set the colours. A drag in particular can
     // arrive after the pointer left the link, so it must not put it back under the pointer.
-    let bg_color = match trigger.event().kind {
-        MouseKind::Over | MouseKind::Pressed | MouseKind::Released => {
-            theme.colors.background_secondary
-        }
-        MouseKind::Out => theme.colors.background_primary,
-        MouseKind::Click(_) | MouseKind::Drag => return,
-    };
-    let link_color = match trigger.event().kind {
-        MouseKind::Over | MouseKind::Released | MouseKind::Out => theme.colors.link,
-        MouseKind::Pressed => theme.colors.link_selected,
-        MouseKind::Click(_) | MouseKind::Drag => return,
-    };
+    let kind = trigger.event().kind;
+    if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
+        return;
+    }
+    // The pointer is on the link for every event but `Out`, a release included.
+    let (bg_color, link_color) = colors_for(
+        &theme.colors,
+        LinkLook {
+            disabled: false,
+            pressed: matches!(kind, MouseKind::Pressed),
+            hovered: !matches!(kind, MouseKind::Out),
+        },
+    );
     let Ok((mut link_bg, children)) = links.get_mut(trigger.event().event_target()) else {
         return;
     };
@@ -168,7 +221,17 @@ fn handle_hover(
 fn theme_link(
     link_id: In<Option<Entity>>,
     theme: Res<Theme>,
-    mut links: Query<(&mut BackgroundColor, &Children, &LinkState), With<Link>>,
+    mut links: Query<
+        (
+            &mut BackgroundColor,
+            &Children,
+            &LinkState,
+            Has<InteractionDisabled>,
+            Has<Pressed>,
+            &Hovered,
+        ),
+        With<Link>,
+    >,
     mut link_texts: Query<(&mut TextColor, &mut TextFont), With<LinkText>>,
 ) {
     let it = if let Some(link_id) = link_id.as_ref() {
@@ -176,8 +239,16 @@ fn theme_link(
     } else {
         Either::Right(links.iter_mut())
     };
-    for (mut link_bg, children, state) in it {
-        link_bg.0 = theme.colors.background_primary;
+    for (mut link_bg, children, state, interaction_disabled, pressed, hovered) in it {
+        let (bg_color, link_color) = colors_for(
+            &theme.colors,
+            LinkLook {
+                disabled: interaction_disabled || matches!(state, LinkState::Disabled),
+                pressed,
+                hovered: hovered.get(),
+            },
+        );
+        link_bg.0 = bg_color;
         let Some((mut text_color, mut text_font)) = children
             .iter()
             .next()
@@ -187,9 +258,6 @@ fn theme_link(
         };
         text_font.font = theme.body_font.clone().into();
         text_font.font_size = Theme::font_size(theme.font_size_body);
-        match state {
-            LinkState::Enabled => text_color.0 = theme.colors.link,
-            LinkState::Disabled => text_color.0 = theme.colors.text_primary,
-        }
+        text_color.0 = link_color;
     }
 }

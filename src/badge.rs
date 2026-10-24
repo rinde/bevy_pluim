@@ -100,7 +100,7 @@ fn mirror_item_badges(
     mut commands: Commands,
 ) {
     for (entity, button, current) in &buttons {
-        let wanted = items.get(button.item).ok().flatten();
+        let wanted = items.get(button.item()).ok().flatten();
         if wanted == current {
             continue;
         }
