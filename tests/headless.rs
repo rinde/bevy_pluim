@@ -9957,3 +9957,126 @@ fn inserting_a_placeholder_changes_the_text_of_a_live_combo() {
     assert_eq!(combo_label(&app, button), "Nothing yet");
     assert_eq!(accessible_value(&app, button), Some(String::new()));
 }
+
+/// The `ScrollContents` of the area `two_axis_scroll_area` spawned, given a laid-out `size` and
+/// `content_size` (headless apps have no layout).
+fn lay_out_scroll_contents(app: &mut App, size: Vec2, content_size: Vec2) {
+    let contents = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<ScrollContents>>()
+            .single(world)
+            .unwrap()
+    };
+    app.world_mut().entity_mut(contents).insert(ComputedNode {
+        size,
+        content_size,
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+}
+
+fn bar_visibility(app: &App, bar: Entity) -> Visibility {
+    *app.world().get::<Visibility>(bar).unwrap()
+}
+
+#[test]
+fn changing_the_headless_orientation_shows_or_hides_the_bar_by_its_new_axis() {
+    let mut app = headless_app();
+    let (vertical, horizontal) = two_axis_scroll_area(&mut app);
+    // Taller than the area, no wider than it.
+    lay_out_scroll_contents(&mut app, Vec2::new(100.0, 100.0), Vec2::new(100.0, 300.0));
+    app.update();
+    app.update();
+    assert_eq!(bar_visibility(&app, vertical), Visibility::Inherited);
+    assert_eq!(bar_visibility(&app, horizontal), Visibility::Hidden);
+
+    // Swap the axes of the two bars without the contents changing at all.
+    app.world_mut()
+        .get_mut::<Scrollbar>(vertical)
+        .unwrap()
+        .orientation = ControlOrientation::Horizontal;
+    app.world_mut()
+        .get_mut::<Scrollbar>(horizontal)
+        .unwrap()
+        .orientation = ControlOrientation::Vertical;
+    app.update();
+    app.update();
+
+    assert_eq!(
+        bar_visibility(&app, vertical),
+        Visibility::Hidden,
+        "now horizontal, and the contents fit across"
+    );
+    assert_eq!(
+        bar_visibility(&app, horizontal),
+        Visibility::Inherited,
+        "now vertical, and the contents overflow down"
+    );
+}
+
+#[derive(Component)]
+struct AppBarChild;
+
+#[test]
+fn an_app_owned_child_of_a_scroll_bar_survives_theming_and_reinserting_the_marker() {
+    let mut app = headless_app();
+    let (vertical, _) = two_axis_scroll_area(&mut app);
+    let node = Node {
+        width: px(7),
+        ..default()
+    };
+    let child = app
+        .world_mut()
+        .spawn((
+            AppBarChild,
+            node.clone(),
+            BackgroundColor(Color::WHITE),
+            ChildOf(vertical),
+        ))
+        .id();
+    app.update();
+
+    let unchanged = |app: &App| {
+        let world = app.world();
+        assert!(
+            world
+                .get::<Children>(vertical)
+                .unwrap()
+                .iter()
+                .any(|c| c == child),
+            "the child is still under the bar"
+        );
+        assert_eq!(world.get::<Node>(child).unwrap(), &node);
+        assert_eq!(world.get::<BackgroundColor>(child).unwrap().0, Color::WHITE);
+        assert!(
+            world
+                .get::<ChildOf>(child)
+                .is_some_and(|c| c.parent() == vertical)
+        );
+    };
+
+    // A theme change restyles the bar and its thumb, not the app's child.
+    let mode = app.world().get_resource::<Theme>().unwrap().mode();
+    let other = if mode == ThemeMode::Light {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(other);
+    app.update();
+    app.update();
+    unchanged(&app);
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+
+    // So does inserting the marker again.
+    app.world_mut().entity_mut(vertical).insert(ScrollBar);
+    app.update();
+    app.update();
+    unchanged(&app);
+    assert_eq!(thumbs_of(&mut app, vertical), 1);
+    assert_eq!(app.world().get::<Children>(vertical).unwrap().len(), 2);
+}
