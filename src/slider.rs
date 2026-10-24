@@ -405,7 +405,8 @@ impl Slider {
 }
 
 /// The parts of a [`Slider`].
-#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct SliderRefs {
     /// The track, the full width of the slider.
     pub track: Entity,
@@ -846,6 +847,34 @@ mod tests {
         for bad in [NAN, INF, -INF] {
             assert!((slider.snap(bad) - 1.0).abs() < f32::EPSILON);
         }
+    }
+
+    #[test]
+    fn the_keys_move_a_stepped_slider_by_its_step() {
+        assert!((stepped(0.0, 0.0, 10.0, 2.5).key_step() - 2.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn the_keys_move_a_continuous_slider_by_a_hundredth_of_its_range() {
+        assert!((slider(0.0, 0.0, 1.0).key_step() - 0.01).abs() < 1e-6);
+        assert!((slider(0.0, -50.0, 150.0).key_step() - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn the_keys_of_a_zero_width_continuous_slider_step_by_epsilon() {
+        assert!((slider(3.0, 3.0, 3.0).key_step() - f32::EPSILON).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn the_keys_of_a_step_larger_than_the_range_use_the_step() {
+        assert!((stepped(0.0, 0.0, 1.0, 10.0).key_step() - 10.0).abs() < f32::EPSILON);
+        assert!((stepped(0.0, 0.0, 1.0, f32::MAX).key_step() - f32::MAX).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn snapping_nan_gives_the_minimum_with_or_without_a_step() {
+        assert!((slider(0.5, 2.0, 4.0).snap(NAN) - 2.0).abs() < f32::EPSILON);
+        assert!((stepped(2.0, 2.0, 4.0, 0.5).snap(NAN) - 2.0).abs() < f32::EPSILON);
     }
 
     #[test]

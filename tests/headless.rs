@@ -42,9 +42,12 @@ use rin_bevy_ui::badge::{Badge, BadgeTone};
 use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::{ColorPaletteCombo, State as PaletteComboState};
+use rin_bevy_ui::color_palette_combo::{
+    ColorPaletteCombo, ColorPaletteComboButton, ColorPaletteComboFloat, ColorPaletteComboRefs,
+    ColorPaletteComboState as PaletteComboState,
+};
 use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
-use rin_bevy_ui::combo::{Combo, ComboState, ComboSubRefs};
+use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboRefs, ComboState};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
 use rin_bevy_ui::float::Float;
@@ -71,18 +74,20 @@ use rin_bevy_ui::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
 };
 use rin_bevy_ui::select::{
-    Item, ItemOf, ItemValues, ItemsRef, Selection, SelectionBuilderWithValue, SelectionParam,
-    SelectionValue,
+    Item, ItemOf, ItemValues, ItemsRef, Selection, SelectionBuilder, SelectionBuilderWithValue,
+    SelectionParam, SelectionValue,
 };
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::slider::{Slider, SliderRefs};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
+use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
+use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
@@ -1993,9 +1998,9 @@ fn spawn_combo(app: &mut App) -> (Entity, Entity) {
     let button = app
         .world()
         .entity(combo)
-        .get::<ComboSubRefs>()
+        .get::<ComboRefs>()
         .unwrap()
-        .button_id;
+        .button();
     (combo, button)
 }
 
@@ -2015,17 +2020,11 @@ fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
         .id();
     app.update();
     app.update();
-    let refs = *app.world().entity(combo).get::<ComboSubRefs>().unwrap();
-    click(&mut app, refs.button_id);
+    let refs = *app.world().entity(combo).get::<ComboRefs>().unwrap();
+    click(&mut app, refs.button());
     app.update();
     app.update();
-    let list_index = |app: &App| {
-        app.world()
-            .entity(refs.list_id)
-            .get::<TabIndex>()
-            .unwrap()
-            .0
-    };
+    let list_index = |app: &App| app.world().entity(refs.list()).get::<TabIndex>().unwrap().0;
     assert_eq!(
         app.world().entity(combo).get::<ComboState>(),
         Some(&ComboState::Open)
@@ -2064,6 +2063,66 @@ fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
     app.update();
     app.update();
     (combo, single_entity_with::<ColorPushButton>(app))
+}
+
+#[test]
+fn the_root_refs_of_a_combo_point_at_its_live_parts() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    let refs = *app.world().get::<ComboRefs>(combo).unwrap();
+    assert_eq!(refs.button(), button);
+    assert!(app.world().entity(button).contains::<ComboButton>());
+    assert!(app.world().entity(refs.list()).contains::<ComboList>());
+
+    // Inserting the component again keeps one parts tree.
+    app.world_mut().entity_mut(combo).insert(Combo);
+    app.update();
+    assert_eq!(
+        app.world().get::<ComboRefs>(combo).unwrap().button(),
+        button
+    );
+    let mut buttons = app.world_mut().query::<&ComboButton>();
+    assert_eq!(buttons.iter(app.world()).count(), 1);
+
+    app.world_mut().entity_mut(combo).despawn();
+    app.update();
+    assert_eq!(buttons.iter(app.world()).count(), 0);
+    let mut lists = app.world_mut().query::<&ComboList>();
+    assert_eq!(lists.iter(app.world()).count(), 0);
+}
+
+#[test]
+fn the_root_refs_of_a_palette_combo_point_at_its_live_parts() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_palette_combo(&mut app);
+    let refs = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
+    assert_eq!(refs.button(), button);
+    let world = app.world();
+    assert!(world.entity(button).contains::<ColorPaletteComboButton>());
+    assert_eq!(
+        world.get::<Name>(button).map(Name::as_str),
+        Some("ColorPaletteComboButton")
+    );
+    assert!(
+        world
+            .entity(refs.popup())
+            .contains::<ColorPaletteComboFloat>()
+    );
+    assert!(world.entity(refs.palette()).contains::<ColorPalette>());
+
+    // Inserting the component again keeps one parts tree.
+    app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
+    app.update();
+    let again = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
+    assert_eq!(again.popup(), refs.popup());
+    let mut popups = app.world_mut().query::<&ColorPaletteComboFloat>();
+    assert_eq!(popups.iter(app.world()).count(), 1);
+
+    app.world_mut().entity_mut(combo).despawn();
+    app.update();
+    assert_eq!(popups.iter(app.world()).count(), 0);
+    let mut palettes = app.world_mut().query::<&ColorPalette>();
+    assert_eq!(palettes.iter(app.world()).count(), 0);
 }
 
 #[test]
@@ -2148,7 +2207,7 @@ fn controls(app: &App, entity: Entity) -> Vec<u64> {
 fn a_combo_button_controls_its_list() {
     let mut app = headless_app();
     let (combo, button) = spawn_combo(&mut app);
-    let list = app.world().get::<ComboSubRefs>(combo).unwrap().list_id;
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
     assert_eq!(controls(&app, button), vec![list.to_bits()]);
 }
 
@@ -2293,6 +2352,52 @@ fn a_color_palette_combo_gets_its_popup_when_the_app_has_two_ui_roots() {
     );
     let floats = palette_combo_floats(&mut app);
     assert_eq!(floats.len(), 1, "one popup, got {floats:?}");
+}
+
+#[test]
+fn a_color_palette_combo_popup_border_is_the_themes_highlight_when_spawned_and_after_a_change() {
+    let mut app = headless_app();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+    // No update since the spawn: the popup is themed when it is spawned.
+    assert_popup_borders_are_highlight(&mut app, 1);
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Light);
+    app.update();
+    app.update();
+    assert_popup_borders_are_highlight(&mut app, 1);
+
+    // A combo spawned after the theme changed is themed as well.
+    app.world_mut()
+        .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
+    assert_popup_borders_are_highlight(&mut app, 2);
+}
+
+/// Every palette combo popup has the active theme's `border_highlight` border.
+fn assert_popup_borders_are_highlight(app: &mut App, count: usize) {
+    let expected = BorderColor::all(
+        app.world()
+            .get_resource::<Theme>()
+            .unwrap()
+            .colors
+            .border_highlight,
+    );
+    let floats = palette_combo_floats(app);
+    assert_eq!(floats.len(), count);
+    for float in floats {
+        assert_eq!(
+            app.world().entity(float).get::<BorderColor>(),
+            Some(&expected)
+        );
+    }
 }
 
 #[test]
@@ -2710,6 +2815,73 @@ fn activating_the_buttons_of_a_numeric_stepper_steps_its_value() {
     activate(&mut app, decrease);
     activate(&mut app, decrease);
     assert_eq!(stepper_value(&app, stepper), 0);
+}
+
+#[derive(Resource, Default)]
+struct StepperChanges(Vec<u8>);
+
+fn count_stepper_changes(app: &mut App) {
+    app.init_resource::<StepperChanges>();
+    app.add_observer(
+        |change: On<rin_bevy_ui::numeric_stepper::ValueChange>,
+         mut seen: ResMut<StepperChanges>| {
+            seen.0.push(change.value.as_u8().unwrap());
+        },
+    );
+}
+
+#[test]
+fn a_value_change_is_sent_for_a_step_only_not_for_spawning_or_setting_the_value() {
+    let mut app = headless_app();
+    count_stepper_changes(&mut app);
+    let (stepper, _, increase) = spawn_stepper(&mut app, 1);
+    assert!(
+        app.world()
+            .get_resource::<StepperChanges>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(Value::new_u8(3, 0, 3, 1).unwrap());
+    app.update();
+    app.update();
+    assert!(
+        app.world()
+            .get_resource::<StepperChanges>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(Value::new_u8(1, 0, 3, 1).unwrap());
+    app.update();
+    activate(&mut app, increase);
+    assert_eq!(
+        app.world().get_resource::<StepperChanges>().unwrap().0,
+        vec![2]
+    );
+}
+
+#[test]
+fn a_stepper_without_a_value_or_with_a_value_ref_to_none_is_not_built_and_gets_no_default() {
+    let mut app = headless_app();
+    let bare = app.world_mut().spawn(NumericStepper::default()).id();
+    let target = app.world_mut().spawn_empty().id();
+    let dangling = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(target)))
+        .id();
+    app.update();
+    app.update();
+    for stepper in [bare, dangling] {
+        assert!(app.world().entity(stepper).get::<Value>().is_none());
+        assert!(app.world().entity(stepper).get::<Children>().is_none());
+    }
 }
 
 fn level_text(value: &Value) -> String {
@@ -5063,6 +5235,48 @@ fn a_setting_row_is_a_group_labelled_with_its_title_and_described_by_its_descrip
 }
 
 #[test]
+fn inserting_a_setting_row_again_changes_its_text_and_keeps_its_control() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let row = app
+        .world_mut()
+        .spawn((SettingRow::new("A", "first"), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+    let control = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(refs.control_slot)))
+        .id();
+    let children_before: Vec<Entity> = app.world().get::<Children>(row).unwrap().to_vec();
+
+    app.world_mut()
+        .entity_mut(row)
+        .insert(SettingRow::new("B", "second"));
+    app.update();
+    app.update();
+
+    assert_eq!(app.world().get::<Text>(refs.title_id).unwrap().0, "B");
+    assert_eq!(
+        app.world().get::<Text>(refs.description_id).unwrap().0,
+        "second"
+    );
+    let node = app.world().get::<AccessibilityNode>(row).unwrap();
+    assert_eq!(node.label(), Some("B"));
+    assert_eq!(node.description(), Some("second"));
+    assert_eq!(*app.world().get::<SettingRowRefs>(row).unwrap(), refs);
+    assert_eq!(
+        app.world().get::<Children>(row).unwrap().to_vec(),
+        children_before
+    );
+    assert_eq!(
+        app.world().get::<ChildOf>(control).unwrap().parent(),
+        refs.control_slot
+    );
+}
+
+#[test]
 fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
     let mut app = headless_app();
     let panel = app.world_mut().spawn(Panel::new("Trains")).id();
@@ -6482,12 +6696,14 @@ fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
             Node
             Children [
                 @ScrollArea::scene(
-                    bsn_list! {
-                        Node
-                        --
-                        Node
-                        --
-                        Node
+                    || {
+                        bsn_list! {
+                            Node
+                            --
+                            Node
+                            --
+                            Node
+                        }
                     },
                     true,
                     true,
@@ -6512,6 +6728,165 @@ fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
     assert_eq!(contents.len(), 3);
     assert_eq!(world.query::<&ScrollBar>().iter(world).count(), 2);
     assert_eq!(ui_root_count_world(world), 1);
+}
+
+fn scene_app() -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    app.world_mut().spawn(Camera2d);
+    app
+}
+
+/// Each area's contents entity with the entities below it, and the targets of its scroll bars.
+fn scroll_areas_of(world: &mut World) -> Vec<(Entity, Vec<Entity>, Vec<Entity>)> {
+    let areas: Vec<Entity> = world
+        .query_filtered::<Entity, With<ScrollArea>>()
+        .iter(world)
+        .collect();
+    areas
+        .into_iter()
+        .map(|area| {
+            let contents = world
+                .query_filtered::<(Entity, &ChildOf), With<ScrollContents>>()
+                .iter(world)
+                .find(|(_, parent)| parent.parent() == area)
+                .map(|(entity, _)| entity)
+                .unwrap();
+            let children = world
+                .get::<Children>(contents)
+                .map(|children| children.iter().collect())
+                .unwrap_or_default();
+            let targets = world
+                .query::<(&ChildOf, &Scrollbar)>()
+                .iter(world)
+                .filter(|(parent, _)| parent.parent() == area)
+                .map(|(_, bar)| bar.target)
+                .collect();
+            (contents, children, targets)
+        })
+        .collect()
+}
+
+fn assert_two_distinct_areas(world: &mut World, children: usize) {
+    let areas = scroll_areas_of(world);
+    assert_eq!(areas.len(), 2);
+    let (first, second) = (&areas[0], &areas[1]);
+    assert_ne!(first.0, second.0);
+    for (contents, kids, targets) in &areas {
+        assert_eq!(kids.len(), children);
+        assert_eq!(targets.len(), 2);
+        assert!(targets.iter().all(|target| target == contents));
+    }
+    assert!(first.1.iter().all(|kid| !second.1.contains(kid)));
+}
+
+#[test]
+fn a_scroll_area_scene_gives_every_build_its_own_fresh_contents() {
+    let mut app = scene_app();
+    let area = || {
+        ScrollArea::scene(
+            || {
+                bsn_list! {
+                    Node
+                    --
+                    Node
+                    --
+                    Node
+                }
+            },
+            true,
+            true,
+        )
+    };
+    app.world_mut()
+        .spawn_scene(bsn! { Node Children [ @area() -- @area() ] })
+        .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_two_distinct_areas(app.world_mut(), 3);
+}
+
+#[test]
+fn a_cached_scroll_area_scene_builds_fresh_contents_each_time_it_is_spawned() {
+    let mut app = scene_app();
+    let server = app.world().get_resource::<AssetServer>().unwrap().clone();
+    let mut patch = bevy::scene::ScenePatch::load(
+        &server,
+        bsn! {
+            Node
+            Children [
+                @ScrollArea::scene(
+                    || bsn_list! { Node -- Node },
+                    true,
+                    true,
+                )
+            ]
+        },
+    );
+    patch
+        .resolve(
+            &server,
+            app.world()
+                .get_resource::<Assets<bevy::scene::ScenePatch>>()
+                .unwrap(),
+        )
+        .unwrap();
+    // One resolved scene, applied twice: the contents are made again for each.
+    patch.spawn(app.world_mut()).unwrap();
+    patch.spawn(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_two_distinct_areas(app.world_mut(), 2);
+}
+
+#[test]
+fn a_scroll_area_factory_with_a_captured_handle_builds_asset_scenes_again_and_again() {
+    let mut app = scene_app();
+    let icon = app
+        .world_mut()
+        .get_resource_mut::<Assets<Image>>()
+        .unwrap()
+        .add(Image::default());
+    let area = move || {
+        let icon = icon.clone();
+        ScrollArea::scene(
+            move || {
+                bsn_list! {
+                    IconButton { icon: {icon.clone()}, name: "Close", size: IconButtonSize::Regular }
+                }
+            },
+            true,
+            true,
+        )
+    };
+    app.world_mut()
+        .spawn_scene(bsn! { Node Children [ @area() -- @area() ] })
+        .unwrap();
+    for _ in 0..6 {
+        app.update();
+    }
+    let world = app.world_mut();
+    assert_two_distinct_areas(world, 1);
+    let names: Vec<String> = world
+        .query::<&IconButton>()
+        .iter(world)
+        .map(|button| button.name.clone())
+        .collect();
+    assert_eq!(names, ["Close", "Close"]);
 }
 
 fn ui_root_count_world(world: &mut World) -> usize {
@@ -8977,4 +9352,316 @@ fn a_swatch_click_leaves_the_popup_of_a_palette_combo_over_many_open() {
             "{name}"
         );
     }
+}
+
+/// Presses `key_code` once with `list` focused, as a keyboard would.
+fn press_key_on(app: &mut App, key_code: KeyCode) {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().write_message(KeyboardInput {
+        key_code,
+        logical_key: Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    });
+    app.update();
+    app.update();
+}
+
+/// A focused `VirtualList` of three rows over a selection built by `selection`, with the
+/// first row active, and the rows' items.
+fn focused_virtual_list(
+    selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
+) -> (App, Entity, Vec<Entity>) {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            VirtualList::new(RowHeight::new(28.0).unwrap()),
+            selection(Selection::builder()).build_with_items(Vec::<Item<String>>::new()),
+            ChildOf(root),
+        ))
+        .id();
+    let items: Vec<Entity> = (1..=3)
+        .map(|index| {
+            app.world_mut()
+                .spawn((Item::new(format!("Row {index}")), ItemOf(list)))
+                .id()
+        })
+        .collect();
+    for _ in 0..3 {
+        app.update();
+    }
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, bevy::input_focus::FocusCause::Navigated);
+    app.update();
+    (app, list, items)
+}
+
+/// The items the selection of `list` holds.
+fn selected_items(app: &App, list: Entity) -> Vec<Entity> {
+    match app.world().get::<Selection>(list) {
+        Some(Selection::Value(value)) => value.iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[test]
+fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_selection_allows() {
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_one);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "{key:?} selects"
+        );
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            Vec::<Entity>::new(),
+            "{key:?} again"
+        );
+
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_more);
+        press_key_on(&mut app, key);
+        press_key_on(&mut app, KeyCode::ArrowDown);
+        press_key_on(&mut app, key);
+        assert_eq!(selected_items(&app, list), vec![items[0], items[1]]);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "only the active row goes"
+        );
+
+        let (mut app, list, items) = focused_virtual_list(SelectionBuilder::one);
+        press_key_on(&mut app, key);
+        press_key_on(&mut app, key);
+        assert_eq!(
+            selected_items(&app, list),
+            vec![items[0]],
+            "a `One` keeps its item"
+        );
+    }
+}
+
+/// What the events of a [`TextField`] and the keys that bubbled past it came to.
+#[derive(Resource, Default)]
+struct TextFieldLog {
+    changes: Vec<String>,
+    commits: Vec<String>,
+    bubbled_keys: Vec<KeyCode>,
+}
+
+/// An app with a primary window, a root and one [`TextField`] holding `value`, which logs its
+/// events into [`TextFieldLog`]. The root counts the keys that reach it.
+fn text_field_app(value: &str) -> (App, Entity, Entity, Entity) {
+    let mut app = headless_app_with(|app| {
+        app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
+    });
+    app.init_resource::<TextFieldLog>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(Camera2d);
+    let root = app
+        .world_mut()
+        .spawn(Node::default())
+        .observe(
+            |key: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
+             mut log: ResMut<TextFieldLog>| {
+                log.bubbled_keys.push(key.event().input.key_code);
+            },
+        )
+        .id();
+    let field = app
+        .world_mut()
+        .spawn((TextField::new(value), ChildOf(root)))
+        .observe(
+            |change: On<TextFieldChange>, mut log: ResMut<TextFieldLog>| {
+                log.changes.push(change.value.clone());
+            },
+        )
+        .observe(
+            |commit: On<TextFieldCommit>, mut log: ResMut<TextFieldLog>| {
+                log.commits.push(commit.value.clone());
+            },
+        )
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let input = app
+        .world()
+        .entity(field)
+        .get::<TextFieldRefs>()
+        .unwrap()
+        .input;
+    (app, window, field, input)
+}
+
+fn input_text(app: &App, input: Entity) -> String {
+    app.world()
+        .entity(input)
+        .get::<bevy::text::EditableText>()
+        .unwrap()
+        .value()
+        .to_string()
+}
+
+fn focus_text_input(app: &mut App, input: Entity) {
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(input, bevy::input_focus::FocusCause::Navigated);
+    for _ in 0..2 {
+        app.update();
+    }
+}
+
+fn press_text_key(
+    app: &mut App,
+    window: Entity,
+    key_code: KeyCode,
+    logical_key: bevy::input::keyboard::Key,
+) {
+    app.world_mut()
+        .write_message(bevy::input::keyboard::KeyboardInput {
+            key_code,
+            logical_key,
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
+fn inserting_a_new_text_field_sets_the_text_without_a_change_event() {
+    let (mut app, _, field, input) = text_field_app("alpha");
+    assert_eq!(input_text(&app, input), "alpha");
+    app.world_mut()
+        .entity_mut(field)
+        .insert(TextField::new("beta").with_placeholder("Name"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(input_text(&app, input), "beta");
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert!(log.changes.is_empty(), "set by the app: {:?}", log.changes);
+    assert!(log.commits.is_empty());
+}
+
+#[test]
+fn enter_and_numpad_enter_commit_the_text_and_stop_there() {
+    use bevy::input::keyboard::Key;
+    for (key_code, key) in [
+        (KeyCode::Enter, Key::Enter),
+        (KeyCode::NumpadEnter, Key::Enter),
+    ] {
+        let (mut app, window, _, input) = text_field_app("alpha");
+        focus_text_input(&mut app, input);
+        press_text_key(&mut app, window, key_code, key);
+        let log = app.world().get_resource::<TextFieldLog>().unwrap();
+        assert_eq!(log.commits, vec!["alpha"], "{key_code:?} commits");
+        assert!(log.bubbled_keys.is_empty(), "{key_code:?} stops");
+        assert_eq!(
+            app.world().get_resource::<InputFocus>().unwrap().get(),
+            None
+        );
+    }
+}
+
+#[test]
+fn tab_commits_the_text_even_when_it_did_not_change() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, field, input) = text_field_app("alpha");
+    app.world_mut()
+        .spawn((Node::default(), Button, TabIndex(1), ChildOf(field)));
+    focus_text_input(&mut app, input);
+    press_text_key(&mut app, window, KeyCode::Tab, Key::Tab);
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert_eq!(log.commits, vec!["alpha"]);
+    assert!(log.changes.is_empty());
+    assert_ne!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(input)
+    );
+}
+
+#[test]
+fn escape_puts_the_text_back_without_a_commit_and_stops_like_enter() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, _, input) = text_field_app("alpha");
+    focus_text_input(&mut app, input);
+    app.world_mut()
+        .entity_mut(input)
+        .get_mut::<bevy::text::EditableText>()
+        .unwrap()
+        .queue_edit(bevy::text::TextEdit::Insert("!".into()));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(input_text(&app, input), "alpha!");
+    assert_eq!(
+        app.world().get_resource::<TextFieldLog>().unwrap().changes,
+        vec!["alpha!"]
+    );
+    press_text_key(&mut app, window, KeyCode::Escape, Key::Escape);
+    assert_eq!(input_text(&app, input), "alpha");
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert!(log.commits.is_empty(), "Escape does not commit");
+    assert!(log.bubbled_keys.is_empty(), "Escape stops like Enter");
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        None
+    );
+}
+
+#[test]
+fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world
+        .spawn(
+            Slider::new(1.0, 0.0, 10.0)
+                .unwrap()
+                .with_format(|v| format!("{v}")),
+        )
+        .id();
+    app.update();
+    app.update();
+    let margin = |app: &App| {
+        app.world()
+            .entity(slider)
+            .get::<Node>()
+            .unwrap()
+            .margin
+            .right
+    };
+    assert!(matches!(margin(&app), Val::Px(px) if px > 0.0));
+    app.world_mut()
+        .entity_mut(slider)
+        .insert(Slider::new(1.0, 0.0, 10.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(margin(&app), Val::Px(0.0));
 }

@@ -58,12 +58,13 @@ impl Plugin for NumericStepperPlugin {
 pub type ValueFormat = fn(&Value) -> String;
 
 /// The default width of the value label, in logical pixels, so that the buttons
-/// do not move as the text changes.
-pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
+/// do not move as the text changes. It is the one constant [`Slider`](crate::slider::Slider)
+/// shares for its own label.
+pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 
 /// A [`Value`] with a decrease and an increase button.
 ///
-/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
+/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when the user steps it with a button or an arrow key, not when the stepper is spawned or the app sets the value itself (the display follows those too). A stepper without a [`Value`], or whose [`ValueRef`] target has none, logs an `error!` and stays unbuilt.
 ///
 /// The buttons are small [`IconButton`]s that change the value when they are
 /// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
@@ -247,20 +248,20 @@ impl NumericStepper {
             (*value, ValueRef(context.entity))
         } else if let Some(value_ref) = world.entity(context.entity).get::<ValueRef>().copied() {
             let Some(value) = world.entity(value_ref.0).get::<Value>().copied() else {
+                error!(
+                    "NumericStepper {} points to {} through ValueRef, which has no Value",
+                    context.entity, value_ref.0
+                );
                 return;
             };
             world.commands().entity(context.entity).insert(value_ref);
             (value, value_ref)
         } else {
-            let Ok(default_value) = Value::new_u32(1, 0, 10, 1) else {
-                return;
-            };
-            let value_ref = ValueRef(context.entity);
-            world
-                .commands()
-                .entity(context.entity)
-                .insert((default_value, value_ref));
-            (default_value, value_ref)
+            error!(
+                "NumericStepper {} has neither a Value nor a ValueRef; insert one with the stepper",
+                context.entity
+            );
+            return;
         };
 
         let mut decrease_icon = stepper.decrease_icon.clone();
@@ -358,7 +359,8 @@ fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
 }
 
 /// Points a [`NumericStepper`] to the entity holding its [`Value`].
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub struct ValueRef(pub Entity);
 
 /// Why a [`Value`], [`UIntValue`] or [`FloatValue`] could not be built.
@@ -606,6 +608,7 @@ fn on_activate(
     decrease: Query<&ValueRef, With<Decrease>>,
     increase: Query<&ValueRef, With<Increase>>,
     mut values: Query<&mut Value>,
+    mut commands: Commands,
 ) {
     let button = trigger.event().event_target();
     if let Ok(vr) = decrease.get(button) {
@@ -614,6 +617,10 @@ fn on_activate(
         };
         if value.can_decrement() {
             value.decrement();
+            commands.trigger(ValueChange {
+                entity: vr.0,
+                value: *value,
+            });
         }
     } else if let Ok(vr) = increase.get(button) {
         let Ok(mut value) = values.get_mut(vr.0) else {
@@ -621,6 +628,10 @@ fn on_activate(
         };
         if value.can_increment() {
             value.increment();
+            commands.trigger(ValueChange {
+                entity: vr.0,
+                value: *value,
+            });
         }
     }
 }
@@ -635,6 +646,7 @@ fn on_key_input(
     steppers: Query<(), With<NumericStepper>>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
+    mut commands: Commands,
 ) {
     let stepper = trigger.event_target();
     if !steppers.contains(stepper) {
@@ -661,7 +673,13 @@ fn on_key_input(
         value.increment();
     } else if !up && value.can_decrement() {
         value.decrement();
+    } else {
+        return;
     }
+    commands.trigger(ValueChange {
+        entity: value_entity,
+        value: *value,
+    });
 }
 
 fn on_change(
@@ -703,10 +721,6 @@ fn on_change(
                 set_disabled(&mut commands, button, disabled, !value.can_increment());
             }
         }
-        commands.trigger(ValueChange {
-            entity: value_ref,
-            value: *value,
-        });
     }
 }
 
@@ -719,7 +733,8 @@ fn set_disabled(commands: &mut Commands, button: Entity, is_disabled: bool, shou
     }
 }
 
-/// Triggered on the entity holding a [`Value`] after a stepper button changed it.
+/// Triggered on the entity holding a [`Value`] after the user stepped it with a stepper button or
+/// an arrow key. Not triggered when the stepper spawns or the app sets the value.
 #[derive(EntityEvent, Debug, Clone, Copy)]
 pub struct ValueChange {
     /// The entity holding the [`Value`].
@@ -1028,6 +1043,101 @@ mod tests {
         assert_eq!(value.as_f32(), Some(0.0));
         let mut low = Value::new_f32(-f32::MAX, -f32::MAX, f32::MAX, f32::MAX).unwrap();
         assert!(!low.decrement());
+    }
+
+    #[test]
+    fn a_value_shows_integers_whole_and_floats_with_one_decimal() {
+        assert_eq!(Value::new_u8(7, 0, 9, 1).unwrap().to_string(), "7");
+        assert_eq!(Value::new_u16(700, 0, 900, 1).unwrap().to_string(), "700");
+        assert_eq!(
+            Value::new_u32(70_000, 0, 90_000, 1).unwrap().to_string(),
+            "70000"
+        );
+        assert_eq!(
+            Value::new_f32(0.25, 0.0, 1.0, 0.25).unwrap().to_string(),
+            "0.2"
+        );
+        assert_eq!(
+            Value::new_f32(0.35, 0.0, 1.0, 0.25).unwrap().to_string(),
+            "0.3"
+        );
+        assert_eq!(
+            Value::new_f32(2.0, 0.0, 5.0, 1.0).unwrap().to_string(),
+            "2.0"
+        );
+        assert_eq!(
+            Value::new_f32(-1.46, -5.0, 5.0, 1.0).unwrap().to_string(),
+            "-1.5"
+        );
+    }
+
+    #[test]
+    fn repeated_tenth_steps_show_every_tenth_despite_accumulated_error() {
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.1).unwrap();
+        let mut shown = vec![value.to_string()];
+        while value.increment() {
+            shown.push(value.to_string());
+        }
+        // The display rounds the accumulated error away, whatever the step count.
+        let expected: Vec<String> = (0..shown.len())
+            .map(|i| format!("{:.1}", i as f32 / 10.0))
+            .collect();
+        assert_eq!(shown, expected);
+        // Rounding error may cost the last step, never more than that.
+        assert!(shown.len() >= 10, "{shown:?}");
+        let mut last = value;
+        while last.decrement() {}
+        assert!(last.as_f32().unwrap() <= 0.1 + 1e-6);
+    }
+
+    #[test]
+    fn stepping_up_and_down_a_float_stays_inside_the_range() {
+        let mut value = Value::new_f32(0.0, 0.0, 1.0, 0.1).unwrap();
+        for _ in 0..30 {
+            value.increment();
+            let now = value.as_f32().unwrap();
+            assert!((0.0..=1.0).contains(&now), "{now}");
+        }
+        for _ in 0..30 {
+            value.decrement();
+            let now = value.as_f32().unwrap();
+            assert!((0.0..=1.0).contains(&now), "{now}");
+        }
+    }
+
+    #[test]
+    fn a_step_larger_than_the_range_cannot_step_any_value_type() {
+        for mut value in [
+            Value::new_u8(2, 1, 3, 200).unwrap(),
+            Value::new_u16(2, 1, 3, 60_000).unwrap(),
+            Value::new_u32(2, 1, 3, 4_000_000_000).unwrap(),
+            Value::new_f32(2.0, 1.0, 3.0, 10.0).unwrap(),
+        ] {
+            assert!(!value.can_increment() && !value.can_decrement());
+            assert!(!value.increment() && !value.decrement());
+        }
+    }
+
+    #[test]
+    fn an_integer_value_steps_exactly_to_both_limits_and_back() {
+        let mut value = Value::new_u8(8, 5, 11, 3).unwrap();
+        assert!(value.increment() && value.as_u8() == Some(11));
+        assert!(!value.can_increment() && value.can_decrement());
+        assert!(value.decrement() && value.decrement() && value.as_u8() == Some(5));
+        assert!(!value.can_decrement() && value.can_increment());
+        // A step that does not reach the maximum stops short of it.
+        let mut short = Value::new_u8(5, 5, 10, 3).unwrap();
+        assert!(short.increment() && !short.increment() && short.as_u8() == Some(8));
+    }
+
+    #[test]
+    fn a_wide_integer_step_that_overflows_or_underflows_changes_nothing() {
+        let mut high = UIntValue::<u8>::new(250, 0, 255, 10).unwrap();
+        assert!(!high.increment() && high.value() == 250);
+        let mut low = UIntValue::<u8>::new(5, 0, 255, 10).unwrap();
+        assert!(!low.decrement() && low.value() == 5);
+        assert!(u8::MAX.checked_add(1).is_none() && 0_u32.checked_sub(1).is_none());
+        assert!(UInt::checked_add(250_u8, 10).is_none() && UInt::checked_sub(5_u8, 10).is_none());
     }
 
     #[test]

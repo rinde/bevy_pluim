@@ -5,7 +5,7 @@
 //! on the track. This module keeps the layout, the look, the wheel and scrolling a
 //! focused row into view.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
@@ -217,31 +217,37 @@ impl ScrollArea {
         )
     }
 
-    /// A scroll area for a `bsn!` scene, whose contents are the scene list `contents`.
+    /// A scroll area for a `bsn!` scene, whose contents the scene list `contents()` makes.
     ///
     /// Use it as an entry of a scene (`@scroll_area(..)` of a function returning it, or by
     /// composing it into another scene). `v_scroll` and `h_scroll` enable scrolling (and a
     /// scroll bar) on that axis. It builds the same area as [`ScrollArea::bundle`], which stays
     /// for code that spawns through `Commands`.
-    pub fn scene(contents: impl SceneList, v_scroll: bool, h_scroll: bool) -> impl Scene {
-        // A scene's template must be `Clone`, a scene list is not: the first build takes it.
-        let contents = Arc::new(Mutex::new(Some(contents)));
+    ///
+    /// The factory runs for every build of the template, so each area gets fresh contents of
+    /// its own, also when a resolved scene is instantiated again. Clone what the contents
+    /// capture (a handle, say) inside it:
+    ///
+    /// ```ignore
+    /// ScrollArea::scene(move || bsn_list! { @squares(icon.clone()) }, true, false)
+    /// ```
+    pub fn scene<L: SceneList>(
+        contents: impl Fn() -> L + Send + Sync + 'static,
+        v_scroll: bool,
+        h_scroll: bool,
+    ) -> impl Scene {
+        // A scene's template must be `Clone`, a scene list is not: share the factory instead.
+        let contents = Arc::new(contents);
         bsn! {
             template(move |context| {
+                let contents = Arc::clone(&contents);
                 Ok(insert_after_scene(context, Self::bundle(
-                    {
-                        let contents = contents.lock().ok().and_then(|mut taken| taken.take());
-                        move |parent: &mut ChildSpawner| {
-                            let Some(contents) = contents else {
-                                error!("the contents of a scroll area scene were already spawned");
-                                return;
-                            };
-                            let target = parent.target_entity();
-                            parent
-                                .world_mut()
-                                .entity_mut(target)
-                                .queue_spawn_related_scenes::<Children>(contents);
-                        }
+                    move |parent: &mut ChildSpawner| {
+                        let target = parent.target_entity();
+                        parent
+                            .world_mut()
+                            .entity_mut(target)
+                            .queue_spawn_related_scenes::<Children>(contents());
                     },
                     v_scroll,
                     h_scroll,
