@@ -1,4 +1,4 @@
-//! `Link`: a clickable text whose look follows its [`LinkState`].
+//! `Link`: a clickable text that is disabled by [`InteractionDisabled`].
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
@@ -28,17 +28,20 @@ impl Plugin for LinkPlugin {
                 .pipe(theme_link)
                 .run_if(resource_changed::<Theme>),
         )
-        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
-        .add_observer(on_insert_link_state);
+        .add_systems(Update, restyle_on_disabled_change)
+        .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync));
     }
 }
 
-/// Clickable text. Whether it reacts is up to its [`LinkState`].
+/// Clickable text. Whether it reacts is up to [`InteractionDisabled`].
 ///
 /// It is a [`bevy::ui_widgets::Button`] that triggers
-/// [`Activate`](bevy::ui_widgets::Activate) when it is used. A
-/// [`LinkState::Disabled`] link keeps its `Button` and has [`InteractionDisabled`]
-/// instead, so it never activates and does not react to the pointer.
+/// [`Activate`](bevy::ui_widgets::Activate) when it is used. Insert
+/// [`InteractionDisabled`] to disable it and remove it to enable it again, as for the other
+/// buttons: a disabled link keeps its `Button`, shows plain text in the primary text colour
+/// (the current crumb of a trail, say), does not react to the pointer, never activates from
+/// the pointer or keyboard and is skipped by Tab. The link restyles when the marker is added
+/// or removed, also under the pointer.
 ///
 /// To assistive technology it is a link ([`Role::Link`]), not a button.
 ///
@@ -71,7 +74,6 @@ impl Plugin for LinkPlugin {
     Name::new("Link"),
     Button,
     Hovered,
-    LinkState::Enabled,
     TabStop,
 )]
 pub struct Link {
@@ -80,18 +82,6 @@ pub struct Link {
 
 #[derive(Component, Clone, Debug, Copy)]
 struct LinkText;
-
-/// Whether a [`Link`] can be clicked.
-#[derive(Component, Clone, Debug, Copy, Eq, PartialEq, Reflect)]
-#[reflect(Component)]
-#[component(immutable)]
-pub enum LinkState {
-    /// The link highlights on hover and can be clicked.
-    Enabled,
-    /// The link is plain text, for example the current crumb of a trail. It is still a
-    /// button, with [`InteractionDisabled`].
-    Disabled,
-}
 
 impl Link {
     /// A link showing `label`.
@@ -137,21 +127,19 @@ impl Link {
     }
 }
 
-/// Adds or removes [`InteractionDisabled`] to match the [`LinkState`], and restyles the link.
-fn on_insert_link_state(t: On<Insert<LinkState>>, q: Query<&LinkState>, mut commands: Commands) {
-    let link = t.event().event_target();
-    let Ok(state) = q.get(link) else {
-        return;
-    };
-    match state {
-        LinkState::Disabled => {
-            commands.entity(link).insert(InteractionDisabled);
-        }
-        LinkState::Enabled => {
-            commands.entity(link).remove::<InteractionDisabled>();
-        }
+/// Restyles a [`Link`] whose [`InteractionDisabled`] was just added or removed.
+fn restyle_on_disabled_change(
+    added: Query<Entity, (With<Link>, Added<InteractionDisabled>)>,
+    mut removed: RemovedComponents<InteractionDisabled>,
+    links: Query<(), With<Link>>,
+    mut commands: Commands,
+) {
+    for entity in added
+        .iter()
+        .chain(removed.read().filter(|e| links.contains(*e)))
+    {
+        commands.run_system_cached_with(theme_link, Some(entity));
     }
-    commands.run_system_cached_with(theme_link, Some(link));
 }
 
 /// Keeps each link a link to assistive technology. Bevy makes a node a button again when its
@@ -237,7 +225,6 @@ fn theme_link(
         (
             &mut BackgroundColor,
             &Children,
-            &LinkState,
             Has<InteractionDisabled>,
             Has<Pressed>,
             &Hovered,
@@ -251,11 +238,11 @@ fn theme_link(
     } else {
         Either::Right(links.iter_mut())
     };
-    for (mut link_bg, children, state, interaction_disabled, pressed, hovered) in it {
+    for (mut link_bg, children, interaction_disabled, pressed, hovered) in it {
         let (bg_color, link_color) = colors_for(
             &theme.colors,
             LinkLook {
-                disabled: interaction_disabled || matches!(state, LinkState::Disabled),
+                disabled: interaction_disabled,
                 pressed,
                 hovered: hovered.get(),
             },

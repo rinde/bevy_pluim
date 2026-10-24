@@ -33,7 +33,7 @@ use rin_bevy_ui::label::Label;
 use rin_bevy_ui::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
-use rin_bevy_ui::link::{Link, LinkState};
+use rin_bevy_ui::link::Link;
 use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::Panel;
@@ -155,7 +155,6 @@ fn the_widget_components_are_in_the_type_registry() {
 fn the_widget_states_are_in_the_type_registry() {
     with_registry(|registry| {
         assert_component::<ComboState>(registry);
-        assert_component::<LinkState>(registry);
         assert_component::<color_palette_combo::State>(registry);
         assert_component::<Value>(registry);
     });
