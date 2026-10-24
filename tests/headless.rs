@@ -2711,6 +2711,73 @@ fn activating_the_buttons_of_a_numeric_stepper_steps_its_value() {
     assert_eq!(stepper_value(&app, stepper), 0);
 }
 
+#[derive(Resource, Default)]
+struct StepperChanges(Vec<u8>);
+
+fn count_stepper_changes(app: &mut App) {
+    app.init_resource::<StepperChanges>();
+    app.add_observer(
+        |change: On<rin_bevy_ui::numeric_stepper::ValueChange>,
+         mut seen: ResMut<StepperChanges>| {
+            seen.0.push(change.value.as_u8().unwrap());
+        },
+    );
+}
+
+#[test]
+fn a_value_change_is_sent_for_a_step_only_not_for_spawning_or_setting_the_value() {
+    let mut app = headless_app();
+    count_stepper_changes(&mut app);
+    let (stepper, _, increase) = spawn_stepper(&mut app, 1);
+    assert!(
+        app.world()
+            .get_resource::<StepperChanges>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(Value::new_u8(3, 0, 3, 1).unwrap());
+    app.update();
+    app.update();
+    assert!(
+        app.world()
+            .get_resource::<StepperChanges>()
+            .unwrap()
+            .0
+            .is_empty()
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(Value::new_u8(1, 0, 3, 1).unwrap());
+    app.update();
+    activate(&mut app, increase);
+    assert_eq!(
+        app.world().get_resource::<StepperChanges>().unwrap().0,
+        vec![2]
+    );
+}
+
+#[test]
+fn a_stepper_without_a_value_or_with_a_value_ref_to_none_is_not_built_and_gets_no_default() {
+    let mut app = headless_app();
+    let bare = app.world_mut().spawn(NumericStepper::default()).id();
+    let target = app.world_mut().spawn_empty().id();
+    let dangling = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(target)))
+        .id();
+    app.update();
+    app.update();
+    for stepper in [bare, dangling] {
+        assert!(app.world().entity(stepper).get::<Value>().is_none());
+        assert!(app.world().entity(stepper).get::<Children>().is_none());
+    }
+}
+
 fn level_text(value: &Value) -> String {
     match value.as_u8() {
         Some(0) => "Ground".to_string(),

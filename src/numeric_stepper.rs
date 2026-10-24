@@ -64,7 +64,7 @@ pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 
 /// A [`Value`] with a decrease and an increase button.
 ///
-/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when a button changes it.
+/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when the user steps it with a button or an arrow key, not when the stepper is spawned or the app sets the value itself (the display follows those too). A stepper without a [`Value`], or whose [`ValueRef`] target has none, logs an `error!` and stays unbuilt.
 ///
 /// The buttons are small [`IconButton`]s that change the value when they are
 /// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
@@ -248,20 +248,20 @@ impl NumericStepper {
             (*value, ValueRef(context.entity))
         } else if let Some(value_ref) = world.entity(context.entity).get::<ValueRef>().copied() {
             let Some(value) = world.entity(value_ref.0).get::<Value>().copied() else {
+                error!(
+                    "NumericStepper {} points to {} through ValueRef, which has no Value",
+                    context.entity, value_ref.0
+                );
                 return;
             };
             world.commands().entity(context.entity).insert(value_ref);
             (value, value_ref)
         } else {
-            let Ok(default_value) = Value::new_u32(1, 0, 10, 1) else {
-                return;
-            };
-            let value_ref = ValueRef(context.entity);
-            world
-                .commands()
-                .entity(context.entity)
-                .insert((default_value, value_ref));
-            (default_value, value_ref)
+            error!(
+                "NumericStepper {} has neither a Value nor a ValueRef; insert one with the stepper",
+                context.entity
+            );
+            return;
         };
 
         let mut decrease_icon = stepper.decrease_icon.clone();
@@ -608,6 +608,7 @@ fn on_activate(
     decrease: Query<&ValueRef, With<Decrease>>,
     increase: Query<&ValueRef, With<Increase>>,
     mut values: Query<&mut Value>,
+    mut commands: Commands,
 ) {
     let button = trigger.event().event_target();
     if let Ok(vr) = decrease.get(button) {
@@ -616,6 +617,10 @@ fn on_activate(
         };
         if value.can_decrement() {
             value.decrement();
+            commands.trigger(ValueChange {
+                entity: vr.0,
+                value: *value,
+            });
         }
     } else if let Ok(vr) = increase.get(button) {
         let Ok(mut value) = values.get_mut(vr.0) else {
@@ -623,6 +628,10 @@ fn on_activate(
         };
         if value.can_increment() {
             value.increment();
+            commands.trigger(ValueChange {
+                entity: vr.0,
+                value: *value,
+            });
         }
     }
 }
@@ -637,6 +646,7 @@ fn on_key_input(
     steppers: Query<(), With<NumericStepper>>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
+    mut commands: Commands,
 ) {
     let stepper = trigger.event_target();
     if !steppers.contains(stepper) {
@@ -663,7 +673,13 @@ fn on_key_input(
         value.increment();
     } else if !up && value.can_decrement() {
         value.decrement();
+    } else {
+        return;
     }
+    commands.trigger(ValueChange {
+        entity: value_entity,
+        value: *value,
+    });
 }
 
 fn on_change(
@@ -705,10 +721,6 @@ fn on_change(
                 set_disabled(&mut commands, button, disabled, !value.can_increment());
             }
         }
-        commands.trigger(ValueChange {
-            entity: value_ref,
-            value: *value,
-        });
     }
 }
 
@@ -721,7 +733,8 @@ fn set_disabled(commands: &mut Commands, button: Entity, is_disabled: bool, shou
     }
 }
 
-/// Triggered on the entity holding a [`Value`] after a stepper button changed it.
+/// Triggered on the entity holding a [`Value`] after the user stepped it with a stepper button or
+/// an arrow key. Not triggered when the stepper spawns or the app sets the value.
 #[derive(EntityEvent, Debug, Clone, Copy)]
 pub struct ValueChange {
     /// The entity holding the [`Value`].
