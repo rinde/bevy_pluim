@@ -62,6 +62,67 @@ impl Plugin for VirtualListPlugin {
     }
 }
 
+/// Minimum accepted row height, in logical pixels. This keeps the row pool bounded.
+pub const MIN_ROW_HEIGHT: f32 = 10.0;
+
+/// A validated row height for a [`VirtualList`], in logical pixels.
+///
+/// Heights must be finite and at least [`MIN_ROW_HEIGHT`].
+#[derive(Debug, Copy, Clone, PartialEq, Reflect)]
+#[reflect(opaque)]
+pub struct RowHeight(f32);
+
+impl RowHeight {
+    /// Validates a row height in logical pixels.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RowHeightError::NotFinite`] for NaN or infinity and
+    /// [`RowHeightError::BelowMinimum`] for a height below [`MIN_ROW_HEIGHT`].
+    pub const fn new(height: f32) -> Result<Self, RowHeightError> {
+        if !height.is_finite() {
+            Err(RowHeightError::NotFinite)
+        } else if height < MIN_ROW_HEIGHT {
+            Err(RowHeightError::BelowMinimum)
+        } else {
+            Ok(Self(height))
+        }
+    }
+
+    /// The height in logical pixels.
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
+/// Why a [`RowHeight`] or separated [`VirtualList`] could not be constructed.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum RowHeightError {
+    /// The height is NaN or infinite.
+    NotFinite,
+    /// The height is below [`MIN_ROW_HEIGHT`].
+    BelowMinimum,
+    /// A separated row must be taller than its 22 px of padding and ring.
+    SeparatedTooShort,
+}
+
+impl std::fmt::Display for RowHeightError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFinite => formatter.write_str("row height must be finite"),
+            Self::BelowMinimum => {
+                write!(formatter, "row height must be at least {MIN_ROW_HEIGHT} px")
+            }
+            Self::SeparatedTooShort => {
+                formatter.write_str("a separated row height must exceed 22 px")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RowHeightError {}
+
 /// A list of rows of one height that renders only the items in view, so that it costs the
 /// rows on screen, not the items.
 ///
@@ -89,6 +150,9 @@ impl Plugin for VirtualListPlugin {
 /// and last item), Home and End go to the first and last item, all scrolling the active row
 /// into view, and Enter or Space selects its item. The focus ring is on the active row, which
 /// [`ActiveDescendant`] names while it is in the pool, from the frame it moves.
+///
+/// A `RowHeight` must be made with [`RowHeight::new`], which rejects non-finite heights and
+/// heights below [`MIN_ROW_HEIGHT`]. `separated` additionally requires a height above 22 px.
 ///
 /// With `separated` set it has the look of a [`List`](crate::list::List) of
 /// [`CornerStyle::Separated`]: the rows stand apart, 6 px in from the list's edges with 2 px
@@ -121,19 +185,16 @@ impl Plugin for VirtualListPlugin {
     },
 )]
 pub struct VirtualList {
-    /// The height of every row, in logical pixels. A list whose row height is not a positive,
-    /// finite number, or for a separated list not more than 22 px (the 20 px of vertical padding
-    /// and the 2 px of ring), shows nothing and logs an error when it is inserted.
-    pub row_height: f32,
+    row_height: RowHeight,
     /// Whether the rows stand apart as in a [`CornerStyle::Separated`] list: padded, with gaps
     /// between them, rounded, and the selected one ringed.
-    pub separated: bool,
+    separated: bool,
 }
 
 impl VirtualList {
     /// A list whose rows are `row_height` logical pixels high.
     #[must_use]
-    pub const fn new(row_height: f32) -> Self {
+    pub const fn new(row_height: RowHeight) -> Self {
         Self {
             row_height,
             separated: false,
@@ -142,12 +203,19 @@ impl VirtualList {
 
     /// A list of [`CornerStyle::Separated`] look, whose rows are `row_height` logical pixels
     /// high.
-    #[must_use]
-    pub const fn separated(row_height: f32) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RowHeightError::SeparatedTooShort`] if the row is not taller than its padding
+    /// and ring.
+    pub const fn separated(row_height: RowHeight) -> Result<Self, RowHeightError> {
+        if row_height.0 <= SEPARATED_ROW_CHROME {
+            return Err(RowHeightError::SeparatedTooShort);
+        }
+        Ok(Self {
             row_height,
             separated: true,
-        }
+        })
     }
 
     /// The corner style whose row look this list has.
@@ -171,9 +239,9 @@ impl VirtualList {
     /// The distance between the tops of neighbouring rows: a row and the gap after it.
     const fn pitch(self) -> f32 {
         if self.separated {
-            self.row_height + px(SEPARATED_ROW_GAP)
+            self.row_height.0 + px(SEPARATED_ROW_GAP)
         } else {
-            self.row_height
+            self.row_height.0
         }
     }
 
@@ -213,26 +281,7 @@ impl VirtualList {
         }
     }
 
-    /// Whether the row height is one rows can be laid out with: positive and finite, and for a
-    /// separated list more than the vertical padding and ring of a row take up.
-    const fn has_valid_row_height(self) -> bool {
-        let floor = if self.separated {
-            SEPARATED_ROW_CHROME
-        } else {
-            0.0
-        };
-        self.row_height > floor && self.row_height.is_finite()
-    }
-
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
-        if let Some(list) = world.get::<Self>(context.entity)
-            && !list.has_valid_row_height()
-        {
-            error!(
-                "VirtualList {} has row height {}, which is not a positive, finite number, or for a separated list not more than {} px of padding and ring; it shows nothing",
-                context.entity, list.row_height, SEPARATED_ROW_CHROME
-            );
-        }
         world
             .commands()
             .run_system_cached_with(theme_virtual_lists, Some(context.entity));
@@ -405,9 +454,6 @@ fn grow_pools(
     mut commands: Commands,
 ) {
     for (list, virtual_list, mut state, creator) in &mut lists {
-        if !virtual_list.has_valid_row_height() {
-            continue;
-        }
         let Some(count) = selections
             .get_item_values(list)
             .map(|(_, items)| items.len())
@@ -429,7 +475,7 @@ fn grow_pools(
                     let mut node = Node {
                         display: Display::None,
                         position_type: PositionType::Absolute,
-                        height: Val::Px(virtual_list.row_height),
+                        height: Val::Px(virtual_list.row_height.get()),
                         align_items: AlignItems::Center,
                         overflow: Overflow::clip(),
                         ..default()
@@ -487,16 +533,13 @@ fn show_rows(
     mut commands: Commands,
 ) {
     for (list, virtual_list, state, active, mut list_node, creator) in &mut lists {
-        if !virtual_list.has_valid_row_height() {
-            continue;
-        }
         let Some((_, items)) = selections.get_item_values(list) else {
             continue;
         };
         let Some(view) = views.of(list) else {
             continue;
         };
-        let row_height = virtual_list.row_height;
+        let row_height = virtual_list.row_height.get();
         let height = Val::Px(virtual_list.content_height(items.len()));
         if list_node.height != height {
             list_node.height = height;
@@ -630,9 +673,6 @@ fn navigate(
     let Ok((virtual_list, mut state)) = lists.get_mut(list) else {
         return;
     };
-    if !virtual_list.has_valid_row_height() {
-        return;
-    }
     let key = &input.event().input;
     let is_move = matches!(
         key.key_code,
@@ -712,7 +752,7 @@ fn navigate(
         return;
     };
     let row_top = view.offset + virtual_list.row_top(next) - FOCUS_RING_REACH;
-    let row_bottom = 2.0f32.mul_add(FOCUS_RING_REACH, row_top + virtual_list.row_height);
+    let row_bottom = 2.0f32.mul_add(FOCUS_RING_REACH, row_top + virtual_list.row_height.get());
     let scroll = if row_top < view.scroll {
         row_top
     } else if row_bottom > view.scroll + view.height {

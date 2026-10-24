@@ -39,7 +39,7 @@ use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
-use rin_bevy_ui::virtual_list::VirtualList;
+use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 use rin_bevy_ui::{UiRoot, WidgetsPlugin};
 
 fn main() {
@@ -379,12 +379,16 @@ fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
 fn virtual_list_scroll_area() -> impl Scene {
     ScrollArea::scene(
         bsn_list! {
-            ~{VirtualList::new(28.0)}
+            ~{VirtualList::new(row_height(28.0))}
             @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
         },
         true,
         false,
     )
+}
+
+fn row_height(height: f32) -> RowHeight {
+    RowHeight::new(height).unwrap_or_else(|_| std::process::abort())
 }
 
 fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {

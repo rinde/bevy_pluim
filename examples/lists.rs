@@ -12,7 +12,7 @@ use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::ScrollArea;
 use rin_bevy_ui::select::{Item, Selection};
 use rin_bevy_ui::theme::Theme;
-use rin_bevy_ui::virtual_list::VirtualList;
+use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 
 fn main() {
     App::new()
@@ -92,18 +92,22 @@ fn setup(mut commands: Commands) {
                 width: px(240.0),
                 height: px(300.0),
             }
-            @virtual_list_scroll_area(VirtualList::new(28.0))
+            @virtual_list_scroll_area(VirtualList::new(row_height(28.0)))
             --
             Node {
                 width: px(240.0),
                 height: px(300.0),
             }
-            @virtual_list_scroll_area(VirtualList::separated(44.0))
+            @virtual_list_scroll_area(VirtualList::separated(row_height(44.0)).unwrap_or_else(|_| std::process::abort()))
             --
             ~{PushButton::from_label("Change theme")}
             on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
         ]
     });
+}
+
+fn row_height(height: f32) -> RowHeight {
+    RowHeight::new(height).unwrap_or_else(|_| std::process::abort())
 }
 
 /// A scroll area over a `VirtualList` of ten thousand rows, which spawns only the rows in view.

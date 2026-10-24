@@ -50,7 +50,9 @@ use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, ThemeColors};
 use rin_bevy_ui::toast::{Toast, ToastStack};
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
-use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
+use rin_bevy_ui::virtual_list::{
+    MIN_ROW_HEIGHT, RowHeight, RowHeightError, VirtualList, VirtualListRow,
+};
 use rin_bevy_ui_tester::{
     AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
     Scenario, ScenarioReport, Step, SyntheticInput, Target, WidgetRole, WorldSnapshot,
@@ -2199,7 +2201,7 @@ fn a_first_page_down_on_a_virtual_list_without_an_active_row_lands_on_the_first_
     app.world_mut().entity_mut(root).with_children(|root| {
         list = root
             .spawn((
-                VirtualList::new(28.0),
+                VirtualList::new(RowHeight::new(28.0).unwrap()),
                 Selection::builder()
                     .zero_or_more()
                     .build_with_items(Vec::<Item<String>>::new()),
@@ -2278,7 +2280,7 @@ fn spawn_virtual_list_with_creator(world: &mut World) {
                 move |parent: &mut ChildSpawner| {
                     parent.spawn((
                         Name::new("creator list"),
-                        VirtualList::new(48.0),
+                        VirtualList::new(RowHeight::new(48.0).unwrap()),
                         ItemViewCreator::new(create),
                         Selection::builder()
                             .one()
@@ -2425,7 +2427,10 @@ fn a_virtual_list_over_a_selection_reference_shows_and_marks_the_referenced_sele
         )
         .id();
     app.world_mut().entity_mut(root).with_children(|root| {
-        root.spawn((VirtualList::new(28.0), Selection::reference(shared)));
+        root.spawn((
+            VirtualList::new(RowHeight::new(28.0).unwrap()),
+            Selection::reference(shared),
+        ));
     });
     for _ in 0..4 {
         app.update();
@@ -2448,45 +2453,39 @@ fn a_virtual_list_over_a_selection_reference_shows_and_marks_the_referenced_sele
 }
 
 #[test]
-fn a_virtual_list_with_a_row_height_of_zero_shows_nothing_and_does_not_panic() {
+fn invalid_virtual_list_row_heights_are_rejected_and_the_minimum_keeps_the_pool_bounded() {
+    for row_height in [0.0, -1.0, f32::NAN, f32::INFINITY, 1e-30] {
+        assert!(matches!(
+            RowHeight::new(row_height),
+            Err(RowHeightError::NotFinite | RowHeightError::BelowMinimum)
+        ));
+    }
+
     let mut app = widgets_app();
     let root = spawn_camera_and_root(app.world_mut());
     app.world_mut().entity_mut(root).with_children(|root| {
-        for row_height in [0.0, -1.0, f32::NAN, f32::INFINITY] {
-            root.spawn((
-                VirtualList::new(row_height),
-                Selection::builder()
-                    .one()
-                    .build_with_items(["a", "b", "c"].map(Item::new)),
-            ));
-        }
+        root.spawn((
+            VirtualList::new(RowHeight::new(MIN_ROW_HEIGHT).unwrap()),
+            Selection::builder()
+                .one()
+                .build_with_items((0..10_000).map(|row| Item::new(row.to_string()))),
+        ));
     });
     for _ in 0..4 {
         app.update();
     }
-
-    assert_eq!(rows_and_entities(&mut app).0, 0);
+    assert!(rows_and_entities(&mut app).0 < 100);
 }
 
 #[test]
-fn a_separated_virtual_list_with_a_row_height_its_padding_and_ring_do_not_fit_shows_nothing() {
-    let mut app = widgets_app();
-    let root = spawn_camera_and_root(app.world_mut());
-    app.world_mut().entity_mut(root).with_children(|root| {
-        for row_height in [22.0, 10.0] {
-            root.spawn((
-                VirtualList::separated(row_height),
-                Selection::builder()
-                    .one()
-                    .build_with_items(["a", "b", "c"].map(Item::new)),
-            ));
-        }
-    });
-    for _ in 0..4 {
-        app.update();
+fn separated_virtual_list_rejects_a_row_height_at_or_below_its_chrome() {
+    for row_height in [10.0, 22.0] {
+        let height = RowHeight::new(row_height).unwrap();
+        assert!(matches!(
+            VirtualList::separated(height),
+            Err(RowHeightError::SeparatedTooShort)
+        ));
     }
-
-    assert_eq!(rows_and_entities(&mut app).0, 0);
 }
 
 #[test]
@@ -2495,7 +2494,7 @@ fn a_separated_virtual_list_with_a_row_height_just_above_its_padding_and_ring_sh
     let root = spawn_camera_and_root(app.world_mut());
     app.world_mut().entity_mut(root).with_children(|root| {
         root.spawn((
-            VirtualList::separated(23.0),
+            VirtualList::separated(RowHeight::new(23.0).unwrap()).unwrap(),
             Selection::builder()
                 .one()
                 .build_with_items(["a", "b", "c"].map(Item::new)),
