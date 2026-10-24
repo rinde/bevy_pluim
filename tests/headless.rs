@@ -2674,6 +2674,90 @@ fn a_list_grid_with_zero_columns_does_not_panic_and_acts_as_one_column() {
     }
 }
 
+#[test]
+fn a_list_keeps_the_node_fields_the_app_gave_it() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            Node {
+                width: Val::Px(120.0),
+                margin: UiRect::all(Val::Px(7.0)),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    // Inserting the zero-sized `List` again must not reset the node either.
+    app.world_mut().entity_mut(list).insert(List);
+    app.update();
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.width, Val::Px(120.0));
+    assert_eq!(node.margin, UiRect::all(Val::Px(7.0)));
+    assert_eq!(node.display, Display::Grid);
+    assert_eq!(node.position_type, PositionType::Relative);
+}
+
+#[test]
+fn changing_the_layout_of_a_live_list_updates_its_grid() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let list = app
+        .world_mut()
+        .spawn((
+            List,
+            Node {
+                width: Val::Px(120.0),
+                ..default()
+            },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let reference = app
+        .world_mut()
+        .spawn((
+            List,
+            ListLayout::VerticalGrid { columns: 3 },
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::VerticalGrid { columns: 3 });
+    app.update();
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    let expected = app.world().entity(reference).get::<Node>().unwrap();
+    assert_eq!(node.grid_auto_flow, expected.grid_auto_flow);
+    assert_eq!(node.grid_template_columns, expected.grid_template_columns);
+    assert_eq!(node.grid_template_columns.len(), 1);
+    assert_eq!(node.width, Val::Px(120.0), "the app's width survives");
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::Horizontal);
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
+    assert!(node.grid_template_columns.is_empty());
+}
+
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
     app.world()
         .entity(list)
