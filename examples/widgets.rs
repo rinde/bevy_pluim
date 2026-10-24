@@ -166,5 +166,5 @@ fn squares() -> impl Scene {
 
 /// A vertical scroll area over the coloured squares.
 fn scroll_squares() -> impl Scene {
-    ScrollArea::scene(bsn_list! { @squares() }, true, false)
+    ScrollArea::scene(|| bsn_list! { @squares() }, true, false)
 }

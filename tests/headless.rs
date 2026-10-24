@@ -6481,12 +6481,14 @@ fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
             Node
             Children [
                 @ScrollArea::scene(
-                    bsn_list! {
-                        Node
-                        --
-                        Node
-                        --
-                        Node
+                    || {
+                        bsn_list! {
+                            Node
+                            --
+                            Node
+                            --
+                            Node
+                        }
                     },
                     true,
                     true,
@@ -6511,6 +6513,165 @@ fn a_scroll_area_scene_has_its_contents_as_a_scene_and_both_scroll_bars() {
     assert_eq!(contents.len(), 3);
     assert_eq!(world.query::<&ScrollBar>().iter(world).count(), 2);
     assert_eq!(ui_root_count_world(world), 1);
+}
+
+fn scene_app() -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.init_resource::<Assets<Image>>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    app.world_mut().spawn(Camera2d);
+    app
+}
+
+/// Each area's contents entity with the entities below it, and the targets of its scroll bars.
+fn scroll_areas_of(world: &mut World) -> Vec<(Entity, Vec<Entity>, Vec<Entity>)> {
+    let areas: Vec<Entity> = world
+        .query_filtered::<Entity, With<ScrollArea>>()
+        .iter(world)
+        .collect();
+    areas
+        .into_iter()
+        .map(|area| {
+            let contents = world
+                .query_filtered::<(Entity, &ChildOf), With<ScrollContents>>()
+                .iter(world)
+                .find(|(_, parent)| parent.parent() == area)
+                .map(|(entity, _)| entity)
+                .unwrap();
+            let children = world
+                .get::<Children>(contents)
+                .map(|children| children.iter().collect())
+                .unwrap_or_default();
+            let targets = world
+                .query::<(&ChildOf, &Scrollbar)>()
+                .iter(world)
+                .filter(|(parent, _)| parent.parent() == area)
+                .map(|(_, bar)| bar.target)
+                .collect();
+            (contents, children, targets)
+        })
+        .collect()
+}
+
+fn assert_two_distinct_areas(world: &mut World, children: usize) {
+    let areas = scroll_areas_of(world);
+    assert_eq!(areas.len(), 2);
+    let (first, second) = (&areas[0], &areas[1]);
+    assert_ne!(first.0, second.0);
+    for (contents, kids, targets) in &areas {
+        assert_eq!(kids.len(), children);
+        assert_eq!(targets.len(), 2);
+        assert!(targets.iter().all(|target| target == contents));
+    }
+    assert!(first.1.iter().all(|kid| !second.1.contains(kid)));
+}
+
+#[test]
+fn a_scroll_area_scene_gives_every_build_its_own_fresh_contents() {
+    let mut app = scene_app();
+    let area = || {
+        ScrollArea::scene(
+            || {
+                bsn_list! {
+                    Node
+                    --
+                    Node
+                    --
+                    Node
+                }
+            },
+            true,
+            true,
+        )
+    };
+    app.world_mut()
+        .spawn_scene(bsn! { Node Children [ @area() -- @area() ] })
+        .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_two_distinct_areas(app.world_mut(), 3);
+}
+
+#[test]
+fn a_cached_scroll_area_scene_builds_fresh_contents_each_time_it_is_spawned() {
+    let mut app = scene_app();
+    let server = app.world().get_resource::<AssetServer>().unwrap().clone();
+    let mut patch = bevy::scene::ScenePatch::load(
+        &server,
+        bsn! {
+            Node
+            Children [
+                @ScrollArea::scene(
+                    || bsn_list! { Node -- Node },
+                    true,
+                    true,
+                )
+            ]
+        },
+    );
+    patch
+        .resolve(
+            &server,
+            app.world()
+                .get_resource::<Assets<bevy::scene::ScenePatch>>()
+                .unwrap(),
+        )
+        .unwrap();
+    // One resolved scene, applied twice: the contents are made again for each.
+    patch.spawn(app.world_mut()).unwrap();
+    patch.spawn(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_two_distinct_areas(app.world_mut(), 2);
+}
+
+#[test]
+fn a_scroll_area_factory_with_a_captured_handle_builds_asset_scenes_again_and_again() {
+    let mut app = scene_app();
+    let icon = app
+        .world_mut()
+        .get_resource_mut::<Assets<Image>>()
+        .unwrap()
+        .add(Image::default());
+    let area = move || {
+        let icon = icon.clone();
+        ScrollArea::scene(
+            move || {
+                bsn_list! {
+                    IconButton { icon: {icon.clone()}, name: "Close", size: IconButtonSize::Regular }
+                }
+            },
+            true,
+            true,
+        )
+    };
+    app.world_mut()
+        .spawn_scene(bsn! { Node Children [ @area() -- @area() ] })
+        .unwrap();
+    for _ in 0..6 {
+        app.update();
+    }
+    let world = app.world_mut();
+    assert_two_distinct_areas(world, 1);
+    let names: Vec<String> = world
+        .query::<&IconButton>()
+        .iter(world)
+        .map(|button| button.name.clone())
+        .collect();
+    assert_eq!(names, ["Close", "Close"]);
 }
 
 fn ui_root_count_world(world: &mut World) -> usize {
