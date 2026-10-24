@@ -78,6 +78,7 @@ use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::slider::{Slider, SliderRefs};
 use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
+use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
 use rin_bevy_ui::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
@@ -9052,4 +9053,212 @@ fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_sele
             "a `One` keeps its item"
         );
     }
+}
+
+/// What the events of a [`TextField`] and the keys that bubbled past it came to.
+#[derive(Resource, Default)]
+struct TextFieldLog {
+    changes: Vec<String>,
+    commits: Vec<String>,
+    bubbled_keys: Vec<KeyCode>,
+}
+
+/// An app with a primary window, a root and one [`TextField`] holding `value`, which logs its
+/// events into [`TextFieldLog`]. The root counts the keys that reach it.
+fn text_field_app(value: &str) -> (App, Entity, Entity, Entity) {
+    let mut app = headless_app_with(|app| {
+        app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
+    });
+    app.init_resource::<TextFieldLog>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(Camera2d);
+    let root = app
+        .world_mut()
+        .spawn(Node::default())
+        .observe(
+            |key: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
+             mut log: ResMut<TextFieldLog>| {
+                log.bubbled_keys.push(key.event().input.key_code);
+            },
+        )
+        .id();
+    let field = app
+        .world_mut()
+        .spawn((TextField::new(value), ChildOf(root)))
+        .observe(
+            |change: On<TextFieldChange>, mut log: ResMut<TextFieldLog>| {
+                log.changes.push(change.value.clone());
+            },
+        )
+        .observe(
+            |commit: On<TextFieldCommit>, mut log: ResMut<TextFieldLog>| {
+                log.commits.push(commit.value.clone());
+            },
+        )
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let input = app
+        .world()
+        .entity(field)
+        .get::<TextFieldRefs>()
+        .unwrap()
+        .input;
+    (app, window, field, input)
+}
+
+fn input_text(app: &App, input: Entity) -> String {
+    app.world()
+        .entity(input)
+        .get::<bevy::text::EditableText>()
+        .unwrap()
+        .value()
+        .to_string()
+}
+
+fn focus_text_input(app: &mut App, input: Entity) {
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(input, bevy::input_focus::FocusCause::Navigated);
+    for _ in 0..2 {
+        app.update();
+    }
+}
+
+fn press_text_key(
+    app: &mut App,
+    window: Entity,
+    key_code: KeyCode,
+    logical_key: bevy::input::keyboard::Key,
+) {
+    app.world_mut()
+        .write_message(bevy::input::keyboard::KeyboardInput {
+            key_code,
+            logical_key,
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
+fn inserting_a_new_text_field_sets_the_text_without_a_change_event() {
+    let (mut app, _, field, input) = text_field_app("alpha");
+    assert_eq!(input_text(&app, input), "alpha");
+    app.world_mut()
+        .entity_mut(field)
+        .insert(TextField::new("beta").with_placeholder("Name"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(input_text(&app, input), "beta");
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert!(log.changes.is_empty(), "set by the app: {:?}", log.changes);
+    assert!(log.commits.is_empty());
+}
+
+#[test]
+fn enter_and_numpad_enter_commit_the_text_and_stop_there() {
+    use bevy::input::keyboard::Key;
+    for (key_code, key) in [
+        (KeyCode::Enter, Key::Enter),
+        (KeyCode::NumpadEnter, Key::Enter),
+    ] {
+        let (mut app, window, _, input) = text_field_app("alpha");
+        focus_text_input(&mut app, input);
+        press_text_key(&mut app, window, key_code, key);
+        let log = app.world().get_resource::<TextFieldLog>().unwrap();
+        assert_eq!(log.commits, vec!["alpha"], "{key_code:?} commits");
+        assert!(log.bubbled_keys.is_empty(), "{key_code:?} stops");
+        assert_eq!(
+            app.world().get_resource::<InputFocus>().unwrap().get(),
+            None
+        );
+    }
+}
+
+#[test]
+fn tab_commits_the_text_even_when_it_did_not_change() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, field, input) = text_field_app("alpha");
+    app.world_mut()
+        .spawn((Node::default(), Button, TabIndex(1), ChildOf(field)));
+    focus_text_input(&mut app, input);
+    press_text_key(&mut app, window, KeyCode::Tab, Key::Tab);
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert_eq!(log.commits, vec!["alpha"]);
+    assert!(log.changes.is_empty());
+    assert_ne!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(input)
+    );
+}
+
+#[test]
+fn escape_puts_the_text_back_without_a_commit_and_stops_like_enter() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, _, input) = text_field_app("alpha");
+    focus_text_input(&mut app, input);
+    app.world_mut()
+        .entity_mut(input)
+        .get_mut::<bevy::text::EditableText>()
+        .unwrap()
+        .queue_edit(bevy::text::TextEdit::Insert("!".into()));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(input_text(&app, input), "alpha!");
+    assert_eq!(
+        app.world().get_resource::<TextFieldLog>().unwrap().changes,
+        vec!["alpha!"]
+    );
+    press_text_key(&mut app, window, KeyCode::Escape, Key::Escape);
+    assert_eq!(input_text(&app, input), "alpha");
+    let log = app.world().get_resource::<TextFieldLog>().unwrap();
+    assert!(log.commits.is_empty(), "Escape does not commit");
+    assert!(log.bubbled_keys.is_empty(), "Escape stops like Enter");
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        None
+    );
+}
+
+#[test]
+fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world
+        .spawn(
+            Slider::new(1.0, 0.0, 10.0)
+                .unwrap()
+                .with_format(|v| format!("{v}")),
+        )
+        .id();
+    app.update();
+    app.update();
+    let margin = |app: &App| {
+        app.world()
+            .entity(slider)
+            .get::<Node>()
+            .unwrap()
+            .margin
+            .right
+    };
+    assert!(matches!(margin(&app), Val::Px(px) if px > 0.0));
+    app.world_mut()
+        .entity_mut(slider)
+        .insert(Slider::new(1.0, 0.0, 10.0).unwrap());
+    app.update();
+    app.update();
+    assert_eq!(margin(&app), Val::Px(0.0));
 }
