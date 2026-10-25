@@ -15,6 +15,7 @@ use bevy::window::{PrimaryWindow, WindowTheme, WindowThemeChanged};
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
 };
+use crate::indicator::{self, Indicator};
 use crate::list::sync_selected;
 use crate::segmented_control::segment_colors;
 use crate::theme::{Theme, ThemeMode};
@@ -68,6 +69,8 @@ impl Plugin for LightDarkTogglePlugin {
                     (|| None::<Entity>)
                         .pipe(theme_toggles)
                         .run_if(theme_toggles_stale),
+                    indicator::spawn::<OptionIndicator, LightDarkToggle>,
+                    indicator::animate::<OptionIndicator, LightDarkToggle, LightDarkOption>,
                 )
                     .chain(),
             )
@@ -243,6 +246,25 @@ pub struct LightDarkToggle;
 pub struct LightDarkOption {
     /// What this option asks for.
     pub preference: ThemePreference,
+}
+
+/// The highlight behind the selected option of a [`LightDarkToggle`]: a child of the toggle,
+/// placed absolutely behind the options, which slides to the selected option when the preference
+/// changes.
+#[derive(Component, Debug, Copy, Clone)]
+#[require(Name::new("OptionIndicator"), Node, BackgroundColor::default())]
+struct OptionIndicator {
+    owner: Entity,
+}
+
+impl Indicator for OptionIndicator {
+    fn of(owner: Entity) -> Self {
+        Self { owner }
+    }
+
+    fn owner(&self) -> Entity {
+        self.owner
+    }
 }
 
 /// Marks the icon of an option.
@@ -423,7 +445,11 @@ fn theme_toggles(
     preference: Option<Res<ThemePreference>>,
     mut toggles: Query<
         (Entity, &mut Node, &mut BackgroundColor),
-        (With<LightDarkToggle>, Without<LightDarkOption>),
+        (
+            With<LightDarkToggle>,
+            Without<LightDarkOption>,
+            Without<OptionIndicator>,
+        ),
     >,
     mut options: Query<
         (
@@ -434,7 +460,11 @@ fn theme_toggles(
             &mut Node,
             &mut BackgroundColor,
         ),
-        Without<LightDarkToggle>,
+        (Without<LightDarkToggle>, Without<OptionIndicator>),
+    >,
+    mut indicators: Query<
+        (&OptionIndicator, &mut Node, &mut BackgroundColor),
+        (Without<LightDarkToggle>, Without<LightDarkOption>),
     >,
     mut icons: Query<(&ChildOf, &mut ImageNode), With<OptionIcon>>,
     mut labels: Query<(&ChildOf, &mut TextColor, &mut TextFont), With<OptionLabel>>,
@@ -465,9 +495,20 @@ fn theme_toggles(
         node.align_items = AlignItems::Center;
         node.justify_content = JustifyContent::Center;
         node.border_radius = BorderRadius::all(theme.control_radius);
-        let (fill, ink) = segment_colors(theme.colors(), is_selected, hovered.get());
-        background.0 = if is_selected { fill } else { Color::NONE };
-        colours.push((option_id, ink));
+        // The selected look is the indicator's, which slides.
+        background.0 = Color::NONE;
+        colours.push((
+            option_id,
+            segment_colors(theme.colors(), is_selected, hovered.get()).1,
+        ));
+    }
+
+    for (indicator, mut node, mut background) in &mut indicators {
+        if toggle_id.0.is_some_and(|id| id != indicator.owner) {
+            continue;
+        }
+        node.border_radius = BorderRadius::all(theme.control_radius);
+        background.0 = OptionIndicator::color(&theme);
     }
 
     for (child_of, mut image) in &mut icons {
