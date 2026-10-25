@@ -3737,3 +3737,115 @@ fn a_light_dark_toggle_does_not_take_the_focus_from_another_widget() {
         "an arrow elsewhere picks nothing"
     );
 }
+
+// ---- The overview example ----
+
+#[path = "../examples/overview.rs"]
+#[expect(
+    dead_code,
+    unreachable_pub,
+    reason = "the example's own `main` is not run by the test, and its plugin is `pub` for it"
+)]
+mod overview;
+
+/// The overview at the default window size (1280 by 720): the tab bar and the theme toggle on the
+/// left, and on every page the same centred area with its variants inside it.
+#[test]
+fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() {
+    let mut app = App::new();
+    app.add_plugins(rin_bevy_ui_tester::HeadlessPlugins::default());
+    app.init_resource::<ClearColor>();
+    app.add_plugins(bevy::scene::ScenePlugin);
+    app.add_plugins((rin_bevy_ui::WidgetsPlugin, overview::OverviewPlugin));
+    app.finish();
+    app.cleanup();
+    settle(&mut app);
+
+    // The theme control is the toggle, not a button.
+    let world = app.world_mut();
+    assert_eq!(world.query::<&LightDarkToggle>().iter(world).count(), 1);
+    assert!(
+        world
+            .query::<&Text>()
+            .iter(world)
+            .all(|text| text.0 != "Change theme"),
+        "the \"Change theme\" button is gone"
+    );
+
+    let bar = world
+        .query_filtered::<Entity, With<TabBar>>()
+        .single(world)
+        .unwrap();
+    let tabs: Vec<String> = world
+        .query::<&Item<String>>()
+        .iter(world)
+        .map(|item| item.data.clone())
+        .collect();
+    assert_eq!(tabs.len(), 20);
+    let mut area = None;
+    for tab in &tabs {
+        let name = tab.clone();
+        app.world_mut()
+            .run_system_once(
+                move |mut selections: SelectionParam, items: Query<(Entity, &Item<String>)>| {
+                    let item = items.iter().find(|(_, i)| i.data == name).unwrap().0;
+                    selections.update_selection(bar, |s| s.set_selection([item]));
+                },
+            )
+            .unwrap();
+        settle(&mut app);
+        settle(&mut app);
+        let world = app.world_mut();
+        let mut shown = world.query::<(Entity, &Name, &Node, &ComputedNode, &UiGlobalTransform)>();
+        let pages: Vec<_> = shown
+            .iter(world)
+            .filter(|(_, name, node, ..)| name.as_str() == "Page" && node.display != Display::None)
+            .map(|(entity, _, _, computed, transform)| {
+                (entity, computed.size(), transform.translation)
+            })
+            .collect();
+        assert_eq!(pages.len(), 1, "{tab}: one page is shown");
+        let (page, size, centre) = pages[0];
+        // Every page is as wide as the first and has the same centre, so none shifts.
+        let (first_size_x, first_centre_x) = *area.get_or_insert((size.x, centre.x));
+        assert_eq!((size.x, centre.x), (first_size_x, first_centre_x), "{tab}");
+        // A page fits the window height (the area around it scrolls past that).
+        assert!(size.y <= 720.0 - 40.0, "{tab} is {} high", size.y);
+        // The variants are inside the page and the page inside the window.
+        assert!(centre.x + size.x / 2.0 <= 1280.0, "{tab}");
+        let left = centre.x - size.x / 2.0;
+        let right = centre.x + size.x / 2.0;
+        let mut parts = vec![page];
+        let mut checked = 0;
+        // The page's children (header, groups) and the groups' children (the variants).
+        for _depth in 0..2 {
+            let mut next = Vec::new();
+            for parent in parts {
+                let Some(children) = world.get::<Children>(parent) else {
+                    continue;
+                };
+                for child in children.iter() {
+                    let (Some(computed), Some(transform)) = (
+                        world.get::<ComputedNode>(child),
+                        world.get::<UiGlobalTransform>(child),
+                    ) else {
+                        continue;
+                    };
+                    let half = computed.size().x / 2.0;
+                    assert!(
+                        transform.translation.x - half >= left - 1.0
+                            && transform.translation.x + half <= right + 1.0,
+                        "{tab}: a part sticks out of the page"
+                    );
+                    checked += 1;
+                    next.push(child);
+                }
+            }
+            parts = next;
+        }
+        assert!(
+            checked >= 2,
+            "{tab}: the header and the variants were looked at"
+        );
+    }
+}

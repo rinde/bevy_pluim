@@ -1,5 +1,9 @@
-//! A widget overview: a vertical `TabBar` on the left with one tab per widget, each showing a few
-//! variants of that widget over example data.
+//! A widget overview: a vertical `TabBar` on the left with one tab per widget, and for the tab
+//! picked a page with that widget's variants over example data.
+//!
+//! Every page has the same layout: a header, then the variants in a centred, wrapping row, each a
+//! group with a secondary label naming what is different about it. The theme is switched with the
+//! `LightDarkToggle` under the tabs, which is one of the widgets of the library, too.
 
 mod common;
 
@@ -13,21 +17,23 @@ use rin_bevy_ui::breadcrumbs::BreadCrumbs;
 use rin_bevy_ui::card::Card;
 use rin_bevy_ui::color_palette::ColorPalette;
 use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
-use rin_bevy_ui::combo::Combo;
+use rin_bevy_ui::combo::{Combo, ComboPlaceholder};
 use rin_bevy_ui::divider::Divider;
 use rin_bevy_ui::filter_chips::{Chip, FilterChips};
+use rin_bevy_ui::filter_combo::FilterCombo;
 use rin_bevy_ui::gallery::{Gallery, GalleryCard};
 use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use rin_bevy_ui::kbd::Kbd;
 use rin_bevy_ui::label::Label;
+use rin_bevy_ui::light_dark_toggle::LightDarkToggle;
 use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, List, ListLayout};
+use rin_bevy_ui::list::{CornerStyle, ItemNote, List, ListLayout};
 use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
 use rin_bevy_ui::panel::{Panel, PanelRefs};
 use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{ButtonSize, PushButton};
+use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
 use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::segmented_control::SegmentedControl;
+use rin_bevy_ui::segmented_control::{ItemIcon, SegmentLabels, SegmentedControl};
 use rin_bevy_ui::select::{Item, Selection};
 use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
 use rin_bevy_ui::slider::Slider;
@@ -35,9 +41,8 @@ use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
 use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::text_field::TextField;
-use rin_bevy_ui::theme::Theme;
 use rin_bevy_ui::toast::Toast;
-use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
+use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
 use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
 use rin_bevy_ui::{UiRoot, WidgetsPlugin};
@@ -70,84 +75,83 @@ impl Plugin for OverviewPlugin {
 #[derive(Resource)]
 struct Icon(Handle<Image>);
 
+/// The tabs, each with the system that spawns its page the first time it is shown.
+fn tab_pages(commands: &mut Commands) -> Vec<(Item<String>, StackItem)> {
+    let mut tabs = Vec::new();
+    let mut add = |name: &str, page: StackItem| tabs.push((Item::new(name), page));
+    add("Buttons", StackItem::new(commands.register_system(buttons)));
+    add(
+        "Icon buttons",
+        StackItem::new(commands.register_system(icon_buttons)),
+    );
+    add("Labels", StackItem::new(commands.register_system(labels)));
+    add("Tags", StackItem::new(commands.register_system(tags)));
+    add("Lists", StackItem::new(commands.register_system(lists)));
+    add("Combos", StackItem::new(commands.register_system(combos)));
+    add(
+        "Filter combos",
+        StackItem::new(commands.register_system(filter_combos)),
+    );
+    add("Colours", StackItem::new(commands.register_system(colours)));
+    add(
+        "Segmented control",
+        StackItem::new(commands.register_system(segmented)),
+    );
+    add(
+        "Light dark toggle",
+        StackItem::new(commands.register_system(light_dark)),
+    );
+    add(
+        "Filter chips",
+        StackItem::new(commands.register_system(chips)),
+    );
+    add(
+        "Tabs and trails",
+        StackItem::new(commands.register_system(navigation)),
+    );
+    add(
+        "Slider and stepper",
+        StackItem::new(commands.register_system(values)),
+    );
+    add(
+        "Text field",
+        StackItem::new(commands.register_system(text_fields)),
+    );
+    add(
+        "Toolbar",
+        StackItem::new(commands.register_system(toolbars)),
+    );
+    add(
+        "Gallery",
+        StackItem::new(commands.register_system(galleries)),
+    );
+    add(
+        "Cards and panels",
+        StackItem::new(commands.register_system(cards)),
+    );
+    add(
+        "Setting rows",
+        StackItem::new(commands.register_system(setting_rows)),
+    );
+    add(
+        "Scroll area",
+        StackItem::new(commands.register_system(scroll_areas)),
+    );
+    add(
+        "Tooltip and toast",
+        StackItem::new(commands.register_system(feedback)),
+    );
+    tabs
+}
+
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2d);
     commands.insert_resource(Icon(common::cross_icon(&mut images)));
 
-    let tabs = vec![
-        (
-            Item::new("Buttons"),
-            StackItem::new(commands.register_system(buttons)),
-        ),
-        (
-            Item::new("Icon buttons"),
-            StackItem::new(commands.register_system(icon_buttons)),
-        ),
-        (
-            Item::new("Labels"),
-            StackItem::new(commands.register_system(labels)),
-        ),
-        (
-            Item::new("Tags"),
-            StackItem::new(commands.register_system(tags)),
-        ),
-        (
-            Item::new("Lists"),
-            StackItem::new(commands.register_system(lists)),
-        ),
-        (
-            Item::new("Combos"),
-            StackItem::new(commands.register_system(combos)),
-        ),
-        (
-            Item::new("Colours"),
-            StackItem::new(commands.register_system(colours)),
-        ),
-        (
-            Item::new("Segmented control"),
-            StackItem::new(commands.register_system(segmented)),
-        ),
-        (
-            Item::new("Filter chips"),
-            StackItem::new(commands.register_system(chips)),
-        ),
-        (
-            Item::new("Tabs and trails"),
-            StackItem::new(commands.register_system(navigation)),
-        ),
-        (
-            Item::new("Slider and stepper"),
-            StackItem::new(commands.register_system(values)),
-        ),
-        (
-            Item::new("Text field"),
-            StackItem::new(commands.register_system(text_fields)),
-        ),
-        (
-            Item::new("Toolbar"),
-            StackItem::new(commands.register_system(toolbars)),
-        ),
-        (
-            Item::new("Gallery"),
-            StackItem::new(commands.register_system(galleries)),
-        ),
-        (
-            Item::new("Cards and panels"),
-            StackItem::new(commands.register_system(cards)),
-        ),
-        (
-            Item::new("Setting rows"),
-            StackItem::new(commands.register_system(setting_rows)),
-        ),
-        (
-            Item::new("Scroll area"),
-            StackItem::new(commands.register_system(scroll_areas)),
-        ),
-        (
-            Item::new("Tooltip and toast"),
-            StackItem::new(commands.register_system(feedback)),
-        ),
-    ];
+    let tabs = tab_pages(&mut commands);
+    let selection = commands
+        .spawn(Selection::builder().one().build_with_items(tabs))
+        .id();
 
     commands.spawn_scene(bsn! {
         Node {
@@ -164,62 +168,168 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             }
             Children [
                 TabBar
-                #tabs
                 Node {
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
                 }
-                @{Selection::builder().one().scene_with_items(tabs)}
+                ~{Selection::reference(selection)}
                 --
-                ~{PushButton::from_label("Change theme")}
-                on(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
+                // The theme control; it is the widget of the "Light dark toggle" page, too.
+                LightDarkToggle
             ]
             --
+            // The pages scroll when one is taller than the window; each is as wide as this area
+            // and centres its contents.
             Node {
                 flex_grow: 1.0,
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
+                min_width: px(0.0),
+                height: percent(100.0),
                 padding: UiRect::all(px(20.0)),
             }
-            Stack { selection_ref: #tabs }
+            Children [
+                Node { width: percent(100.0), height: percent(100.0) }
+                @pages(selection)
+            ]
         ]
     });
+}
+
+/// The area the pages are shown in.
+fn pages(selection: Entity) -> impl Scene {
+    ScrollArea::scene(
+        move || {
+            bsn_list! {
+                Stack { selection_ref: selection }
+                Node { width: percent(100.0) }
+            }
+        },
+        true,
+        false,
+    )
+}
+
+// ---- The layout every page shares ----
+
+/// A page: a column as wide as the pages area, with everything centred.
+fn page() -> Node {
+    Node {
+        width: percent(100.0),
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: px(24.0),
+        ..default()
+    }
+}
+
+/// The variants of a page, centred and wrapping.
+fn groups() -> Node {
+    Node {
+        max_width: px(960.0),
+        flex_direction: FlexDirection::Row,
+        flex_wrap: FlexWrap::Wrap,
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::FlexStart,
+        column_gap: px(40.0),
+        row_gap: px(28.0),
+        ..default()
+    }
+}
+
+/// Widgets side by side inside a variant.
+fn row() -> Node {
+    Node {
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        column_gap: px(12.0),
+        ..default()
+    }
+}
+
+/// One variant: a secondary label naming what is different about it, over the widget.
+fn variant(caption: &'static str, content: impl Scene) -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::FlexStart,
+            row_gap: px(8.0),
+        }
+        Children [
+            ~{Label::secondary(caption)}
+            --
+            @{content}
+        ]
+    }
 }
 
 fn countries() -> [Item<String>; 5] {
     ["Netherlands", "Canada", "Indonesia", "Portugal", "Belgium"].map(Item::new)
 }
 
+fn stations() -> [(Item<String>, ItemNote); 3] {
+    [
+        (Item::new("Amsterdam"), ItemNote::new("")),
+        (Item::new("Delft"), ItemNote::warning("< unreachable >")),
+        (Item::new("Utrecht"), ItemNote::new("4 km")),
+    ]
+}
+
 fn buttons(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Label::header("Push buttons")}
+                ~{Label::header("Buttons")}
                 --
-                Node { column_gap: px(10.0), align_items: AlignItems::Center }
+                ~{groups()}
                 Children [
-                    ~{PushButton::from_label("Regular")}
+                    @variant("Regular", bsn! { ~{PushButton::from_label("Regular")} })
                     --
-                    ~{PushButton::from_label("Compact")}
-                    ~{ButtonSize::Compact}
+                    @variant("Compact", bsn! {
+                        ~{PushButton::from_label("Compact")}
+                        ~{ButtonSize::Compact}
+                    })
                     --
-                    ~{PushButton::from_label("Disabled")}
-                    InteractionDisabled
-                ]
-                --
-                ~{Label::header("Links")}
-                --
-                Node { column_gap: px(10.0), align_items: AlignItems::Center }
-                Children [
-                    ~{Link::new("Timetable")}
+                    @variant("Disabled", bsn! {
+                        ~{PushButton::from_label("Disabled")}
+                        InteractionDisabled
+                    })
                     --
-                    ~{Link::new("Depot map")}
+                    @variant("Toggle (off, then on)", bsn! {
+                        ~{row()}
+                        Children [
+                            ~{PushButton::from_label("Off")}
+                            ~{ToggleState(false)}
+                            --
+                            ~{PushButton::from_label("On")}
+                            ~{ToggleState(true)}
+                        ]
+                    })
+                    --
+                    @variant("Icon placement: left, right, top, bottom", bsn! {
+                        ~{row()}
+                        Children [
+                            ~{PushButton::new("Left", "+")}
+                            ~{IconPlacement::Left}
+                            --
+                            ~{PushButton::new("Right", "+")}
+                            ~{IconPlacement::Right}
+                            --
+                            ~{PushButton::new("Top", "+")}
+                            ~{IconPlacement::Top}
+                            --
+                            ~{PushButton::new("Bottom", "+")}
+                            ~{IconPlacement::Bottom}
+                        ]
+                    })
+                    --
+                    @variant("Link", bsn! { ~{Link::new("Timetable")} })
+                    --
+                    @variant("Disabled link", bsn! {
+                        ~{Link::new("Depot map")}
+                        InteractionDisabled
+                    })
                 ]
             ]
         },
@@ -228,35 +338,55 @@ fn buttons(spawner: In<StackChildSpawner>, mut commands: Commands) {
 
 fn icon_buttons(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands) {
     let icon = icon.0.clone();
+    let (small, regular, large, toggle) = (icon.clone(), icon.clone(), icon.clone(), icon.clone());
+    let (warning, danger, badge, disabled) = (icon.clone(), icon.clone(), icon.clone(), icon);
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
                 ~{Label::header("Icon buttons")}
                 --
-                Node { column_gap: px(16.0), align_items: AlignItems::Center }
+                ~{groups()}
                 Children [
-                    IconButton { icon: {icon.clone()}, name: "Small", size: IconButtonSize::Small }
+                    @variant("Small", bsn! {
+                        IconButton { icon: {small}, name: "Small", size: IconButtonSize::Small }
+                    })
                     --
-                    IconButton { icon: {icon.clone()}, name: "Regular", size: IconButtonSize::Regular }
+                    @variant("Regular", bsn! {
+                        IconButton { icon: {regular}, name: "Regular", size: IconButtonSize::Regular }
+                    })
                     --
-                    IconButton { icon: {icon.clone()}, name: "Large", size: IconButtonSize::Large }
+                    @variant("Large", bsn! {
+                        IconButton { icon: {large}, name: "Large", size: IconButtonSize::Large }
+                    })
                     --
-                    IconButton { icon: {icon.clone()}, name: "Toggle", size: IconButtonSize::Regular }
-                    ~{ToggleState(false)}
+                    @variant("Toggle", bsn! {
+                        IconButton { icon: {toggle}, name: "Toggle", size: IconButtonSize::Regular }
+                        ~{ToggleState(false)}
+                    })
                     --
-                    IconButton { icon: {icon.clone()}, name: "Warning", size: IconButtonSize::Large, tone: Tone::Warning }
+                    @variant("Warning tone", bsn! {
+                        IconButton { icon: {warning}, name: "Warning", size: IconButtonSize::Large, tone: Tone::Warning }
+                    })
                     --
-                    IconButton { icon: {icon.clone()}, name: "Danger", size: IconButtonSize::Regular, tone: Tone::Danger }
+                    @variant("Danger tone", bsn! {
+                        IconButton { icon: {danger}, name: "Danger", size: IconButtonSize::Regular, tone: Tone::Danger }
+                    })
                     --
-                    IconButton { icon, name: "Trains", size: IconButtonSize::Large }
-                    ~{Badge::count(3)}
+                    @variant("With a badge", bsn! {
+                        IconButton { icon: {badge}, name: "Trains", size: IconButtonSize::Large }
+                        ~{Badge::count(3)}
+                    })
+                    --
+                    @variant("Disabled", bsn! {
+                        IconButton { icon: {disabled}, name: "Disabled", size: IconButtonSize::Regular }
+                        InteractionDisabled
+                    })
                 ]
+                --
+                ~{Label::caption("Every icon button shows its name as a tooltip after half a second.")}
             ]
         },
     );
@@ -266,38 +396,44 @@ fn labels(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(8.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Label::header("Header")}
+                ~{Label::header("Labels")}
                 --
-                ~{Label::title("Title")}
-                --
-                ~{Label::regular("Regular text")}
-                --
-                ~{Label::secondary("Secondary text")}
-                --
-                ~{Label::caption("Caption")}
-                --
-                ~{Label::overline("Overline")}
-                --
-                @{Divider::horizontal_scene()}
-                Node { width: px(300.0) }
-                --
-                Node { column_gap: px(10.0), align_items: AlignItems::Center }
+                ~{groups()}
                 Children [
-                    ~{Label::regular("Press")}
+                    @variant("Header", bsn! { ~{Label::header("Header")} })
                     --
-                    ~{Kbd::new("Esc")}
+                    @variant("Title", bsn! { ~{Label::title("Title")} })
                     --
-                    ~{Label::regular("to cancel, or")}
+                    @variant("Regular", bsn! { ~{Label::regular("Regular text")} })
                     --
-                    ~{Kbd::new("R")}
+                    @variant("Secondary", bsn! { ~{Label::secondary("Secondary text")} })
                     --
-                    ~{Label::regular("to rotate")}
+                    @variant("Caption", bsn! { ~{Label::caption("Caption")} })
+                    --
+                    @variant("Overline", bsn! { ~{Label::overline("Overline")} })
+                    --
+                    @variant("Divider", bsn! {
+                        @{Divider::horizontal_scene()}
+                        Node { width: px(200.0) }
+                    })
+                    --
+                    @variant("Key caps", bsn! {
+                        ~{row()}
+                        Children [
+                            ~{Label::regular("Press")}
+                            --
+                            ~{Kbd::new("Esc")}
+                            --
+                            ~{Label::regular("to cancel, or")}
+                            --
+                            ~{Kbd::new("R")}
+                            --
+                            ~{Label::regular("to rotate")}
+                        ]
+                    })
                 ]
             ]
         },
@@ -306,37 +442,38 @@ fn labels(spawner: In<StackChildSpawner>, mut commands: Commands) {
 
 fn tags(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands) {
     let icon = icon.0.clone();
+    let (neutral, warning) = (icon.clone(), icon);
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Label::header("Pills")}
+                ~{Label::header("Tags")}
                 --
-                Node { column_gap: px(10.0), align_items: AlignItems::Center }
+                ~{groups()}
                 Children [
-                    ~{Pill::new("Idle")}
+                    @variant("Pill: neutral", bsn! { ~{Pill::new("Idle")} })
                     --
-                    ~{Pill::new("Running").with_tone(PillTone::Info)}
+                    @variant("Pill: info", bsn! { ~{Pill::new("Running").with_tone(PillTone::Info)} })
                     --
-                    ~{Pill::new("Waiting").with_tone(PillTone::Warning)}
+                    @variant("Pill: warning (waiting)", bsn! {
+                        ~{Pill::new("Waiting").with_tone(PillTone::Warning)}
+                    })
                     --
-                    ~{Pill::new("No path").with_tone(PillTone::Problem)}
-                ]
-                --
-                ~{Label::header("Badges")}
-                --
-                Node { column_gap: px(20.0), align_items: AlignItems::Center }
-                Children [
-                    IconButton { icon: {icon.clone()}, name: "Trains", size: IconButtonSize::Large }
-                    ~{Badge::count(3)}
+                    @variant("Pill: problem", bsn! {
+                        ~{Pill::new("No path").with_tone(PillTone::Problem)}
+                    })
                     --
-                    IconButton { icon, name: "Warnings", size: IconButtonSize::Large }
-                    ~{Badge::count(12).with_tone(BadgeTone::Warning)}
+                    @variant("Badge: neutral count", bsn! {
+                        IconButton { icon: {neutral}, name: "Trains", size: IconButtonSize::Large }
+                        ~{Badge::count(3)}
+                    })
+                    --
+                    @variant("Badge: warning count", bsn! {
+                        IconButton { icon: {warning}, name: "Warnings", size: IconButtonSize::Large }
+                        ~{Badge::count(12).with_tone(BadgeTone::Warning)}
+                    })
                 ]
             ]
         },
@@ -347,40 +484,55 @@ fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
-                flex_wrap: FlexWrap::Wrap,
-                column_gap: px(20.0),
-                row_gap: px(20.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                List
-                @{Selection::builder().one().scene_with_items(countries())}
+                ~{Label::header("Lists")}
                 --
-                List
-                ~{CornerStyle::Separated}
-                @{Selection::builder().zero_or_more().scene_with_items(countries())}
-                --
-                List
-                ~{ListLayout::VerticalGrid { columns: 2 }}
-                ~{CornerStyle::Tabs}
-                @{Selection::builder().zero_or_one().scene_with_items(countries())}
-                --
-                // Ten thousand rows, of which only those in view are spawned.
-                Node { width: px(220.0), height: px(260.0) }
-                @virtual_list_scroll_area()
+                ~{groups()}
+                Children [
+                    @variant("One selected", bsn! {
+                        List
+                        @{Selection::builder().one().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("Separated, many selected", bsn! {
+                        List
+                        ~{CornerStyle::Separated}
+                        @{Selection::builder().zero_or_more().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("Two-column grid, tabs corners, none or one", bsn! {
+                        List
+                        ~{ListLayout::VerticalGrid { columns: 2 }}
+                        ~{CornerStyle::Tabs}
+                        @{Selection::builder().zero_or_one().scene_with_items(countries())}
+                    })
+                    --
+                    // Ten thousand rows, of which only those in view are spawned.
+                    @variant("Virtual list, 10,000 rows", bsn! {
+                        Node { width: px(220.0), height: px(260.0) }
+                        @virtual_list_scroll_area(VirtualList::new(row_height(28.0)))
+                    })
+                    --
+                    @variant("Virtual list, separated", bsn! {
+                        Node { width: px(220.0), height: px(260.0) }
+                        @virtual_list_scroll_area(
+                            VirtualList::separated(row_height(44.0)).unwrap_or_else(|_| std::process::abort())
+                        )
+                    })
+                ]
             ]
         },
     );
 }
 
 /// A scroll area over a `VirtualList` of ten thousand rows.
-fn virtual_list_scroll_area() -> impl Scene {
+fn virtual_list_scroll_area(list: VirtualList) -> impl Scene {
     ScrollArea::scene(
-        || {
+        move || {
             bsn_list! {
-                ~{VirtualList::new(row_height(28.0))}
+                ~{list}
                 @{Selection::builder().one().scene_with_items((1..=10_000).map(|row| Item::new(format!("Row {row}"))))}
             }
         },
@@ -397,17 +549,90 @@ fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
-                column_gap: px(20.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Combo}
-                @{Selection::builder().zero_or_one().scene_with_items(countries())}
+                ~{Label::header("Combos")}
                 --
-                ~{Combo}
-                @{Selection::builder().one().scene_with_items(countries())}
+                ~{groups()}
+                Children [
+                    @variant("None or one, with a placeholder", bsn! {
+                        ~{Combo}
+                        ~{ComboPlaceholder("Pick a country".to_string())}
+                        @{Selection::builder().zero_or_one().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("Exactly one", bsn! {
+                        ~{Combo}
+                        @{Selection::builder().one().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("Options with a note", bsn! {
+                        ~{Combo}
+                        @{Selection::builder().zero_or_one().scene_with_items(stations())}
+                    })
+                    --
+                    @variant("One or more", bsn! {
+                        ~{Combo}
+                        @{Selection::builder().one_or_more().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("None or more", bsn! {
+                        ~{Combo}
+                        @{Selection::builder().zero_or_more().scene_with_items(countries())}
+                    })
+                ]
+            ]
+        },
+    );
+}
+
+fn filter_combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    let shared = commands
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(countries()),
+        )
+        .id();
+    spawner.spawn_scene(
+        &mut commands,
+        bsn! {
+            #Page
+            ~{page()}
+            Children [
+                ~{Label::header("Filter combos")}
+                --
+                ~{Label::caption("Type to filter the options, Arrow Down and Up to move through the matches, Enter to pick.")}
+                --
+                ~{groups()}
+                Children [
+                    @variant("Shares its selection with the combo beside it", bsn! {
+                        ~{row()}
+                        Children [
+                            ~{FilterCombo::default().with_name("Country")}
+                            ~{Selection::reference(shared)}
+                            --
+                            ~{Combo}
+                            ~{Selection::reference(shared)}
+                        ]
+                    })
+                    --
+                    @variant("Exactly one", bsn! {
+                        ~{FilterCombo::default().with_name("Country")}
+                        @{Selection::builder().one().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("None or more, stays open for the next pick", bsn! {
+                        ~{FilterCombo::default().with_name("Stations")}
+                        @{Selection::builder().zero_or_more().scene_with_items(countries())}
+                    })
+                    --
+                    @variant("A long list: 80 options, the popup scrolls", bsn! {
+                        ~{FilterCombo::default().with_name("Number")}
+                        @{Selection::builder().zero_or_one().scene_with_items((1..=80).map(|n| Item::new(format!("Option {n}"))))}
+                    })
+                ]
             ]
         },
     );
@@ -424,43 +649,116 @@ fn colours(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Label::header("Colour palette")}
+                ~{Label::header("Colours")}
                 --
-                ~{ColorPalette}
-                ~{ListLayout::VerticalGrid { columns: 11 }}
-                @{Selection::builder().one().scene_with_items(swatches())}
-                --
-                ~{Label::header("Colour palette combo")}
-                --
-                ColorPaletteCombo
-                ~{ListLayout::VerticalGrid { columns: 11 }}
-                @{Selection::builder().zero_or_one().scene_with_items(swatches())}
+                ~{groups()}
+                Children [
+                    @variant("Palette, exactly one", bsn! {
+                        ~{ColorPalette}
+                        ~{ListLayout::VerticalGrid { columns: 11 }}
+                        @{Selection::builder().one().scene_with_items(swatches())}
+                    })
+                    --
+                    @variant("Palette in a scroll area", bsn! {
+                        Node { width: px(250.0), height: px(120.0) }
+                        @palette_scroll_area(swatches())
+                    })
+                    --
+                    @variant("Palette combo, none or one", bsn! {
+                        ColorPaletteCombo
+                        ~{ListLayout::VerticalGrid { columns: 11 }}
+                        @{Selection::builder().zero_or_one().scene_with_items(swatches())}
+                    })
+                    --
+                    @variant("Palette combo, exactly one", bsn! {
+                        ColorPaletteCombo
+                        ~{ListLayout::VerticalGrid { columns: 11 }}
+                        @{Selection::builder().one().scene_with_items(swatches())}
+                    })
+                ]
             ]
         },
     );
 }
 
-fn segmented(spawner: In<StackChildSpawner>, mut commands: Commands) {
+/// A scroll area over a palette of `swatches`.
+fn palette_scroll_area(swatches: Vec<Item<Color>>) -> impl Scene {
+    ScrollArea::scene(
+        move || {
+            bsn_list! {
+                ~{ColorPalette}
+                ~{ListLayout::VerticalGrid { columns: 6 }}
+                @{Selection::builder().one().scene_with_items(swatches.clone())}
+            }
+        },
+        true,
+        false,
+    )
+}
+
+fn segmented(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands) {
+    let icon = icon.0.clone();
+    let with_icon = move |text| (Item::new(text), ItemIcon(icon.clone()));
+    let (text_and_icon, icon_only) = (
+        ["Grid", "List"].map(with_icon.clone()),
+        ["Map", "Table"].map(with_icon),
+    );
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                SegmentedControl
-                @{Selection::builder().one().scene_with_items(["Auto", "Manual"].map(Item::new))}
+                ~{Label::header("Segmented control")}
                 --
-                SegmentedControl
-                @{Selection::builder().one().scene_with_items(["Dark", "System", "Light"].map(Item::new))}
+                ~{groups()}
+                Children [
+                    @variant("Two segments", bsn! {
+                        SegmentedControl
+                        @{Selection::builder().one().scene_with_items(["Auto", "Manual"].map(Item::new))}
+                    })
+                    --
+                    @variant("Three segments", bsn! {
+                        SegmentedControl
+                        @{Selection::builder().one().scene_with_items(["Dark", "System", "Light"].map(Item::new))}
+                    })
+                    --
+                    @variant("Text and icon", bsn! {
+                        SegmentedControl
+                        @{Selection::builder().one().scene_with_items(text_and_icon)}
+                    })
+                    --
+                    @variant("Icon only, the text is the tooltip", bsn! {
+                        SegmentedControl
+                        ~{SegmentLabels::Hidden}
+                        @{Selection::builder().one().scene_with_items(icon_only)}
+                    })
+                ]
+            ]
+        },
+    );
+}
+
+fn light_dark(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    spawner.spawn_scene(
+        &mut commands,
+        bsn! {
+            #Page
+            ~{page()}
+            Children [
+                ~{Label::header("Light dark toggle")}
+                --
+                ~{groups()}
+                Children [
+                    @variant("Light, system or dark; the system follows the operating system", bsn! {
+                        LightDarkToggle
+                    })
+                ]
+                --
+                ~{Label::caption("The toggle under the tabs is this widget, and it switches the theme of this overview.")}
             ]
         },
     );
@@ -486,27 +784,40 @@ fn chips(spawner: In<StackChildSpawner>, mut commands: Commands) {
             },
         ]
     };
+    let shared = commands
+        .spawn(Selection::builder().one().build_with_items(items()))
+        .id();
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                FilterChips
-                @{Selection::builder().one().scene_with_items(items())}
+                ~{Label::header("Filter chips")}
                 --
-                // Narrow, so that the chips wrap.
-                FilterChips
-                Node {
-                    width: px(220.0),
-                    flex_wrap: FlexWrap::Wrap,
-                    column_gap: px(6.0),
-                    row_gap: px(6.0),
-                }
-                @{Selection::builder().one().scene_with_items(items())}
+                ~{groups()}
+                Children [
+                    @variant("With counts", bsn! {
+                        FilterChips
+                        ~{Selection::reference(shared)}
+                    })
+                    --
+                    @variant("Narrow, so that the chips wrap", bsn! {
+                        FilterChips
+                        Node {
+                            width: px(220.0),
+                            flex_wrap: FlexWrap::Wrap,
+                            column_gap: px(6.0),
+                            row_gap: px(6.0),
+                        }
+                        @{Selection::builder().one().scene_with_items(items())}
+                    })
+                    --
+                    @variant("A second control sharing the selection of the first", bsn! {
+                        FilterChips
+                        ~{Selection::reference(shared)}
+                    })
+                ]
             ]
         },
     );
@@ -516,21 +827,23 @@ fn navigation(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(16.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Label::header("Tab bar")}
+                ~{Label::header("Tabs and trails")}
                 --
-                TabBar
-                @{Selection::builder().one().scene_with_items(["Overview", "Trains", "Stops"].map(Item::new))}
-                --
-                ~{Label::header("Bread crumbs")}
-                --
-                ~{BreadCrumbs}
-                @{Selection::builder().one_or_more().scene_with_items(["Home", "Lines", "Line 4"].map(Item::new))}
+                ~{groups()}
+                Children [
+                    @variant("Tab bar", bsn! {
+                        TabBar
+                        @{Selection::builder().one().scene_with_items(["Overview", "Trains", "Stops"].map(Item::new))}
+                    })
+                    --
+                    @variant("Bread crumbs", bsn! {
+                        ~{BreadCrumbs}
+                        @{Selection::builder().one_or_more().scene_with_items(["Home", "Lines", "Line 4"].map(Item::new))}
+                    })
+                ]
             ]
         },
     );
@@ -543,28 +856,37 @@ fn values(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(16.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{valid_slider(0.5, 0.0, 1.0, None).with_name("Volume")}
+                ~{Label::header("Slider and stepper")}
                 --
-                ~{valid_slider(60.0, 0.0, 120.0, Some(10.0)).with_format(kilometres_per_hour).with_name("Speed")}
-                --
-                ~{valid_slider(4.0, 0.0, 10.0, Some(1.0)).with_name("Locked")}
-                InteractionDisabled
-                --
-                Node { column_gap: px(16.0), align_items: AlignItems::Center }
+                ~{groups()}
                 Children [
-                    NumericStepper
+                    @variant("Slider: continuous", bsn! {
+                        ~{valid_slider(0.5, 0.0, 1.0, None).with_name("Volume")}
+                    })
                     --
-                    NumericStepper
-                    ~{float_value}
+                    @variant("Slider: stepped and formatted", bsn! {
+                        ~{valid_slider(60.0, 0.0, 120.0, Some(10.0)).with_format(kilometres_per_hour).with_name("Speed")}
+                    })
                     --
-                    NumericStepper
-                    ~{level_value}
+                    @variant("Slider: disabled", bsn! {
+                        ~{valid_slider(4.0, 0.0, 10.0, Some(1.0)).with_name("Locked")}
+                        InteractionDisabled
+                    })
+                    --
+                    @variant("Stepper: default", bsn! { NumericStepper })
+                    --
+                    @variant("Stepper: float", bsn! {
+                        NumericStepper
+                        ~{float_value}
+                    })
+                    --
+                    @variant("Stepper: u8, in steps of 7", bsn! {
+                        NumericStepper
+                        ~{level_value}
+                    })
                 ]
             ]
         },
@@ -579,18 +901,24 @@ fn text_fields(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(12.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{TextField::new("Amsterdam Centraal").with_name("Name")}
+                ~{Label::header("Text field")}
                 --
-                ~{TextField::new("")
-                    .with_placeholder("Seed")
-                    .with_name("Seed")
-                    .with_max_width(Val::Px(200.0))}
+                ~{groups()}
+                Children [
+                    @variant("With text", bsn! {
+                        ~{TextField::new("Amsterdam Centraal").with_name("Name")}
+                    })
+                    --
+                    @variant("Placeholder, narrow", bsn! {
+                        ~{TextField::new("")
+                            .with_placeholder("Seed")
+                            .with_name("Seed")
+                            .with_max_width(Val::Px(200.0))}
+                    })
+                ]
             ]
         },
     );
@@ -613,22 +941,49 @@ fn toolbars(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Comma
             },
         ]
     };
-    let filled = tools(&icon.0);
-    let underlined = tools(&icon.0);
+    let toned = vec![
+        Item {
+            data: Tool::in_group(icon.0.clone(), "Neutral", 0),
+        },
+        Item {
+            data: Tool::in_group(icon.0.clone(), "Warning", 1).with_tone(Tone::Warning),
+        },
+        Item {
+            data: Tool::in_group(icon.0.clone(), "Danger", 2).with_tone(Tone::Danger),
+        },
+    ];
+    let (filled, hidden, underlined) = (tools(&icon.0), tools(&icon.0), tools(&icon.0));
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::FlexStart,
-                row_gap: px(16.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Toolbar::new(ToolbarStyle::Filled)}
-                @{Selection::builder().one().scene_with_items(filled)}
+                ~{Label::header("Toolbar")}
                 --
-                ~{Toolbar::new(ToolbarStyle::Underlined)}
-                @{Selection::builder().zero_or_one().scene_with_items(underlined)}
+                ~{groups()}
+                Children [
+                    @variant("Filled, with key hints and a danger tool", bsn! {
+                        ~{Toolbar::new(ToolbarStyle::Filled)}
+                        @{Selection::builder().one().scene_with_items(filled)}
+                    })
+                    --
+                    @variant("Filled, labels hidden", bsn! {
+                        ~{Toolbar::new(ToolbarStyle::Filled)}
+                        ~{ToolbarLabels::Hidden}
+                        @{Selection::builder().one().scene_with_items(hidden)}
+                    })
+                    --
+                    @variant("Underlined, none or one, the label is the tooltip", bsn! {
+                        ~{Toolbar::new(ToolbarStyle::Underlined)}
+                        @{Selection::builder().zero_or_one().scene_with_items(underlined)}
+                    })
+                    --
+                    @variant("Tool tones: neutral, warning, danger", bsn! {
+                        ~{Toolbar::new(ToolbarStyle::Filled)}
+                        @{Selection::builder().one().scene_with_items(toned)}
+                    })
+                ]
             ]
         },
     );
@@ -649,8 +1004,19 @@ fn galleries(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Comm
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node { width: px(600.0) }
-            @gallery_scroll_area(cards)
+            #Page
+            ~{page()}
+            Children [
+                ~{Label::header("Gallery")}
+                --
+                ~{groups()}
+                Children [
+                    @variant("Two groups of cards, in a horizontal scroll area", bsn! {
+                        Node { width: px(600.0) }
+                        @gallery_scroll_area(cards)
+                    })
+                ]
+            ]
         },
     );
 }
@@ -678,37 +1044,45 @@ struct Lines(usize);
 struct Filled;
 
 fn cards(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands) {
-    let close = icon.0.clone();
+    let (close, close_scrolling) = (icon.0.clone(), icon.0.clone());
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
-                column_gap: px(20.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{Card}
-                Node {
-                    padding: UiRect::all(px(12.0)),
-                    row_gap: px(8.0),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::FlexStart,
-                }
+                ~{Label::header("Cards and panels")}
+                --
+                ~{groups()}
                 Children [
-                    ~{Label::title("Card")}
+                    @variant("Card", bsn! {
+                        ~{Card}
+                        Node {
+                            padding: UiRect::all(px(12.0)),
+                            row_gap: px(8.0),
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::FlexStart,
+                        }
+                        Children [
+                            ~{Label::title("Card")}
+                            --
+                            ~{Label::secondary("A themed surface")}
+                            --
+                            ~{PushButton::from_label("Button on a card")}
+                        ]
+                    })
                     --
-                    ~{Label::secondary("A themed surface")}
+                    @variant("Panel: closable, with a subtitle", bsn! {
+                        Panel { title: "Trains", subtitle: {Some("3 open".to_string())}, close_icon: {HandleTemplate::Handle(close)} }
+                        Lines(3)
+                    })
                     --
-                    ~{PushButton::from_label("Button on a card")}
+                    // A body past 150 pixels scrolls.
+                    @variant("Panel: the body scrolls past 150 px", bsn! {
+                        Panel { title: "Stops", close_icon: {HandleTemplate::Handle(close_scrolling)}, max_body_height: 150.0 }
+                        Lines(12)
+                    })
                 ]
-                --
-                Panel { title: "Trains", subtitle: {Some("3 open".to_string())}, close_icon: {HandleTemplate::Handle(close.clone())} }
-                Lines(3)
-                --
-                // A body past 150 pixels scrolls.
-                Panel { title: "Stops", close_icon: {HandleTemplate::Handle(close)}, max_body_height: 150.0 }
-                Lines(12)
             ]
         },
     );
@@ -740,14 +1114,25 @@ fn setting_rows(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            SettingRows
-            Node { width: px(420.0) }
+            #Page
+            ~{page()}
             Children [
-                ~{SettingRow::new("Appearance", "Light or dark")} Control::Appearance
+                ~{Label::header("Setting rows")}
                 --
-                ~{SettingRow::new("Text size", "In points")} Control::TextSize
-                --
-                ~{SettingRow::new("Reset", "Back to the defaults")} Control::Reset
+                ~{groups()}
+                Children [
+                    @variant("Rows with a segmented control, a stepper and a button", bsn! {
+                        SettingRows
+                        Node { width: px(420.0) }
+                        Children [
+                            ~{SettingRow::new("Appearance", "Light or dark")} Control::Appearance
+                            --
+                            ~{SettingRow::new("Text size", "In points")} Control::TextSize
+                            --
+                            ~{SettingRow::new("Reset", "Back to the defaults")} Control::Reset
+                        ]
+                    })
+                ]
             ]
         },
     );
@@ -790,17 +1175,23 @@ fn scroll_areas(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
-                column_gap: px(20.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                Node { width: px(200.0), height: px(200.0) }
-                @list_scroll_area(true, false)
+                ~{Label::header("Scroll area")}
                 --
-                Node { width: px(200.0), height: px(200.0) }
-                @list_scroll_area(true, true)
+                ~{groups()}
+                Children [
+                    @variant("Vertical", bsn! {
+                        Node { width: px(200.0), height: px(200.0) }
+                        @list_scroll_area(true, false)
+                    })
+                    --
+                    @variant("Vertical and horizontal", bsn! {
+                        Node { width: px(200.0), height: px(200.0) }
+                        @list_scroll_area(true, true)
+                    })
+                ]
             ]
         },
     );
@@ -821,23 +1212,34 @@ fn list_scroll_area(vertical: bool, horizontal: bool) -> impl Scene {
     )
 }
 
-fn feedback(spawner: In<StackChildSpawner>, mut commands: Commands) {
+fn feedback(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands) {
+    let icon = icon.0.clone();
     spawner.spawn_scene(
         &mut commands,
         bsn! {
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
-                column_gap: px(20.0),
-            }
+            #Page
+            ~{page()}
             Children [
-                ~{PushButton::from_label("Hover me")}
-                ~{Tooltip::new("A tooltip appears after half a second")}
+                ~{Label::header("Tooltip and toast")}
                 --
-                ~{PushButton::from_label("Raise a toast")}
-                on(|_: On<Activate>, mut commands: Commands, root: Single<Entity, With<UiRoot>>| {
-                    commands.spawn((Toast::new("Saved to rails.ron"), ChildOf(*root)));
-                })
+                ~{groups()}
+                Children [
+                    @variant("Tooltip on a push button", bsn! {
+                        ~{PushButton::from_label("Hover me")}
+                        ~{Tooltip::new("A tooltip appears after half a second")}
+                    })
+                    --
+                    @variant("The tooltip an icon button carries", bsn! {
+                        IconButton { icon: {icon}, name: "Hover me too", size: IconButtonSize::Regular }
+                    })
+                    --
+                    @variant("Toast", bsn! {
+                        ~{PushButton::from_label("Raise a toast")}
+                        on(|_: On<Activate>, mut commands: Commands, root: Single<Entity, With<UiRoot>>| {
+                            commands.spawn((Toast::new("Saved to rails.ron"), ChildOf(*root)));
+                        })
+                    })
+                ]
             ]
         },
     );

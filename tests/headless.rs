@@ -7082,16 +7082,19 @@ fn the_overview_example_builds_and_every_page_runs() {
     }
     assert_eq!(ui_root_count(&mut app), 1);
     let bar = single_entity_with::<TabBar>(&mut app);
-    // Showing each page in turn builds it: none of them panics or logs a missing widget.
-    for tab in [
+    // Showing each page in turn builds it: none of them panics or logs a missing widget, and the
+    // page has its header (the same text as its tab, so a shown page makes two of them).
+    let pages = [
         "Buttons",
         "Icon buttons",
         "Labels",
         "Tags",
         "Lists",
         "Combos",
+        "Filter combos",
         "Colours",
         "Segmented control",
+        "Light dark toggle",
         "Filter chips",
         "Tabs and trails",
         "Slider and stepper",
@@ -7102,11 +7105,23 @@ fn the_overview_example_builds_and_every_page_runs() {
         "Setting rows",
         "Scroll area",
         "Tooltip and toast",
-    ] {
-        select_by_text(&mut app, bar, tab);
+    ];
+    {
+        let world = app.world_mut();
+        assert_eq!(world.query::<&TabBarTab>().iter(world).count(), pages.len());
+    }
+    for page in pages {
+        select_by_text(&mut app, bar, page);
         for _ in 0..4 {
             app.update();
         }
+        let world = app.world_mut();
+        let texts = world
+            .query::<&Text>()
+            .iter(world)
+            .filter(|text| text.0 == page)
+            .count();
+        assert_eq!(texts, 2, "the {page} page has its header");
     }
     assert_eq!(ui_root_count(&mut app), 1);
 }
