@@ -3988,5 +3988,71 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
             checked >= 2,
             "{tab}: the header and the variants were looked at"
         );
+        // The wrapping row of variants is centred in the page, and every line of variants is
+        // centred in the row, none overlapping another. (The page centres the row itself, so
+        // the lines are what `justify_content: Center` of the row decides.)
+        let rows: Vec<Entity> = world
+            .get::<Children>(page)
+            .unwrap()
+            .iter()
+            .filter(|child| {
+                world
+                    .get::<Node>(*child)
+                    .is_some_and(|node| node.flex_wrap == FlexWrap::Wrap)
+            })
+            .collect();
+        assert_eq!(rows.len(), 1, "{tab}: one wrapping row of variants");
+        let rect = |world: &World, entity: Entity| {
+            let computed = world.get::<ComputedNode>(entity).unwrap();
+            let centre = world.get::<UiGlobalTransform>(entity).unwrap().translation;
+            let size = computed.size();
+            Rect::from_center_size(centre, size)
+        };
+        let row = rect(world, rows[0]);
+        let page_rect = rect(world, page);
+        if row.width() < page_rect.width() {
+            assert!(
+                (row.center().x - page_rect.center().x).abs() <= 1.0,
+                "{tab}: the row of variants is not centred in the page"
+            );
+        }
+        let variants: Vec<Rect> = world
+            .get::<Children>(rows[0])
+            .unwrap()
+            .iter()
+            .map(|variant| rect(world, variant))
+            .collect();
+        assert!(!variants.is_empty(), "{tab}: the row has variants");
+        // A line is the variants that start at the same height.
+        let mut lines: Vec<(f32, f32, f32)> = Vec::new();
+        for variant in &variants {
+            match lines
+                .iter_mut()
+                .find(|(top, ..)| (top - variant.min.y).abs() < 1.0)
+            {
+                Some((_, left, right)) => {
+                    *left = left.min(variant.min.x);
+                    *right = right.max(variant.max.x);
+                }
+                None => lines.push((variant.min.y, variant.min.x, variant.max.x)),
+            }
+        }
+        for (_, left, right) in &lines {
+            assert!(
+                ((left + right) / 2.0 - row.center().x).abs() <= 1.0,
+                "{tab}: a line of variants ({left}..{right}) is not centred in the row {}..{}",
+                row.min.x,
+                row.max.x
+            );
+        }
+        for (i, a) in variants.iter().enumerate() {
+            for b in variants.iter().skip(i + 1) {
+                let overlap = a.intersect(*b);
+                assert!(
+                    overlap.width() <= 0.0 || overlap.height() <= 0.0,
+                    "{tab}: two variants overlap: {a:?} and {b:?}"
+                );
+            }
+        }
     }
 }
