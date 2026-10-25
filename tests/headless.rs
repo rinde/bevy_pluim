@@ -12732,3 +12732,208 @@ fn the_theme_editor_example_exports_the_numbers_as_a_theme_function() {
         "balanced braces"
     );
 }
+
+// ---- ThemeEditor: values the rows cannot show as they are (#611) ----
+
+/// Runs `frames` updates of `app` and returns the `warn!` messages logged meanwhile.
+fn warnings_during(app: &mut App, frames: usize) -> Vec<String> {
+    use bevy::log::tracing::{self, Level, field::Visit};
+    use bevy::log::tracing_subscriber::{self, layer::SubscriberExt};
+    use std::sync::{Arc, Mutex};
+
+    struct Message(String);
+    impl Visit for Message {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "message" {
+                self.0 = format!("{value:?}");
+            }
+        }
+    }
+    struct Warnings(Arc<Mutex<Vec<String>>>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Warnings {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            if *event.metadata().level() == Level::WARN
+                && let Ok(mut all) = self.0.lock()
+            {
+                let mut message = Message(String::new());
+                event.record(&mut message);
+                all.push(message.0);
+            }
+        }
+    }
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(Warnings(seen.clone()));
+    // The subscriber is thread-local, so the systems must run on this thread.
+    app.edit_schedule(Update, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    tracing::subscriber::with_default(subscriber, || {
+        for _ in 0..frames {
+            app.update();
+        }
+    });
+    seen.lock().unwrap().clone()
+}
+
+/// An app whose `Theme` is edited by `edit` before a `ThemeEditor` is spawned, and the warnings
+/// logged while the editor built and showed it.
+fn theme_editor_over(edit: impl FnOnce(&mut Theme)) -> (App, Vec<String>) {
+    let mut app = headless_app();
+    edit(&mut app.world_mut().get_resource_mut::<Theme>().unwrap());
+    app.world_mut().spawn((ThemeEditor, Node::default()));
+    let warnings = warnings_during(&mut app, 6);
+    (app, warnings)
+}
+
+fn step_editor_to(app: &mut App, name: &str, value: f32) {
+    let stepper = editor_stepper(app, name);
+    app.world_mut()
+        .trigger(rin_bevy_ui::numeric_stepper::ValueChange {
+            entity: stepper,
+            value: Value::new_f32(value, 0.0, 100.0, 1.0).unwrap(),
+        });
+    app.update();
+    app.update();
+}
+
+#[test]
+fn a_theme_number_above_its_range_still_has_a_row_with_the_range_widened_to_it() {
+    let (mut app, _) = theme_editor_over(|theme| {
+        theme.control_radius = Val::Px(50.0);
+        theme.font_size_body = 60.0;
+        theme.scroll_bar_width = Val::Px(0.5);
+    });
+    let count = {
+        let world = app.world_mut();
+        world.query::<&ThemeParameterEditor>().iter(world).count()
+    };
+    assert_eq!(count, theme_parameters().len(), "a row is missing");
+    for (name, shown) in [
+        ("control_radius", 50.0),
+        ("font_size_body", 60.0),
+        ("scroll_bar_width", 0.5),
+    ] {
+        let stepper = editor_stepper(&mut app, name);
+        let value = app.world().entity(stepper).get::<Value>().unwrap();
+        assert_eq!(value.as_f32(), Some(shown), "{name}");
+    }
+
+    // Stepping stays inside the widened range: down to 49, and 50 is still the top.
+    let stepper = editor_stepper(&mut app, "control_radius");
+    assert!(
+        !app.world()
+            .entity(stepper)
+            .get::<Value>()
+            .unwrap()
+            .can_increment()
+    );
+    assert!(
+        app.world()
+            .entity(stepper)
+            .get::<Value>()
+            .unwrap()
+            .can_decrement()
+    );
+    step_editor_to(&mut app, "control_radius", 49.0);
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().control_radius,
+        Val::Px(49.0)
+    );
+    // A later change of the theme to another out-of-range value widens the live row too.
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .control_radius = Val::Px(70.0);
+    for _ in 0..3 {
+        app.update();
+    }
+    let stepper = editor_stepper(&mut app, "control_radius");
+    assert_eq!(
+        app.world().entity(stepper).get::<Value>().unwrap().as_f32(),
+        Some(70.0)
+    );
+}
+
+#[test]
+fn a_theme_number_that_is_nan_still_has_a_row_at_its_minimum_and_a_warning_names_it() {
+    let (mut app, warnings) = theme_editor_over(|theme| {
+        theme.font_size_body = f32::NAN;
+        theme.panel_radius = Val::Px(f32::INFINITY);
+    });
+    let count = {
+        let world = app.world_mut();
+        world.query::<&ThemeParameterEditor>().iter(world).count()
+    };
+    assert_eq!(count, theme_parameters().len(), "a row is missing");
+    for (name, minimum) in [("font_size_body", 6.0), ("panel_radius", 0.0)] {
+        let stepper = editor_stepper(&mut app, name);
+        assert_eq!(
+            app.world().entity(stepper).get::<Value>().unwrap().as_f32(),
+            Some(minimum),
+            "{name}"
+        );
+        assert_eq!(
+            warnings.iter().filter(|w| w.contains(name)).count(),
+            1,
+            "{name}: {warnings:?}"
+        );
+    }
+    // The theme keeps the value until a step sets it.
+    assert!(
+        app.world()
+            .get_resource::<Theme>()
+            .unwrap()
+            .font_size_body
+            .is_nan()
+    );
+    step_editor_to(&mut app, "font_size_body", 16.0);
+    assert!(
+        (app.world().get_resource::<Theme>().unwrap().font_size_body - 16.0).abs() < f32::EPSILON
+    );
+}
+
+#[test]
+fn a_theme_number_that_is_not_in_pixels_shows_0_and_is_warned_about_once() {
+    let (mut app, warnings) = theme_editor_over(|theme| {
+        theme.border_thickness = Val::Percent(50.0);
+        theme.item_padding.left = Val::Auto;
+    });
+    let count = {
+        let world = app.world_mut();
+        world.query::<&ThemeParameterEditor>().iter(world).count()
+    };
+    assert_eq!(count, theme_parameters().len(), "a row is missing");
+    let stepper = editor_stepper(&mut app, "border_thickness");
+    assert_eq!(
+        app.world().entity(stepper).get::<Value>().unwrap().as_f32(),
+        Some(0.0)
+    );
+    for name in ["border_thickness", "item_padding.left"] {
+        assert_eq!(
+            warnings.iter().filter(|w| w.contains(name)).count(),
+            1,
+            "{name}: {warnings:?}"
+        );
+    }
+    // The warning is not repeated when the theme changes again ...
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .panel_radius = Val::Px(12.0);
+    let again = warnings_during(&mut app, 3);
+    assert!(again.is_empty(), "{again:?}");
+    // ... and stepping turns the value into pixels.
+    step_editor_to(&mut app, "border_thickness", 2.0);
+    assert_eq!(
+        app.world()
+            .get_resource::<Theme>()
+            .unwrap()
+            .border_thickness,
+        Val::Px(2.0)
+    );
+}
