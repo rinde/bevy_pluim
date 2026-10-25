@@ -9,6 +9,15 @@
 //! ([`Theme::set_colors`]); stepping a number sets it in the [`Theme`]. Nothing is exported:
 //! what to do with the edited theme is the application's.
 //!
+//! A row never goes missing because of its value. A number outside its row's range (an app set
+//! `control_radius` to 50, say) gets a row whose stepper range is widened to include it, and
+//! stepping keeps to that widened range. A number that is not finite (NaN, infinity) has no
+//! range to widen: its row shows the row's minimum, the theme keeps the value until a step sets
+//! it, and a `warn!` names the parameter. A [`Val`] that is not in pixels (percent, rem, auto)
+//! reads as 0, so the row shows 0 (widening the range if 0 is outside it) and a `warn!` names
+//! the parameter the first time the editor reads it: the first step turns the value into
+//! pixels.
+//!
 //! Not editable here: the fonts (handles to assets the application loads) and the translucent
 //! colour slots (the shadows), which a palette colour, opaque, cannot express.
 
@@ -183,6 +192,8 @@ pub struct ThemeParameter {
     pub max: f32,
     get: fn(&Theme) -> f32,
     set: fn(&mut Theme, f32),
+    /// The [`Val`] of the theme this number is read from, `None` for a number that is not one.
+    raw: fn(&Theme) -> Option<Val>,
 }
 
 impl ThemeParameter {
@@ -195,6 +206,65 @@ impl ThemeParameter {
     /// Sets the number in `theme`, in pixels for a [`Val`], clamped to `min..=max`.
     pub fn apply(&self, theme: &mut Theme, value: f32) {
         (self.set)(theme, value.clamp(self.min, self.max));
+    }
+
+    /// The range a row's stepper covers for `theme`: `min..=max`, widened to include the current
+    /// value when that is outside it. A value that is not finite widens nothing.
+    fn range_in(&self, theme: &Theme) -> (f32, f32) {
+        let value = self.value(theme);
+        if value.is_finite() {
+            (self.min.min(value), self.max.max(value))
+        } else {
+            (self.min, self.max)
+        }
+    }
+
+    /// The number a row shows for `theme`: the value, or `min` when it is not finite.
+    fn shown_in(&self, theme: &Theme) -> f32 {
+        let value = self.value(theme);
+        if value.is_finite() { value } else { self.min }
+    }
+
+    /// The stepper value of a row for `theme`.
+    fn stepper_value(&self, theme: &Theme) -> Option<Value> {
+        let (min, max) = self.range_in(theme);
+        Value::new_f32(self.shown_in(theme), min, max, 1.0).ok()
+    }
+
+    /// What is odd about the number in `theme`, if anything.
+    fn issue_in(&self, theme: &Theme) -> Option<ThemeParameterIssue> {
+        if !self.value(theme).is_finite() {
+            Some(ThemeParameterIssue::NotFinite)
+        } else if (self.raw)(theme).is_some_and(|val| !matches!(val, Val::Px(_))) {
+            Some(ThemeParameterIssue::NotPixels)
+        } else {
+            None
+        }
+    }
+}
+
+/// Why the editor cannot show a number of the theme as it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ThemeParameterIssue {
+    /// NaN or infinity: the row shows the minimum.
+    NotFinite,
+    /// A [`Val`] in percent, rem or another unit than pixels: the row shows 0.
+    NotPixels,
+}
+
+impl ThemeParameterIssue {
+    /// Logs the issue of `parameter`.
+    fn warn(self, parameter: &ThemeParameter) {
+        match self {
+            Self::NotFinite => warn!(
+                "the theme editor shows {} at its minimum {}: the theme's value is not finite",
+                parameter.name, parameter.min
+            ),
+            Self::NotPixels => warn!(
+                "the theme editor reads {} as 0: the theme's value is not in pixels, and a step sets it in pixels",
+                parameter.name
+            ),
+        }
     }
 }
 
@@ -216,6 +286,7 @@ macro_rules! parameter {
             max: $max,
             get: |theme| pixels(theme.$field),
             set: |theme, value| theme.$field = Val::Px(value),
+            raw: |theme| Some(theme.$field),
         }
     };
     ($name:expr, $label:expr, $section:expr, $min:expr, $max:expr, px $field:ident . $side:ident) => {
@@ -227,6 +298,7 @@ macro_rules! parameter {
             max: $max,
             get: |theme| pixels(theme.$field.$side),
             set: |theme, value| theme.$field.$side = Val::Px(value),
+            raw: |theme| Some(theme.$field.$side),
         }
     };
     ($name:expr, $label:expr, $section:expr, $min:expr, $max:expr, size $field:ident) => {
@@ -238,6 +310,7 @@ macro_rules! parameter {
             max: $max,
             get: |theme| theme.$field,
             set: |theme, value| theme.$field = value,
+            raw: |_| None,
         }
     };
 }
@@ -338,6 +411,7 @@ pub fn theme_parameters() -> &'static [ThemeParameter] {
                 max: 20.0,
                 get: |theme| pixels(theme.shadow_style().x_offset),
                 set: |theme, value| theme.shadow_style_mut().x_offset = Val::Px(value),
+                raw: |theme| Some(theme.shadow_style().x_offset),
             },
             ThemeParameter {
                 name: "shadow_style.y_offset",
@@ -347,6 +421,7 @@ pub fn theme_parameters() -> &'static [ThemeParameter] {
                 max: 20.0,
                 get: |theme| pixels(theme.shadow_style().y_offset),
                 set: |theme, value| theme.shadow_style_mut().y_offset = Val::Px(value),
+                raw: |theme| Some(theme.shadow_style().y_offset),
             },
             ThemeParameter {
                 name: "shadow_style.spread_radius",
@@ -356,6 +431,7 @@ pub fn theme_parameters() -> &'static [ThemeParameter] {
                 max: 20.0,
                 get: |theme| pixels(theme.shadow_style().spread_radius),
                 set: |theme, value| theme.shadow_style_mut().spread_radius = Val::Px(value),
+                raw: |theme| Some(theme.shadow_style().spread_radius),
             },
             ThemeParameter {
                 name: "shadow_style.blur_radius",
@@ -365,6 +441,7 @@ pub fn theme_parameters() -> &'static [ThemeParameter] {
                 max: 40.0,
                 get: |theme| pixels(theme.shadow_style().blur_radius),
                 set: |theme, value| theme.shadow_style_mut().blur_radius = Val::Px(value),
+                raw: |theme| Some(theme.shadow_style().blur_radius),
             },
         ]);
         all
@@ -488,7 +565,10 @@ fn color_row(colors: Entity, slot: &str, current: &ThemeColors) -> impl Bundle {
 
 /// A number row: its label and the stepper that sets it.
 fn parameter_row(parameter: &ThemeParameter, theme: &Theme) -> Option<impl Bundle> {
-    let value = Value::new_f32(parameter.value(theme), parameter.min, parameter.max, 1.0).ok()?;
+    let Some(value) = parameter.stepper_value(theme) else {
+        error!("the theme editor has no row for {}", parameter.name);
+        return None;
+    };
     Some((
         Node {
             align_items: AlignItems::Center,
@@ -555,7 +635,9 @@ fn on_step(
         return;
     };
     if let Some(parameter) = theme_parameters().iter().find(|p| p.name == editor.0) {
-        parameter.apply(&mut theme, value);
+        // Within the row's range, widened to a value the theme had out of range.
+        let (min, max) = parameter.range_in(&theme);
+        (parameter.set)(&mut theme, value.clamp(min, max));
     }
 }
 
@@ -565,6 +647,7 @@ fn show_theme(
     mut swatches: Query<(&ThemeColorSwatch, &mut BackgroundColor)>,
     steppers: Query<(Entity, &ThemeParameterEditor, &Value)>,
     mut labels: Query<&mut Text, With<ThemeEditorModeLabel>>,
+    mut warned: Local<std::collections::HashSet<(&'static str, ThemeParameterIssue)>>,
     mut commands: Commands,
 ) {
     for (swatch, mut background) in &mut swatches {
@@ -578,11 +661,16 @@ fn show_theme(
         let Some(parameter) = theme_parameters().iter().find(|p| p.name == editor.0) else {
             continue;
         };
-        let wanted = parameter.value(&theme);
+        if let Some(issue) = parameter.issue_in(&theme)
+            && warned.insert((parameter.name, issue))
+        {
+            issue.warn(parameter);
+        }
+        let wanted = parameter.shown_in(&theme);
         if value
             .as_f32()
             .is_none_or(|shown| (shown - wanted).abs() > f32::EPSILON)
-            && let Ok(value) = Value::new_f32(wanted, parameter.min, parameter.max, 1.0)
+            && let Some(value) = parameter.stepper_value(&theme)
         {
             commands.entity(stepper).insert(value);
         }
