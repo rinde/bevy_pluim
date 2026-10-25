@@ -13,6 +13,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 
 use crate::focus::{AccessibilitySync, is_hidden, sync_label};
+use crate::indicator::{self, Indicator};
 use crate::segmented_control::segment_colors;
 use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
 use crate::theme::Theme;
@@ -47,6 +48,11 @@ impl Plugin for TabBarPlugin {
                 selection_change,
                 hover_change,
                 sync_label_text,
+                (
+                    indicator::spawn::<TabIndicator, TabBar>,
+                    indicator::animate::<TabIndicator, TabBar, TabBarTab>,
+                )
+                    .chain(),
             ),
         )
         .add_systems(
@@ -123,6 +129,24 @@ impl TabBar {
         world
             .commands()
             .run_system_cached_with(theme_tab_bars, Some(context.entity));
+    }
+}
+
+/// The highlight behind the selected tab of a [`TabBar`]: a child of the bar, placed absolutely
+/// behind the tabs, which slides to the selected tab when the selection changes.
+#[derive(Component, Debug, Copy, Clone)]
+#[require(Name::new("TabIndicator"), Node, BackgroundColor::default())]
+struct TabIndicator {
+    owner: Entity,
+}
+
+impl Indicator for TabIndicator {
+    fn of(owner: Entity) -> Self {
+        Self { owner }
+    }
+
+    fn owner(&self) -> Entity {
+        self.owner
     }
 }
 
@@ -225,8 +249,15 @@ fn theme_tab_bars(
     bar_id: In<Option<Entity>>,
     theme: Res<Theme>,
     selections: SelectionParam,
-    mut bars: Query<(Entity, &mut Node, &mut BackgroundColor), (With<TabBar>, Without<TabBarTab>)>,
-    mut tabs: Query<(&TabBarTab, &Hovered, &mut Node, &mut BackgroundColor), Without<TabBar>>,
+    mut bars: Query<
+        (Entity, &mut Node, &mut BackgroundColor),
+        (With<TabBar>, Without<TabBarTab>, Without<TabIndicator>),
+    >,
+    mut tabs: Query<
+        (&TabBarTab, &mut Node, &mut BackgroundColor),
+        (Without<TabBar>, Without<TabIndicator>),
+    >,
+    mut indicators: Query<(&TabIndicator, &mut Node, &mut BackgroundColor), Without<TabBarTab>>,
     mut labels: Query<(&ChildOf, &mut TextColor, &mut TextFont), With<TabBarTabLabel>>,
     states: Query<(&TabBarTab, &Hovered)>,
 ) {
@@ -238,20 +269,26 @@ fn theme_tab_bars(
         background.0 = theme.colors().segmented_track;
     }
 
-    for (tab, hovered, mut node, mut background) in &mut tabs {
+    for (tab, mut node, mut background) in &mut tabs {
         if bar_id.0.is_some_and(|id| id != tab.owner()) {
             continue;
         }
-        let selected = selections
-            .get(tab.owner())
-            .is_some_and(|selection| selection.is_selected(tab.item()));
         node.height = Val::Px(TAB_HEIGHT);
         node.min_width = Val::Px(TAB_MIN_WIDTH);
         node.padding = UiRect::axes(Val::Px(TAB_SIDE_PADDING), Val::ZERO);
         node.align_items = AlignItems::Center;
         node.justify_content = JustifyContent::Center;
         node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = segment_colors(theme.colors(), selected, hovered.get()).0;
+        // The selected look is the indicator's, which slides.
+        background.0 = Color::NONE;
+    }
+
+    for (indicator, mut node, mut background) in &mut indicators {
+        if bar_id.0.is_some_and(|id| id != indicator.owner) {
+            continue;
+        }
+        node.border_radius = BorderRadius::all(theme.control_radius);
+        background.0 = TabIndicator::color(&theme);
     }
 
     for (child_of, mut text_color, mut text_font) in &mut labels {

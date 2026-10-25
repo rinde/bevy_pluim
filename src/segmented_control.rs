@@ -13,6 +13,7 @@ use bevy::ui_widgets::{Activate, Button};
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
 };
+use crate::indicator::{self, Indicator};
 use crate::list::sync_selected;
 use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
 use crate::theme::{Theme, ThemeColors};
@@ -28,11 +29,6 @@ const SEGMENT_SIDE_PADDING: f32 = 10.0;
 const TRACK_PADDING: f32 = 3.0;
 /// The gap between two segments.
 const SEGMENT_GAP: f32 = 2.0;
-/// How fast the selection indicator catches up with the selected segment, per second: it covers
-/// all but about 1 % of the way in a quarter of a second.
-const INDICATOR_RATE: f32 = 18.0;
-/// The distance in logical pixels under which the indicator snaps to its target.
-const INDICATOR_SNAP: f32 = 0.5;
 /// The side of a segment's icon, in logical pixels.
 const SEGMENT_ICON_SIZE: f32 = 16.0;
 /// The gap between a segment's icon and its text.
@@ -58,8 +54,8 @@ impl Plugin for SegmentedControlPlugin {
                 sync_icons,
                 sync_label_text,
                 hover_change,
-                spawn_indicators,
-                animate_indicators,
+                indicator::spawn::<SegmentIndicator, SegmentedControl>,
+                indicator::animate::<SegmentIndicator, SegmentedControl, Segment>,
             )
                 .chain(),
         )
@@ -262,6 +258,16 @@ impl SegmentIndicator {
     /// The [`SegmentedControl`] this indicator belongs to.
     #[must_use]
     pub const fn owner(&self) -> Entity {
+        self.owner
+    }
+}
+
+impl Indicator for SegmentIndicator {
+    fn of(owner: Entity) -> Self {
+        Self { owner }
+    }
+
+    fn owner(&self) -> Entity {
         self.owner
     }
 }
@@ -504,94 +510,6 @@ fn sync_label_text(
         {
             text.0.clone_from(&item.data);
         }
-    }
-}
-
-/// Gives every control without one its [`SegmentIndicator`], drawn behind the segments.
-fn spawn_indicators(
-    controls: Query<Entity, With<SegmentedControl>>,
-    indicators: Query<&SegmentIndicator>,
-    theme: Res<Theme>,
-    mut commands: Commands,
-) {
-    for control in &controls {
-        if indicators.iter().any(|i| i.owner() == control) {
-            continue;
-        }
-        commands.entity(control).with_child((
-            SegmentIndicator { owner: control },
-            Node {
-                position_type: PositionType::Absolute,
-                display: Display::None,
-                border_radius: BorderRadius::all(theme.control_radius),
-                ..default()
-            },
-            BackgroundColor(theme.colors().segmented_selected),
-            ZIndex(-1),
-            Pickable::IGNORE,
-        ));
-    }
-}
-
-/// Moves each indicator towards the selected segment, snapping the first time it is placed.
-fn animate_indicators(
-    time: Res<Time>,
-    controls: Query<(&ComputedNode, &UiGlobalTransform, &Children), With<SegmentedControl>>,
-    selected: Query<(&ComputedNode, &UiGlobalTransform), (With<Segment>, With<Selected>)>,
-    mut indicators: Query<(&SegmentIndicator, &mut Node)>,
-) {
-    let blend = 1.0 - (-time.delta_secs() * INDICATOR_RATE).exp();
-    for (indicator, mut node) in &mut indicators {
-        let Ok((control, control_at, children)) = controls.get(indicator.owner()) else {
-            continue;
-        };
-        let target = children.iter().find_map(|c| selected.get(c).ok());
-        let Some((segment, segment_at)) = target.filter(|(s, _)| s.size().x > 0.0) else {
-            if node.display != Display::None {
-                node.display = Display::None;
-            }
-            continue;
-        };
-        let scale = segment.inverse_scale_factor();
-        let size = segment.size() * scale;
-        let origin = (segment_at.translation - segment.size() / 2.0)
-            - (control_at.translation - control.size() / 2.0);
-        let goal = [origin.x * scale, origin.y * scale, size.x, size.y];
-
-        let placed = node.display != Display::None;
-        let now = [node.left, node.top, node.width, node.height].map(|v| match v {
-            Val::Px(px) => px,
-            _ => 0.0,
-        });
-        let next: [f32; 4] = if placed {
-            std::array::from_fn(|i| {
-                let (from, to) = (
-                    now.get(i).copied().unwrap_or(0.0),
-                    goal.get(i).copied().unwrap_or(0.0),
-                );
-                if (to - from).abs() < INDICATOR_SNAP {
-                    to
-                } else {
-                    (to - from).mul_add(blend, from)
-                }
-            })
-        } else {
-            goal
-        };
-        if placed
-            && next
-                .iter()
-                .zip(&now)
-                .all(|(a, b)| a.to_bits() == b.to_bits())
-        {
-            continue;
-        }
-        let [left, top, width, height] = next.map(Val::Px);
-        node.display = Display::Flex;
-        node.left = left;
-        node.top = top;
-        node.width = width;
-        node.height = height;
     }
 }
 

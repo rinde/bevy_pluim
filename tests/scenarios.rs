@@ -50,7 +50,7 @@ use rin_bevy_ui::push_button::PushButton;
 use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
 use rin_bevy_ui::segmented_control::SegmentedControl;
 use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
-use rin_bevy_ui::tab_bar::TabBar;
+use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use rin_bevy_ui::theme::{
     DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeColors, ThemeMode,
@@ -553,11 +553,14 @@ fn tab_bar_beside_a_button(app: &mut App) -> [Entity; 2] {
     app.update();
     app.update();
     let bar = named(app, "nav tab bar");
+    // The bar's children are its tabs and the sliding indicator.
     app.world()
         .entity(bar)
         .get::<Children>()
         .unwrap()
-        .to_vec()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<TabBarTab>())
+        .collect::<Vec<_>>()
         .try_into()
         .unwrap()
 }
@@ -3377,6 +3380,143 @@ fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
     }
     let (left, goal) = indicator_left_and_goal(&app, control, last);
     assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
+}
+
+/// The `left` of the child of `track` named `indicator`, in logical pixels, and the left edge of
+/// `item` relative to `track`, as the layout has it.
+fn named_indicator_left_and_goal(
+    app: &App,
+    track: Entity,
+    indicator: &str,
+    item: Entity,
+) -> (f32, f32) {
+    let world = app.world();
+    let indicator = world
+        .entity(track)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| {
+            world
+                .get::<Name>(*c)
+                .is_some_and(|n| n.as_str() == indicator)
+        })
+        .unwrap();
+    let Val::Px(left) = world.get::<Node>(indicator).unwrap().left else {
+        return (f32::NAN, f32::NAN);
+    };
+    let edge = |e: Entity| {
+        let node = world.get::<ComputedNode>(e).unwrap();
+        (world.get::<UiGlobalTransform>(e).unwrap().translation.x - node.size().x / 2.0)
+            * node.inverse_scale_factor()
+    };
+    (left, edge(item) - edge(track))
+}
+
+/// Checks that the indicator named `indicator` of `track` rests behind `first`, slides when
+/// `change` runs and rests behind `last` a second later.
+fn assert_indicator_slides(
+    app: &mut App,
+    track: Entity,
+    indicator: &str,
+    first: Entity,
+    last: Entity,
+    change: impl FnOnce(&mut App),
+) {
+    let (left, goal) = named_indicator_left_and_goal(app, track, indicator, first);
+    assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
+
+    let start = left;
+    change(app);
+    for _ in 0..3 {
+        app.update();
+    }
+    let (left, goal) = named_indicator_left_and_goal(app, track, indicator, last);
+    assert!(
+        left > start + 1.0 && left < goal - 1.0,
+        "{start} {left} {goal}"
+    );
+
+    for _ in 0..60 {
+        app.update();
+    }
+    let (left, goal) = named_indicator_left_and_goal(app, track, indicator, last);
+    assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
+}
+
+#[test]
+fn a_tab_bar_slides_its_indicator_to_a_newly_selected_tab() {
+    use rin_bevy_ui::select::{Item, Selection, SelectionParam};
+    use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
+
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    let bar = world
+        .spawn((
+            TabBar,
+            Selection::builder()
+                .one()
+                .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..5 {
+        app.update();
+    }
+    let [first, _, last]: [Entity; 3] = app
+        .world()
+        .entity(bar)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<TabBarTab>())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    assert_indicator_slides(&mut app, bar, "TabIndicator", first, last, |app| {
+        app.world_mut()
+            .run_system_once(move |mut selections: SelectionParam| {
+                let item = selections
+                    .get_item_values(bar)
+                    .unwrap()
+                    .1
+                    .iter()
+                    .nth(2)
+                    .unwrap();
+                selections.update_selection(bar, |s| s.set_selection([item]));
+            })
+            .unwrap();
+    });
+}
+
+#[test]
+fn a_light_dark_toggle_slides_its_indicator_to_a_newly_chosen_option() {
+    use rin_bevy_ui::light_dark_toggle::LightDarkOption;
+
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    world.insert_resource(ThemePreference::Light);
+    let toggle = world.spawn((LightDarkToggle, ChildOf(root))).id();
+    for _ in 0..5 {
+        app.update();
+    }
+    let [first, _, last]: [Entity; 3] = app
+        .world()
+        .entity(toggle)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|c| app.world().entity(*c).contains::<LightDarkOption>())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    assert_indicator_slides(&mut app, toggle, "OptionIndicator", first, last, |app| {
+        app.world_mut().insert_resource(ThemePreference::Dark);
+    });
 }
 
 // ---- `TextField` width constraints are layout units (#472) ----

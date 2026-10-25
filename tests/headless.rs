@@ -4194,6 +4194,21 @@ fn indicator_of(app: &App, control: Entity) -> Entity {
         .unwrap()
 }
 
+/// The child of `parent` named `name`, such as the indicator of a tab bar.
+fn child_named(app: &App, parent: Entity, name: &str) -> Entity {
+    app.world()
+        .entity(parent)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| {
+            app.world()
+                .get::<Name>(*c)
+                .is_some_and(|n| n.as_str() == name)
+        })
+        .unwrap()
+}
+
 fn spawn_segmented_control(app: &mut App) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let control = app
@@ -4482,8 +4497,13 @@ fn a_tab_bar_shows_a_tab_per_item_with_the_first_selected() {
     assert_eq!(selected_tabs(&app, bar), ["General"]);
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     assert_eq!(background(&app, bar), colors.segmented_track);
-    assert_eq!(background(&app, tabs[0]), colors.segmented_selected);
-    assert_eq!(background(&app, tabs[1]), colors.segmented_track);
+    // The selected look is the sliding indicator's; the tabs themselves are transparent.
+    assert_eq!(
+        background(&app, child_named(&app, bar, "TabIndicator")),
+        colors.segmented_selected
+    );
+    assert_eq!(background(&app, tabs[0]), Color::NONE);
+    assert_eq!(background(&app, tabs[1]), Color::NONE);
 }
 
 #[test]
@@ -4503,8 +4523,12 @@ fn a_tab_the_tab_list_asks_for_becomes_the_selection() {
     assert_eq!(selected_tab(&app, bar), Some(tabs[2]));
     assert_eq!(selected_tabs(&app, bar), ["Input"]);
     let colors = DEFAULT_LIGHT_THEME_COLORS;
-    assert_eq!(background(&app, tabs[0]), colors.segmented_track);
-    assert_eq!(background(&app, tabs[2]), colors.segmented_selected);
+    assert_eq!(background(&app, tabs[0]), Color::NONE);
+    assert_eq!(background(&app, tabs[2]), Color::NONE);
+    assert_eq!(
+        background(&app, child_named(&app, bar, "TabIndicator")),
+        colors.segmented_selected
+    );
 }
 
 #[test]

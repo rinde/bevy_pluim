@@ -22,6 +22,7 @@ pub(crate) mod focus;
 pub mod gallery;
 pub mod icon;
 pub mod icon_button;
+pub(crate) mod indicator;
 pub mod kbd;
 pub mod label;
 pub mod light_dark_toggle;
