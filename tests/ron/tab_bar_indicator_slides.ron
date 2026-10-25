@@ -1,0 +1,29 @@
+// Picking another tab slides the bar's indicator to it: two frames later it is between the old and
+// the new tab (its `Node.left` has moved, but not all the way), and in the end it lies on the
+// laid-out box of the picked tab.
+(
+    format_version: 3,
+    name: "the tab bar indicator slides to a newly picked tab",
+    setup: App(Tabs),
+    steps: [
+        Wait(10),
+        Capture(name: "from x", value: Component(target: Role(role: Tab, label: "Panel A"), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        Capture(name: "to x", value: Component(target: Role(role: Tab, label: "Panel B"), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        Capture(name: "to width", value: Component(target: Role(role: Tab, label: "Panel B"), path: "ComputedNode.size.x", unit: Logical)),
+        Capture(name: "left before", value: Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "Node.left.0")),
+        // It starts on the selected item.
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(Captured(name: "from x", plus: -1.0), Captured(name: "from x", plus: 1.0)))),
+        MoveTo(Role(role: Tab, label: "Panel B")),
+        Click(Left),
+        Wait(2),
+        // On its way: past where it was and short of where it is going (the new item is to the
+        // right), and its `Node.left` has grown.
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Gt(Captured(name: "from x", plus: 1.0)))),
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Lt(Captured(name: "to x", plus: -1.0)))),
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "Node.left.0", is: Gt(Captured(name: "left before", plus: 0.5)))),
+        Wait(60),
+        // Arrived: on the laid-out box of the picked item.
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(Captured(name: "to x", plus: -1.0), Captured(name: "to x", plus: 1.0)))),
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "ComputedNode.size.x", unit: Logical, is: Between(Captured(name: "to width", plus: -1.0), Captured(name: "to width", plus: 1.0)))),
+    ],
+)

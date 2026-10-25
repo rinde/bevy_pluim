@@ -1099,7 +1099,7 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
   says what a control shows with `App(Selected(of: Name(..), items: [..]))` and
   whether a segment is `Selected(..)`; each control is one tab stop, so Tab walks
   Auto, Dark, Dark (the selected segment of each control) and the arrows move inside one.
-- **The `LightDarkToggle` screen.** `light dark toggle` (a `LightDarkToggle`, so the `ThemePreference` resource starts at `System`) and "Change theme". A file reaches an option with `Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))`, reads the preference with `Resource(path: "ThemePreference", is: Eq(Dark))`; the toggle is one Tab stop at the option of the preference, the arrows, Home and End move the focus and pick (`light_dark_toggle_roving_tab_stop.ron`), and Enter / Space pick the focused one. The scenarios have no primary window, so the window theme and `WindowThemeChanged` are covered by headless tests (`a_system_preference_follows_the_system_theme_as_it_changes`, `the_primary_window_theme_follows_the_preference`).
+- **The `LightDarkToggle` screen.** `light dark toggle` (a `LightDarkToggle`, so the `ThemePreference` resource starts at `System`) and "Change theme". A file reaches an option with `Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))`, reads the preference with `Resource(path: "ThemePreference", is: Eq(Dark))`; the toggle's sliding indicator is `Name("OptionIndicator")` (`light_dark_toggle_indicator_slides.ron` reads its `UiGlobalTransform` centre, `ComputedNode` width and `Node.left.0` mid-slide and on arrival), the toggle is one Tab stop at the option of the preference, the arrows, Home and End move the focus and pick (`light_dark_toggle_roving_tab_stop.ron`), and Enter / Space pick the focused one. The scenarios have no primary window, so the window theme and `WindowThemeChanged` are covered by headless tests (`a_system_preference_follows_the_system_theme_as_it_changes`, `the_primary_window_theme_follows_the_preference`).
 - **The `FilterChips` screen.** A row of `status chips` (All 4, Running 2, Waiting 1,
   Problems 1; its own selection, All first), `mirror chips` (the same selection through
   `Selection::reference`), `narrow chips` (Alpha, Beta, Gamma, Delta in 150 pixels, so they
@@ -1243,7 +1243,7 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
   (`stack_shows_only_the_selected_item`); the `Tabs` screen's number list
   keeps its selection while its panel is hidden
   (`stack_keeps_state_of_hidden_item`). The combos in Panel A open popups that are descendants of the panel, so hiding it hides them and takes the list out of the tab order (`stack_hidden_panel_hides_combo_popups`). The tabs are the `Tab`s of a
-  `TabBar`, `Role(role: Tab, label: "Panel A")`, `Panel B` and `Card demo`;
+  `TabBar` (its sliding indicator is `Name("TabIndicator")`, `tab_bar_indicator_slides.ron`), `Role(role: Tab, label: "Panel A")`, `Panel B` and `Card demo`;
   the bar is one tab stop, the arrows move between its tabs and Enter or
   Space picks the focused one.
 - **Targets on the `ColorPalette` screen.** A row of `first palette combo`,
