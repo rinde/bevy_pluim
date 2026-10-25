@@ -1,0 +1,27 @@
+// Every number of the theme has a stepper: scrolled to the end of the editor, the last one is
+// the shadow's blur, and stepping it up sets it in the theme (the shadow geometry is private to
+// the theme, reached by reflection).
+(
+    format_version: 3,
+    name: "stepping a number in the theme editor sets it in the theme",
+    setup: App(ThemeEditor),
+    steps: [
+        Wait(3),
+        Check(Resource(path: "Theme.shadow_style.blur_radius", is: Eq(Px(8.0)))),
+        MoveTo(Nth(0, Within(Name("ThemeEditor"), Component("ThemeColorSwatch")))),
+        Wheel(x: 0.0, y: -20000.0),
+        Wait(3),
+        Check(Component(target: Nth(0, Within(Name("ThemeEditor"), Component("ScrollContents"))), path: "ScrollPosition.0.y", is: Gt(100.0))),
+        MoveTo(Within(Nth(28, Within(Name("ThemeEditor"), Component("ThemeParameterEditor"))), Name("Increase"))),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "Theme.shadow_style.blur_radius", is: Eq(Px(9.0)))),
+        Check(Resource(path: "Theme.control_radius", is: Eq(Px(8.0)))),
+        MoveTo(Within(Nth(28, Within(Name("ThemeEditor"), Component("ThemeParameterEditor"))), Name("Decrease"))),
+        Click(Left),
+        Click(Left),
+        Wait(2),
+        Check(Resource(path: "Theme.shadow_style.blur_radius", is: Eq(Px(7.0)))),
+    ],
+    expect: [],
+)

@@ -184,6 +184,17 @@ impl Theme {
         &self.colors
     }
 
+    /// The geometry and colour of the shadow of popups and cards, which [`large_shadow`](Self::large_shadow)
+    /// and [`small_shadow`](Self::small_shadow) take the colour of the active set into.
+    pub(crate) const fn shadow_style(&self) -> ShadowStyle {
+        self.shadow_style
+    }
+
+    /// Mutable access to [`shadow_style`](Self::shadow_style), for the theme editor.
+    pub(crate) const fn shadow_style_mut(&mut self) -> &mut ShadowStyle {
+        &mut self.shadow_style
+    }
+
     /// A light-mode theme with the given pair of colour sets, everything else default.
     #[must_use]
     pub fn with_colors(light: ThemeColors, dark: ThemeColors) -> Self {
