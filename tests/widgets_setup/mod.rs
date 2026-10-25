@@ -61,6 +61,7 @@ use rin_bevy_ui::tab_bar::TabBar;
 use rin_bevy_ui::tailwind::COLORS;
 use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
 use rin_bevy_ui::theme::Theme;
+use rin_bevy_ui::theme_editor::ThemeEditor;
 use rin_bevy_ui::toast::Toast;
 use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
 use rin_bevy_ui::tooltip::Tooltip;
@@ -210,6 +211,9 @@ pub enum WidgetsSetup {
     /// low in the window, so its popup opens upward, capped and scrolling) and an `empty filter
     /// combo` (`One`, no items).
     FilterCombos,
+    /// "Change theme" and a `ThemeEditor` (a card with a row for each colour slot and each number
+    /// of the theme), side by side; the editor's rows are laid out in a column in its scroll area.
+    ThemeEditor,
 }
 
 impl AppSetup for WidgetsSetup {
@@ -243,6 +247,7 @@ impl AppSetup for WidgetsSetup {
             Self::SeparatedVirtualList => virtual_list(world, true),
             Self::ComboRows => combo_rows(world),
             Self::FilterCombos => filter_combos(world),
+            Self::ThemeEditor => theme_editor(world),
         }
         Ok(())
     }
@@ -2113,5 +2118,21 @@ fn filter_combos(world: &mut World) {
                 .one()
                 .build_with_items(Vec::<Item<String>>::new()),
         ));
+    });
+}
+
+fn theme_editor(world: &mut World) {
+    let root = spawn_camera_and_root(world);
+    world.entity_mut(root).with_children(|root| {
+        root.spawn(Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(20),
+            ..default()
+        })
+        .with_children(|row| {
+            spawn_theme_button(row);
+            row.spawn(ThemeEditor);
+        });
     });
 }

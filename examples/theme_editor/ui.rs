@@ -1,11 +1,10 @@
-//! The theme editor: a row for each colour slot of `ThemeColors` with a swatch of its current
-//! colour and a Tailwind palette combo to change it, for the theme in use.
+//! The theme editor example: the library's [`ThemeEditor`] in a window, with "Change theme"
+//! to switch the half of the colour pair being edited and "Export", which writes the edited
+//! theme as Rust text ([`theme_source`]) to the log and shows a toast. The export is the
+//! example's: the library only edits.
 //!
 //! Shared by the `theme_editor` example and the headless tests in `tests/headless.rs`: add
-//! [`ThemeEditorPlugin`] to an app with `WidgetsPlugin`. Picking a colour sets that slot of the
-//! light or dark half of the `Theme` that is showing ([`Theme::set_colors`]), so every widget on
-//! screen follows. Export writes the pair as Rust text ([`pair_source`]) to the log and shows a
-//! toast.
+//! [`ThemeEditorExamplePlugin`] to an app with `WidgetsPlugin`.
 
 #![expect(
     unreachable_pub,
@@ -13,88 +12,36 @@
 )]
 
 use bevy::prelude::*;
-use bevy::reflect::structs::Struct;
 use bevy::ui_widgets::Activate;
 use rin_bevy_ui::UiRoot;
-use rin_bevy_ui::card::Card;
-use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
 use rin_bevy_ui::label::Label;
-use rin_bevy_ui::list::ListLayout;
 use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::select::{Item, Selection, SelectionParam, SelectionValue};
-use rin_bevy_ui::tailwind::COLORS;
-use rin_bevy_ui::theme::{
-    DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeColors, ThemeMode,
-};
+use rin_bevy_ui::theme::{Theme, ThemeColors, ThemeMode};
+use rin_bevy_ui::theme_editor::{ThemeEditor, color_slot, theme_parameters};
 use rin_bevy_ui::toast::Toast;
 use std::fmt::Write as _;
 
-/// Spawns the editor at startup and wires the pickers to the `Theme`.
+/// Spawns the editor and its buttons at startup.
 #[derive(Debug, Clone, Copy)]
-pub struct ThemeEditorPlugin;
+pub struct ThemeEditorExamplePlugin;
 
-impl Plugin for ThemeEditorPlugin {
+impl Plugin for ThemeEditorExamplePlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_pick)
-            .add_systems(Startup, spawn_editor)
-            .add_systems(Update, show_theme.run_if(resource_changed::<Theme>));
+        app.add_systems(Startup, spawn_editor);
     }
-}
-
-/// On a palette combo: the `ThemeColors` field its pick sets.
-#[derive(Component, Debug, Clone)]
-pub struct ThemeSlot(pub String);
-
-/// On a swatch: the `ThemeColors` field whose current colour it shows.
-#[derive(Component, Debug, Clone)]
-pub struct SlotSwatch(pub String);
-
-/// On the label saying which half of the pair is being edited.
-#[derive(Component, Debug, Default, Clone, Copy)]
-pub struct ModeLabel;
-
-/// The slots the editor offers: those opaque in both default themes, since a palette colour has
-/// no alpha (shadows and translucent overlays keep their defaults), in field order.
-#[must_use]
-pub fn editable_slots() -> Vec<String> {
-    (0..DEFAULT_LIGHT_THEME_COLORS.field_len())
-        .filter_map(|i| {
-            let name = DEFAULT_LIGHT_THEME_COLORS.name_at(i)?;
-            let opaque = |colors: &ThemeColors| {
-                slot_color(colors, name).is_some_and(|c| (c.alpha() - 1.0).abs() < f32::EPSILON)
-            };
-            (opaque(&DEFAULT_LIGHT_THEME_COLORS) && opaque(&DEFAULT_DARK_THEME_COLORS))
-                .then(|| name.to_owned())
-        })
-        .collect()
-}
-
-/// The colour of the slot `name`, `None` for a name that is not a colour field.
-#[must_use]
-pub fn slot_color(colors: &ThemeColors, name: &str) -> Option<Color> {
-    colors.field(name)?.try_downcast_ref::<Color>().copied()
-}
-
-/// Sets the slot `name` of `colors`; `false` (and no change) for a name that is not a colour field.
-pub fn set_slot_color(colors: &mut ThemeColors, name: &str, color: Color) -> bool {
-    colors
-        .field_mut(name)
-        .and_then(|field| field.try_downcast_mut::<Color>())
-        .map(|slot| *slot = color)
-        .is_some()
 }
 
 /// `colors` as a Rust expression `const NAME: ThemeColors = ThemeColors { .. };`, one
 /// `field: Color::srgba(..)` line for each slot, ready to paste into an app.
 #[must_use]
 pub fn colors_source(name: &str, colors: &ThemeColors) -> String {
+    use bevy::reflect::structs::Struct as _;
     let mut source = format!("const {name}: ThemeColors = ThemeColors {{\n");
     for i in 0..colors.field_len() {
         let Some(field) = colors.name_at(i) else {
             continue;
         };
-        let Some(color) = slot_color(colors, field) else {
+        let Some(color) = color_slot(colors, field) else {
             continue;
         };
         let c = color.to_srgba();
@@ -118,24 +65,58 @@ pub fn pair_source(theme: &Theme) -> String {
     )
 }
 
-fn spawn_editor(mut commands: Commands, theme: Res<Theme>) {
-    commands.spawn(Camera2d);
-    let items = commands
-        .spawn(
-            Selection::builder()
-                .zero_or_one()
-                .build_with_items(COLORS.iter().map(|c| Item { data: c.color })),
-        )
-        .id();
-    let current = *theme.colors();
-    let rows = move |rows: &mut ChildSpawner| {
-        for slot in editable_slots() {
-            rows.spawn(row(items, &slot, &current));
+/// The numbers of `theme` as a function building a `Theme` from the colour pair: the public
+/// fields as struct fields (a padding as a `UiRect`), the private shadow geometry as comments.
+#[must_use]
+pub fn numbers_source(theme: &Theme) -> String {
+    let mut fields = String::new();
+    let mut comments = String::new();
+    // The padding group (`UiRect`) whose fields are being written, if any.
+    let mut open_group: Option<&str> = None;
+    for parameter in theme_parameters() {
+        let value = parameter.value(theme);
+        let (group, side) = parameter
+            .name
+            .split_once('.')
+            .unwrap_or((parameter.name, ""));
+        if open_group.is_some_and(|open| open != group) {
+            fields.push_str("        },\n");
+            open_group = None;
         }
-    };
-    // Plain spawns, not scenes: the rows are built from the slots the theme has.
+        if group == "shadow_style" {
+            let _ = writeln!(comments, "    // shadow {side}: {value:?}");
+        } else if side.is_empty() {
+            let literal = if parameter.name.starts_with("font_size") {
+                format!("{value:?}")
+            } else {
+                format!("Val::Px({value:?})")
+            };
+            let _ = writeln!(fields, "        {group}: {literal},");
+        } else {
+            if open_group.is_none() {
+                let _ = writeln!(fields, "        {group}: UiRect {{");
+                open_group = Some(group);
+            }
+            let _ = writeln!(fields, "            {side}: Val::Px({value:?}),");
+        }
+    }
+    if open_group.is_some() {
+        fields.push_str("        },\n");
+    }
+    format!(
+        "fn theme() -> Theme {{\n{comments}    Theme {{\n{fields}        ..Theme::with_colors(LIGHT, DARK)\n    }}\n}}\n"
+    )
+}
+
+/// The edited theme as Rust text: the colour pair and the function that builds the theme.
+#[must_use]
+pub fn theme_source(theme: &Theme) -> String {
+    format!("{}\n{}", pair_source(theme), numbers_source(theme))
+}
+
+fn spawn_editor(mut commands: Commands) {
+    commands.spawn(Camera2d);
     let title = commands.spawn(Label::title("Theme editor")).id();
-    let mode_label = commands.spawn((Label::secondary(""), ModeLabel)).id();
     let change_theme = commands
         .spawn(PushButton::from_label("Change theme"))
         .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle())
@@ -151,27 +132,14 @@ fn spawn_editor(mut commands: Commands, theme: Res<Theme>) {
         })
         .add_children(&[change_theme, export])
         .id();
-    let area = commands
-        .spawn((
-            ScrollArea::bundle(rows, true, false),
-            Node {
-                height: px(520.0),
-                ..default()
-            },
-        ))
-        .id();
-    let card = commands
-        .spawn((
-            Card,
-            Node {
-                width: px(440.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(10.0),
-                padding: UiRect::all(px(12.0)),
-                ..default()
-            },
-        ))
-        .add_children(&[title, mode_label, buttons, area])
+    let editor = commands.spawn(ThemeEditor).id();
+    let column = commands
+        .spawn(Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: px(10.0),
+            ..default()
+        })
+        .add_children(&[title, buttons, editor])
         .id();
     commands
         .spawn(Node {
@@ -181,100 +149,17 @@ fn spawn_editor(mut commands: Commands, theme: Res<Theme>) {
             padding: UiRect::all(px(16.0)),
             ..default()
         })
-        .add_child(card);
+        .add_child(column);
 }
 
-/// A row: a swatch of the slot's colour, its name and the palette combo that sets it.
-fn row(items: Entity, slot: &str, colors: &ThemeColors) -> impl Bundle {
-    let color = slot_color(colors, slot).unwrap_or(Color::NONE);
-    (
-        Node {
-            align_items: AlignItems::Center,
-            column_gap: px(10.0),
-            ..default()
-        },
-        children![
-            (
-                Node {
-                    width: px(24.0),
-                    height: px(24.0),
-                    ..default()
-                },
-                BackgroundColor(color),
-                SlotSwatch(slot.to_owned()),
-            ),
-            (
-                Label::regular(slot),
-                Node {
-                    flex_grow: 1.0,
-                    ..default()
-                },
-            ),
-            (
-                ColorPaletteCombo,
-                ListLayout::VerticalGrid { columns: 11 },
-                Selection::builder()
-                    .zero_or_one()
-                    .build_with_items_ref(items),
-                ThemeSlot(slot.to_owned()),
-            ),
-        ],
-    )
-}
-
-/// A pick on a slot's combo sets that slot of the half of the pair in use.
-fn on_pick(
-    insert: On<Insert<Selection>>,
-    slots: Query<&ThemeSlot>,
-    selections: SelectionParam,
-    colors: Query<&Item<Color>>,
-    mut theme: ResMut<Theme>,
-) {
-    let entity = insert.event_target();
-    let Ok(slot) = slots.get(entity) else {
-        return;
-    };
-    let Some(picked) = selections.get(entity).and_then(SelectionValue::single) else {
-        return;
-    };
-    let Ok(color) = colors.get(picked) else {
-        return;
-    };
-    let mode = theme.mode();
-    let mut set = theme.colors_of(mode);
-    if set_slot_color(&mut set, &slot.0, color.data) {
-        theme.set_colors(mode, set);
-    }
-}
-
-/// Keeps the swatches and the mode label in step with the `Theme`.
-fn show_theme(
-    theme: Res<Theme>,
-    mut swatches: Query<(&SlotSwatch, &mut BackgroundColor)>,
-    mut labels: Query<&mut Text, With<ModeLabel>>,
-) {
-    for (swatch, mut background) in &mut swatches {
-        if let Some(color) = slot_color(theme.colors(), &swatch.0) {
-            background.0 = color;
-        }
-    }
-    let text = match theme.mode() {
-        ThemeMode::Light => "Editing the light theme",
-        ThemeMode::Dark => "Editing the dark theme",
-    };
-    for mut label in &mut labels {
-        text.clone_into(&mut label.0);
-    }
-}
-
-/// Writes the pair as Rust text to the log and says so in a toast.
+/// Writes the edited theme as Rust text to the log and says so in a toast.
 fn export(
     _: On<Activate>,
     theme: Res<Theme>,
     roots: Query<Entity, With<UiRoot>>,
     mut commands: Commands,
 ) {
-    info!("\n{}", pair_source(&theme));
+    info!("\n{}", theme_source(&theme));
     if let Some(root) = roots.iter().next() {
         commands.spawn((Toast::new("Exported the theme to the log"), ChildOf(root)));
     }

@@ -52,6 +52,9 @@ use rin_bevy_ui::stack::{Stack, StackItem};
 use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
 use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
 use rin_bevy_ui::theme::{Theme, ThemeColors};
+use rin_bevy_ui::theme_editor::{
+    ThemeColorSlot, ThemeColorSwatch, ThemeEditor, ThemeEditorRefs, ThemeParameterEditor,
+};
 use rin_bevy_ui::toast::{Toast, ToastPlacement, ToastStack};
 use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels};
 use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
@@ -113,6 +116,10 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<ColorPalette>(registry);
         assert_component::<ColorPaletteCombo>(registry);
         assert_component::<FilterCombo>(registry);
+        assert_component::<ThemeEditor>(registry);
+        assert_component::<ThemeColorSlot>(registry);
+        assert_component::<ThemeColorSwatch>(registry);
+        assert_component::<ThemeParameterEditor>(registry);
         assert_component::<ColorPushButton>(registry);
         assert_component::<ColorSquare>(registry);
         assert_component::<NumericStepper>(registry);
@@ -180,6 +187,7 @@ fn the_widget_states_are_in_the_type_registry() {
         assert_component::<ComboPlaceholder>(registry);
         assert_component::<ComboRefs>(registry);
         assert_component::<FilterComboRefs>(registry);
+        assert_component::<ThemeEditorRefs>(registry);
         assert_component::<ColorPaletteComboRefs>(registry);
         assert_component::<ColorPaletteComboButton>(registry);
         assert_component::<ColorPaletteComboFloat>(registry);

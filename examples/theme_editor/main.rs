@@ -1,5 +1,5 @@
-//! A theme editor: pick a colour for each slot of the `ThemeColors` of the light or dark theme,
-//! watch the widgets change, and export the pair as Rust text for `Theme::with_colors`.
+//! A theme editor: the library's `ThemeEditor` edits every colour and number of the `Theme`
+//! of the light or dark half, while the widgets change; "Export" writes the result as Rust text.
 
 mod ui;
 
@@ -11,7 +11,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WidgetsPlugin)
-        .add_plugins(ui::ThemeEditorPlugin)
+        .add_plugins(ui::ThemeEditorExamplePlugin)
         .insert_resource(GlobalUiDebugOptions {
             enabled: false,
             line_width: 1.0,

@@ -1,0 +1,20 @@
+// Picking a colour for a slot sets that slot of the theme in use, so the widgets follow, and
+// the slot's swatch shows it.
+(
+    format_version: 3,
+    name: "picking a colour in the theme editor sets that slot of the theme",
+    setup: App(ThemeEditor),
+    steps: [
+        Wait(3),
+        Capture(name: "before", value: Resource(path: "Theme.colors.background_primary")),
+        MoveTo(Within(Nth(0, Within(Name("ThemeEditor"), Component("ColorPaletteCombo"))), Component("ColorPushButton"))),
+        Click(Left),
+        Wait(2),
+        MoveTo(Nth(60, Within(Nth(0, Within(Name("ThemeEditor"), Component("ColorPaletteCombo"))), Component("ItemView")))),
+        Click(Left),
+        Wait(3),
+        Check(Resource(path: "Theme.colors.background_primary", is: Ne(Captured("before")))),
+        Check(Component(target: Nth(0, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "BackgroundColor.0", is: Eq(Srgba((red:0.9372549, green:0.26666668, blue:0.26666668, alpha:1.0))))),
+    ],
+    expect: [],
+)

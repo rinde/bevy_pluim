@@ -1,0 +1,18 @@
+// The editor's rows are laid out in a column: each colour row is below the one before, not
+// beside it (the rows were once children of the scroll area's contents, which lay them out in a
+// row, so only the first two showed).
+(
+    format_version: 3,
+    name: "the rows of the theme editor are stacked one below the other",
+    setup: App(ThemeEditor),
+    steps: [
+        Wait(3),
+        Capture(name: "first", value: Component(target: Nth(0, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "UiGlobalTransform.0.translation.y")),
+        Capture(name: "first x", value: Component(target: Nth(0, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "UiGlobalTransform.0.translation.x")),
+        Check(Component(target: Nth(1, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "UiGlobalTransform.0.translation.y", is: Gt(Captured("first")))),
+        Check(Component(target: Nth(2, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "UiGlobalTransform.0.translation.y", is: Gt(Captured("first")))),
+        Check(Component(target: Nth(1, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "UiGlobalTransform.0.translation.x", is: Eq(Captured("first x")))),
+        Check(Component(target: Nth(2, Within(Name("ThemeEditor"), Component("ThemeColorSwatch"))), path: "UiGlobalTransform.0.translation.x", is: Eq(Captured("first x")))),
+    ],
+    expect: [],
+)

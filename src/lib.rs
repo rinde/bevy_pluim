@@ -42,6 +42,7 @@ pub mod tab_bar;
 pub mod tailwind;
 pub mod text_field;
 pub mod theme;
+pub mod theme_editor;
 pub mod toast;
 pub mod toolbar;
 pub mod tooltip;
@@ -89,6 +90,7 @@ use crate::stack::StackPlugin;
 use crate::tab_bar::TabBarPlugin;
 use crate::text_field::TextFieldPlugin;
 use crate::theme::{Theme, ThemePlugin};
+use crate::theme_editor::ThemeEditorPlugin;
 use crate::toast::ToastPlugin;
 use crate::toolbar::ToolbarPlugin;
 use crate::tooltip::TooltipPlugin;
@@ -114,6 +116,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(PushButtonPlugin)
             .add_plugins(FloatPlugin)
             .add_plugins(ComboPlugin)
+            .add_plugins(ThemeEditorPlugin)
             .add_plugins(FilterComboPlugin)
             .add_plugins(ScrollAreaPlugin)
             .add_plugins(SegmentedControlPlugin)

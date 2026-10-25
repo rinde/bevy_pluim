@@ -6809,7 +6809,7 @@ fn theme_editor_app() -> App {
     app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
     app.init_resource::<ClearColor>();
     app.init_resource::<Assets<Image>>();
-    app.add_plugins((WidgetsPlugin, theme_editor_ui::ThemeEditorPlugin));
+    app.add_plugins((WidgetsPlugin, theme_editor_ui::ThemeEditorExamplePlugin));
     app.finish();
     app.cleanup();
     for _ in 0..6 {
@@ -6819,22 +6819,22 @@ fn theme_editor_app() -> App {
 }
 
 #[test]
-fn the_theme_editor_example_has_a_row_for_each_editable_slot() {
+fn the_theme_editor_has_a_row_for_each_editable_colour_slot() {
     let mut app = theme_editor_app();
     assert_eq!(ui_root_count(&mut app), 1);
-    let slots = theme_editor_ui::editable_slots();
+    let slots = rin_bevy_ui::theme_editor::editable_color_slots();
     assert!(slots.len() > 20);
     let world = app.world_mut();
     assert_eq!(
         world
-            .query::<&theme_editor_ui::ThemeSlot>()
+            .query::<&rin_bevy_ui::theme_editor::ThemeColorSlot>()
             .iter(world)
             .count(),
         slots.len()
     );
     assert_eq!(
         world
-            .query::<&theme_editor_ui::SlotSwatch>()
+            .query::<&rin_bevy_ui::theme_editor::ThemeColorSwatch>()
             .iter(world)
             .count(),
         slots.len()
@@ -6847,7 +6847,7 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let (combo, items) = {
         let world = app.world_mut();
         let combo = world
-            .query::<(Entity, &theme_editor_ui::ThemeSlot)>()
+            .query::<(Entity, &rin_bevy_ui::theme_editor::ThemeColorSlot)>()
             .iter(world)
             .find(|(_, slot)| slot.0 == "accent")
             .map(|(e, _)| e)
@@ -6883,11 +6883,11 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let theme = app.world().get_resource::<Theme>().unwrap();
     let mode = theme.mode();
     assert_eq!(
-        theme_editor_ui::slot_color(theme.colors(), "accent"),
+        rin_bevy_ui::theme_editor::color_slot(theme.colors(), "accent"),
         Some(items)
     );
     assert_eq!(
-        theme_editor_ui::slot_color(&theme.colors_of(mode), "accent"),
+        rin_bevy_ui::theme_editor::color_slot(&theme.colors_of(mode), "accent"),
         Some(items)
     );
     if mode == ThemeMode::Light {
@@ -6901,7 +6901,7 @@ fn pick_accent_in_the_theme_editor(app: &mut App) -> Color {
     let combo = {
         let world = app.world_mut();
         world
-            .query::<(Entity, &theme_editor_ui::ThemeSlot)>()
+            .query::<(Entity, &rin_bevy_ui::theme_editor::ThemeColorSlot)>()
             .iter(world)
             .find(|(_, slot)| slot.0 == "accent")
             .map(|(e, _)| e)
@@ -6949,16 +6949,16 @@ fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
     let theme = app.world().get_resource::<Theme>().unwrap();
     assert_eq!(theme.mode(), ThemeMode::Dark);
     assert_ne!(
-        theme_editor_ui::slot_color(&before.colors_of(ThemeMode::Dark), "accent"),
+        rin_bevy_ui::theme_editor::color_slot(&before.colors_of(ThemeMode::Dark), "accent"),
         Some(red),
         "the pick is a change"
     );
     assert_eq!(
-        theme_editor_ui::slot_color(&theme.colors_of(ThemeMode::Dark), "accent"),
+        rin_bevy_ui::theme_editor::color_slot(&theme.colors_of(ThemeMode::Dark), "accent"),
         Some(red)
     );
     assert_eq!(
-        theme_editor_ui::slot_color(theme.colors(), "accent"),
+        rin_bevy_ui::theme_editor::color_slot(theme.colors(), "accent"),
         Some(red)
     );
     assert_eq!(
@@ -6975,7 +6975,7 @@ fn the_theme_editor_pair_source_has_both_blocks_and_follows_an_edit_to_the_dark_
     assert!(source.contains("const DARK: ThemeColors = ThemeColors {\n"));
 
     let mut dark = theme.colors_of(ThemeMode::Dark);
-    assert!(theme_editor_ui::set_slot_color(
+    assert!(rin_bevy_ui::theme_editor::set_color_slot(
         &mut dark,
         "accent",
         Color::srgba(0.25, 0.5, 0.75, 1.0)
@@ -12457,4 +12457,239 @@ fn shift_tab_to_the_button_closes_the_popup_without_picking_but_a_press_on_it_do
     assert_eq!(fa.state(), ComboState::Closed);
     assert!(fa.selected().is_empty());
     assert_eq!(fa.focus(), Some(fa.refs.button()));
+}
+
+// ---- ThemeEditor (the library widget) ----
+
+use rin_bevy_ui::theme_editor::{
+    ThemeEditor, ThemeEditorRefs, ThemeParameterEditor, theme_parameters,
+};
+
+#[test]
+fn every_number_of_the_theme_has_a_row_in_the_theme_editor() {
+    use bevy::reflect::structs::Struct as _;
+    let theme = Theme::default();
+    let names: Vec<&str> = theme_parameters().iter().map(|p| p.name).collect();
+    for i in 0..theme.field_len() {
+        let field = theme.name_at(i).unwrap();
+        let value = theme.field_at(i).unwrap();
+        if value.try_downcast_ref::<Val>().is_some() || value.try_downcast_ref::<f32>().is_some() {
+            assert!(names.contains(&field), "`{field}` has no row");
+        } else if value.try_downcast_ref::<UiRect>().is_some() {
+            for side in ["left", "right", "top", "bottom"] {
+                let name = format!("{field}.{side}");
+                assert!(names.contains(&name.as_str()), "`{name}` has no row");
+            }
+        } else if value.try_downcast_ref::<ShadowStyle>().is_some() {
+            assert!(
+                names.iter().any(|n| n.starts_with(&format!("{field}."))),
+                "`{field}` has no row"
+            );
+        }
+    }
+    // Names are unique.
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), names.len());
+}
+
+#[test]
+fn a_theme_parameter_reads_what_it_sets_and_stays_in_its_range() {
+    for parameter in theme_parameters() {
+        let mut theme = Theme::default();
+        parameter.apply(&mut theme, parameter.max + 100.0);
+        assert!(
+            (parameter.value(&theme) - parameter.max).abs() < f32::EPSILON,
+            "{}",
+            parameter.name
+        );
+        parameter.apply(&mut theme, parameter.min - 100.0);
+        assert!(
+            (parameter.value(&theme) - parameter.min).abs() < f32::EPSILON,
+            "{}",
+            parameter.name
+        );
+        let middle = f32::midpoint(parameter.min, parameter.max).round();
+        parameter.apply(&mut theme, middle);
+        assert!((parameter.value(&theme) - middle).abs() < f32::EPSILON);
+        // Only that number moved.
+        let mut expected = Theme::default();
+        parameter.apply(&mut expected, middle);
+        assert_eq!(format!("{theme:?}"), format!("{expected:?}"));
+    }
+}
+
+fn editor_stepper(app: &mut App, name: &str) -> Entity {
+    let world = app.world_mut();
+    world
+        .query::<(Entity, &ThemeParameterEditor)>()
+        .iter(world)
+        .find(|(_, editor)| editor.0 == name)
+        .map(|(entity, _)| entity)
+        .unwrap()
+}
+
+#[test]
+fn the_theme_editor_has_a_stepper_for_each_number_showing_the_value_in_the_theme() {
+    let mut app = theme_editor_app();
+    let count = {
+        let world = app.world_mut();
+        world.query::<&ThemeParameterEditor>().iter(world).count()
+    };
+    assert_eq!(count, theme_parameters().len());
+    let stepper = editor_stepper(&mut app, "control_radius");
+    let value = app.world().entity(stepper).get::<Value>().unwrap();
+    assert_eq!(value.as_f32(), Some(8.0));
+}
+
+#[test]
+fn stepping_a_number_in_the_theme_editor_sets_it_in_the_theme_and_only_it() {
+    let mut app = theme_editor_app();
+    let before = app.world().get_resource::<Theme>().unwrap().clone();
+    let stepper = editor_stepper(&mut app, "control_radius");
+    app.world_mut()
+        .trigger(rin_bevy_ui::numeric_stepper::ValueChange {
+            entity: stepper,
+            value: Value::new_f32(14.0, 0.0, 32.0, 1.0).unwrap(),
+        });
+    app.update();
+    app.update();
+    let theme = app.world().get_resource::<Theme>().unwrap();
+    assert_eq!(theme.control_radius, Val::Px(14.0));
+    let mut expected = before;
+    expected.control_radius = Val::Px(14.0);
+    assert_eq!(format!("{theme:?}"), format!("{expected:?}"));
+}
+
+#[test]
+fn the_theme_editor_edits_the_padding_sides_and_the_shadow_geometry_too() {
+    let mut app = theme_editor_app();
+    for (name, check) in [
+        (
+            "item_padding.top",
+            (|t: &Theme| t.item_padding.top) as fn(&Theme) -> Val,
+        ),
+        ("compact_button_padding.left", |t| {
+            t.compact_button_padding.left
+        }),
+        ("color_button_padding.bottom", |t| {
+            t.color_button_padding.bottom
+        }),
+        ("shadow_style.blur_radius", |t| t.large_shadow().blur_radius),
+    ] {
+        let stepper = editor_stepper(&mut app, name);
+        app.world_mut()
+            .trigger(rin_bevy_ui::numeric_stepper::ValueChange {
+                entity: stepper,
+                value: Value::new_f32(17.0, 0.0, 40.0, 1.0).unwrap(),
+            });
+        app.update();
+        app.update();
+        assert_eq!(
+            check(app.world().get_resource::<Theme>().unwrap()),
+            Val::Px(17.0),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_change_to_the_theme_moves_the_steppers_of_the_theme_editor() {
+    let mut app = theme_editor_app();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .font_size_body = 21.0;
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .item_padding
+        .left = Val::Px(9.0);
+    for _ in 0..3 {
+        app.update();
+    }
+    let body = editor_stepper(&mut app, "font_size_body");
+    assert_eq!(
+        app.world().entity(body).get::<Value>().unwrap().as_f32(),
+        Some(21.0)
+    );
+    let left = editor_stepper(&mut app, "item_padding.left");
+    assert_eq!(
+        app.world().entity(left).get::<Value>().unwrap().as_f32(),
+        Some(9.0)
+    );
+}
+
+#[test]
+fn the_theme_editor_says_which_half_it_edits_and_follows_the_toggle() {
+    let mut app = theme_editor_app();
+    let label_text = |app: &mut App| {
+        let world = app.world_mut();
+        let editor = world
+            .query_filtered::<&ThemeEditorRefs, With<ThemeEditor>>()
+            .single(world)
+            .unwrap()
+            .mode_label();
+        world.entity(editor).get::<Text>().unwrap().0.clone()
+    };
+    assert_eq!(label_text(&mut app), "Editing the light theme");
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(label_text(&mut app), "Editing the dark theme");
+}
+
+#[test]
+fn the_theme_editor_is_a_library_widget_that_needs_no_example_code() {
+    let mut app = headless_app();
+    let editor = app.world_mut().spawn((ThemeEditor, Node::default())).id();
+    for _ in 0..6 {
+        app.update();
+    }
+    let refs = *app.world().entity(editor).get::<ThemeEditorRefs>().unwrap();
+    assert!(app.world().get_entity(refs.scroll_area()).is_ok());
+    let slots = {
+        let world = app.world_mut();
+        world
+            .query::<&rin_bevy_ui::theme_editor::ThemeColorSlot>()
+            .iter(world)
+            .count()
+    };
+    assert_eq!(
+        slots,
+        rin_bevy_ui::theme_editor::editable_color_slots().len()
+    );
+    // Despawning it takes everything with it, the colours it chooses from included.
+    app.world_mut().entity_mut(editor).despawn();
+    for _ in 0..2 {
+        app.update();
+    }
+    assert!(app.world().get_entity(refs.colors()).is_err());
+    let left = {
+        let world = app.world_mut();
+        world.query::<&ThemeParameterEditor>().iter(world).count()
+    };
+    assert_eq!(left, 0);
+}
+
+#[test]
+fn the_theme_editor_example_exports_the_numbers_as_a_theme_function() {
+    let source = theme_editor_ui::theme_source(&Theme::default());
+    assert!(source.contains("const LIGHT: ThemeColors"));
+    assert!(source.contains("fn theme() -> Theme {"));
+    assert!(source.contains("        control_radius: Val::Px(8.0),"));
+    assert!(source.contains("        font_size_body: 15.0,"));
+    assert!(source.contains("        item_padding: UiRect {\n            left: Val::Px(12.0),"));
+    assert!(source.contains("    // shadow blur_radius: 8.0"));
+    assert!(source.contains("..Theme::with_colors(LIGHT, DARK)"));
+    assert_eq!(
+        source.matches('{').count(),
+        source.matches('}').count(),
+        "balanced braces"
+    );
 }
