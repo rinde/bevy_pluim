@@ -98,7 +98,7 @@ Each is `just example NAME` (`cargo run --example NAME`) and needs a window.
 
 | Example | Shows |
 | --- | --- |
-| `overview` | every widget that stands alone, one page each (20 pages, among them `FilterCombo` and `LightDarkToggle`), behind a vertical `TabBar` driving a `Stack` in a vertically scrolling `ScrollArea`; the `LightDarkToggle` under the tabs switches the theme. Every page has the same layout: a `Label::header`, then the variants in a centred, wrapping row, each a `variant(caption, content)` group with a `Label::secondary` naming what differs (modes, sizes, tones, selection kinds, layouts the module rows name as separate); the page node is named `Page` and as wide as the area, so pages do not shift when switching tabs. Left out on purpose: `Float`, `Stack`, `Icon`, `tailwind` and the crate-private modules (`Divider` is on the labels page, `ColorPushButton` is the palette combo's button). `tests/headless.rs` includes it with `#[path]` and shows every page (`the_overview_example_builds_and_every_page_runs`), and `tests/scenarios.rs` does too to lay it out in the default 1280 x 720 window (`every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window`) |
+| `overview` | every widget that stands alone, one page each (20 pages, among them `FilterCombo` and `LightDarkToggle`), behind a vertical `TabBar` driving a `Stack` in a vertically scrolling `ScrollArea`; the `LightDarkToggle` above the tabs switches the theme. Every page has the same layout: a `Label::header`, then the variants in a centred, wrapping row, each a `variant(caption, content)` group with a `Label::secondary` naming what differs (modes, sizes, tones, selection kinds, layouts the module rows name as separate); the page node is named `Page` and as wide as the area, so pages do not shift when switching tabs. Left out on purpose: `Float`, `Stack`, `Icon`, `tailwind` and the crate-private modules (`Divider` is on the labels page, `ColorPushButton` is the palette combo's button). `tests/headless.rs` includes it with `#[path]` and shows every page (`the_overview_example_builds_and_every_page_runs`), and `tests/scenarios.rs` does too to lay it out in the default 1280 x 720 window (`every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window`) |
 | `widgets` | a showcase: a scroll area, a list and combos sharing one selection via `Selection::reference`, and buttons that add more |
 | `breadcrumbs` | `BreadCrumbs` and a `Stack` sharing one selection, with reused `StackItem` creators |
 | `tabs` | a `TabBar` driving a `Stack`, with combos, colour palettes and cards inside |
@@ -167,7 +167,7 @@ Bevy's `ScenePlugin`, which spawning a scene needs.
 
 Every example has a way to toggle the light and dark theme (the gallery's
 button is on its screens, the `hud`'s is the Appearance setting of its Preferences
-panel, the `overview`'s a `LightDarkToggle` under its tabs), and all but `gallery` set `GlobalUiDebugOptions`, which is
+panel, the `overview`'s a `LightDarkToggle` above its tabs), and all but `gallery` set `GlobalUiDebugOptions`, which is
 why `bevy_ui_debug` is switched on in `[dev-dependencies]`.
 
 ### The gallery
