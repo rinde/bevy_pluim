@@ -3917,6 +3917,26 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
         .query_filtered::<Entity, With<TabBar>>()
         .single(world)
         .unwrap();
+    let toggle = world
+        .query_filtered::<Entity, With<LightDarkToggle>>()
+        .single(world)
+        .unwrap();
+    let rect = |entity| {
+        let size = world.get::<ComputedNode>(entity).unwrap().size();
+        let centre = world.get::<UiGlobalTransform>(entity).unwrap().translation;
+        Rect::from_center_size(centre, size)
+    };
+    let toggle_rect = rect(toggle);
+    let bar_rect = rect(bar);
+    assert!(
+        (toggle_rect.min.x - 10.0).abs() <= 1.0,
+        "toggle at the left edge"
+    );
+    assert!(
+        (toggle_rect.min.y - 10.0).abs() <= 1.0,
+        "toggle at the top edge"
+    );
+    assert!(toggle_rect.max.y <= bar_rect.min.y, "toggle above the tabs");
     let tabs: Vec<String> = world
         .query::<&Item<String>>()
         .iter(world)
