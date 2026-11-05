@@ -10,9 +10,6 @@ env:
   CARGO_TERM_COLOR: always
   # Full debuginfo in Bevy-linked test binaries fills the runner's disk.
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
-  # Cargo fetches git dependencies with the `git` binary, so the credentials
-  # configured by `.github/actions/private-deps` apply to it.
-  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 # A new push to a branch makes the run already in flight for it pointless.
 concurrency:
@@ -25,9 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/private-deps
-        with:
-          token: ${{ secrets.TESTER_REPO_TOKEN }}
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -49,9 +43,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/private-deps
-        with:
-          token: ${{ secrets.TESTER_REPO_TOKEN }}
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -72,11 +63,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # `cargo machete --with-metadata` runs `cargo metadata` over the whole
-      # dependency graph, so Cargo fetches the private dev-dependency here too.
-      - uses: ./.github/actions/private-deps
-        with:
-          token: ${{ secrets.TESTER_REPO_TOKEN }}
       - uses: taiki-e/install-action@v2
         with:
           tool: just,cargo-machete
@@ -91,9 +77,6 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/private-deps
-        with:
-          token: ${{ secrets.TESTER_REPO_TOKEN }}
       - uses: taiki-e/install-action@just
       - name: Read pinned Rust toolchain version
         id: toolchain
@@ -115,9 +98,6 @@ jobs:
       WGPU_BACKEND: vulkan
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/private-deps
-        with:
-          token: ${{ secrets.TESTER_REPO_TOKEN }}
       - name: Install system dependencies and software Vulkan (lavapipe)
         run: |
           sudo apt-get update

@@ -37,9 +37,8 @@ Work is tracked in GitHub issues. Issues ready for implementation use the
 description; ask for clarification if its scope is genuinely ambiguous.
 Changes should be made through pull requests.
 
-There is a GitHub Actions billing problem, this is a known problem, no
-action is required. Running `just ci` is a valid substitute and is enough
-for merging a PR.
+Run `just ci` locally to check the same lint, test and unused-dependency
+recipes used by CI.
 
 ## Where to find what
 
@@ -768,44 +767,25 @@ the dependencies again, and again when you drop the flag).
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
 
-### The private tester dependency
+### The scenario tester dependency
 
-`bevy_stagecraft` (`github.com/rinde/bevy_stagecraft`) is a
+`bevy_stagecraft` (`github.com/rinde/bevy_stagecraft`) is a public
 `[dev-dependencies]` git dependency pinned to a revision in `Cargo.toml`; it
 drives scripted pointer and keyboard scenarios against the widgets
 (`tests/scenarios.rs`, see [Writing a scenario](#writing-a-scenario)).
 
 - **Bumping it** means changing `rev` in `Cargo.toml` and `Cargo.lock`
   together (`cargo update -p bevy_stagecraft`); `--locked` in CI fails if
-  they disagree.
-
-
-- **In cloud sessions**, `.claude/hooks/session-start.sh` exports the same
-  variable and persists it through `CLAUDE_ENV_FILE` before setup can fail.
-  Git uses Claude's GitHub proxy. The hook checks live read access with
-  `git ls-remote` before installing tools, even if Cargo has cached the tester.
-  Access to this repository alone does not grant access to the tester:
-  configure the Claude GitHub App at
-  <https://github.com/settings/installations> to include both `bevy-pluim`
-  and `bevy_stagecraft`. Alternatively, run `/web-setup` in local Claude
-  Code with a `gh` token that can read both repositories. See
-  [Claude's GitHub authentication options](https://code.claude.com/docs/en/claude-code-on-the-web#github-authentication-options).
-  `TESTER_REPO_TOKEN` is a GitHub Actions secret, not automatically available
-  in Claude Cloud; the cloud hook relies on the proxy's access instead.
-  To verify in a **cloud session**, run
-  `GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code https://github.com/rinde/bevy_stagecraft HEAD`
-  and `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo fetch --locked`. Both must
-  succeed; a local success does not verify cloud permissions. After changing
-  access, rerun `.claude/hooks/session-start.sh` in the cloud session.
+  they disagree. The repository is public, so no credentials are needed.
 
 ### Claude Code on the web
 
 `.claude/hooks/session-start.sh`, registered in `.claude/settings.json` under
-`SessionStart`, prepares a fresh cloud container: it checks tester access,
-then installs the pinned toolchain with `clippy` and `rustfmt`, `just` and
+`SessionStart`, prepares a fresh cloud container: it installs the pinned
+toolchain with `clippy` and `rustfmt`, `just` and
 `cargo-machete` at pinned versions, the Bevy system headers
 `.github/workflows/ci.yml` also installs,
-then fetches the dependencies (the private tester included, see above) and
+then fetches the dependencies (including the public scenario tester above) and
 warms the build cache with `cargo build --all-targets` so the first real
 build isn't a cold Bevy compile. It is a no-op unless `CLAUDE_CODE_REMOTE=true`
 or run with `--force`, and is idempotent, with progress on stderr.

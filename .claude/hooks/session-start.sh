@@ -4,7 +4,7 @@
 # Installs the Rust toolchain pinned in rust-toolchain.toml with clippy and
 # rustfmt, `just` and `cargo-machete` at pinned versions, the system headers
 # Bevy's default features need, then warms the build cache so the first real
-# build is not a cold Bevy compile. Checks access before installing anything.
+# build is not a cold Bevy compile.
 # Safe to run more than once: every step checks whether it already has what
 # it needs.
 #
@@ -29,18 +29,12 @@ mkdir -p "$BIN"
 # Progress goes to stderr so it stays out of the session's context.
 log() { printf '  %s\n' "$*" >&2; }
 
-# ----------------------------------------------------------- private sources
+# --------------------------------------------------------------- environment
 
-# Cargo must use git so Claude's GitHub proxy authenticates the request.
-# Persist this before any fallible setup, so a later cargo command still uses
-# the proxy when an install or fetch failed. Installed tools need PATH here too.
 export PATH="$BIN:$PATH"
-export CARGO_NET_GIT_FETCH_WITH_CLI=true
-export GIT_TERMINAL_PROMPT=0
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     printf 'export PATH=%q:$PATH\n' "$BIN" >>"$CLAUDE_ENV_FILE"
     echo 'export CARGO_TERM_COLOR=always' >>"$CLAUDE_ENV_FILE"
-    echo 'export CARGO_NET_GIT_FETCH_WITH_CLI=true' >>"$CLAUDE_ENV_FILE"
 fi
 
 # ---------------------------------------------------------------- toolchain
