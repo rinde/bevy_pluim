@@ -46,7 +46,7 @@ gallery-test:
 
 # Run the whole test suite, doc tests included.
 test *ARGS:
-    cargo test --quiet --all-targets {{ARGS}}
+    cargo nextest run --all-targets {{ARGS}}
     cargo test --quiet --doc
 
 # Check formatting and run clippy at the project's settings.
@@ -86,7 +86,7 @@ bevy-lint:
 # in target/recordings (RECORD_DIR overrides it). Needs a GPU, or lavapipe with
 # WGPU_BACKEND=vulkan; not part of `just ci`.
 record:
-    cargo test --quiet --test recorded_scenarios_gpu --features record -- --include-ignored --nocapture
+    cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all --no-capture
     @echo "open target/recordings/index.html"
 
 # Everything CI would run.
