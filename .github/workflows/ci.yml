@@ -110,7 +110,9 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev \
             mesa-vulkan-drivers libvulkan1
-      - uses: taiki-e/install-action@just
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-nextest
       - name: Read pinned Rust toolchain version
         id: toolchain
         run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
