@@ -3,7 +3,7 @@
 //!
 //! Every page has the same layout: a header, then the variants in a centred, wrapping row, each a
 //! group with a secondary label naming what is different about it. The theme is switched with the
-//! `LightDarkToggle` under the tabs, which is one of the widgets of the library, too.
+//! `LightDarkToggle` above the tabs, which is one of the widgets of the library, too.
 
 mod common;
 
@@ -162,20 +162,20 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         Children [
             Node {
                 flex_direction: FlexDirection::Column,
-                justify_content: JustifyContent::SpaceBetween,
                 height: percent(100.0),
                 padding: UiRect::all(px(10.0)),
+                row_gap: px(10.0),
             }
             Children [
+                // The theme control; it is the widget of the "Light dark toggle" page, too.
+                LightDarkToggle
+                --
                 TabBar
                 Node {
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
                 }
                 ~{Selection::reference(selection)}
-                --
-                // The theme control; it is the widget of the "Light dark toggle" page, too.
-                LightDarkToggle
             ]
             --
             // The pages scroll when one is taller than the window; each is as wide as this area
@@ -758,7 +758,7 @@ fn light_dark(spawner: In<StackChildSpawner>, mut commands: Commands) {
                     })
                 ]
                 --
-                ~{Label::caption("The toggle under the tabs is this widget, and it switches the theme of this overview.")}
+                ~{Label::caption("The toggle above the tabs is this widget, and it switches the theme of this overview.")}
             ]
         },
     );
