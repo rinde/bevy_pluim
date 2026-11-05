@@ -37,9 +37,8 @@ Work is tracked in GitHub issues. Issues ready for implementation use the
 description; ask for clarification if its scope is genuinely ambiguous.
 Changes should be made through pull requests.
 
-There is a GitHub Actions billing problem, this is a known problem, no
-action is required. Running `just ci` is a valid substitute and is enough
-for merging a PR.
+Run `just ci` locally to check the same lint, test and unused-dependency
+recipes used by CI.
 
 ## Where to find what
 
