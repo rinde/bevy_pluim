@@ -124,14 +124,14 @@ impl Chip {
 /// labels.
 ///
 /// ```compile_fail
-/// use rin_bevy_ui::filter_chips::ChipView;
+/// use bevy_pluim::filter_chips::ChipView;
 /// # let (item, chips) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
 /// let _ = ChipView { item, owner: chips };
 /// ```
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::filter_chips::ChipView;
+/// use bevy_pluim::filter_chips::ChipView;
 /// fn change(mut chips: Query<&mut ChipView>) {}
 /// bevy::ecs::system::assert_is_system(change);
 /// ```

@@ -14,51 +14,51 @@ use bevy::MinimalPlugins;
 use bevy::ecs::reflect::{AppTypeRegistry, ReflectComponent, ReflectResource};
 use bevy::prelude::*;
 use bevy::reflect::TypeRegistry;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::badge::{Badge, BadgeRef, BadgeTone};
-use rin_bevy_ui::breadcrumbs::{BreadCrumb, BreadCrumbs};
-use rin_bevy_ui::card::Card;
-use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::{
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::badge::{Badge, BadgeRef, BadgeTone};
+use bevy_pluim::breadcrumbs::{BreadCrumb, BreadCrumbs};
+use bevy_pluim::card::Card;
+use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::color_palette_combo::{
     self, ColorPaletteCombo, ColorPaletteComboButton, ColorPaletteComboFloat, ColorPaletteComboRefs,
 };
-use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquare};
-use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
-use rin_bevy_ui::divider::Divider;
-use rin_bevy_ui::filter_chips::{ChipCount, ChipLabel, ChipRefs, ChipView, FilterChips};
-use rin_bevy_ui::filter_combo::{FilterCombo, FilterComboRefs};
-use rin_bevy_ui::float::Float;
-use rin_bevy_ui::gallery::{Gallery, GalleryCardRefs, GalleryCardView};
-use rin_bevy_ui::icon::Icon;
-use rin_bevy_ui::icon_button::{IconButton, ToggleState};
-use rin_bevy_ui::kbd::Kbd;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::light_dark_toggle::{
+use bevy_pluim::color_push_button::{ColorPushButton, ColorSquare};
+use bevy_pluim::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
+use bevy_pluim::divider::Divider;
+use bevy_pluim::filter_chips::{ChipCount, ChipLabel, ChipRefs, ChipView, FilterChips};
+use bevy_pluim::filter_combo::{FilterCombo, FilterComboRefs};
+use bevy_pluim::float::Float;
+use bevy_pluim::gallery::{Gallery, GalleryCardRefs, GalleryCardView};
+use bevy_pluim::icon::Icon;
+use bevy_pluim::icon_button::{IconButton, ToggleState};
+use bevy_pluim::kbd::Kbd;
+use bevy_pluim::label::Label;
+use bevy_pluim::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
-use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef};
-use rin_bevy_ui::panel::Panel;
-use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
-use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
-use rin_bevy_ui::segmented_control::{
+use bevy_pluim::link::Link;
+use bevy_pluim::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
+use bevy_pluim::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef};
+use bevy_pluim::panel::Panel;
+use bevy_pluim::pill::{Pill, PillTone};
+use bevy_pluim::push_button::{ButtonSize, IconPlacement, PushButton};
+use bevy_pluim::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
+use bevy_pluim::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentLabels, SegmentedControl,
 };
-use rin_bevy_ui::setting_row::{SettingRow, SettingRows};
-use rin_bevy_ui::slider::{Slider, SliderRefs};
-use rin_bevy_ui::stack::{Stack, StackItem};
-use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
-use rin_bevy_ui::text_field::{TextField, TextFieldRefs};
-use rin_bevy_ui::theme::{Theme, ThemeColors};
-use rin_bevy_ui::theme_editor::{
+use bevy_pluim::setting_row::{SettingRow, SettingRows};
+use bevy_pluim::slider::{Slider, SliderRefs};
+use bevy_pluim::stack::{Stack, StackItem};
+use bevy_pluim::tab_bar::{TabBar, TabBarTab};
+use bevy_pluim::text_field::{TextField, TextFieldRefs};
+use bevy_pluim::theme::{Theme, ThemeColors};
+use bevy_pluim::theme_editor::{
     ThemeColorSlot, ThemeColorSwatch, ThemeEditor, ThemeEditorRefs, ThemeParameterEditor,
 };
-use rin_bevy_ui::toast::{Toast, ToastPlacement, ToastStack};
-use rin_bevy_ui::toolbar::{Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels};
-use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
-use rin_bevy_ui::virtual_list::{VirtualList, VirtualListRow};
+use bevy_pluim::toast::{Toast, ToastPlacement, ToastStack};
+use bevy_pluim::toolbar::{Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels};
+use bevy_pluim::tooltip::{Tooltip, TooltipPopup};
+use bevy_pluim::virtual_list::{VirtualList, VirtualListRow};
 
 fn app_with_widgets() -> App {
     let mut app = App::new();

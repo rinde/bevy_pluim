@@ -1010,7 +1010,7 @@ fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut comman
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::select::ItemsRef;
+/// # use bevy_pluim::select::ItemsRef;
 /// fn edit(mut refs: Query<&mut ItemsRef>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

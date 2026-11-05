@@ -2,9 +2,9 @@
 
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::light_dark_toggle::LightDarkToggle;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::label::Label;
+use bevy_pluim::light_dark_toggle::LightDarkToggle;
 
 fn main() {
     App::new()

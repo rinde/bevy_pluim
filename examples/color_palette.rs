@@ -6,16 +6,16 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::card::Card;
-use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
-use rin_bevy_ui::list::ListLayout;
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::select::{Item, Selection};
-use rin_bevy_ui::tailwind::COLORS;
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::card::Card;
+use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::color_palette_combo::ColorPaletteCombo;
+use bevy_pluim::list::ListLayout;
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::scroll_area::ScrollArea;
+use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::tailwind::COLORS;
+use bevy_pluim::theme::Theme;
 
 fn main() {
     App::new()

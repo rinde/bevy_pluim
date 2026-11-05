@@ -174,7 +174,7 @@ impl Theme {
     /// The field itself is private; assigning to it does not compile:
     ///
     /// ```compile_fail
-    /// use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, Theme};
+    /// use bevy_pluim::theme::{DEFAULT_DARK_THEME_COLORS, Theme};
     ///
     /// let mut theme = Theme::default();
     /// theme.colors = DEFAULT_DARK_THEME_COLORS;

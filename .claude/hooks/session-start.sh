@@ -5,7 +5,7 @@
 # rustfmt, `just` and `cargo-machete` at pinned versions, the system headers
 # Bevy's default features need, then warms the build cache so the first real
 # build is not a cold Bevy compile. Cargo fetches the private
-# rin-bevy-ui-tester dev-dependency with the `git` binary, so it uses the
+# bevy_stagecraft dev-dependency with the `git` binary, so it uses the
 # container's git credentials. Checks access before installing anything.
 # Safe to run more than once: every step checks whether it already has what
 # it needs.
@@ -47,10 +47,10 @@ fi
 
 # A cached Cargo checkout can hide missing permissions. Check live access on
 # every start, before spending time on the toolchain or a cold Bevy build.
-log "checking read access to the private rin-bevy-ui-tester"
-if ! git ls-remote --exit-code https://github.com/rinde/rin-bevy-ui-tester HEAD >/dev/null; then
-    log "cannot read rinde/rin-bevy-ui-tester; check the git error above"
-    log "for Claude Cloud, grant the Claude GitHub App access to rin-bevy-ui-tester at https://github.com/settings/installations"
+log "checking read access to the private bevy_stagecraft"
+if ! git ls-remote --exit-code https://github.com/rinde/bevy_stagecraft HEAD >/dev/null; then
+    log "cannot read rinde/bevy_stagecraft; check the git error above"
+    log "for Claude Cloud, grant the Claude GitHub App access to bevy_stagecraft at https://github.com/settings/installations"
     log "or run /web-setup in a local Claude Code session with a gh token that can read the tester"
     log "then retry .claude/hooks/session-start.sh in the cloud session"
     exit 1
@@ -77,8 +77,7 @@ rustup toolchain install "$toolchain" --profile minimal \
 # ------------------------------------------------------------ system headers
 
 # The default Bevy feature set (winit windowing, audio, gamepad) needs these
-# to link, as in `.github/workflows/ci.yml`. If the feature list here is ever
-# trimmed the way rails trims it, drop the packages that are no longer needed.
+# to link, as in `.github/workflows/ci.yml`.
 readonly BEVY_HEADERS=(pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev)
 if command -v apt-get >/dev/null 2>&1 && ! dpkg -s "${BEVY_HEADERS[@]}" >/dev/null 2>&1; then
     log "installing Bevy's system headers: ${BEVY_HEADERS[*]}"
@@ -131,7 +130,7 @@ install_tool cargo-machete "$MACHETE_VERSION" \
 
 # ------------------------------------------------------------------ sources
 
-log "fetching dependencies (including the private rin-bevy-ui-tester)"
+log "fetching dependencies (including the private bevy_stagecraft)"
 if ! cargo fetch --locked >&2; then
     log "could not fetch dependencies; check the Cargo and git errors above"
     exit 1
@@ -145,4 +144,4 @@ if ! cargo build --all-targets --locked >&2; then
     log "warm-up did not finish; the first build will just take longer"
 fi
 
-echo "rin-bevy-ui dev environment ready: rustc $(rustc --version | cut -d' ' -f2), $(just --version), cargo-machete $(cargo machete --version 2>/dev/null | head -1). Run 'just ci' for everything CI checks."
+echo "bevy-pluim dev environment ready: rustc $(rustc --version | cut -d' ' -f2), $(just --version), cargo-machete $(cargo machete --version 2>/dev/null | head -1). Run 'just ci' for everything CI checks."

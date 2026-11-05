@@ -36,7 +36,7 @@ impl Plugin for StackPlugin {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::stack::Stack;
+/// # use bevy_pluim::stack::Stack;
 /// fn edit(mut stacks: Query<&mut Stack>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

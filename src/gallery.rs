@@ -131,14 +131,14 @@ impl GalleryCard {
 /// supply meaningful labels.
 ///
 /// ```compile_fail
-/// use rin_bevy_ui::gallery::GalleryCardView;
+/// use bevy_pluim::gallery::GalleryCardView;
 /// # let (item, gallery) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
 /// let _ = GalleryCardView { item, owner: gallery };
 /// ```
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::gallery::GalleryCardView;
+/// use bevy_pluim::gallery::GalleryCardView;
 /// fn change(mut cards: Query<&mut GalleryCardView>) {}
 /// bevy::ecs::system::assert_is_system(change);
 /// ```

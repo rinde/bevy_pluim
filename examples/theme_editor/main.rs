@@ -5,7 +5,7 @@ mod ui;
 
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
-use rin_bevy_ui::WidgetsPlugin;
+use bevy_pluim::WidgetsPlugin;
 
 fn main() {
     App::new()

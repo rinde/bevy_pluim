@@ -57,7 +57,7 @@ pub enum PillTone {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::pill::Pill;
+/// # use bevy_pluim::pill::Pill;
 /// fn edit(mut widgets: Query<&mut Pill>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

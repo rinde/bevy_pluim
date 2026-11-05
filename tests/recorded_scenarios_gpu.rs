@@ -22,8 +22,8 @@ mod widgets_setup;
 
 use std::path::{Path, PathBuf};
 
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui_tester::{Recorder, Registry, load_ron_file, ron_files};
+use bevy_pluim::WidgetsPlugin;
+use bevy_stagecraft::{Recorder, Registry, load_ron_file, ron_files};
 
 /// Scenarios that pass headless but fail in a recording, because of a bug in a
 /// widget that only shows with UI drawn to an image (#100). The Card demo

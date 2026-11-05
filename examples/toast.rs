@@ -4,10 +4,10 @@
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::theme::Theme;
-use rin_bevy_ui::toast::Toast;
-use rin_bevy_ui::{UiRoot, WidgetsPlugin};
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::theme::Theme;
+use bevy_pluim::toast::Toast;
+use bevy_pluim::{UiRoot, WidgetsPlugin};
 
 fn main() {
     App::new()

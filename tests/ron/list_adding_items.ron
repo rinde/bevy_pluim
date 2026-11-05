@@ -9,7 +9,7 @@
     setup: App(Lists),
     steps: [
         Wait(2),
-        Check(Count(with: ["rin_bevy_ui::list::ItemView"], is: Eq(47))),
+        Check(Count(with: ["bevy_pluim::list::ItemView"], is: Eq(47))),
         Check(Not(Exists(Within(Name("one-or-more list"), Text("Suriname"))))),
         Check(Not(Exists(Within(Name("one-or-more grid list"), Text("Suriname"))))),
         Check(Not(Exists(Within(Name("zero-or-one list"), Text("Suriname"))))),
@@ -26,7 +26,7 @@
         Check(Not(Exists(Within(Name("scrolling list"), Text("Suriname"))))),
         // 47 item views before (seven lists of five and one of twelve),
         // one more in each of the four lists drawing from the shared items.
-        Check(Count(with: ["rin_bevy_ui::list::ItemView"], is: Eq(51))),
+        Check(Count(with: ["bevy_pluim::list::ItemView"], is: Eq(51))),
         // The next click adds the next one.
         MoveTo(Role(role: Button, label: "Add country")), Click(Left),
         Wait(2),

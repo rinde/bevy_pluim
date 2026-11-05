@@ -37,7 +37,7 @@ impl Plugin for LabelPlugin {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::label::Label;
+/// # use bevy_pluim::label::Label;
 /// fn edit(mut widgets: Query<&mut Label>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

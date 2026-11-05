@@ -109,7 +109,7 @@ impl IconButtonSize {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::icon_button::IconButton;
+/// # use bevy_pluim::icon_button::IconButton;
 /// fn edit(mut buttons: Query<&mut IconButton>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);
@@ -177,7 +177,7 @@ const BAR_HEIGHT_PX: f32 = 2.0;
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::icon_button::IconButtonRefs;
+/// # use bevy_pluim::icon_button::IconButtonRefs;
 /// let _ = IconButtonRefs { icon_id: Entity::PLACEHOLDER };
 /// ```
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]

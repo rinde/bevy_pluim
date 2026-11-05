@@ -1,4 +1,4 @@
-# rin-bevy-ui
+# bevy-pluim
 
 A reusable widget library for [Bevy](https://bevy.org) UI, built on Bevy's
 native `Node` UI. Buttons, lists, combos, scroll areas, tabs, sliders and more,
@@ -19,12 +19,10 @@ The crate is not on crates.io; use it as a git dependency:
 ```toml
 [dependencies]
 bevy = "0.20"
-rin_bevy_ui = { git = "https://github.com/rinde/rin-bevy-ui" }
+bevy_pluim = { git = "https://github.com/rinde/bevy-pluim" }
 ```
 
-Pin a `rev` for reproducible builds. The repository is private, so Cargo needs
-your git credentials; set `CARGO_NET_GIT_FETCH_WITH_CLI=true` to make it use
-the `git` binary.
+Pin a `rev` for reproducible builds. 
 
 ## A minimal app
 
@@ -33,8 +31,8 @@ the root.
 
 ```rust
 use bevy::prelude::*;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::push_button::PushButton;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::push_button::PushButton;
 
 fn main() {
     App::new()

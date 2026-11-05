@@ -1,4 +1,4 @@
-//! Scenario tests: `rin_bevy_ui_tester` drives this crate's widgets with
+//! Scenario tests: `bevy_stagecraft` drives this crate's widgets with
 //! scripted pointer input in a headless app, and checks what they did.
 
 #![expect(
@@ -32,35 +32,35 @@ use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirec
 use bevy::ui::{InteractionDisabled, IsDefaultUiCamera, Selected, UiSystems};
 use bevy::ui_widgets::{Activate, ActiveDescendant, Button, Tab};
 use bevy::window::PrimaryWindow;
-use rin_bevy_ui::badge::Badge;
-use rin_bevy_ui::breadcrumbs::BreadCrumbs;
-use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::combo::{Combo, ComboButton, ComboState};
-use rin_bevy_ui::filter_chips::{Chip, ChipView, FilterChips};
-use rin_bevy_ui::gallery::{Gallery, GalleryCard};
-use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
-use rin_bevy_ui::kbd::Kbd;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::light_dark_toggle::{LightDarkToggle, ThemePreference};
-use rin_bevy_ui::list::{ItemViewCreator, ItemViewSpawner, List};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
-use rin_bevy_ui::panel::{Panel, PanelRefs};
-use rin_bevy_ui::pill::Pill;
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::{ScrollArea, ScrollContents};
-use rin_bevy_ui::segmented_control::SegmentedControl;
-use rin_bevy_ui::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
-use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
-use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
-use rin_bevy_ui::theme::{
+use bevy_pluim::badge::Badge;
+use bevy_pluim::breadcrumbs::BreadCrumbs;
+use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::combo::{Combo, ComboButton, ComboState};
+use bevy_pluim::filter_chips::{Chip, ChipView, FilterChips};
+use bevy_pluim::gallery::{Gallery, GalleryCard};
+use bevy_pluim::icon_button::{IconButton, IconButtonSize};
+use bevy_pluim::kbd::Kbd;
+use bevy_pluim::label::Label;
+use bevy_pluim::light_dark_toggle::{LightDarkToggle, ThemePreference};
+use bevy_pluim::list::{ItemViewCreator, ItemViewSpawner, List};
+use bevy_pluim::numeric_stepper::{NumericStepper, Value};
+use bevy_pluim::panel::{Panel, PanelRefs};
+use bevy_pluim::pill::Pill;
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
+use bevy_pluim::segmented_control::SegmentedControl;
+use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
+use bevy_pluim::tab_bar::{TabBar, TabBarTab};
+use bevy_pluim::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
+use bevy_pluim::theme::{
     DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeColors, ThemeMode,
 };
-use rin_bevy_ui::toast::{Toast, ToastStack};
-use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarStyle};
-use rin_bevy_ui::virtual_list::{
+use bevy_pluim::toast::{Toast, ToastStack};
+use bevy_pluim::toolbar::{Tool, Toolbar, ToolbarStyle};
+use bevy_pluim::virtual_list::{
     MIN_ROW_HEIGHT, RowHeight, RowHeightError, ShownItem, VirtualList, VirtualListRow,
 };
-use rin_bevy_ui_tester::{
+use bevy_stagecraft::{
     AppCheck, AppSetup, Check, CheckResult, DEFAULT_WINDOW_SIZE, NoiseFilter, Probe, Registry,
     Scenario, ScenarioReport, Step, SyntheticInput, Target, WidgetRole, WorldSnapshot,
     load_ron_file, resolve, suggest_checks,
@@ -1655,7 +1655,7 @@ fn clicking_items_changes_what_selected_reports_in_a_scenario() {
         1,
         Target::within(
             first_list(),
-            Target::component::<rin_bevy_ui::list::ItemView>(),
+            Target::component::<bevy_pluim::list::ItemView>(),
         ),
     );
     let selected = |of: Target, items: &[&str]| {
@@ -2207,7 +2207,7 @@ fn a_swatch_picked_under_the_pointer_keeps_its_hover_highlight_in_a_window_and_i
             0,
             Target::within(
                 Target::name("palette"),
-                Target::component::<rin_bevy_ui::list::ItemView>(),
+                Target::component::<bevy_pluim::list::ItemView>(),
             ),
         )
     };
@@ -2221,7 +2221,7 @@ fn a_swatch_picked_under_the_pointer_keeps_its_hover_highlight_in_a_window_and_i
         let world = app.world();
         let view = resolve(world, &swatch()).unwrap().widget.unwrap();
         let item = world
-            .get::<rin_bevy_ui::list::ItemView>(view)
+            .get::<bevy_pluim::list::ItemView>(view)
             .unwrap()
             .item_ref;
         let color = world.get::<Item<Color>>(item).unwrap().data;
@@ -2687,11 +2687,11 @@ fn a_toolbar_is_a_toolbar_of_buttons_toggled_while_their_tool_is_active() {
 fn the_cursor_overlays_roots_get_no_ui_root() {
     let mut app = App::new();
     app.add_plugins((
-        rin_bevy_ui_tester::HeadlessPlugins::default(),
-        rin_bevy_ui_tester::overlay::CursorOverlayPlugin,
+        bevy_stagecraft::HeadlessPlugins::default(),
+        bevy_stagecraft::overlay::CursorOverlayPlugin,
     ));
     app.init_resource::<ClearColor>();
-    app.add_plugins(rin_bevy_ui::WidgetsPlugin);
+    app.add_plugins(bevy_pluim::WidgetsPlugin);
     app.finish();
     app.cleanup();
     spawn_camera_and_root(app.world_mut());
@@ -2700,7 +2700,7 @@ fn the_cursor_overlays_roots_get_no_ui_root() {
 
     let roots = app
         .world_mut()
-        .query_filtered::<Entity, With<rin_bevy_ui::UiRoot>>()
+        .query_filtered::<Entity, With<bevy_pluim::UiRoot>>()
         .iter(app.world())
         .count();
     assert_eq!(roots, 1, "only the app's own root is a UiRoot");
@@ -2748,8 +2748,6 @@ fn shown_rows(app: &mut App) -> Vec<String> {
 
 #[test]
 fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_position() {
-    // The rails case: ten thousand trains. Scrolling, and an item added while scrolled,
-    // re-point the rows; no row or other entity is spawned for it.
     let mut app = widgets_app();
     WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
     for _ in 0..4 {
@@ -3297,7 +3295,7 @@ fn a_separated_virtual_list_with_a_row_height_just_above_its_padding_and_ring_sh
 /// The `left` of the segment indicator of `control`, in logical pixels, and the left edge of
 /// `segment` relative to `control`, as the layout has it.
 fn indicator_left_and_goal(app: &App, control: Entity, segment: Entity) -> (f32, f32) {
-    use rin_bevy_ui::segmented_control::SegmentIndicator;
+    use bevy_pluim::segmented_control::SegmentIndicator;
     let world = app.world();
     let indicator = world
         .entity(control)
@@ -3319,8 +3317,8 @@ fn indicator_left_and_goal(app: &App, control: Entity, segment: Entity) -> (f32,
 
 #[test]
 fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
-    use rin_bevy_ui::segmented_control::{Segment, SegmentedControl};
-    use rin_bevy_ui::select::{Item, Selection, SelectionParam};
+    use bevy_pluim::segmented_control::{Segment, SegmentedControl};
+    use bevy_pluim::select::{Item, Selection, SelectionParam};
 
     let mut app = widgets_app();
     let world = app.world_mut();
@@ -3447,8 +3445,8 @@ fn assert_indicator_slides(
 
 #[test]
 fn a_tab_bar_slides_its_indicator_to_a_newly_selected_tab() {
-    use rin_bevy_ui::select::{Item, Selection, SelectionParam};
-    use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
+    use bevy_pluim::select::{Item, Selection, SelectionParam};
+    use bevy_pluim::tab_bar::{TabBar, TabBarTab};
 
     let mut app = widgets_app();
     let world = app.world_mut();
@@ -3494,7 +3492,7 @@ fn a_tab_bar_slides_its_indicator_to_a_newly_selected_tab() {
 
 #[test]
 fn a_light_dark_toggle_slides_its_indicator_to_a_newly_chosen_option() {
-    use rin_bevy_ui::light_dark_toggle::LightDarkOption;
+    use bevy_pluim::light_dark_toggle::LightDarkOption;
 
     let mut app = widgets_app();
     let world = app.world_mut();
@@ -3894,10 +3892,10 @@ mod overview;
 #[test]
 fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() {
     let mut app = App::new();
-    app.add_plugins(rin_bevy_ui_tester::HeadlessPlugins::default());
+    app.add_plugins(bevy_stagecraft::HeadlessPlugins::default());
     app.init_resource::<ClearColor>();
     app.add_plugins(bevy::scene::ScenePlugin);
-    app.add_plugins((rin_bevy_ui::WidgetsPlugin, overview::OverviewPlugin));
+    app.add_plugins((bevy_pluim::WidgetsPlugin, overview::OverviewPlugin));
     app.finish();
     app.cleanup();
     settle(&mut app);

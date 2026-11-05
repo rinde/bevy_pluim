@@ -76,7 +76,7 @@ impl Default for ToastPlacement {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::toast::Toast;
+/// # use bevy_pluim::toast::Toast;
 /// fn edit(mut widgets: Query<&mut Toast>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

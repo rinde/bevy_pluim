@@ -13,12 +13,12 @@
 
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::UiRoot;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::theme::{Theme, ThemeColors, ThemeMode};
-use rin_bevy_ui::theme_editor::{ThemeEditor, color_slot, theme_parameters};
-use rin_bevy_ui::toast::Toast;
+use bevy_pluim::UiRoot;
+use bevy_pluim::label::Label;
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::theme::{Theme, ThemeColors, ThemeMode};
+use bevy_pluim::theme_editor::{ThemeEditor, color_slot, theme_parameters};
+use bevy_pluim::toast::Toast;
 use std::fmt::Write as _;
 
 /// Spawns the editor and its buttons at startup.

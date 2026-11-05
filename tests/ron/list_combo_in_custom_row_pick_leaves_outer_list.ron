@@ -19,7 +19,7 @@
         Check(TextOf(Within(Name("combo in row a"), Component("ComboButton")), StartsWith("Beta"))),
         // The closed state is read from `ComboState` and `InheritedVisibility` because
         // `Not(Visible(..))` wrongly fails here: it reads the enclosing row's visibility
-        // (rinde/rin-bevy-ui-tester#156).
+        // (rinde/bevy_stagecraft#156).
         // Switch back to `Not(Visible(..))` once the tester fix is in.
         Check(Component(target: Name("combo in row a"), path: "ComboState", is: Eq(Closed))),
         Check(Component(target: Within(Name("combo in row a"), Component("ComboList")), path: "InheritedVisibility.0", is: Eq(false))),

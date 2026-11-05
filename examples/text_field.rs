@@ -7,11 +7,11 @@ use bevy::prelude::*;
 use bevy::ui::Val;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit};
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::label::Label;
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::text_field::{TextField, TextFieldChange, TextFieldCommit};
+use bevy_pluim::theme::Theme;
 
 fn main() {
     App::new()

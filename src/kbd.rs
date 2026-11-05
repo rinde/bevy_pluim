@@ -39,7 +39,7 @@ impl Plugin for KbdPlugin {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::kbd::Kbd;
+/// # use bevy_pluim::kbd::Kbd;
 /// fn edit(mut widgets: Query<&mut Kbd>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

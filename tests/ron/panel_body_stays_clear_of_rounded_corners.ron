@@ -9,7 +9,7 @@
     steps: [
         Wait(2),
         Check(Component(
-            target: Within(Name("tall panel"), Component("rin_bevy_ui::scroll_area::ScrollArea")),
+            target: Within(Name("tall panel"), Component("bevy_pluim::scroll_area::ScrollArea")),
             path: "Node.margin.bottom",
             is: Eq(Px(12.0)),
         )),

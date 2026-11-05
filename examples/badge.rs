@@ -6,11 +6,11 @@ mod common;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::badge::{Badge, BadgeTone};
-use rin_bevy_ui::icon_button::{IconButton, IconButtonSize};
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::badge::{Badge, BadgeTone};
+use bevy_pluim::icon_button::{IconButton, IconButtonSize};
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::theme::Theme;
 
 /// Marks the button whose badge "Add one" raises.
 #[derive(Component, Default, Clone)]

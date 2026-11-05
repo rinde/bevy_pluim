@@ -8,8 +8,8 @@
 
 use bevy::camera::ClearColor;
 use bevy::prelude::*;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui_tester::HeadlessPlugins;
+use bevy_pluim::WidgetsPlugin;
+use bevy_stagecraft::HeadlessPlugins;
 
 /// A finished headless app with [`WidgetsPlugin`], ready for
 /// `Scenario::run_in`.

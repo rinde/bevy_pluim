@@ -203,14 +203,14 @@ impl Tool {
 /// accessible name is its [`Tool::label`], so callers supply meaningful labels.
 ///
 /// ```compile_fail
-/// use rin_bevy_ui::toolbar::ToolbarButton;
+/// use bevy_pluim::toolbar::ToolbarButton;
 /// # let (item, toolbar) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
 /// let _ = ToolbarButton { item, owner: toolbar };
 /// ```
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::toolbar::ToolbarButton;
+/// use bevy_pluim::toolbar::ToolbarButton;
 /// fn change(mut buttons: Query<&mut ToolbarButton>) {}
 /// bevy::ecs::system::assert_is_system(change);
 /// ```

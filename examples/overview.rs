@@ -12,40 +12,40 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::badge::{Badge, BadgeTone};
-use rin_bevy_ui::breadcrumbs::BreadCrumbs;
-use rin_bevy_ui::card::Card;
-use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
-use rin_bevy_ui::combo::{Combo, ComboPlaceholder};
-use rin_bevy_ui::divider::Divider;
-use rin_bevy_ui::filter_chips::{Chip, FilterChips};
-use rin_bevy_ui::filter_combo::FilterCombo;
-use rin_bevy_ui::gallery::{Gallery, GalleryCard};
-use rin_bevy_ui::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
-use rin_bevy_ui::kbd::Kbd;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::light_dark_toggle::LightDarkToggle;
-use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{CornerStyle, ItemNote, List, ListLayout};
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value};
-use rin_bevy_ui::panel::{Panel, PanelRefs};
-use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{ButtonSize, IconPlacement, PushButton};
-use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::segmented_control::{ItemIcon, SegmentLabels, SegmentedControl};
-use rin_bevy_ui::select::{Item, Selection};
-use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
-use rin_bevy_ui::slider::Slider;
-use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
-use rin_bevy_ui::tab_bar::TabBar;
-use rin_bevy_ui::tailwind::COLORS;
-use rin_bevy_ui::text_field::TextField;
-use rin_bevy_ui::toast::Toast;
-use rin_bevy_ui::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
-use rin_bevy_ui::tooltip::Tooltip;
-use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
-use rin_bevy_ui::{UiRoot, WidgetsPlugin};
+use bevy_pluim::badge::{Badge, BadgeTone};
+use bevy_pluim::breadcrumbs::BreadCrumbs;
+use bevy_pluim::card::Card;
+use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::color_palette_combo::ColorPaletteCombo;
+use bevy_pluim::combo::{Combo, ComboPlaceholder};
+use bevy_pluim::divider::Divider;
+use bevy_pluim::filter_chips::{Chip, FilterChips};
+use bevy_pluim::filter_combo::FilterCombo;
+use bevy_pluim::gallery::{Gallery, GalleryCard};
+use bevy_pluim::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
+use bevy_pluim::kbd::Kbd;
+use bevy_pluim::label::Label;
+use bevy_pluim::light_dark_toggle::LightDarkToggle;
+use bevy_pluim::link::Link;
+use bevy_pluim::list::{CornerStyle, ItemNote, List, ListLayout};
+use bevy_pluim::numeric_stepper::{NumericStepper, Value};
+use bevy_pluim::panel::{Panel, PanelRefs};
+use bevy_pluim::pill::{Pill, PillTone};
+use bevy_pluim::push_button::{ButtonSize, IconPlacement, PushButton};
+use bevy_pluim::scroll_area::ScrollArea;
+use bevy_pluim::segmented_control::{ItemIcon, SegmentLabels, SegmentedControl};
+use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::setting_row::{SettingRow, SettingRowRefs, SettingRows};
+use bevy_pluim::slider::Slider;
+use bevy_pluim::stack::{Stack, StackChildSpawner, StackItem};
+use bevy_pluim::tab_bar::TabBar;
+use bevy_pluim::tailwind::COLORS;
+use bevy_pluim::text_field::TextField;
+use bevy_pluim::toast::Toast;
+use bevy_pluim::toolbar::{Tool, Toolbar, ToolbarLabels, ToolbarStyle};
+use bevy_pluim::tooltip::Tooltip;
+use bevy_pluim::virtual_list::{RowHeight, VirtualList};
+use bevy_pluim::{UiRoot, WidgetsPlugin};
 
 fn main() {
     App::new()
@@ -642,7 +642,7 @@ fn colours(spawner: In<StackChildSpawner>, mut commands: Commands) {
     let swatches = || {
         COLORS
             .iter()
-            .filter(|c| c.variant == rin_bevy_ui::tailwind::Variant::V500)
+            .filter(|c| c.variant == bevy_pluim::tailwind::Variant::V500)
             .map(|c| Item { data: c.color })
             .collect::<Vec<_>>()
     };

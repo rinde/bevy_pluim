@@ -13,10 +13,10 @@
         // 487, 12 = `panel_radius` above 499); the other is 198 high centred on 400 (bottom 499).
         Check(Component(target: Name("card scroll area"), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(400.0))),
         Check(Component(target: Name("card scroll area"), path: "ComputedNode.size.y", unit: Logical, is: Eq(200.0))),
-        Check(Component(target: Within(Name("card scroll area"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "ComputedNode.size.y", unit: Logical, is: Eq(186.0))),
-        Check(Component(target: Within(Name("card scroll area without opt-in"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "ComputedNode.size.y", unit: Logical, is: Eq(198.0))),
-        Check(Component(target: Within(Name("card scroll area"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(394.0))),
-        Check(Component(target: Within(Name("card scroll area without opt-in"), Component("rin_bevy_ui::scroll_area::ScrollArea")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(400.0))),
+        Check(Component(target: Within(Name("card scroll area"), Component("bevy_pluim::scroll_area::ScrollArea")), path: "ComputedNode.size.y", unit: Logical, is: Eq(186.0))),
+        Check(Component(target: Within(Name("card scroll area without opt-in"), Component("bevy_pluim::scroll_area::ScrollArea")), path: "ComputedNode.size.y", unit: Logical, is: Eq(198.0))),
+        Check(Component(target: Within(Name("card scroll area"), Component("bevy_pluim::scroll_area::ScrollArea")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(394.0))),
+        Check(Component(target: Within(Name("card scroll area without opt-in"), Component("bevy_pluim::scroll_area::ScrollArea")), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Eq(400.0))),
     ],
     expect: [],
 )

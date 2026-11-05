@@ -5,11 +5,11 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::{Activate, SliderValue, ValueChange};
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::numeric_stepper::{self, FloatValue, NumericStepper, Value};
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::slider::Slider;
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::numeric_stepper::{self, FloatValue, NumericStepper, Value};
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::slider::Slider;
+use bevy_pluim::theme::Theme;
 
 fn main() {
     App::new()

@@ -59,7 +59,7 @@ pub enum BadgeTone {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::badge::Badge;
+/// # use bevy_pluim::badge::Badge;
 /// fn edit(mut widgets: Query<&mut Badge>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

@@ -10,7 +10,7 @@
         Wait(2),
         Tap(key: Tab),
         Check(App(Focused(of: Name("continuous slider")))),
-        Check(Count(with: ["Outline", "rin_bevy_ui::slider::Slider"], is: Eq(1))),
+        Check(Count(with: ["Outline", "bevy_pluim::slider::Slider"], is: Eq(1))),
         Tap(key: ArrowRight),
         Check(Component(target: Name("continuous slider"), path: "SliderValue.0", is: Between(0.0099, 0.0101))),
         Tap(key: Tab),
@@ -34,7 +34,7 @@
         Check(TextOf(Name("formatted slider"), Exact("30 %"))),
         Tap(key: Tab),
         Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
-        Check(Count(with: ["Outline", "rin_bevy_ui::slider::Slider"], is: Eq(0))),
+        Check(Count(with: ["Outline", "bevy_pluim::slider::Slider"], is: Eq(0))),
     ],
     expect: [],
 )

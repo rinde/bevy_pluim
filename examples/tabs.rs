@@ -5,19 +5,19 @@ use std::sync::LazyLock;
 use bevy::ecs::spawn::SpawnIter;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::card::Card;
-use rin_bevy_ui::color_palette_combo::ColorPaletteCombo;
-use rin_bevy_ui::combo::Combo;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::list::{List, ListLayout};
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::select::{Item, ItemValues, Selection};
-use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
-use rin_bevy_ui::tab_bar::TabBar;
-use rin_bevy_ui::tailwind::{COLORS, TailwindColor, Variant};
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::card::Card;
+use bevy_pluim::color_palette_combo::ColorPaletteCombo;
+use bevy_pluim::combo::Combo;
+use bevy_pluim::label::Label;
+use bevy_pluim::list::{List, ListLayout};
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::scroll_area::ScrollArea;
+use bevy_pluim::select::{Item, ItemValues, Selection};
+use bevy_pluim::stack::{Stack, StackChildSpawner, StackItem};
+use bevy_pluim::tab_bar::TabBar;
+use bevy_pluim::tailwind::{COLORS, TailwindColor, Variant};
+use bevy_pluim::theme::Theme;
 
 fn main() {
     App::new()

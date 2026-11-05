@@ -10,13 +10,13 @@ use bevy::ecs::system::Commands;
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::combo::Combo;
-use rin_bevy_ui::list::List;
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::scroll_area::ScrollArea;
-use rin_bevy_ui::select::{Item, Selection};
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::combo::Combo;
+use bevy_pluim::list::List;
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::scroll_area::ScrollArea;
+use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::theme::Theme;
 
 fn main() {
     App::new()

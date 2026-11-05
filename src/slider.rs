@@ -127,7 +127,7 @@ const LABEL_GAP_PX: f32 = 12.0;
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::slider::Slider;
+/// use bevy_pluim::slider::Slider;
 ///
 /// fn edit(mut widgets: Query<&mut Slider>) {
 ///     for mut widget in &mut widgets {

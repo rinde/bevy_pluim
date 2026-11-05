@@ -38,60 +38,60 @@ use bevy::ui_widgets::{
     SliderStep, SliderValue, SliderValueChange, Tab, TabList, ValueChange,
 };
 use bevy::window::{PrimaryWindow, Window, WindowPlugin, WindowTheme, WindowThemeChanged};
-use rin_bevy_ui::UiRoot;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::badge::{Badge, BadgeTone};
-use rin_bevy_ui::breadcrumbs::BreadCrumbs;
-use rin_bevy_ui::card::Card;
-use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::color_palette_combo::{
+use bevy_pluim::UiRoot;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::badge::{Badge, BadgeTone};
+use bevy_pluim::breadcrumbs::BreadCrumbs;
+use bevy_pluim::card::Card;
+use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::color_palette_combo::{
     ColorPaletteCombo, ColorPaletteComboButton, ColorPaletteComboFloat, ColorPaletteComboRefs,
     ColorPaletteComboState as PaletteComboState,
 };
-use rin_bevy_ui::color_push_button::{ColorPushButton, ColorSquareRef};
-use rin_bevy_ui::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
-use rin_bevy_ui::divider::Divider;
-use rin_bevy_ui::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
-use rin_bevy_ui::filter_combo::{FilterCombo, FilterComboRefs};
-use rin_bevy_ui::float::Float;
-use rin_bevy_ui::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
-use rin_bevy_ui::icon::{Icon, IconColor};
-use rin_bevy_ui::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
-use rin_bevy_ui::kbd::Kbd;
-use rin_bevy_ui::label::Label;
-use rin_bevy_ui::light_dark_toggle::{
+use bevy_pluim::color_push_button::{ColorPushButton, ColorSquareRef};
+use bevy_pluim::combo::{Combo, ComboButton, ComboList, ComboPlaceholder, ComboRefs, ComboState};
+use bevy_pluim::divider::Divider;
+use bevy_pluim::filter_chips::{Chip, ChipRefs, ChipView, FilterChips};
+use bevy_pluim::filter_combo::{FilterCombo, FilterComboRefs};
+use bevy_pluim::float::Float;
+use bevy_pluim::gallery::{Gallery, GalleryCard, GalleryCardRefs, GalleryCardView};
+use bevy_pluim::icon::{Icon, IconColor};
+use bevy_pluim::icon_button::{IconButton, IconButtonRefs, IconButtonSize, ToggleState, Tone};
+use bevy_pluim::kbd::Kbd;
+use bevy_pluim::label::Label;
+use bevy_pluim::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
-use rin_bevy_ui::link::Link;
-use rin_bevy_ui::list::{
+use bevy_pluim::link::Link;
+use bevy_pluim::list::{
     CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
-use rin_bevy_ui::numeric_stepper::{NumericStepper, Value, ValueRef};
-use rin_bevy_ui::panel::{Panel, PanelClosed, PanelRefs};
-use rin_bevy_ui::pill::{Pill, PillTone};
-use rin_bevy_ui::push_button::{
+use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
+use bevy_pluim::panel::{Panel, PanelClosed, PanelRefs};
+use bevy_pluim::pill::{Pill, PillTone};
+use bevy_pluim::push_button::{
     ButtonSize, IconPlacement, NoDefaultHover, PushButton, PushButtonRefs,
 };
-use rin_bevy_ui::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
-use rin_bevy_ui::segmented_control::{
+use bevy_pluim::scroll_area::{ClearOfCorners, ScrollArea, ScrollBar, ScrollContents};
+use bevy_pluim::segmented_control::{
     ItemIcon, Segment, SegmentIcon, SegmentIndicator, SegmentLabels, SegmentedControl,
 };
-use rin_bevy_ui::select::{
+use bevy_pluim::select::{
     Item, ItemOf, ItemValues, ItemsRef, Selection, SelectionBuilder, SelectionBuilderWithValue,
     SelectionParam, SelectionValue,
 };
-use rin_bevy_ui::setting_row::{SettingRow, SettingRowRefs, SettingRows};
-use rin_bevy_ui::slider::{Slider, SliderRefs};
-use rin_bevy_ui::stack::{Stack, StackChildSpawner, StackItem};
-use rin_bevy_ui::tab_bar::{TabBar, TabBarTab};
-use rin_bevy_ui::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
-use rin_bevy_ui::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
-use rin_bevy_ui::toast::Toast;
-use rin_bevy_ui::toolbar::{
+use bevy_pluim::setting_row::{SettingRow, SettingRowRefs, SettingRows};
+use bevy_pluim::slider::{Slider, SliderRefs};
+use bevy_pluim::stack::{Stack, StackChildSpawner, StackItem};
+use bevy_pluim::tab_bar::{TabBar, TabBarTab};
+use bevy_pluim::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
+use bevy_pluim::theme::{DEFAULT_DARK_THEME_COLORS, DEFAULT_LIGHT_THEME_COLORS, Theme, ThemeMode};
+use bevy_pluim::toast::Toast;
+use bevy_pluim::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
-use rin_bevy_ui::tooltip::{Tooltip, TooltipPopup};
-use rin_bevy_ui::virtual_list::{RowHeight, VirtualList};
+use bevy_pluim::tooltip::{Tooltip, TooltipPopup};
+use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
@@ -303,7 +303,7 @@ fn a_panel_spawned_through_a_stack_keeps_its_own_width() {
         app_with_stack_child(|world| StackItem::new(world.register_system(spawn_real_panel)));
     let panel = single_entity_with::<Panel>(&mut app);
     let width = app.world().entity(panel).get::<Node>().unwrap().width;
-    assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));
+    assert_eq!(width, Val::Px(bevy_pluim::panel::PANEL_WIDTH_PX));
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn a_panel_scene_spawned_through_a_stack_keeps_its_own_width() {
         app_with_stack_child(|world| StackItem::new(world.register_system(spawn_real_panel_scene)));
     let panel = single_entity_with::<Panel>(&mut app);
     let width = app.world().entity(panel).get::<Node>().unwrap().width;
-    assert_eq!(width, Val::Px(rin_bevy_ui::panel::PANEL_WIDTH_PX));
+    assert_eq!(width, Val::Px(bevy_pluim::panel::PANEL_WIDTH_PX));
 }
 
 #[test]
@@ -2872,8 +2872,7 @@ struct StepperChanges(Vec<u8>);
 fn count_stepper_changes(app: &mut App) {
     app.init_resource::<StepperChanges>();
     app.add_observer(
-        |change: On<rin_bevy_ui::numeric_stepper::ValueChange>,
-         mut seen: ResMut<StepperChanges>| {
+        |change: On<bevy_pluim::numeric_stepper::ValueChange>, mut seen: ResMut<StepperChanges>| {
             seen.0.push(change.value.as_u8().unwrap());
         },
     );
@@ -6846,19 +6845,19 @@ fn theme_editor_app() -> App {
 fn the_theme_editor_has_a_row_for_each_editable_colour_slot() {
     let mut app = theme_editor_app();
     assert_eq!(ui_root_count(&mut app), 1);
-    let slots = rin_bevy_ui::theme_editor::editable_color_slots();
+    let slots = bevy_pluim::theme_editor::editable_color_slots();
     assert!(slots.len() > 20);
     let world = app.world_mut();
     assert_eq!(
         world
-            .query::<&rin_bevy_ui::theme_editor::ThemeColorSlot>()
+            .query::<&bevy_pluim::theme_editor::ThemeColorSlot>()
             .iter(world)
             .count(),
         slots.len()
     );
     assert_eq!(
         world
-            .query::<&rin_bevy_ui::theme_editor::ThemeColorSwatch>()
+            .query::<&bevy_pluim::theme_editor::ThemeColorSwatch>()
             .iter(world)
             .count(),
         slots.len()
@@ -6871,7 +6870,7 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let (combo, items) = {
         let world = app.world_mut();
         let combo = world
-            .query::<(Entity, &rin_bevy_ui::theme_editor::ThemeColorSlot)>()
+            .query::<(Entity, &bevy_pluim::theme_editor::ThemeColorSlot)>()
             .iter(world)
             .find(|(_, slot)| slot.0 == "accent")
             .map(|(e, _)| e)
@@ -6907,11 +6906,11 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let theme = app.world().get_resource::<Theme>().unwrap();
     let mode = theme.mode();
     assert_eq!(
-        rin_bevy_ui::theme_editor::color_slot(theme.colors(), "accent"),
+        bevy_pluim::theme_editor::color_slot(theme.colors(), "accent"),
         Some(items)
     );
     assert_eq!(
-        rin_bevy_ui::theme_editor::color_slot(&theme.colors_of(mode), "accent"),
+        bevy_pluim::theme_editor::color_slot(&theme.colors_of(mode), "accent"),
         Some(items)
     );
     if mode == ThemeMode::Light {
@@ -6925,7 +6924,7 @@ fn pick_accent_in_the_theme_editor(app: &mut App) -> Color {
     let combo = {
         let world = app.world_mut();
         world
-            .query::<(Entity, &rin_bevy_ui::theme_editor::ThemeColorSlot)>()
+            .query::<(Entity, &bevy_pluim::theme_editor::ThemeColorSlot)>()
             .iter(world)
             .find(|(_, slot)| slot.0 == "accent")
             .map(|(e, _)| e)
@@ -6973,16 +6972,16 @@ fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
     let theme = app.world().get_resource::<Theme>().unwrap();
     assert_eq!(theme.mode(), ThemeMode::Dark);
     assert_ne!(
-        rin_bevy_ui::theme_editor::color_slot(&before.colors_of(ThemeMode::Dark), "accent"),
+        bevy_pluim::theme_editor::color_slot(&before.colors_of(ThemeMode::Dark), "accent"),
         Some(red),
         "the pick is a change"
     );
     assert_eq!(
-        rin_bevy_ui::theme_editor::color_slot(&theme.colors_of(ThemeMode::Dark), "accent"),
+        bevy_pluim::theme_editor::color_slot(&theme.colors_of(ThemeMode::Dark), "accent"),
         Some(red)
     );
     assert_eq!(
-        rin_bevy_ui::theme_editor::color_slot(theme.colors(), "accent"),
+        bevy_pluim::theme_editor::color_slot(theme.colors(), "accent"),
         Some(red)
     );
     assert_eq!(
@@ -6999,7 +6998,7 @@ fn the_theme_editor_pair_source_has_both_blocks_and_follows_an_edit_to_the_dark_
     assert!(source.contains("const DARK: ThemeColors = ThemeColors {\n"));
 
     let mut dark = theme.colors_of(ThemeMode::Dark);
-    assert!(rin_bevy_ui::theme_editor::set_color_slot(
+    assert!(bevy_pluim::theme_editor::set_color_slot(
         &mut dark,
         "accent",
         Color::srgba(0.25, 0.5, 0.75, 1.0)
@@ -7907,7 +7906,7 @@ fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
 #[test]
 fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
     use bevy::time::TimeUpdateStrategy;
-    use rin_bevy_ui::toast::Toast;
+    use bevy_pluim::toast::Toast;
     use std::time::Duration;
 
     let mut app = headless_app();
@@ -7944,7 +7943,7 @@ fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
 
 #[test]
 fn toasts_with_unusual_durations_do_not_panic_and_the_zero_ones_go_after_a_tick() {
-    use rin_bevy_ui::toast::Toast;
+    use bevy_pluim::toast::Toast;
 
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -10923,7 +10922,7 @@ fn reinserting_a_slider_updates_its_range_format_name_and_value() {
 fn a_toast_with_no_parent_is_logged_and_despawned() {
     use bevy::log::tracing::{self, Level};
     use bevy::log::tracing_subscriber::{self, layer::SubscriberExt};
-    use rin_bevy_ui::toast::Toast;
+    use bevy_pluim::toast::Toast;
     use std::sync::{Arc, Mutex};
 
     struct Errors(Arc<Mutex<usize>>);
@@ -10963,7 +10962,7 @@ fn a_toast_with_no_parent_is_logged_and_despawned() {
 
 #[test]
 fn two_roots_each_get_their_own_toast_stack() {
-    use rin_bevy_ui::toast::{Toast, ToastStack};
+    use bevy_pluim::toast::{Toast, ToastStack};
 
     let mut app = headless_app();
     let first = app.world_mut().spawn(Node::default()).id();
@@ -10999,7 +10998,7 @@ fn toast_app() -> (App, Entity) {
 }
 
 fn toast_stacks(app: &mut App) -> Vec<Entity> {
-    use rin_bevy_ui::toast::ToastStack;
+    use bevy_pluim::toast::ToastStack;
 
     let world = app.world_mut();
     world
@@ -11010,7 +11009,7 @@ fn toast_stacks(app: &mut App) -> Vec<Entity> {
 
 #[test]
 fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
-    use rin_bevy_ui::toast::{Toast, ToastPlacement};
+    use bevy_pluim::toast::{Toast, ToastPlacement};
 
     let (mut app, root) = toast_app();
     assert_eq!(
@@ -11051,7 +11050,7 @@ fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
 
 #[test]
 fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
-    use rin_bevy_ui::toast::Toast;
+    use bevy_pluim::toast::Toast;
 
     let (mut app, root) = toast_app();
     let first = app
@@ -11089,7 +11088,7 @@ fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
 
 #[test]
 fn two_toasts_with_one_text_raised_in_the_same_frame_keep_one_entity() {
-    use rin_bevy_ui::toast::Toast;
+    use bevy_pluim::toast::Toast;
 
     let (mut app, root) = toast_app();
     let a = app
@@ -11114,7 +11113,7 @@ fn two_toasts_with_one_text_raised_in_the_same_frame_keep_one_entity() {
 
 #[test]
 fn the_toast_stack_is_absolute_above_everything_and_ignores_the_pointer() {
-    use rin_bevy_ui::toast::Toast;
+    use bevy_pluim::toast::Toast;
 
     let (mut app, root) = toast_app();
     let toast = app
@@ -12500,7 +12499,7 @@ fn shift_tab_to_the_button_closes_the_popup_without_picking_but_a_press_on_it_do
 
 // ---- ThemeEditor (the library widget) ----
 
-use rin_bevy_ui::theme_editor::{
+use bevy_pluim::theme_editor::{
     ThemeEditor, ThemeEditorRefs, ThemeParameterEditor, theme_parameters,
 };
 
@@ -12588,7 +12587,7 @@ fn stepping_a_number_in_the_theme_editor_sets_it_in_the_theme_and_only_it() {
     let before = app.world().get_resource::<Theme>().unwrap().clone();
     let stepper = editor_stepper(&mut app, "control_radius");
     app.world_mut()
-        .trigger(rin_bevy_ui::numeric_stepper::ValueChange {
+        .trigger(bevy_pluim::numeric_stepper::ValueChange {
             entity: stepper,
             value: Value::new_f32(14.0, 0.0, 32.0, 1.0).unwrap(),
         });
@@ -12619,7 +12618,7 @@ fn the_theme_editor_edits_the_padding_sides_and_the_shadow_geometry_too() {
     ] {
         let stepper = editor_stepper(&mut app, name);
         app.world_mut()
-            .trigger(rin_bevy_ui::numeric_stepper::ValueChange {
+            .trigger(bevy_pluim::numeric_stepper::ValueChange {
                 entity: stepper,
                 value: Value::new_f32(17.0, 0.0, 40.0, 1.0).unwrap(),
             });
@@ -12695,13 +12694,13 @@ fn the_theme_editor_is_a_library_widget_that_needs_no_example_code() {
     let slots = {
         let world = app.world_mut();
         world
-            .query::<&rin_bevy_ui::theme_editor::ThemeColorSlot>()
+            .query::<&bevy_pluim::theme_editor::ThemeColorSlot>()
             .iter(world)
             .count()
     };
     assert_eq!(
         slots,
-        rin_bevy_ui::theme_editor::editable_color_slots().len()
+        bevy_pluim::theme_editor::editable_color_slots().len()
     );
     // Despawning it takes everything with it, the colours it chooses from included.
     app.world_mut().entity_mut(editor).despawn();
@@ -12793,7 +12792,7 @@ fn theme_editor_over(edit: impl FnOnce(&mut Theme)) -> (App, Vec<String>) {
 fn step_editor_to(app: &mut App, name: &str, value: f32) {
     let stepper = editor_stepper(app, name);
     app.world_mut()
-        .trigger(rin_bevy_ui::numeric_stepper::ValueChange {
+        .trigger(bevy_pluim::numeric_stepper::ValueChange {
             entity: stepper,
             value: Value::new_f32(value, 0.0, 100.0, 1.0).unwrap(),
         });

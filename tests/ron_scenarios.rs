@@ -17,7 +17,7 @@ mod widgets_check;
 mod widgets_setup;
 
 use bevy::text::DEFAULT_REM_SIZE_PX;
-use rin_bevy_ui_tester::{Registry, Variant, load_ron_file};
+use bevy_stagecraft::{Registry, Variant, load_ron_file};
 
 use common::widgets_app;
 

@@ -95,7 +95,7 @@ fn sync_accessibility(
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::push_button::PushButton;
+/// # use bevy_pluim::push_button::PushButton;
 /// fn edit(mut buttons: Query<&mut PushButton>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);
@@ -180,7 +180,7 @@ pub struct PushButtonLabel;
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::push_button::PushButtonRefs;
+/// # use bevy_pluim::push_button::PushButtonRefs;
 /// let _ = PushButtonRefs { label_id: Entity::PLACEHOLDER, icon_id: None };
 /// ```
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]

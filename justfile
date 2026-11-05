@@ -1,4 +1,4 @@
-# Common commands for rin-bevy-ui.
+# Common commands for bevy-pluim.
 # Run `just` on its own to see this list.
 
 set shell := ["bash", "-uc"]

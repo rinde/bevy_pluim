@@ -84,8 +84,8 @@ impl Plugin for TabBarPlugin {
 ///
 /// ```no_run
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::tab_bar::TabBar;
-/// # use rin_bevy_ui::select::{Item, Selection};
+/// # use bevy_pluim::tab_bar::TabBar;
+/// # use bevy_pluim::select::{Item, Selection};
 /// fn setup(mut commands: Commands) {
 ///     commands.spawn((
 ///         TabBar,
@@ -157,14 +157,14 @@ impl Indicator for TabIndicator {
 /// A tab's accessible name is its item's text, so callers supply meaningful item labels.
 ///
 /// ```compile_fail
-/// use rin_bevy_ui::tab_bar::TabBarTab;
+/// use bevy_pluim::tab_bar::TabBarTab;
 /// # let (item, bar) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
 /// let _ = TabBarTab { item, owner: bar };
 /// ```
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::tab_bar::TabBarTab;
+/// use bevy_pluim::tab_bar::TabBarTab;
 /// fn change(mut tabs: Query<&mut TabBarTab>) {}
 /// bevy::ecs::system::assert_is_system(change);
 /// ```

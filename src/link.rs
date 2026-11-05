@@ -53,7 +53,7 @@ impl Plugin for LinkPlugin {
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::link::Link;
+/// # use bevy_pluim::link::Link;
 /// fn edit(mut links: Query<&mut Link>) {}
 /// # let mut app = App::new();
 /// # app.add_systems(Update, edit);

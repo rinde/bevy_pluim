@@ -1,16 +1,16 @@
 [package]
-name = "rin_bevy_ui"
+name = "bevy_pluim"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
-repository = "https://github.com/rinde/rin-bevy-ui"
+repository = "https://github.com/rinde/bevy_pluim"
 # Private software: never publish to a registry.
 publish = false
 
 [features]
 # Records the scenarios in tests/ron offscreen for review (`just record`). Only
 # the `recorded_scenarios_gpu` test target uses it, and it needs a GPU.
-record = ["rin_bevy_ui_tester/record"]
+record = ["bevy_stagecraft/record"]
 
 [dependencies]
 accesskit = "0.24"
@@ -29,7 +29,7 @@ bevy = { version = "0.20.0", features = ["bevy_ui_debug", "debug"] }
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
-rin_bevy_ui_tester = { git = "https://github.com/rinde/rin-bevy-ui-tester", rev = "7e733ae3f3462caeb15c7a1dfdf848727c2ee959", features = ["gallery"] }
+bevy_stagecraft = { git = "https://github.com/rinde/bevy_stagecraft", rev = "0a0278f7fab19c6c2e47566c8e69cfb857c11754", features = ["gallery"] }
 
 # Plays every `.ron` file and variant in tests/ron as an individual libtest
 # case. `build.rs` generates the cases so libtest can schedule them in parallel.

@@ -55,7 +55,7 @@ pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::panel::Panel;
+/// use bevy_pluim::panel::Panel;
 ///
 /// // A panel cannot be edited in place: `&mut Panel` is not a valid query.
 /// fn edit(mut panels: Query<&mut Panel>) {}
@@ -63,7 +63,7 @@ pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::panel::Panel;
+/// use bevy_pluim::panel::Panel;
 ///
 /// fn edit(world: &mut World, panel: Entity) {
 ///     let _ = world.entity_mut(panel).get_mut::<Panel>();
@@ -134,7 +134,7 @@ fn validate_max_body_height(height: f32) -> core::result::Result<f32, PanelHeigh
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::panel::PanelRefs;
+/// use bevy_pluim::panel::PanelRefs;
 ///
 /// // The fields are private: use `PanelRefs::body()`.
 /// fn body(refs: &PanelRefs) -> Entity {
@@ -144,7 +144,7 @@ fn validate_max_body_height(height: f32) -> core::result::Result<f32, PanelHeigh
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::panel::PanelRefs;
+/// use bevy_pluim::panel::PanelRefs;
 ///
 /// fn edit(mut refs: Query<&mut PanelRefs>) {}
 /// ```

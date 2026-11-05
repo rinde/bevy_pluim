@@ -36,10 +36,10 @@ use std::path::Path;
 use bevy::app::AppExit;
 use bevy::camera::Camera2d;
 use bevy::prelude::*;
-use rin_bevy_ui::select::{ItemOf, Selection};
-use rin_bevy_ui::theme::Theme;
-use rin_bevy_ui::{UiRoot, WidgetsPlugin};
-use rin_bevy_ui_tester::{
+use bevy_pluim::select::{ItemOf, Selection};
+use bevy_pluim::theme::Theme;
+use bevy_pluim::{UiRoot, WidgetsPlugin};
+use bevy_stagecraft::{
     AppSetup, Gallery, GalleryEntry, GalleryPlugin, NotUnderTest, Registry, Scenario,
 };
 use widgets_setup::{Clicks, CurrentScreen, WidgetsSetup};
@@ -205,7 +205,7 @@ fn main() -> AppExit {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "rin-bevy-ui".into(),
+                title: "bevy-pluim".into(),
                 ..default()
             }),
             ..default()

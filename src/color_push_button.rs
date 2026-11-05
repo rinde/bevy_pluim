@@ -63,7 +63,7 @@ pub struct ColorSquare;
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::color_push_button::ColorSquareRef;
+/// # use bevy_pluim::color_push_button::ColorSquareRef;
 /// let _ = ColorSquareRef(Entity::PLACEHOLDER);
 /// ```
 #[derive(Component, Clone, Copy, Debug)]

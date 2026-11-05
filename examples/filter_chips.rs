@@ -4,11 +4,11 @@
 use bevy::prelude::*;
 use bevy::ui_render::GlobalUiDebugOptions;
 use bevy::ui_widgets::Activate;
-use rin_bevy_ui::WidgetsPlugin;
-use rin_bevy_ui::filter_chips::{Chip, FilterChips};
-use rin_bevy_ui::push_button::PushButton;
-use rin_bevy_ui::select::{Item, Selection};
-use rin_bevy_ui::theme::Theme;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::filter_chips::{Chip, FilterChips};
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::theme::Theme;
 
 fn main() {
     App::new()

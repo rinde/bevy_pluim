@@ -104,7 +104,7 @@ pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::text_field::TextField;
+/// use bevy_pluim::text_field::TextField;
 ///
 /// fn edit(mut widgets: Query<&mut TextField>) {
 ///     for mut widget in &mut widgets {

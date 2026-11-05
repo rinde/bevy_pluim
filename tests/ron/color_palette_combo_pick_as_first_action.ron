@@ -1,7 +1,7 @@
 // The first thing done on the screen is to open "own palette combo" and pick a
 // swatch in its popup: there is no wait, and nothing has changed a selection
 // first. The popup's palette refers to the combo's selection from the moment
-// the popup is spawned (rinde/rin-bevy-ui#88), so the pick lands in the
+// the popup is spawned (rinde/bevy-pluim#88), so the pick lands in the
 // combo's selection. Index 60 is red-500 of `COLORS`.
 (
     format_version: 3,

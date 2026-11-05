@@ -27,17 +27,17 @@ use bevy::ecs::query::QueryFilter;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui_widgets::ActiveDescendant;
-use rin_bevy_ui::breadcrumbs::BreadCrumbs;
-use rin_bevy_ui::color_palette::ColorPalette;
-use rin_bevy_ui::combo::{Combo, ComboList};
-use rin_bevy_ui::filter_chips::Chip;
-use rin_bevy_ui::gallery::GalleryCard;
-use rin_bevy_ui::list::List;
-use rin_bevy_ui::select::{Item, Selection, SelectionValue};
-use rin_bevy_ui::tailwind::color_name;
-use rin_bevy_ui::toolbar::Tool;
-use rin_bevy_ui_tester::targets::resolve;
-use rin_bevy_ui_tester::{AppCheck, CheckResult, Probe, ReflectAppCheck, Target};
+use bevy_pluim::breadcrumbs::BreadCrumbs;
+use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::combo::{Combo, ComboList};
+use bevy_pluim::filter_chips::Chip;
+use bevy_pluim::gallery::GalleryCard;
+use bevy_pluim::list::List;
+use bevy_pluim::select::{Item, Selection, SelectionValue};
+use bevy_pluim::tailwind::color_name;
+use bevy_pluim::toolbar::Tool;
+use bevy_stagecraft::targets::resolve;
+use bevy_stagecraft::{AppCheck, CheckResult, Probe, ReflectAppCheck, Target};
 
 /// The checks the widgets' tests make about what the widgets hold.
 #[derive(Reflect, Debug, Clone, PartialEq)]

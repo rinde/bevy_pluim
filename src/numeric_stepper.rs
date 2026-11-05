@@ -96,7 +96,7 @@ pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::numeric_stepper::NumericStepper;
+/// use bevy_pluim::numeric_stepper::NumericStepper;
 ///
 /// fn edit(mut widgets: Query<&mut NumericStepper>) {
 ///     for mut widget in &mut widgets {

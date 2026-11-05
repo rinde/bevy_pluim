@@ -83,8 +83,8 @@ impl Plugin for SegmentedControlPlugin {
 ///
 /// ```no_run
 /// # use bevy::prelude::*;
-/// # use rin_bevy_ui::segmented_control::SegmentedControl;
-/// # use rin_bevy_ui::select::{Item, Selection};
+/// # use bevy_pluim::segmented_control::SegmentedControl;
+/// # use bevy_pluim::select::{Item, Selection};
 /// fn setup(mut commands: Commands) {
 ///     commands.spawn((
 ///         SegmentedControl,
@@ -182,14 +182,14 @@ pub struct SegmentIcon;
 /// meaningful item labels.
 ///
 /// ```compile_fail
-/// use rin_bevy_ui::segmented_control::Segment;
+/// use bevy_pluim::segmented_control::Segment;
 /// # let (item, control) = (bevy::prelude::Entity::PLACEHOLDER, bevy::prelude::Entity::PLACEHOLDER);
 /// let _ = Segment { item, owner: control };
 /// ```
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::segmented_control::Segment;
+/// use bevy_pluim::segmented_control::Segment;
 /// fn change(mut segments: Query<&mut Segment>) {}
 /// bevy::ecs::system::assert_is_system(change);
 /// ```
@@ -235,14 +235,14 @@ impl Segment {
 /// of the indicator and is read with [`owner`](Self::owner).
 ///
 /// ```compile_fail
-/// use rin_bevy_ui::segmented_control::SegmentIndicator;
+/// use bevy_pluim::segmented_control::SegmentIndicator;
 /// # let control = bevy::prelude::Entity::PLACEHOLDER;
 /// let _ = SegmentIndicator { owner: control };
 /// ```
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
-/// use rin_bevy_ui::segmented_control::SegmentIndicator;
+/// use bevy_pluim::segmented_control::SegmentIndicator;
 /// fn change(mut indicators: Query<&mut SegmentIndicator>) {}
 /// bevy::ecs::system::assert_is_system(change);
 /// ```
