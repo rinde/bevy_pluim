@@ -86,7 +86,7 @@ bevy-lint:
 # in target/recordings (RECORD_DIR overrides it). Needs a GPU, or lavapipe with
 # WGPU_BACKEND=vulkan; not part of `just ci`.
 record:
-    cargo nextest run --test recorded_scenarios_gpu --features record --include-ignored --no-capture
+    cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all --no-capture
     @echo "open target/recordings/index.html"
 
 # Everything CI would run.
