@@ -4,9 +4,7 @@
 # Installs the Rust toolchain pinned in rust-toolchain.toml with clippy and
 # rustfmt, `just` and `cargo-machete` at pinned versions, the system headers
 # Bevy's default features need, then warms the build cache so the first real
-# build is not a cold Bevy compile. Cargo fetches the private
-# bevy_stagecraft dev-dependency with the `git` binary, so it uses the
-# container's git credentials. Checks access before installing anything.
+# build is not a cold Bevy compile. Checks access before installing anything.
 # Safe to run more than once: every step checks whether it already has what
 # it needs.
 #
@@ -43,17 +41,6 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     printf 'export PATH=%q:$PATH\n' "$BIN" >>"$CLAUDE_ENV_FILE"
     echo 'export CARGO_TERM_COLOR=always' >>"$CLAUDE_ENV_FILE"
     echo 'export CARGO_NET_GIT_FETCH_WITH_CLI=true' >>"$CLAUDE_ENV_FILE"
-fi
-
-# A cached Cargo checkout can hide missing permissions. Check live access on
-# every start, before spending time on the toolchain or a cold Bevy build.
-log "checking read access to the private bevy_stagecraft"
-if ! git ls-remote --exit-code https://github.com/rinde/bevy_stagecraft HEAD >/dev/null; then
-    log "cannot read rinde/bevy_stagecraft; check the git error above"
-    log "for Claude Cloud, grant the Claude GitHub App access to bevy_stagecraft at https://github.com/settings/installations"
-    log "or run /web-setup in a local Claude Code session with a gh token that can read the tester"
-    log "then retry .claude/hooks/session-start.sh in the cloud session"
-    exit 1
 fi
 
 # ---------------------------------------------------------------- toolchain
@@ -130,7 +117,7 @@ install_tool cargo-machete "$MACHETE_VERSION" \
 
 # ------------------------------------------------------------------ sources
 
-log "fetching dependencies (including the private bevy_stagecraft)"
+log "fetching dependencies"
 if ! cargo fetch --locked >&2; then
     log "could not fetch dependencies; check the Cargo and git errors above"
     exit 1
