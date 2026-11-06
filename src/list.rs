@@ -18,6 +18,7 @@ use bevy::window::PrimaryWindow;
 use itertools::Either;
 
 use crate::combo::Combo;
+use crate::filter_combo::FilterCombo;
 use crate::focus::{AccessibilitySync, TabStop, sync_label};
 use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
 use crate::theme::{Theme, ThemeColors, contrast_ratio};
@@ -168,9 +169,9 @@ pub enum CornerStyle {
 /// views. The creator runs once per view, right after it is spawned, and adds the
 /// contents as children of [`ItemViewSpawner::view`]. The items need not be `Item<String>`.
 ///
-/// A [`Button`] inside a view handles its own pointer: a press on it does not restyle the
-/// row and a click on it does not change the selection. Contents that are not buttons pass
-/// the pointer on to the row.
+/// A nested [`Button`], [`List`], [`Combo`] or [`FilterCombo`] handles its own pointer: a
+/// press on it does not restyle the row and a click on it does not change the selection.
+/// Other contents pass the pointer on to the row.
 ///
 /// Add it with the [`List`], before the first update; the creator is a system registered
 /// with `World::register_system`.
@@ -489,12 +490,12 @@ fn handle_mouse_events(
 }
 
 /// The [`ItemView`] a pointer event on `target` belongs to, if `target` is a custom view or
-/// lies under one without a nested button, list or combo in between.
+/// lies under one without a nested button, list, combo or filter combo in between.
 fn custom_view_of(
     target: Entity,
     parents: &Query<&ChildOf>,
     views: &Query<(), With<CustomView>>,
-    nested: &Query<(), Or<(With<Button>, With<List>, With<Combo>)>>,
+    nested: &Query<(), Or<(With<Button>, With<List>, With<Combo>, With<FilterCombo>)>>,
 ) -> Option<Entity> {
     let mut current = target;
     loop {
@@ -508,8 +509,8 @@ fn custom_view_of(
     }
 }
 
-/// Stops a click that began inside a button, list or combo in a custom view from reaching the
-/// outer list, which would take it as a pick of the row.
+/// Stops a click that began inside a button, list, combo or filter combo in a custom view from
+/// reaching the outer list, which would take it as a pick of the row.
 ///
 /// The `ListBox` searches the ancestors of a click's original target for a row, whatever
 /// the target is, so a click on a combo inside a row (its root node or its popup, which let
@@ -519,7 +520,7 @@ fn keep_nested_clicks_from_row(
     mut click: On<PointerClick>,
     parents: Query<&ChildOf>,
     custom_views: Query<(), With<CustomView>>,
-    nested: Query<(), Or<(With<Button>, With<List>, With<Combo>)>>,
+    nested: Query<(), Or<(With<Button>, With<List>, With<Combo>, With<FilterCombo>)>>,
 ) {
     let row = click.entity;
     if custom_view_of(
@@ -537,7 +538,7 @@ fn handle_custom_view_mouse_events(
     t: On<MouseEvent>,
     parents: Query<&ChildOf>,
     custom_views: Query<(), With<CustomView>>,
-    nested: Query<(), Or<(With<Button>, With<List>, With<Combo>)>>,
+    nested: Query<(), Or<(With<Button>, With<List>, With<Combo>, With<FilterCombo>)>>,
     selections: SelectionParam,
     mut item_views: Query<(&ItemView, &Hovered, &mut BackgroundColor)>,
     styles: Query<&CornerStyle>,

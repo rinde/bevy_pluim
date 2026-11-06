@@ -302,13 +302,15 @@ of them (`just example gallery -- --run-all stack link`).
   is `CustomView`: its children take the pointer, so hover colours come from
   `Hovered` (`custom_view_hover`) and press and release from a global
   `MouseEvent` observer that walks up from the target to the view
-  (`custom_view_of`), ignoring a target inside a nested `Button`, `List` or `Combo`
+  (`custom_view_of`), ignoring a target inside a nested `Button`, `List`, `Combo` or `FilterCombo`
   (which handle their own press). A `Button` stops the click that hits it, but a
   combo's root node and popup let the pointer through, and their click bubbles
   through the row to the outer `ListBox`, which takes any click under a row as a
   pick of that row; so each custom view stops a click whose original target lies
-  in a nested `Button`, `List` or `Combo` (`keep_nested_clicks_from_row`,
-  `list_combo_in_custom_row_pick_leaves_outer_list.ron`, the `ComboRows` screen). Selection and `Selected` are as
+  in a nested `Button`, `List`, `Combo` or `FilterCombo` (`keep_nested_clicks_from_row`,
+  `list_combo_in_custom_row_pick_leaves_outer_list.ron` and
+  `list_filter_combo_in_custom_row_pick_leaves_outer_list.ron`, the `ComboRows` and
+  `FilterComboRows` screens). Selection and `Selected` are as
   for default views.
 - **Lists are `ListBox`es, and `Selection` keeps the last word.** A `List` is a
   `bevy::ui_widgets::ListBox` and its `ItemView`s are `ListItem`s (`Selectable`,
@@ -910,7 +912,7 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
 - **The setup** is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
   `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
   `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Slider`, `SegmentedControls`, `LightDarkToggle`, `FilterChips`,
-  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`, `ComboRows`, `FilterCombos`, `ThemeEditor`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+  `Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`, `ComboRows`, `FilterComboRows`, `FilterCombos`, `ThemeEditor`), which spawns a `Camera2d`, the one root `Node` and a screen, each
   with a "Change theme" button.
   - **A screen is a fixture of its own.** It starts from the example of the
     widget it is named after, then adds names, widgets and sizes for testing
@@ -1040,7 +1042,8 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
 - **The `FilterCombos` screen.** A row of `filter combo` (named "City") and `ordinary combo`, both sharing one `ZeroOrOne` selection (Amsterdam, Delft, Den Haag, Utrecht, Rotterdam) with the `city list` below them, which is never filtered, and "Change theme"; then, absolutely placed and spawned last so the tab order stays: `multi filter combo` ("Cities", `ZeroOrMore`, own items, x 300 y 300), `one filter combo` (`One`, x 550), `long filter combo` (80 options at x 800 y 600, so the popup opens upward, capped and scrolling) and `empty filter combo` (`One`, no items, x 1050). Reach the button with `Within(Name("filter combo"), Component("ComboButton"))`, the search input with `Component("TextInput")`, the options with `Nth(i, Within(Name(..), Component("ItemView")))` and read `Node.display` (`Eq(None)` for a filtered-out row; `Role(role: ListItem, ..)` does not find a hidden row), the active option with `App(Active(of: <input>, is: <row>))` and the zero-results line with `Within(.., Name("FilterComboEmpty"))`. Type with `Type(text: ..)` after the popup opened (it focuses the input); a deleting key cannot be played (see `filter_combo.rs`), and Shift+Tab is `Key(key: ShiftLeft)`, `Tap(key: Tab)`, `KeyUp(key: ShiftLeft)` because the tester's `modifiers` do not reach Bevy's tab navigation. The `filter_combo_*.ron` files cover opening, filtering, the arrows, Enter, continuing to type, Escape, Tab, Shift+Tab, an outside click, no matches, a hidden selection, many, the accessibility tree, a capped popup scrolling to results below the visible part (with a held arrow) and both themes; all run at scale 2 and `[text 1.5x]` too.
 - **The `ComboRows` screen.** A `row list` (a, b, c; `ZeroOrOne`, nothing selected) of
   custom-view rows, each a text and a `combo in row a` (b, c) over Alpha, Beta and Gamma with
-  its own selection; a pick in a row's combo leaves the list unselected.
+  its own selection; a pick in a row's combo leaves the list unselected. `FilterComboRows`
+  has the same rows with a `filter combo in row a` (b, c) in each.
 - **The `IconButtons` screen.** Six icon buttons with the default (blank) icon image,
   each with a `Name`: `small button`, `regular button`, `large button`,
   `toggle button` (a `ToggleState` that starts off), `warning button` and
