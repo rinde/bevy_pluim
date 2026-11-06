@@ -202,6 +202,8 @@ pub enum WidgetsSetup {
     /// nothing selected), each holding a `combo in row a` (b, c) over the stations Alpha,
     /// Beta and Gamma with a selection of its own, then "Change theme".
     ComboRows,
+    /// The same custom rows with a `FilterCombo` in each.
+    FilterComboRows,
     /// A `filter combo` (named "City") and an `ordinary combo` over the same cities, sharing one
     /// `ZeroOrOne` selection with a `city list` below them (which is never filtered), and "Change
     /// theme"; then, absolutely placed and spawned last, a `multi filter combo` (`ZeroOrMore`,
@@ -243,7 +245,8 @@ impl AppSetup for WidgetsSetup {
             Self::Themed => themed(world),
             Self::VirtualList => virtual_list(world, false),
             Self::SeparatedVirtualList => virtual_list(world, true),
-            Self::ComboRows => combo_rows(world),
+            Self::ComboRows => combo_rows(world, false),
+            Self::FilterComboRows => combo_rows(world, true),
             Self::FilterCombos => filter_combos(world),
             Self::ThemeEditor => theme_editor(world),
         }
@@ -2010,8 +2013,34 @@ fn combo_row(spawner: In<ItemViewSpawner>, items: Query<&Item<String>>, mut comm
     });
 }
 
-fn combo_rows(world: &mut World) {
-    let create = world.register_system(combo_row);
+fn filter_combo_row(
+    spawner: In<ItemViewSpawner>,
+    items: Query<&Item<String>>,
+    mut commands: Commands,
+) {
+    let Ok(item) = items.get(spawner.item) else {
+        return;
+    };
+    let name = format!("filter combo in row {}", item.data);
+    let text = item.data.clone();
+    commands.entity(spawner.view).with_children(|view| {
+        view.spawn(Text::new(text));
+        view.spawn((
+            FilterCombo::default(),
+            Name::new(name),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["Alpha", "Beta", "Gamma"].map(Item::new)),
+        ));
+    });
+}
+
+fn combo_rows(world: &mut World, filter: bool) {
+    let create = if filter {
+        world.register_system(filter_combo_row)
+    } else {
+        world.register_system(combo_row)
+    };
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((

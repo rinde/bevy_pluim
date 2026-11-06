@@ -1,0 +1,28 @@
+// Opening and picking in a filter combo must leave the surrounding list alone.
+(
+    format_version: 3,
+    name: "picking in a filter combo inside a list row leaves the list unselected",
+    setup: App(FilterComboRows),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("row list"), items: []))),
+        MoveTo(Within(Name("filter combo in row a"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("filter combo in row a"), path: "ComboState", is: Eq(Open))),
+        Check(App(Selected(of: Name("row list"), items: []))),
+        MoveTo(Within(Name("filter combo in row a"), Role(role: ListItem, label: "Beta"))),
+        Click(Left),
+        Check(App(Selected(of: Name("filter combo in row a"), items: ["Beta"]))),
+        Check(Component(target: Name("filter combo in row a"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("row list"), items: []))),
+        MoveTo(Within(Name("filter combo in row b"), Component("ComboButton"))),
+        Click(Left),
+        Check(App(Selected(of: Name("row list"), items: []))),
+        MoveTo(Within(Name("filter combo in row b"), Role(role: ListItem, label: "Gamma"))),
+        Click(Left),
+        Check(App(Selected(of: Name("filter combo in row b"), items: ["Gamma"]))),
+        Check(App(Selected(of: Name("filter combo in row a"), items: ["Beta"]))),
+        Check(App(Selected(of: Name("row list"), items: []))),
+    ],
+    expect: [App(Selected(of: Name("row list"), items: []))],
+)
