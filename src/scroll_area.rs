@@ -44,6 +44,16 @@ impl Plugin for ScrollAreaPlugin {
                     refresh_changed_scroll_bars.before(UiSystems::Layout),
                     show_scroll_bars,
                     restyle_thumbs_on_drag_change,
+                    place_popup_scroll_bars.before(UiSystems::Layout),
+                ),
+            )
+            .add_systems(
+                Update,
+                (
+                    (|| None::<Entity>)
+                        .pipe(theme_popup_scroll_bars)
+                        .run_if(resource_changed::<Theme>),
+                    theme_new_popup_scroll_bars,
                 ),
             )
             .add_systems(
@@ -645,21 +655,7 @@ fn theme_scroll_area(
         ),
         (With<ScrollBar>, Without<ScrollContents>),
     >,
-    mut scroll_thumbs: Query<
-        (
-            &mut ScrollbarThumb,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &Hovered,
-            Has<Pressed>,
-            Option<&ScrollbarDragState>,
-        ),
-        (
-            With<ScrollThumb>,
-            Without<ScrollContents>,
-            Without<ScrollBar>,
-        ),
-    >,
+    mut scroll_thumbs: Query<ThumbData, ThumbFilter>,
 ) {
     let it = if let Some(scroll_area_ref) = scroll_area_ref.as_ref() {
         Either::Left(scroll_contents.get_mut(*scroll_area_ref).into_iter())
@@ -676,32 +672,179 @@ fn theme_scroll_area(
                 continue;
             };
 
-            size_bar(&mut sb_node, scrollbar.orientation, theme.scroll_bar_width);
-            sb_background_color.0 = theme.colors().background_secondary;
-            sb_node.border_radius = BorderRadius::all(theme.control_radius);
-
-            // Only the marked thumb is ours; other children of the bar are the app's.
-            for thumb_entity in children.into_iter().flatten() {
-                let Ok((
-                    mut thumb,
-                    mut thumb_background_color,
-                    mut thumb_border_color,
-                    hovered,
-                    pressed,
-                    drag,
-                )) = scroll_thumbs.get_mut(*thumb_entity)
-                else {
-                    continue;
-                };
-                // The thumb is as thick as its scroll bar: the `Scrollbar` sizes it.
-                thumb_background_color.0 = thumb_background(
-                    theme.colors(),
-                    hovered.get(),
-                    pressed || drag.is_some_and(|drag| drag.dragging),
-                );
-                thumb.border_radius = BorderRadius::all(theme.control_radius);
-                thumb_border_color.set_all(theme.colors().border);
-            }
+            theme_bar(
+                &theme,
+                scrollbar,
+                &mut sb_node,
+                &mut sb_background_color,
+                children,
+                &mut scroll_thumbs,
+            );
         }
+    }
+}
+
+type ThumbData = (
+    &'static mut ScrollbarThumb,
+    &'static mut BackgroundColor,
+    &'static mut BorderColor,
+    &'static Hovered,
+    Has<Pressed>,
+    Option<&'static ScrollbarDragState>,
+);
+type ThumbFilter = (
+    With<ScrollThumb>,
+    Without<ScrollContents>,
+    Without<ScrollBar>,
+);
+
+/// Themes one scroll bar and its marked thumb.
+fn theme_bar(
+    theme: &Theme,
+    scrollbar: &Scrollbar,
+    node: &mut Node,
+    background: &mut BackgroundColor,
+    children: Option<&Children>,
+    thumbs: &mut Query<ThumbData, ThumbFilter>,
+) {
+    size_bar(node, scrollbar.orientation, theme.scroll_bar_width);
+    background.0 = theme.colors().background_secondary;
+    node.border_radius = BorderRadius::all(theme.control_radius);
+
+    // Only the marked thumb is ours; other children of the bar are the app's.
+    for thumb_entity in children.into_iter().flatten() {
+        let Ok((mut thumb, mut thumb_color, mut thumb_border, hovered, pressed, drag)) =
+            thumbs.get_mut(*thumb_entity)
+        else {
+            continue;
+        };
+        // The thumb is as thick as its scroll bar: the `Scrollbar` sizes it.
+        thumb_color.0 = thumb_background(
+            theme.colors(),
+            hovered.get(),
+            pressed || drag.is_some_and(|drag| drag.dragging),
+        );
+        thumb.border_radius = BorderRadius::all(theme.control_radius);
+        thumb_border.set_all(theme.colors().border);
+    }
+}
+
+/// The vertical scroll bar of a popup list that scrolls itself (a [`Combo`](crate::combo::Combo)'s
+/// or [`FilterCombo`](crate::filter_combo::FilterCombo)'s list capped to the window).
+///
+/// It is a child of the list it scrolls and shows only while that list's contents overflow it.
+/// The list scrolls, so a child placed at the top would scroll away with the rows:
+/// `place_popup_scroll_bars` keeps the bar at the visible top of the list.
+#[derive(Component, Clone, Copy, Debug)]
+pub(crate) struct PopupScrollBar {
+    list: Entity,
+}
+
+/// The bundle of a [`PopupScrollBar`] for `list`, a child of it.
+pub(crate) fn popup_scroll_bar(list: Entity) -> impl Bundle {
+    (
+        ScrollBar,
+        Scrollbar::new(list, ControlOrientation::Vertical, 0.0),
+        PopupScrollBar { list },
+        Hovered::default(),
+        Pickable::default(),
+        Node {
+            position_type: PositionType::Absolute,
+            ..default()
+        },
+        Visibility::Hidden,
+        ChildOf(list),
+    )
+}
+
+/// Whether the pointer is on the scroll bar of `list`, which counts as inside its popup.
+pub(crate) fn popup_scroll_bar_hovered(
+    bars: &Query<(&PopupScrollBar, &Hovered)>,
+    list: Entity,
+) -> bool {
+    bars.iter()
+        .any(|(bar, hovered)| bar.list == list && hovered.get())
+}
+
+/// Puts each popup bar at the right edge of the visible part of its list and shows it only
+/// while the list's rows overflow.
+fn place_popup_scroll_bars(
+    lists: Query<(&ComputedNode, &ScrollPosition)>,
+    mut bars: Query<(&PopupScrollBar, &mut Node, &mut Visibility)>,
+) {
+    for (bar, mut node, mut visibility) in &mut bars {
+        let Ok((computed, position)) = lists.get(bar.list) else {
+            continue;
+        };
+        let scale = computed.inverse_scale_factor();
+        let visible = computed.size().y * scale;
+        let contents = computed.content_size().y * scale;
+        if visible < f32::EPSILON {
+            continue;
+        }
+        visibility.set_if_neq(if visible >= contents {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        });
+        let top = Val::Px(position.0.y);
+        let height = Val::Px(visible);
+        let right = Val::Px(0.0);
+        if node.top != top || node.height != height || node.right != right {
+            node.top = top;
+            node.height = height;
+            node.right = right;
+        }
+    }
+}
+
+fn theme_popup_scroll_bars(
+    bar: In<Option<Entity>>,
+    theme: Res<Theme>,
+    mut bars: Query<
+        (
+            &Scrollbar,
+            &mut Node,
+            &mut BackgroundColor,
+            Option<&Children>,
+        ),
+        (
+            With<PopupScrollBar>,
+            With<ScrollBar>,
+            Without<ScrollContents>,
+        ),
+    >,
+    mut thumbs: Query<ThumbData, ThumbFilter>,
+) {
+    let it = if let Some(bar) = bar.0 {
+        Either::Left(bars.get_mut(bar).into_iter())
+    } else {
+        Either::Right(bars.iter_mut())
+    };
+    for (scrollbar, mut node, mut background, children) in it {
+        theme_bar(
+            &theme,
+            scrollbar,
+            &mut node,
+            &mut background,
+            children,
+            &mut thumbs,
+        );
+    }
+}
+
+/// Themes a new popup bar, and one that has just got its thumb.
+fn theme_new_popup_scroll_bars(
+    new: Query<
+        Entity,
+        (
+            With<PopupScrollBar>,
+            Or<(Added<PopupScrollBar>, Changed<Children>)>,
+        ),
+    >,
+    mut commands: Commands,
+) {
+    for bar in &new {
+        commands.run_system_cached_with(theme_popup_scroll_bars, Some(bar));
     }
 }

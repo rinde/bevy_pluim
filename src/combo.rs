@@ -24,7 +24,9 @@ use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
 use crate::popup::{self, ButtonLook};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
-use crate::scroll_area::update_scroll_position;
+use crate::scroll_area::{
+    PopupScrollBar, popup_scroll_bar, popup_scroll_bar_hovered, update_scroll_position,
+};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
@@ -253,6 +255,9 @@ impl Combo {
                     .id();
             });
         });
+
+        // The list scrolls itself when it is capped to the window: it gets a bar.
+        world.commands().spawn(popup_scroll_bar(list_id));
 
         let combo_id = context.entity;
         world
@@ -517,6 +522,7 @@ fn close_combos_on_outside_click(
     selections: SelectionParam,
     mut combo_buttons: Query<(&Hovered, &mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     combo_lists: Query<&Hovered, With<ComboList>>,
+    scroll_bars: Query<(&PopupScrollBar, &Hovered)>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
@@ -535,7 +541,8 @@ fn close_combos_on_outside_click(
             if popup::closes_on_outside_release(
                 combo_state == ComboState::Open,
                 over_button.get(),
-                selection_value.allow_multiple() && over_list,
+                (selection_value.allow_multiple() && over_list)
+                    || popup_scroll_bar_hovered(&scroll_bars, subs.list_id),
             ) {
                 popup::apply_look(
                     ButtonLook::Resting,

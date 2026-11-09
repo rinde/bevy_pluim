@@ -10728,7 +10728,13 @@ fn a_combo_shows_its_placeholder_while_nothing_is_selected_and_the_selection_aft
     click(&mut app, button);
     app.update();
     let list = app.world().get::<ComboRefs>(combo).unwrap().list();
-    let item = app.world().get::<Children>(list).unwrap()[0];
+    let item = app
+        .world()
+        .get::<Children>(list)
+        .unwrap()
+        .iter()
+        .find(|child| app.world().get::<ItemView>(*child).is_some())
+        .unwrap();
     click(&mut app, item);
     app.update();
     app.update();
