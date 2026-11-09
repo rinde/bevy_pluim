@@ -569,6 +569,11 @@ fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
                         @{Selection::builder().one().scene_with_items(countries())}
                     })
                     --
+                    @variant("A long list: 100 options, the popup scrolls", bsn! {
+                        ~{Combo}
+                        @{Selection::builder().zero_or_one().scene_with_items((1..=100).map(|n| Item::new(format!("Option {n}"))))}
+                    })
+                    --
                     @variant("Options with a note", bsn! {
                         ~{Combo}
                         @{Selection::builder().zero_or_one().scene_with_items(stations())}
@@ -1156,6 +1161,16 @@ fn fill_control_panels(
                     .build_with_items(["Red", "White", "Blue", "Yellow"].map(Item::new)),
                 ChildOf(row),
             ));
+            if index == 0 {
+                commands.spawn((
+                    Combo,
+                    ComboPlaceholder("Pick an option".to_string()),
+                    Selection::builder()
+                        .zero_or_one()
+                        .build_with_items((1..=100).map(|n| Item::new(format!("Option {n}")))),
+                    ChildOf(group),
+                ));
+            }
             commands.spawn((valid_slider(0.5, 0.0, 1.0, None), ChildOf(group)));
             commands.spawn((NumericStepper::default(), step_value, ChildOf(group)));
         }
