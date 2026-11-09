@@ -1723,6 +1723,14 @@ fn control_panel(world: &mut World) {
             Name::new(format!("control {index}")),
             ChildOf(group),
         ));
+        world.spawn((
+            Combo,
+            Name::new(format!("panel combo {index}")),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["Red", "Blue"].map(Item::new)),
+            ChildOf(group),
+        ));
         world.spawn((valid_slider(0.5, 0.0, 1.0, None), ChildOf(group)));
         world.spawn((
             NumericStepper::default(),

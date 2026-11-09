@@ -1,0 +1,17 @@
+(
+    format_version: 3,
+    name: "scrolling a panel closes its nested combo",
+    setup: App(ControlPanel),
+    steps: [
+        Wait(3),
+        MoveTo(Within(Name("panel combo 0"), Component("ComboButton"))),
+        Click(Left),
+        Check(Component(target: Name("panel combo 0"), path: "ComboState", is: Eq(Open))),
+        MoveTo(Name("control 0")),
+        Wheel(x: 0.0, y: -30.0),
+        Wait(2),
+        Check(Component(target: Within(Name("control panel"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Eq(30.0))),
+        Check(Component(target: Name("panel combo 0"), path: "ComboState", is: Eq(Closed))),
+    ],
+    expect: [],
+)
