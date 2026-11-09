@@ -1,6 +1,6 @@
 //! Records every scenario in `tests/ron` offscreen for review: PNGs at step
 //! boundaries, a filmstrip and a GIF per scenario, a `trace.html`, and one
-//! `index.html` with the failures first.
+//! `index.html` for each scenario.
 //!
 //! It needs a GPU (or lavapipe: `WGPU_BACKEND=vulkan`), so it is only built
 //! with the `record` feature and its test is ignored. `just record` runs it and
@@ -23,7 +23,7 @@ mod widgets_setup;
 use std::path::{Path, PathBuf};
 
 use bevy_pluim::WidgetsPlugin;
-use bevy_stagecraft::{Recorder, Registry, load_ron_file, ron_files};
+use bevy_stagecraft::{Recorder, Registry, load_ron_file};
 
 /// Scenarios that pass headless but fail in a recording, because of a bug in a
 /// widget that only shows with UI drawn to an image (#100). The Card demo
@@ -34,53 +34,35 @@ use bevy_stagecraft::{Recorder, Registry, load_ron_file, ron_files};
 /// fixed.
 const FAILS_WHEN_RECORDED: [&str; 0] = [];
 
-#[test]
-#[ignore = "needs a GPU: run by `just record`"]
-fn gpu_records_every_ron_scenario() {
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
+include!(concat!(env!("OUT_DIR"), "/record_scenario_tests.rs"));
+
+fn run_record_case(path: &str) {
+    let path = Path::new(path);
     let registry = Registry::default();
-    let mut recorder = Recorder::new(|app| {
-        // The recorder's app renders for real, so `ClearColor` is already
-        // there. The widgets, and the types a file's `App(..)` values name,
-        // are what the scenarios need on top of it.
+    let scenario = load_ron_file(path, &registry)
+        .unwrap_or_else(|error| panic!("{} does not load: {error}", path.display()));
+    let recorder = Recorder::new(|app| {
         app.add_plugins(WidgetsPlugin);
         Registry::default().install(app.world_mut());
-    });
-    for path in ron_files(dir).expect("tests/ron can be read") {
-        let scenario = load_ron_file(&path, &registry)
-            .unwrap_or_else(|error| panic!("{} does not load: {error}", path.display()));
-        recorder = recorder.grouped(group_of(&path), scenario);
-    }
-
-    let output = std::env::var_os("RECORD_DIR").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/recordings"),
-        PathBuf::from,
-    );
+    })
+    .grouped(group_of(path), scenario);
+    let output = std::env::var_os("RECORD_DIR")
+        .map_or_else(
+            || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/recordings"),
+            PathBuf::from,
+        )
+        .join(path.file_stem().expect("scenario file stem"));
     let recording = recorder.record(&output).expect("recording works");
-
-    let failed: Vec<_> = recording
-        .scenarios
-        .iter()
-        .filter(|scenario| !scenario.passed())
-        .filter(|scenario| !FAILS_WHEN_RECORDED.contains(&scenario.name.as_str()))
-        .map(|scenario| scenario.name.clone())
-        .collect();
-    let fixed: Vec<_> = recording
-        .scenarios
-        .iter()
-        .filter(|scenario| scenario.passed())
-        .filter(|scenario| FAILS_WHEN_RECORDED.contains(&scenario.name.as_str()))
-        .map(|scenario| scenario.name.clone())
-        .collect();
-    assert!(
-        fixed.is_empty(),
-        "these scenarios pass when recorded now: remove them from FAILS_WHEN_RECORDED: {fixed:?}"
-    );
-    assert!(
-        failed.is_empty(),
-        "scenarios failed that did not fail before (see {}): {failed:?}",
-        recording.index.display()
-    );
+    for scenario in &recording.scenarios {
+        let expected_failure = FAILS_WHEN_RECORDED.contains(&scenario.name.as_str());
+        assert_ne!(
+            scenario.passed(),
+            expected_failure,
+            "unexpected recording result for {} (see {})",
+            scenario.name,
+            recording.index.display()
+        );
+    }
 }
 
 /// The index group of a file: the widget its name starts with.

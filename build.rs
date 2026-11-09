@@ -30,6 +30,7 @@ fn main() {
 
     let mut ron_tests = String::new();
     let mut image_tests = String::new();
+    let mut record_tests = String::new();
     let mut shuffled_tests = String::new();
     let variants = ["default", "scale_2", "text_1_5x"];
     let schedules = ["PreUpdate", "Update", "PostUpdate", "Last"];
@@ -55,6 +56,11 @@ fn main() {
                 "{ignore}#[test]\nfn {test_name}() {{ run_ron_case({path}, {variant:?}); }}"
             );
         }
+        let record_name = format!("record_{}", rust_name(&stem));
+        let _ = writeln!(
+            record_tests,
+            "#[test]\n#[ignore = \"needs a GPU: run by `just record`\"]\nfn {record_name}() {{ run_record_case({path}); }}"
+        );
         let image_name = format!("scenario_{}_drawn_to_image", rust_name(&stem));
         let _ = writeln!(
             image_tests,
@@ -81,6 +87,8 @@ fn main() {
         }
     }
 
+    fs::write(output.join("record_scenario_tests.rs"), record_tests)
+        .expect("write generated record tests");
     fs::write(output.join("ron_scenario_tests.rs"), ron_tests).expect("write generated RON tests");
     fs::write(output.join("image_scenario_tests.rs"), image_tests)
         .expect("write generated image tests");
