@@ -87,7 +87,7 @@ bevy-lint:
 # WGPU_BACKEND=vulkan; not part of `just ci`.
 record:
     cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all
-    @echo "recordings are in target/recordings/<scenario>/index.html"
+    @if [ -z "${RECORD_CHECK_ONLY+x}" ]; then echo "recordings are in ${RECORD_DIR:-target/recordings}/<scenario>/index.html"; fi
 
 # Everything CI would run.
 ci: lint test unused-deps

@@ -4,7 +4,8 @@
 //!
 //! It needs a GPU (or lavapipe: `WGPU_BACKEND=vulkan`), so it is only built
 //! with the `record` feature and its test is ignored. `just record` runs it and
-//! writes to `target/recordings`; `RECORD_DIR` overrides the directory.
+//! writes to `target/recordings`; `RECORD_DIR` overrides the directory. Set
+//! `RECORD_CHECK_ONLY` to run the rendered checks without recording artifacts.
 
 #![expect(
     clippy::unwrap_used,
@@ -46,21 +47,28 @@ fn run_record_case(path: &str) {
         Registry::default().install(app.world_mut());
     })
     .grouped(group_of(path), scenario);
-    let output = std::env::var_os("RECORD_DIR")
-        .map_or_else(
-            || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/recordings"),
-            PathBuf::from,
+    let (scenarios, output_hint) = if std::env::var_os("RECORD_CHECK_ONLY").is_some() {
+        (
+            recorder.check().expect("rendered checks work").scenarios,
+            String::new(),
         )
-        .join(path.file_stem().expect("scenario file stem"));
-    let recording = recorder.record(&output).expect("recording works");
-    for scenario in &recording.scenarios {
+    } else {
+        let output = std::env::var_os("RECORD_DIR")
+            .map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/recordings"),
+                PathBuf::from,
+            )
+            .join(path.file_stem().expect("scenario file stem"));
+        let recording = recorder.record(&output).expect("recording works");
+        let hint = format!(" (see {})", recording.index.display());
+        (recording.scenarios, hint)
+    };
+    for scenario in &scenarios {
         let expected_failure = FAILS_WHEN_RECORDED.contains(&scenario.name.as_str());
         assert_ne!(
             scenario.passed(),
             expected_failure,
-            "unexpected recording result for {} (see {})",
-            scenario.name,
-            recording.index.display()
+            "unexpected recording result{output_hint}: {scenario:#?}"
         );
     }
 }

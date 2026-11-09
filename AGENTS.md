@@ -1315,9 +1315,11 @@ recorded_scenarios_gpu --features record`.
   there is no allowlist, so a
   scenario that only fails with the UI drawn to an image is a bug to fix, not a
   name to list.
-- **CI.** The `record` job of `ci.yml` runs `just record` on lavapipe and uploads
-  `target/recordings` as the `recordings` workflow artifact. It is not part of
-  `just ci`, and it was written without being run on GitHub.
+- **CI.** The `record` job of `ci.yml` sets `RECORD_CHECK_ONLY=1` and runs
+  the same scenario tests as `just record` on lavapipe. This uses
+  `Recorder::check` to run the rendered
+  checks without generating recordings. It is not part of `just ci`. Locally,
+  omit that variable to write recordings as above.
 
 ## Before you call it done
 
