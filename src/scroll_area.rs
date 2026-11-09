@@ -506,7 +506,7 @@ fn scroll_into_view(
 /// stop the ancestor search so a floating popup does not scroll its owner.
 ///
 /// Registered once, by [`ScrollAreaPlugin`].
-fn update_scroll_position(
+pub(crate) fn update_scroll_position(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
     hover_map: Res<HoverMap>,
     mut scrolled_node_query: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
