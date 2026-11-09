@@ -129,9 +129,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Keep the target, features and selection in step with `just record`.
       - name: Compile scenario recorder
-        run: cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all --no-capture --no-run
+        run: cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all --no-run
       - name: Record scenarios
-        run: cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all --no-capture
+        run: cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all
       - uses: actions/upload-artifact@v4
         if: always()
         with:
