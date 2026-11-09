@@ -1,0 +1,27 @@
+// A combo list that is capped and scrolls (the `long combo`, 80 options) shows a scroll bar;
+// one whose rows fit (`first combo`) hides it. A press on the bar is inside the popup, so it
+// stays open.
+(
+    format_version: 3,
+    name: "a combo popup shows a scroll bar only while its list scrolls",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("first combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Check(Component(target: Within(Name("first combo"), Name("ScrollBar")), path: "Visibility", is: Eq(Hidden))),
+        MoveTo(Screen((900.0, 500.0))),
+        Click(Left),
+        Wait(2),
+        MoveTo(Within(Name("long combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Check(Component(target: Within(Name("long combo"), Name("ScrollBar")), path: "Visibility", is: Eq(Inherited))),
+        MoveTo(Within(Name("long combo"), Name("ScrollBar"))),
+        Click(Left),
+        Wait(2),
+        Check(Component(target: Name("long combo"), path: "ComboState", is: Eq(Open))),
+    ],
+    expect: [],
+)

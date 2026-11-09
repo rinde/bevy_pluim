@@ -1069,14 +1069,18 @@ fn theme_items(
         let Some(children) = children else {
             continue;
         };
-        if children.is_empty() {
+        // A popup list also holds its scroll bar, which is no row.
+        let views = children
+            .iter()
+            .filter(|child| item_views.contains(*child))
+            .collect::<Vec<_>>();
+        let Some(last) = views.len().checked_sub(1) else {
             continue;
-        }
-        let last = children.len() - 1;
+        };
 
         let selection = selections.get(list_ref).unwrap_or(&no_selection);
 
-        for (i, item_view_id) in children.iter().enumerate() {
+        for (i, item_view_id) in views.into_iter().enumerate() {
             let Ok((ItemView { item_ref, .. }, hovered, mut node, mut bg, mut border_color)) =
                 item_views.get_mut(item_view_id)
             else {

@@ -35,6 +35,7 @@ use crate::icon::Icon;
 use crate::list::{CornerStyle, ItemView, List};
 use crate::popup::{self, ButtonLook};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
+use crate::scroll_area::{PopupScrollBar, popup_scroll_bar, popup_scroll_bar_hovered};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::text_field::{OwnKeys, TextField, TextFieldChange, TextFieldRefs};
 use crate::theme::Theme;
@@ -234,6 +235,8 @@ impl FilterCombo {
                 ChildOf(popup),
             ))
             .id();
+        // The list scrolls itself when the popup is capped to the window: it gets a bar.
+        commands.spawn(popup_scroll_bar(list));
         let empty = commands
             .spawn((
                 Name::new("FilterComboEmpty"),
@@ -853,6 +856,7 @@ fn close_on_outside_click(
     mouse_button: Res<ButtonInput<MouseButton>>,
     combos: Query<(Entity, &ComboState, &FilterComboRefs), With<FilterCombo>>,
     hovered: Query<&Hovered>,
+    scroll_bars: Query<(&PopupScrollBar, &Hovered)>,
     selections: SelectionParam,
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
@@ -869,7 +873,8 @@ fn close_on_outside_click(
         let multiple = selections
             .get(refs.list)
             .is_some_and(SelectionValue::allow_multiple);
-        let inside = over(refs.popup) && (multiple || !over(refs.list));
+        let inside = over(refs.popup)
+            && (multiple || !over(refs.list) || popup_scroll_bar_hovered(&scroll_bars, refs.list));
         if popup::closes_on_outside_release(true, over(refs.button), inside) {
             if let Ok((mut background, mut border)) = buttons.get_mut(refs.button) {
                 popup::apply_look(ButtonLook::Resting, &theme, &mut background, &mut border);
