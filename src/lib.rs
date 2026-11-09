@@ -256,6 +256,9 @@ struct MouseEvent {
     /// For [`MouseKind::Drag`], how far the pointer has moved since the press, in logical
     /// pixels; zero for every other kind.
     distance: Vec2,
+    /// The button of a press, release, click or drag; `None` for a pointer moving over or out.
+    /// A touch counts as [`PointerButton::Primary`].
+    button: Option<PointerButton>,
 }
 
 trait ToMouseEvent {
@@ -264,6 +267,11 @@ trait ToMouseEvent {
     /// How far the pointer has been dragged since the press; zero unless this is a drag.
     fn distance(&self) -> Vec2 {
         Vec2::ZERO
+    }
+
+    /// The button that caused the event, if it has one.
+    fn button(&self) -> Option<PointerButton> {
+        None
     }
 }
 
@@ -277,11 +285,19 @@ impl ToMouseEvent for PointerPress {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Pressed
     }
+
+    fn button(&self) -> Option<PointerButton> {
+        Some(self.button)
+    }
 }
 
 impl ToMouseEvent for PointerRelease {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Released
+    }
+
+    fn button(&self) -> Option<PointerButton> {
+        Some(self.button)
     }
 }
 
@@ -289,11 +305,19 @@ impl ToMouseEvent for PointerClick {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Click(self.button)
     }
+
+    fn button(&self) -> Option<PointerButton> {
+        Some(self.button)
+    }
 }
 
 impl ToMouseEvent for PointerDrag {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Drag
+    }
+
+    fn button(&self) -> Option<PointerButton> {
+        Some(self.button)
     }
 
     fn distance(&self) -> Vec2 {
@@ -330,6 +354,7 @@ where
             entity: original,
             kind: trigger.event().to_mouse_kind(),
             distance: trigger.event().distance(),
+            button: trigger.event().button(),
         });
     }
 }

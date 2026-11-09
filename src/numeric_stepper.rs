@@ -923,8 +923,9 @@ fn on_mouse(
     let event = *trigger.event();
     if !matches!(
         event.kind,
-        MouseKind::Pressed | MouseKind::Drag | MouseKind::Click(PointerButton::Primary)
-    ) {
+        MouseKind::Pressed | MouseKind::Drag | MouseKind::Click(_)
+    ) || event.button != Some(PointerButton::Primary)
+    {
         return;
     }
     let Some(stepper) = stepper_of(event.entity, &parents, &steppers) else {
@@ -1117,9 +1118,16 @@ fn finish_editors(
     }
 }
 
-/// Forgets a press once the mouse button is up, so the next one starts afresh.
-fn end_scrub(buttons: Res<ButtonInput<MouseButton>>, mut scrubs: Query<&mut Scrub>) {
-    if buttons.pressed(MouseButton::Left) {
+/// Forgets a press once the mouse button is up and no finger is down, so the next one starts
+/// afresh and a stale drag never swallows a later keyboard `Activate`.
+fn end_scrub(
+    buttons: Res<ButtonInput<MouseButton>>,
+    touches: Option<Res<Touches>>,
+    mut scrubs: Query<&mut Scrub>,
+) {
+    if buttons.pressed(MouseButton::Left)
+        || touches.is_some_and(|touches| touches.iter().next().is_some())
+    {
         return;
     }
     for mut scrub in &mut scrubs {
