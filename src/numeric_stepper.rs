@@ -22,7 +22,7 @@ use bevy::ecs::template::{SpecializeFromTemplate, Template, TemplateContext};
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::FocusedInput;
+use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::InteractionDisabled;
@@ -30,7 +30,9 @@ use bevy::ui_widgets::Activate;
 use itertools::Either;
 
 use crate::icon_button::{IconButton, IconButtonSize};
+use crate::text_field::{TextField, TextFieldCommit, TextFieldRefs};
 use crate::theme::Theme;
+use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`NumericStepper`].
 ///
@@ -42,9 +44,14 @@ impl Plugin for NumericStepperPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_activate)
             .add_observer(on_key_input)
+            .add_observer(on_mouse)
+            .add_observer(on_editor_commit)
+            .add_observer(on_editor_focus_lost)
+            .add_systems(Last, (finish_editors, end_scrub))
             .add_systems(
                 Update,
                 (
+                    focus_new_editors,
                     on_change,
                     (|| None::<Entity>)
                         .pipe(theme_numeric_stepper)
@@ -78,6 +85,15 @@ pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 /// handle is replaced by a plain minus or plus drawn by the library. The
 /// fields are read when the component is inserted.
 ///
+/// The stepper can also be scrubbed like a slider. A background fill shows where the value is
+/// between its bounds, and dragging sideways from anywhere on the stepper, the "-" and "+"
+/// buttons included, moves the value across that range (a drag over the whole width of the
+/// stepper covers the whole range), snapped to the step, with a [`ValueChange`] for each change.
+/// A drag does not also step the button it started on. A click on the value (without dragging)
+/// swaps it for a [`TextField`] holding the number: Enter, Tab or a click elsewhere sets the
+/// value to the number typed (clamped to the bounds, whole for an integer; text after the number
+/// is ignored, and text without a number leaves the value as it was), Escape drops the edit.
+///
 /// The stepper is one spin button to a screen reader: its own node has the role
 /// `SpinButton`, the value, bounds and step as numbers, the text `format` shows as its
 /// value (kept in step when the value changes, also through a [`ValueRef`]) and `name` as
@@ -107,7 +123,7 @@ pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component, from_reflect = false)]
 #[component(immutable, on_insert = Self::on_insert)]
-#[require(Node::default())]
+#[require(Node::default(), Scrub)]
 pub struct NumericStepper {
     /// Turns the value into the text between the buttons.
     #[reflect(ignore)]
@@ -312,6 +328,20 @@ impl NumericStepper {
             .entity(context.entity)
             .insert(Children::spawn(SpawnWith(
                 move |spawner: &mut RelatedSpawner<ChildOf>| {
+                    spawner.spawn((
+                        Name::new("ScrubFill"),
+                        ScrubFill,
+                        Pickable::IGNORE,
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            top: Val::Px(0.0),
+                            bottom: Val::Px(0.0),
+                            width: Val::Percent(fraction_percent(&value)),
+                            ..default()
+                        },
+                        value_ref,
+                    ));
                     let mut decrease = spawner.spawn((
                         IconButton::new(
                             decrease_icon,
@@ -512,6 +542,74 @@ impl Value {
         stepped.decrement()
     }
 
+    /// How far the value is between its bounds: 0 at the minimum, 1 at the maximum (0 when the
+    /// bounds are equal).
+    #[must_use]
+    pub fn fraction(&self) -> f64 {
+        let (now, min, max, _) = self.numbers();
+        if max > min {
+            ((now - min) / (max - min)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+
+    /// Moves the value to `fraction` of the way between its bounds, snapped to the step from the
+    /// minimum. Returns whether the value changed.
+    fn set_fraction(&mut self, fraction: f64) -> bool {
+        let (_, min, max, _) = self.numbers();
+        self.set_number(fraction.clamp(0.0, 1.0).mul_add(max - min, min), true)
+    }
+
+    /// Sets the value to `number`, clamped to the bounds, rounded for an integer and, with
+    /// `snap`, moved to the nearest step from the minimum. Returns whether the value changed.
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "the number is clamped to the bounds, which an unsigned integer keeps at or above 0"
+    )]
+    fn set_number(&mut self, number: f64, snap: bool) -> bool {
+        let (_, min, max, step) = self.numbers();
+        if !number.is_finite() {
+            return false;
+        }
+        let mut number = number.clamp(min, max);
+        if snap {
+            number = ((number - min) / step)
+                .round()
+                .mul_add(step, min)
+                .clamp(min, max);
+        }
+        macro_rules! set_uint {
+            ($v:expr, $ty:ty) => {{
+                let new = (number.round() as $ty).clamp($v.min, $v.max);
+                let changed = new != $v.value;
+                $v.value = new;
+                changed
+            }};
+        }
+        match self {
+            Self::F32(v) => {
+                let new = (number as f32).clamp(v.min, v.max);
+                let changed = new.total_cmp(&v.value).is_ne();
+                v.value = new;
+                changed
+            }
+            Self::U8(v) => set_uint!(v, u8),
+            Self::U16(v) => set_uint!(v, u16),
+            Self::U32(v) => set_uint!(v, u32),
+        }
+    }
+
+    /// The value as the number typed into the editor shows it: every digit, no unit.
+    fn edit_text(&self) -> String {
+        match self {
+            Self::F32(v) => v.value.to_string(),
+            Self::U8(v) => v.value.to_string(),
+            Self::U16(v) => v.value.to_string(),
+            Self::U32(v) => v.value.to_string(),
+        }
+    }
+
     /// The value, minimum, maximum and step as `f64`s.
     fn numbers(&self) -> (f64, f64, f64, f64) {
         match self {
@@ -594,16 +692,52 @@ impl std::fmt::Display for Value {
 struct Increase;
 #[derive(Component, Clone, Copy, Debug)]
 struct Decrease;
+/// The background fill of a stepper, as wide as the value is far between its bounds.
+#[derive(Component, Clone, Copy, Debug)]
+struct ScrubFill;
+/// What a stepper remembers about the press on it.
+#[derive(Component, Clone, Copy, Debug, Default)]
+struct Scrub {
+    /// Where the value was, between 0 and 1, when the pointer went down on the stepper.
+    start: Option<f64>,
+    /// Whether that press became a drag, so its release is no click and no step.
+    dragged: bool,
+}
+/// The text field that replaces the value label while the user types a number.
+#[derive(Component, Clone, Copy, Debug)]
+struct ScrubEditor {
+    stepper: Entity,
+}
+/// An editor whose field has given up the focus, to be closed after its commit was handled.
+#[derive(Component, Clone, Copy, Debug)]
+struct EditorDone;
 /// The value label of a stepper, which knows the stepper for its `format`.
 #[derive(Component, Clone, Copy, Debug)]
 struct NumericStepperLabel(Entity);
+
+/// How opaque the fill behind the value is over the stepper's own background.
+const FILL_ALPHA: f32 = 0.25;
+/// How far the pointer has to move, in logical pixels, before a press is a drag.
+const DRAG_THRESHOLD: f32 = 3.0;
 
 fn theme_numeric_stepper(
     numeric_stepper_ref: In<Option<Entity>>,
     mut numeric_steppers: Query<(&mut Node, &mut BorderColor), With<NumericStepper>>,
     mut value_texts: Query<(&NumericStepperLabel, &mut TextColor, &mut TextFont)>,
+    mut fills: Query<
+        (&ChildOf, &mut BackgroundColor, &mut Node),
+        (With<ScrubFill>, Without<NumericStepper>),
+    >,
     theme: Res<Theme>,
 ) {
+    for (parent, mut background, mut node) in &mut fills {
+        if numeric_stepper_ref.is_some_and(|stepper| stepper != parent.parent()) {
+            continue;
+        }
+        background.0 = theme.colors().slider_fill.with_alpha(FILL_ALPHA);
+        node.border_radius = BorderRadius::all(theme.control_radius);
+    }
+
     for (label, mut text_color, mut text_font) in &mut value_texts {
         if numeric_stepper_ref.is_some_and(|stepper| stepper != label.0) {
             continue;
@@ -634,9 +768,19 @@ fn on_activate(
     decrease: Query<&ValueRef, With<Decrease>>,
     increase: Query<&ValueRef, With<Increase>>,
     mut values: Query<&mut Value>,
+    parents: Query<&ChildOf>,
+    scrubs: Query<&Scrub>,
     mut commands: Commands,
 ) {
     let button = trigger.event().event_target();
+    if parents
+        .get(button)
+        .ok()
+        .and_then(|parent| scrubs.get(parent.parent()).ok())
+        .is_some_and(|scrub| scrub.dragged)
+    {
+        return;
+    }
     if let Ok(vr) = decrease.get(button) {
         let Ok(mut value) = values.get_mut(vr.0) else {
             return;
@@ -670,12 +814,17 @@ fn on_activate(
 fn on_key_input(
     mut trigger: On<FocusedInput<KeyboardInput>>,
     steppers: Query<(), With<NumericStepper>>,
+    editors: Query<&ScrubEditor>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
     mut commands: Commands,
 ) {
     let stepper = trigger.event_target();
     if !steppers.contains(stepper) {
+        return;
+    }
+    // The arrow keys of the number being typed belong to its text field.
+    if editors.iter().any(|editor| editor.stepper == stepper) {
         return;
     }
     let input = &trigger.event().input;
@@ -708,6 +857,230 @@ fn on_key_input(
     });
 }
 
+/// The [`NumericStepper`] that `entity` is or lies in.
+fn stepper_of(
+    entity: Entity,
+    parents: &Query<&ChildOf>,
+    steppers: &Query<(), With<NumericStepper>>,
+) -> Option<Entity> {
+    let mut at = entity;
+    // The deepest part (the icon of a button) is a few levels below the stepper.
+    for _ in 0..8 {
+        if steppers.contains(at) {
+            return Some(at);
+        }
+        at = parents.get(at).ok()?.parent();
+    }
+    None
+}
+
+/// Scrubs the value when the pointer is dragged on a stepper, and opens the number editor on a
+/// click on the value.
+fn on_mouse(
+    trigger: On<MouseEvent>,
+    parents: Query<&ChildOf>,
+    steppers: Query<(), With<NumericStepper>>,
+    computed: Query<(&ComputedNode, Option<&ValueRef>)>,
+    mut scrubs: Query<&mut Scrub>,
+    labels: Query<&NumericStepperLabel>,
+    editors: Query<&ScrubEditor>,
+    children: Query<&Children>,
+    mut values: Query<&mut Value>,
+    mut nodes: Query<&mut Node>,
+    mut commands: Commands,
+) {
+    let event = *trigger.event();
+    if !matches!(
+        event.kind,
+        MouseKind::Pressed | MouseKind::Drag | MouseKind::Click(PointerButton::Primary)
+    ) {
+        return;
+    }
+    let Some(stepper) = stepper_of(event.entity, &parents, &steppers) else {
+        return;
+    };
+    // While a number is typed, the pointer belongs to the text field.
+    if editors.iter().any(|editor| editor.stepper == stepper) {
+        return;
+    }
+    let Ok((computed_node, value_ref)) = computed.get(stepper) else {
+        return;
+    };
+    let value_entity = value_ref.map_or(stepper, |value_ref| value_ref.0);
+    let Ok(mut scrub) = scrubs.get_mut(stepper) else {
+        return;
+    };
+    match event.kind {
+        MouseKind::Pressed => {
+            scrub.dragged = false;
+            scrub.start = values.get(value_entity).ok().map(Value::fraction);
+        }
+        MouseKind::Drag => {
+            let Some(start) = scrub.start else {
+                return;
+            };
+            if !scrub.dragged && event.distance.x.abs() < DRAG_THRESHOLD {
+                return;
+            }
+            scrub.dragged = true;
+            let width = f64::from(computed_node.size().x * computed_node.inverse_scale_factor());
+            if width <= 0.0 {
+                return;
+            }
+            let Ok(mut value) = values.get_mut(value_entity) else {
+                return;
+            };
+            let target = start + f64::from(event.distance.x) / width;
+            // Look first, so a drag that does not move the value does not mark it changed.
+            let mut moved = *value;
+            if moved.set_fraction(target) {
+                *value = moved;
+                commands.trigger(ValueChange {
+                    entity: value_entity,
+                    value: moved,
+                });
+            }
+        }
+        _ => {
+            if scrub.dragged {
+                return;
+            }
+            let Ok(label) = labels.get(event.entity) else {
+                return;
+            };
+            let Ok(value) = values.get(value_entity) else {
+                return;
+            };
+            let Some(index) = children
+                .get(stepper)
+                .ok()
+                .and_then(|kids| kids.iter().position(|kid| kid == event.entity))
+            else {
+                return;
+            };
+            let Ok(mut label_node) = nodes.get_mut(event.entity) else {
+                return;
+            };
+            let width = match label_node.min_width {
+                Val::Px(px) => Val::Px(px),
+                _ => Val::Px(DEFAULT_LABEL_MIN_WIDTH_PX),
+            };
+            label_node.display = Display::None;
+            let editor = commands
+                .spawn((
+                    TextField::new("")
+                        .with_placeholder(value.edit_text())
+                        .with_name("Value")
+                        .with_min_width(width)
+                        .with_max_width(width),
+                    ScrubEditor { stepper: label.0 },
+                ))
+                .id();
+            commands.entity(stepper).insert_children(index, &[editor]);
+        }
+    }
+}
+
+/// Sets the value to the number typed in the editor, if there is one.
+fn on_editor_commit(
+    trigger: On<TextFieldCommit>,
+    editors: Query<&ScrubEditor>,
+    value_refs: Query<&ValueRef>,
+    mut values: Query<&mut Value>,
+    mut commands: Commands,
+) {
+    let Ok(editor) = editors.get(trigger.event().entity) else {
+        return;
+    };
+    let Some(number) = parse_number(&trigger.event().value) else {
+        return;
+    };
+    let value_entity = value_refs
+        .get(editor.stepper)
+        .map_or(editor.stepper, |value_ref| value_ref.0);
+    let Ok(mut value) = values.get_mut(value_entity) else {
+        return;
+    };
+    let mut typed = *value;
+    if typed.set_number(number, false) {
+        *value = typed;
+        commands.trigger(ValueChange {
+            entity: value_entity,
+            value: typed,
+        });
+    }
+}
+
+/// Marks the editor whose field gave up the focus, to be closed in `Last`, after the commit
+/// that comes with the same loss was handled.
+fn on_editor_focus_lost(
+    trigger: On<FocusLost>,
+    editors: Query<(Entity, &TextFieldRefs), With<ScrubEditor>>,
+    mut commands: Commands,
+) {
+    for (editor, refs) in &editors {
+        if refs.input == trigger.event_target() {
+            commands.entity(editor).insert(EditorDone);
+        }
+    }
+}
+
+/// Gives a freshly built number editor the keyboard focus.
+fn focus_new_editors(
+    new: Query<&TextFieldRefs, (Added<TextFieldRefs>, With<ScrubEditor>)>,
+    mut focus: ResMut<InputFocus>,
+) {
+    for refs in &new {
+        focus.set(refs.input, FocusCause::Navigated);
+    }
+}
+
+/// Closes the editors that are done and shows the value again.
+fn finish_editors(
+    done: Query<(Entity, &ScrubEditor), With<EditorDone>>,
+    mut labels: Query<(&NumericStepperLabel, &mut Node)>,
+    mut commands: Commands,
+) {
+    for (editor, scrub_editor) in &done {
+        commands.entity(editor).despawn();
+        for (label, mut node) in &mut labels {
+            if label.0 == scrub_editor.stepper {
+                node.display = Display::DEFAULT;
+            }
+        }
+    }
+}
+
+/// Forgets a press once the mouse button is up, so the next one starts afresh.
+fn end_scrub(buttons: Res<ButtonInput<MouseButton>>, mut scrubs: Query<&mut Scrub>) {
+    if buttons.pressed(MouseButton::Left) {
+        return;
+    }
+    for mut scrub in &mut scrubs {
+        if scrub.start.is_some() || scrub.dragged {
+            *scrub = Scrub::default();
+        }
+    }
+}
+
+/// The leading number of `text`: the longest start of it that is a finite number.
+fn parse_number(text: &str) -> Option<f64> {
+    let text = text.trim();
+    (1..=text.len())
+        .rev()
+        .filter(|end| text.is_char_boundary(*end))
+        .find_map(|end| {
+            text.get(..end)
+                .and_then(|prefix| prefix.parse::<f64>().ok())
+                .filter(|number| number.is_finite())
+        })
+}
+
+/// How far `value` is between its bounds, as a CSS percentage.
+fn fraction_percent(value: &Value) -> f32 {
+    (value.fraction() * 100.0) as f32
+}
+
 fn on_change(
     changed_values: Query<(Entity, &Value), Changed<Value>>,
     mut numeric_stepper_labels: Query<(&ValueRef, &NumericStepperLabel, &mut Text)>,
@@ -720,9 +1093,15 @@ fn on_change(
     )>,
     decrease: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Decrease>>,
     increase: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Increase>>,
+    mut fills: Query<(&ValueRef, &mut Node), (With<ScrubFill>, Without<NumericStepper>)>,
     mut commands: Commands,
 ) {
     for (value_ref, value) in &changed_values {
+        for (fill_value_ref, mut node) in &mut fills {
+            if fill_value_ref.0 == value_ref {
+                node.width = Val::Percent(fraction_percent(value));
+            }
+        }
         for (text_value_ref, label, mut text) in &mut numeric_stepper_labels {
             if text_value_ref.0 == value_ref {
                 let format = steppers
@@ -1171,5 +1550,56 @@ mod tests {
         assert_eq!(ValueError::ZeroStep.to_string(), "the step is zero");
         let error: &dyn std::error::Error = &ValueError::MinAboveMax;
         assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn a_value_knows_how_far_it_is_between_its_bounds() {
+        assert!((Value::new_u8(5, 0, 10, 1).unwrap().fraction() - 0.5).abs() < 1e-9);
+        assert!(Value::new_u8(0, 0, 10, 1).unwrap().fraction().abs() < 1e-9);
+        assert!((Value::new_f32(15.0, 5.0, 15.0, 0.5).unwrap().fraction() - 1.0).abs() < 1e-9);
+        assert!(Value::new_u8(3, 3, 3, 1).unwrap().fraction().abs() < 1e-9);
+    }
+
+    #[test]
+    fn scrubbing_snaps_to_the_step_and_stays_inside_the_bounds() {
+        let mut value = Value::new_u32(1, 0, 10, 2).unwrap();
+        assert!(value.set_fraction(0.33));
+        assert_eq!(value.to_string(), "4");
+        assert!(!value.set_fraction(0.35), "the same step is no change");
+        assert!(value.set_fraction(7.0));
+        assert_eq!(value.to_string(), "10");
+        assert!(value.set_fraction(-3.0));
+        assert_eq!(value.to_string(), "0");
+        let mut float = Value::new_f32(10.0, 5.0, 15.0, 0.5).unwrap();
+        assert!(float.set_fraction(0.26));
+        assert_eq!(float.to_string(), "7.5");
+    }
+
+    #[test]
+    fn a_typed_number_is_clamped_and_a_non_number_changes_nothing() {
+        let mut value = Value::new_u8(5, 2, 8, 2).unwrap();
+        assert!(
+            value.set_number(7.0, false),
+            "typing is not snapped to the step"
+        );
+        assert_eq!(value.to_string(), "7");
+        assert!(value.set_number(100.0, false));
+        assert_eq!(value.to_string(), "8");
+        assert!(value.set_number(-4.0, false));
+        assert_eq!(value.to_string(), "2");
+        assert!(!value.set_number(f64::NAN, false));
+        assert!(!value.set_number(f64::INFINITY, false));
+        assert_eq!(value.to_string(), "2");
+    }
+
+    #[test]
+    fn typed_text_is_read_as_its_leading_number() {
+        assert_eq!(parse_number(" 12 "), Some(12.0));
+        assert_eq!(parse_number("7.5 %"), Some(7.5));
+        assert_eq!(parse_number("-3"), Some(-3.0));
+        assert_eq!(parse_number("abc"), None);
+        assert_eq!(parse_number(""), None);
+        assert_eq!(parse_number("NaN"), None);
+        assert_eq!(parse_number("inf"), None);
     }
 }

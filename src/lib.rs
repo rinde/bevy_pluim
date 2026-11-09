@@ -253,10 +253,18 @@ enum MouseKind {
 struct MouseEvent {
     entity: Entity,
     kind: MouseKind,
+    /// For [`MouseKind::Drag`], how far the pointer has moved since the press, in logical
+    /// pixels; zero for every other kind.
+    distance: Vec2,
 }
 
 trait ToMouseEvent {
     fn to_mouse_kind(&self) -> MouseKind;
+
+    /// How far the pointer has been dragged since the press; zero unless this is a drag.
+    fn distance(&self) -> Vec2 {
+        Vec2::ZERO
+    }
 }
 
 impl ToMouseEvent for PointerOver {
@@ -286,6 +294,10 @@ impl ToMouseEvent for PointerClick {
 impl ToMouseEvent for PointerDrag {
     fn to_mouse_kind(&self) -> MouseKind {
         MouseKind::Drag
+    }
+
+    fn distance(&self) -> Vec2 {
+        self.distance
     }
 }
 
@@ -317,6 +329,7 @@ where
         commands.trigger(MouseEvent {
             entity: original,
             kind: trigger.event().to_mouse_kind(),
+            distance: trigger.event().distance(),
         });
     }
 }

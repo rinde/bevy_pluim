@@ -1,0 +1,17 @@
+// A click on the value opens a text field with the number: typing a number and pressing Enter sets
+// the value (clamped to the bounds), Escape leaves it as it was.
+(
+    format_version: 3,
+    name: "a numeric stepper takes a typed number",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+        MoveTo(Within(Name("default stepper"), Text("1"))), Click(Left),
+        Type(text: "7", into: Within(Name("default stepper"), Component("TextInput"))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(TextOf(Name("default stepper"), Exact("7"))),
+        Check(Not(Exists(Within(Name("default stepper"), Component("TextInput"))))),
+    ],
+    expect: [TextOf(Name("default stepper"), Exact("7"))],
+)
