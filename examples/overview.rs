@@ -66,8 +66,10 @@ pub struct OverviewPlugin;
 
 impl Plugin for OverviewPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup)
-            .add_systems(Update, (fill_panels, fill_setting_rows));
+        app.add_systems(Startup, setup).add_systems(
+            Update,
+            (fill_panels, fill_control_panels, fill_setting_rows),
+        );
     }
 }
 
@@ -1043,6 +1045,9 @@ struct Lines(usize);
 #[derive(Component)]
 struct Filled;
 
+#[derive(Component, Default, Clone)]
+struct ControlLines;
+
 fn cards(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands) {
     let (close, close_scrolling) = (icon.0.clone(), icon.0.clone());
     spawner.spawn_scene(
@@ -1079,8 +1084,13 @@ fn cards(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands: Commands
                     --
                     // A body past 150 pixels scrolls.
                     @variant("Panel: the body scrolls past 150 px", bsn! {
-                        Panel { title: "Stops", close_icon: {HandleTemplate::Handle(close_scrolling)}, max_body_height: 150.0 }
+                        Panel { title: "Stops", close_icon: {HandleTemplate::Handle(close_scrolling.clone())}, max_body_height: 150.0 }
                         Lines(12)
+                    })
+                    --
+                    @variant("Panel: scrolling controls", bsn! {
+                        Panel { title: "Controls", close_icon: {HandleTemplate::Handle(close_scrolling)}, max_body_height: 180.0 }
+                        ControlLines
                     })
                 ]
             ]
@@ -1097,6 +1107,46 @@ fn fill_panels(
         commands.entity(panel).insert(Filled);
         for line in 1..=lines.0 {
             commands.spawn((Label::regular(format!("Line {line}")), ChildOf(refs.body())));
+        }
+    }
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "the panel uses a fixed valid value range"
+)]
+fn fill_control_panels(
+    mut commands: Commands,
+    panels: Query<(Entity, &PanelRefs), (With<ControlLines>, Without<Filled>)>,
+) {
+    for (panel, refs) in &panels {
+        commands.entity(panel).insert(Filled);
+        for index in 0..12 {
+            let step_value = Value::new_u8(index, 0, 20, 1).expect("a valid 0 to 20 range");
+            let row = commands
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        column_gap: px(8.0),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    ChildOf(refs.body()),
+                ))
+                .id();
+            commands.spawn((
+                PushButton::from_label(format!("Action {}", index + 1)),
+                ChildOf(row),
+            ));
+            commands.spawn((
+                Combo,
+                Selection::builder()
+                    .zero_or_one()
+                    .build_with_items(["Red", "White", "Blue", "Yellow"].map(Item::new)),
+                ChildOf(row),
+            ));
+            commands.spawn((valid_slider(0.5, 0.0, 1.0, None), ChildOf(refs.body())));
+            commands.spawn((NumericStepper::default(), step_value, ChildOf(refs.body())));
         }
     }
 }
