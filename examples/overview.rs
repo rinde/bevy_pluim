@@ -1123,6 +1123,17 @@ fn fill_control_panels(
         commands.entity(panel).insert(Filled);
         for index in 0..12 {
             let step_value = Value::new_u8(index, 0, 20, 1).expect("a valid 0 to 20 range");
+            let group = commands
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(6.0),
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                    ChildOf(refs.body()),
+                ))
+                .id();
             let row = commands
                 .spawn((
                     Node {
@@ -1131,7 +1142,7 @@ fn fill_control_panels(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    ChildOf(refs.body()),
+                    ChildOf(group),
                 ))
                 .id();
             commands.spawn((
@@ -1145,8 +1156,8 @@ fn fill_control_panels(
                     .build_with_items(["Red", "White", "Blue", "Yellow"].map(Item::new)),
                 ChildOf(row),
             ));
-            commands.spawn((valid_slider(0.5, 0.0, 1.0, None), ChildOf(refs.body())));
-            commands.spawn((NumericStepper::default(), step_value, ChildOf(refs.body())));
+            commands.spawn((valid_slider(0.5, 0.0, 1.0, None), ChildOf(group)));
+            commands.spawn((NumericStepper::default(), step_value, ChildOf(group)));
         }
     }
 }

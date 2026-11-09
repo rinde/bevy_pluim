@@ -5,6 +5,7 @@
 //! on the track. This module keeps the layout, the look, the wheel and scrolling a
 //! focused row into view.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use accesskit::Role;
@@ -500,10 +501,9 @@ fn scroll_into_view(
 /// horizontal scroll by its vertical delta, since a mouse wheel only turns
 /// vertically. An event with a horizontal delta scrolls by that delta alone.
 ///
-/// Nested areas: only nodes in picking's [`HoverMap`] are scrolled, and a
-/// [`ScrollContents`] blocks the pointer for what is below it, so over an inner area
-/// only that one scrolls; the area around it gets nothing, also when the inner one is at
-/// its limit.
+/// The nearest scrollable ancestor of each hovered entity receives the wheel. Nested
+/// areas scroll only the innermost area, even when it is at its limit. Fixed nodes
+/// stop the ancestor search so a floating popup does not scroll its owner.
 ///
 /// Registered once, by [`ScrollAreaPlugin`].
 fn update_scroll_position(
@@ -511,6 +511,7 @@ fn update_scroll_position(
     hover_map: Res<HoverMap>,
     mut scrolled_node_query: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
 ) {
     for mouse_wheel_event in mouse_wheel_events.read() {
         let (mut dx, mut dy) = match mouse_wheel_event.unit {
@@ -525,7 +526,51 @@ fn update_scroll_position(
         }
 
         for (_pointer, pointer_map) in hover_map.iter() {
-            for (entity, _hit) in pointer_map {
+            let mut targets = HashSet::new();
+            for entity in pointer_map.keys() {
+                let mut current = Some(*entity);
+                while let Some(entity) = current {
+                    if let Ok((_, _, node)) = scrolled_node_query.get(entity)
+                        && (node.overflow.x == OverflowAxis::Scroll
+                            || node.overflow.y == OverflowAxis::Scroll)
+                    {
+                        targets.insert(entity);
+                        break;
+                    }
+                    let Ok((parent, fixed)) = hierarchy.get(entity) else {
+                        break;
+                    };
+                    if fixed {
+                        break;
+                    }
+                    current = parent.map(ChildOf::parent);
+                }
+            }
+            // A nested scroll area gets the wheel alone, even if picking also reports
+            // its outer area. Do not pass the wheel on when the inner area is at its limit.
+            let mut outer_targets = HashSet::new();
+            for &target in &targets {
+                let mut current = hierarchy.get(target).ok().and_then(|(parent, fixed)| {
+                    if fixed {
+                        None
+                    } else {
+                        parent.map(ChildOf::parent)
+                    }
+                });
+                while let Some(entity) = current {
+                    if targets.contains(&entity) {
+                        outer_targets.insert(entity);
+                    }
+                    let Ok((parent, fixed)) = hierarchy.get(entity) else {
+                        break;
+                    };
+                    if fixed {
+                        break;
+                    }
+                    current = parent.map(ChildOf::parent);
+                }
+            }
+            for entity in targets.difference(&outer_targets) {
                 let Ok((mut scroll_position, computed, node)) =
                     scrolled_node_query.get_mut(*entity)
                 else {
