@@ -4075,3 +4075,51 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
         }
     }
 }
+
+/// The lists on the overview's "Scroll area" page get their rows although a scene inserts their
+/// `List` after the `Selection` and items, so the areas overflow and show their scroll bars.
+#[test]
+fn the_overview_scroll_area_page_has_rows_and_visible_scroll_bars() {
+    let mut app = App::new();
+    app.add_plugins(bevy_stagecraft::HeadlessPlugins::default());
+    app.init_resource::<ClearColor>();
+    app.add_plugins(bevy::scene::ScenePlugin);
+    app.add_plugins((bevy_pluim::WidgetsPlugin, overview::OverviewPlugin));
+    app.finish();
+    app.cleanup();
+    settle(&mut app);
+    let bar = app
+        .world_mut()
+        .query_filtered::<Entity, With<TabBar>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .run_system_once(
+            move |mut selections: SelectionParam, items: Query<(Entity, &Item<String>)>| {
+                let item = items
+                    .iter()
+                    .find(|(_, i)| i.data == "Scroll area")
+                    .unwrap()
+                    .0;
+                selections.update_selection(bar, |s| s.set_selection([item]));
+            },
+        )
+        .unwrap();
+    settle(&mut app);
+    settle(&mut app);
+    let world = app.world_mut();
+    let views = world
+        .query::<&bevy_pluim::list::ItemView>()
+        .iter(world)
+        .count();
+    assert_eq!(views, 40, "two lists of 20 rows");
+    let shown = world
+        .query::<(&bevy_pluim::scroll_area::ScrollBar, &Visibility)>()
+        .iter(world)
+        .filter(|(_, v)| **v != Visibility::Hidden)
+        .count();
+    assert_eq!(
+        shown, 2,
+        "the vertical area's bar and the two-way area's vertical bar (the horizontal one needs text layout)"
+    );
+}

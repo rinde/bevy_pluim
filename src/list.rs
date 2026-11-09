@@ -59,6 +59,7 @@ impl Plugin for ListPlugin {
             )
             .add_systems(PostUpdate, sync_item_labels.in_set(AccessibilitySync))
             .add_observer(on_insert_selection)
+            .add_observer(on_insert_list)
             .add_observer(on_value_change)
             .add_observer(on_reselect_row)
             .add_observer(keep_navigation_keys)
@@ -964,17 +965,28 @@ pub(crate) struct ItemsWatch {
     observer: Entity,
 }
 
-fn on_insert_selection(
-    t: On<Insert<Selection>>,
+fn on_insert_selection(t: On<Insert<Selection>>, mut commands: Commands) {
+    commands.run_system_cached_with(watch_list, t.event().event_target());
+}
+
+/// A list inserted after its selection and items (a scene inserts its components in the order
+/// of the patches, not of the list's own requirements) starts watching them now.
+fn on_insert_list(t: On<Insert<List>>, mut commands: Commands) {
+    commands.run_system_cached_with(watch_list, t.event().event_target());
+}
+
+/// Starts watching the items of `list_ref`. Run as a deferred system by both observers, so the
+/// second of two in one frame sees the `ItemsWatch` the first inserted and adds no second observer.
+fn watch_list(
+    list: In<Entity>,
     lists: Query<Option<&ItemsWatch>, (With<List>, With<Selection>, Without<NoDefaultItems>)>,
     selections: SelectionParam,
     commands: Commands,
 ) {
-    let list_ref = t.event().event_target();
-    let Ok(watch) = lists.get(list_ref) else {
+    let Ok(watch) = lists.get(list.0) else {
         return;
     };
-    watch_items(list_ref, watch, &selections, commands, on_items_changed);
+    watch_items(list.0, watch, &selections, commands, on_items_changed);
 }
 
 /// Makes `on_items_changed` run for `list_ref` whenever the items of its

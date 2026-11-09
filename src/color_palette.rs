@@ -37,6 +37,7 @@ impl Plugin for ColorPalettePlugin {
             ),
         )
         .add_observer(on_insert_selection)
+        .add_observer(on_insert_palette)
         .register_type::<Item<Color>>();
     }
 }
@@ -168,17 +169,27 @@ fn sync_accessible_names(
     }
 }
 
-fn on_insert_selection(
-    t: On<Insert<Selection>>,
+fn on_insert_selection(t: On<Insert<Selection>>, mut commands: Commands) {
+    commands.run_system_cached_with(watch_palette, t.event().event_target());
+}
+
+/// A palette inserted after its selection and items starts watching them now.
+fn on_insert_palette(t: On<Insert<ColorPalette>>, mut commands: Commands) {
+    commands.run_system_cached_with(watch_palette, t.event().event_target());
+}
+
+/// Starts watching the items of the palette. Run as a deferred system by both observers, so the
+/// second of two in one frame sees the `ItemsWatch` the first inserted.
+fn watch_palette(
+    palette: In<Entity>,
     color_palettes: Query<Option<&ItemsWatch>, (With<ColorPalette>, With<Selection>)>,
     selections: SelectionParam,
     commands: Commands,
 ) {
-    let list_ref = t.event().event_target();
-    let Ok(watch) = color_palettes.get(list_ref) else {
+    let Ok(watch) = color_palettes.get(palette.0) else {
         return;
     };
-    watch_items(list_ref, watch, &selections, commands, on_items_changed);
+    watch_items(palette.0, watch, &selections, commands, on_items_changed);
 }
 
 fn handle_mouse_events(
