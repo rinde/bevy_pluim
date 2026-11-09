@@ -50,6 +50,7 @@ use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::SegmentedControl;
 use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionParam, SelectionValue};
+use bevy_pluim::slider::Slider;
 use bevy_pluim::tab_bar::{TabBar, TabBarTab};
 use bevy_pluim::text_field::{TextField, TextFieldChange, TextFieldCommit, TextFieldRefs};
 use bevy_pluim::theme::{
@@ -2365,6 +2366,77 @@ fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
     assert!(
         (tall_overflow - 306.0).abs() < 1.5,
         "the rest scrolls: {tall_overflow}"
+    );
+}
+
+#[test]
+fn a_panel_body_with_control_groups_scrolls_past_its_maximum_height() {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let panel = app
+        .world_mut()
+        .spawn((
+            Panel::new("Controls").with_max_body_height(100.0).unwrap(),
+            ChildOf(root),
+        ))
+        .id();
+    let body = app.world().get::<PanelRefs>(panel).unwrap().body();
+    for index in 0..12 {
+        let group = app
+            .world_mut()
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(6),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                ChildOf(body),
+            ))
+            .id();
+        let row = app
+            .world_mut()
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(8),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                ChildOf(group),
+            ))
+            .id();
+        app.world_mut().spawn((
+            PushButton::from_label(format!("Action {}", index + 1)),
+            ChildOf(row),
+        ));
+        app.world_mut().spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["Red", "White", "Blue", "Yellow"].map(Item::new)),
+            ChildOf(row),
+        ));
+        app.world_mut()
+            .spawn((Slider::new(0.5, 0.0, 1.0).unwrap(), ChildOf(group)));
+        app.world_mut().spawn((
+            NumericStepper::default(),
+            Value::new_u8(index, 0, 20, 1).unwrap(),
+            ChildOf(group),
+        ));
+    }
+    for _ in 0..6 {
+        app.update();
+    }
+    let refs = app.world().get::<PanelRefs>(panel).unwrap();
+    let area = refs.scroll_area();
+    let contents = *app.world().get::<Children>(area).unwrap().first().unwrap();
+    let computed = app.world().get::<ComputedNode>(contents).unwrap();
+    let overflow =
+        (computed.content_size().y - computed.size().y) * computed.inverse_scale_factor();
+    assert!(
+        overflow > 1.0,
+        "control panel should scroll, overflow is {overflow}"
     );
 }
 
