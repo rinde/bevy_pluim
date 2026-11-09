@@ -148,6 +148,8 @@ pub enum WidgetsSetup {
     /// its body) and `tall panel`, whose 100 pixel high body is shorter than
     /// its twelve lines and so scrolls. Then "Change theme".
     Panel,
+    /// A panel containing groups of controls.
+    ControlPanel,
     /// A `setting rows` column of three `SettingRow`s (`appearance row` with
     /// a segmented control, `text size row` with a numeric stepper and `last
     /// row` with a button) and "Change theme".
@@ -233,6 +235,7 @@ impl AppSetup for WidgetsSetup {
             Self::LightDarkToggle => light_dark_toggle(world),
             Self::FilterChips => filter_chips(world),
             Self::Panel => panel(world),
+            Self::ControlPanel => control_panel(world),
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
             Self::IconButtons => icon_buttons(world),
@@ -1685,6 +1688,47 @@ fn panel(world: &mut World) {
         for line in 1..=lines {
             world.spawn((Label::regular(format!("Line {line}")), ChildOf(body)));
         }
+    }
+}
+
+fn control_panel(world: &mut World) {
+    let root = row_root(world);
+    let panel = world
+        .spawn((
+            Panel::new("Controls")
+                .with_max_body_height(100.0)
+                .unwrap_or_else(|_| Panel::new("Controls")),
+            Name::new("control panel"),
+            ChildOf(root),
+        ))
+        .id();
+    world.flush();
+    let Some(body) = world.get::<PanelRefs>(panel).map(PanelRefs::body) else {
+        return;
+    };
+    for index in 0..12 {
+        let group = world
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(6),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                ChildOf(body),
+            ))
+            .id();
+        world.spawn((
+            PushButton::from_label(format!("Action {index}")),
+            Name::new(format!("control {index}")),
+            ChildOf(group),
+        ));
+        world.spawn((valid_slider(0.5, 0.0, 1.0, None), ChildOf(group)));
+        world.spawn((
+            NumericStepper::default(),
+            valid(Value::new_u8(index, 0, 20, 1)),
+            ChildOf(group),
+        ));
     }
 }
 
