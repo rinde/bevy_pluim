@@ -1296,7 +1296,7 @@ in `[dev-dependencies]` only.
 recorder (`Recorder`, feature `record`, which this crate's `record` feature
 turns on) and writes to `target/recordings/` (`RECORD_DIR` overrides it): per
 scenario PNGs at the step boundaries and every tenth frame, `filmstrip.png`,
-`scenario.gif` and `trace.html`, and one `index.html` with the failures first.
+`scenario.gif` and `trace.html`, and an `index.html` per scenario in `target/recordings/<scenario>/`. Each recording is an ignored, independently runnable test named `record_<scenario>` in `recorded_scenarios_gpu`; output directories are separate for parallel runs.
 Open the index and look; no picture is compared with a golden one. It needs a
 GPU, or lavapipe (`mesa-vulkan-drivers libvulkan1` and `WGPU_BACKEND=vulkan`),
 so the test is `#[ignore]`d, its target needs the `record` feature, and
