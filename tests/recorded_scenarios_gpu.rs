@@ -3,9 +3,10 @@
 //! `index.html` for each scenario.
 //!
 //! It needs a GPU (or lavapipe: `WGPU_BACKEND=vulkan`), so it is only built
-//! with the `record` feature and its test is ignored. `just record` runs it and
-//! writes to `target/recordings`; `RECORD_DIR` overrides the directory. Set
-//! `RECORD_CHECK_ONLY` to run the rendered checks without recording artifacts.
+//! with the `record` feature and its tests are ignored. `just record` checks
+//! them without artifacts; `just record --save` writes to `target/recordings`
+//! (`RECORD_DIR` overrides it). Direct test runs save unless `RECORD_CHECK_ONLY`
+//! is set.
 
 #![expect(
     clippy::unwrap_used,

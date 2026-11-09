@@ -81,13 +81,10 @@ bevy-lint:
         --tag lint-{{BEVY_LINT_VERSION}} --locked bevy_lint
     bevy_lint --all-targets
 
-# Record every scenario of tests/ron offscreen for review: PNGs, a filmstrip and
-# a GIF per scenario, a trace.html, and an index.html per scenario,
-# in target/recordings (RECORD_DIR overrides it). Needs a GPU, or lavapipe with
-# WGPU_BACKEND=vulkan; not part of `just ci`.
-record:
-    cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all
-    @if [ -z "${RECORD_CHECK_ONLY+x}" ]; then echo "recordings are in ${RECORD_DIR:-target/recordings}/<scenario>/index.html"; fi
+# Run rendered scenarios without saving recordings. Pass --save to write them
+# under target/recordings (RECORD_DIR overrides it). Needs a GPU or lavapipe.
+record $option="":
+    @case "$option" in "") RECORD_CHECK_ONLY=1 cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all ;; --save) unset RECORD_CHECK_ONLY; cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all && echo "recordings are in ${RECORD_DIR:-target/recordings}/<scenario>/index.html" ;; *) echo "usage: just record [--save]" >&2; exit 2 ;; esac
 
 # Everything CI would run.
 ci: lint test unused-deps
