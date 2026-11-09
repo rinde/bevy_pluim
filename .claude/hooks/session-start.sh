@@ -2,7 +2,7 @@
 # Prepares a fresh container for working on this repository.
 #
 # Installs the Rust toolchain pinned in rust-toolchain.toml with clippy and
-# rustfmt, `just` and `cargo-machete` at pinned versions, the system headers
+# rustfmt, `just`, `cargo-machete` and `cargo-nextest` at pinned versions, the system headers
 # Bevy's default features need, then warms the build cache so the first real
 # build is not a cold Bevy compile.
 # Safe to run more than once: every step checks whether it already has what
@@ -22,6 +22,7 @@ cd "$REPO"
 # Versions of the tools CI installs. Bump deliberately.
 readonly JUST_VERSION="1.42.4"
 readonly MACHETE_VERSION="0.9.1"
+readonly NEXTEST_VERSION="0.9.118"
 
 readonly BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
 mkdir -p "$BIN"
@@ -108,6 +109,10 @@ install_tool just "$JUST_VERSION" \
 install_tool cargo-machete "$MACHETE_VERSION" \
     "https://github.com/bnjbvr/cargo-machete/releases/download/v${MACHETE_VERSION}/cargo-machete-v${MACHETE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
     cargo-machete
+
+install_tool cargo-nextest "$NEXTEST_VERSION" \
+    "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    cargo-nextest
 
 # ------------------------------------------------------------------ sources
 

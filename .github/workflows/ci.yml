@@ -27,7 +27,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev
-      - uses: taiki-e/install-action@just
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-nextest
       - name: Read pinned Rust toolchain version
         id: toolchain
         run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
@@ -48,7 +50,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev
-      - uses: taiki-e/install-action@just
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-nextest
       - name: Read pinned Rust toolchain version
         id: toolchain
         run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
@@ -77,7 +81,9 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@just
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-nextest
       - name: Read pinned Rust toolchain version
         id: toolchain
         shell: bash
@@ -104,7 +110,9 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev \
             mesa-vulkan-drivers libvulkan1
-      - uses: taiki-e/install-action@just
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-nextest
       - name: Read pinned Rust toolchain version
         id: toolchain
         run: echo "version=$(just rust-version)" >> "$GITHUB_OUTPUT"
