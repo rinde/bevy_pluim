@@ -2832,7 +2832,7 @@ fn spawn_stepper(app: &mut App, initial: u8) -> (Entity, Entity, Entity) {
     app.update();
     app.update();
     let children = app.world().entity(stepper).get::<Children>().unwrap();
-    (stepper, children[0], children[2])
+    (stepper, children[1], children[3])
 }
 
 fn stepper_value(app: &App, stepper: Entity) -> u8 {
@@ -2964,26 +2964,26 @@ fn a_numeric_stepper_shows_its_custom_format_and_updates_it_on_a_change() {
         .unwrap()
         .iter()
         .collect();
-    let text = |app: &App| app.world().get::<Text>(children[1]).unwrap().0.clone();
+    let text = |app: &App| app.world().get::<Text>(children[2]).unwrap().0.clone();
     assert_eq!(text(&app), "Ground");
     assert_eq!(
-        app.world().get::<IconButton>(children[0]).unwrap().name,
+        app.world().get::<IconButton>(children[1]).unwrap().name,
         "Lower the level"
     );
     assert_eq!(
-        app.world().get::<IconButton>(children[2]).unwrap().name,
+        app.world().get::<IconButton>(children[3]).unwrap().name,
         "Raise the level"
     );
 
-    activate(&mut app, children[2]);
+    activate(&mut app, children[3]);
     assert_eq!(text(&app), "+7");
-    activate(&mut app, children[2]);
+    activate(&mut app, children[3]);
     assert_eq!(text(&app), "+14");
-    assert!(is_disabled(&app, children[2]));
-    activate(&mut app, children[0]);
-    activate(&mut app, children[0]);
+    assert!(is_disabled(&app, children[3]));
+    activate(&mut app, children[1]);
+    activate(&mut app, children[1]);
     assert_eq!(text(&app), "Ground");
-    assert!(is_disabled(&app, children[0]));
+    assert!(is_disabled(&app, children[1]));
 }
 
 #[test]
@@ -7533,7 +7533,7 @@ fn spawn_stepper_of(app: &mut App, value: Value) -> (Entity, Entity, Entity) {
     app.update();
     app.update();
     let children = app.world().entity(stepper).get::<Children>().unwrap();
-    (stepper, children[0], children[2])
+    (stepper, children[1], children[3])
 }
 
 #[test]
@@ -7591,7 +7591,7 @@ fn mirrors_of_a_shared_stepper_value_follow_it_and_disable_at_its_limits() {
     app.update();
     app.update();
     let children = app.world().entity(mirror).get::<Children>().unwrap();
-    let (decrease, increase) = (children[0], children[2]);
+    let (decrease, increase) = (children[1], children[3]);
 
     activate(&mut app, increase);
     assert_eq!(stepper_value(&app, shared), 2);
@@ -10331,6 +10331,122 @@ fn escape_puts_the_text_back_without_a_commit_and_stops_like_enter() {
     );
 }
 
+/// A `u8` stepper from 0 to 9 at `initial` in a text-capable app, with its value label.
+fn scrub_stepper_app(initial: u8) -> (App, Entity, Entity, Entity) {
+    let mut app = headless_app_with(|app| {
+        app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
+    });
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(Camera2d);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stepper = app
+        .world_mut()
+        .spawn((
+            NumericStepper::default(),
+            Value::new_u8(initial, 0, 9, 1).unwrap(),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let label = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|kid| app.world().entity(*kid).contains::<Text>())
+        .unwrap();
+    (app, window, stepper, label)
+}
+
+/// The input of the number editor of `stepper`, if one is open.
+fn scrub_editor_input(app: &App, stepper: Entity) -> Option<Entity> {
+    app.world()
+        .entity(stepper)
+        .get::<Children>()?
+        .iter()
+        .find_map(|kid| {
+            app.world()
+                .entity(kid)
+                .get::<TextFieldRefs>()
+                .map(|refs| refs.input)
+        })
+}
+
+/// Opens the number editor with a click on the value and types `text` into it.
+fn open_scrub_editor_and_type(app: &mut App, stepper: Entity, label: Entity, text: &str) -> Entity {
+    click_and_release(app, label);
+    for _ in 0..3 {
+        app.update();
+    }
+    let input = scrub_editor_input(app, stepper);
+    assert!(input.is_some(), "a click on the value opens the editor");
+    let input = input.unwrap();
+    focus_text_input(app, input);
+    app.world_mut()
+        .entity_mut(input)
+        .get_mut::<bevy::text::EditableText>()
+        .unwrap()
+        .queue_edit(bevy::text::TextEdit::Insert(text.into()));
+    for _ in 0..3 {
+        app.update();
+    }
+    input
+}
+
+#[test]
+fn escape_in_the_number_editor_closes_it_and_keeps_the_value() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, stepper, label) = scrub_stepper_app(3);
+    open_scrub_editor_and_type(&mut app, stepper, label, "7");
+    press_text_key(&mut app, window, KeyCode::Escape, Key::Escape);
+    app.update();
+    assert_eq!(stepper_value(&app, stepper), 3);
+    assert!(scrub_editor_input(&app, stepper).is_none());
+    assert_ne!(
+        app.world().entity(label).get::<Node>().unwrap().display,
+        Display::None,
+        "the value shows again"
+    );
+}
+
+#[test]
+fn enter_in_the_number_editor_sets_the_typed_number_and_closes_it() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, stepper, label) = scrub_stepper_app(3);
+    open_scrub_editor_and_type(&mut app, stepper, label, "7");
+    press_text_key(&mut app, window, KeyCode::Enter, Key::Enter);
+    app.update();
+    assert_eq!(stepper_value(&app, stepper), 7);
+    assert!(scrub_editor_input(&app, stepper).is_none());
+}
+
+#[test]
+fn text_that_is_not_a_number_changes_nothing_and_closes_the_editor() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, stepper, label) = scrub_stepper_app(3);
+    open_scrub_editor_and_type(&mut app, stepper, label, "abc");
+    press_text_key(&mut app, window, KeyCode::Enter, Key::Enter);
+    app.update();
+    assert_eq!(stepper_value(&app, stepper), 3);
+    assert!(scrub_editor_input(&app, stepper).is_none());
+}
+
+#[test]
+fn a_typed_number_above_the_maximum_is_clamped() {
+    use bevy::input::keyboard::Key;
+    let (mut app, window, stepper, label) = scrub_stepper_app(3);
+    open_scrub_editor_and_type(&mut app, stepper, label, "99");
+    press_text_key(&mut app, window, KeyCode::Enter, Key::Enter);
+    app.update();
+    assert_eq!(stepper_value(&app, stepper), 9);
+}
+
 #[test]
 fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
     let mut app = headless_app();
@@ -10780,30 +10896,30 @@ fn reinserting_a_numeric_stepper_updates_every_setting_without_duplicating_its_p
         .unwrap()
         .iter()
         .collect();
-    assert_eq!(children.len(), 3, "no duplicate buttons or label");
+    assert_eq!(children.len(), 4, "no duplicate buttons or label");
     assert!(
         app.world().get_entity(old_decrease).is_err(),
         "the old buttons are gone"
     );
     assert_eq!(
-        app.world().get::<IconButton>(children[0]).unwrap().name,
+        app.world().get::<IconButton>(children[1]).unwrap().name,
         "Lower"
     );
     assert_eq!(
-        app.world().get::<IconButton>(children[2]).unwrap().name,
+        app.world().get::<IconButton>(children[3]).unwrap().name,
         "Raise"
     );
     assert_eq!(
-        app.world().get::<IconButton>(children[0]).unwrap().icon,
+        app.world().get::<IconButton>(children[1]).unwrap().icon,
         icon
     );
     assert_eq!(
-        app.world().get::<IconButton>(children[2]).unwrap().icon,
+        app.world().get::<IconButton>(children[3]).unwrap().icon,
         icon
     );
-    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "Ground");
+    assert_eq!(app.world().get::<Text>(children[2]).unwrap().0, "Ground");
     assert_eq!(
-        app.world().get::<Node>(children[1]).unwrap().min_width,
+        app.world().get::<Node>(children[2]).unwrap().min_width,
         Val::Px(90.0)
     );
     let node = app
@@ -10815,11 +10931,11 @@ fn reinserting_a_numeric_stepper_updates_every_setting_without_duplicating_its_p
     assert_eq!(node.value(), Some("Ground"));
 
     // The new buttons step the value once each, through one observer.
-    activate(&mut app, children[2]);
+    activate(&mut app, children[3]);
     assert_eq!(stepper_value(&app, stepper), 1);
-    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "+1");
-    assert!(!is_disabled(&app, children[0]));
-    activate(&mut app, children[0]);
+    assert_eq!(app.world().get::<Text>(children[2]).unwrap().0, "+1");
+    assert!(!is_disabled(&app, children[1]));
+    activate(&mut app, children[1]);
     assert_eq!(stepper_value(&app, stepper), 0);
 }
 
@@ -10863,11 +10979,11 @@ fn reinserting_a_mirror_numeric_stepper_keeps_its_value_ref() {
         .unwrap()
         .iter()
         .collect();
-    assert_eq!(children.len(), 3);
-    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "+1");
-    activate(&mut app, children[2]);
+    assert_eq!(children.len(), 4);
+    assert_eq!(app.world().get::<Text>(children[2]).unwrap().0, "+1");
+    activate(&mut app, children[3]);
     assert_eq!(stepper_value(&app, shared), 2);
-    assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "+2");
+    assert_eq!(app.world().get::<Text>(children[2]).unwrap().0, "+2");
 }
 
 #[test]

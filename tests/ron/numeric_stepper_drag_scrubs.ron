@@ -1,0 +1,21 @@
+// A drag that starts on a stepper's "+" button scrubs the value like a slider instead of stepping
+// it: dragging far to the right reaches the maximum (10), far to the left the minimum (0), and the
+// shaded fill behind the stepper follows. The release over another button steps nothing.
+(
+    format_version: 3,
+    name: "dragging a numeric stepper scrubs its value",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+        Drag(from: Within(Name("default stepper"), Name("Increase")), to: Within(Name("second mirror stepper"), Name("Increase")), frames: 5),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        // A drag moves the value by its distance over the stepper's width, so four drags to the left
+        // edge of the window are needed to get from the maximum to the minimum.
+        Drag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        Drag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        Drag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        Drag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        Check(TextOf(Name("default stepper"), Exact("0"))),
+    ],
+    expect: [TextOf(Name("default stepper"), Exact("0"))],
+)
