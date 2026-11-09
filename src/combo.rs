@@ -24,6 +24,7 @@ use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
 use crate::popup::{self, ButtonLook};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
+use crate::scroll_area::update_scroll_position;
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
@@ -36,6 +37,10 @@ pub struct ComboPlugin;
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (close_combos_on_outside_click, selection_change))
+            .add_systems(
+                Update,
+                close_on_ancestor_scroll.after(update_scroll_position),
+            )
             .add_systems(
                 PostUpdate,
                 (
@@ -50,7 +55,7 @@ impl Plugin for ComboPlugin {
 
 /// A button that opens a [`List`] in a [`Float`].
 ///
-/// The popup closes again on a click outside of it. The button toggles it when
+/// The popup closes again on a click outside of it or when an ancestor scrolls. The button toggles it when
 /// it is [`Activate`]d (a click, or Enter or Space on a focused button).
 ///
 /// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a
@@ -322,6 +327,23 @@ fn close_on_focus_lost(
 /// The list is a [`Float`], placed in the viewport, so it is moved here from the button's
 /// last laid-out position, in logical pixels, and follows the button while open (a scroll area
 /// around the combo scrolling, say).
+fn close_on_ancestor_scroll(
+    combos: Query<(Entity, &ComboState), With<Combo>>,
+    parents: Query<&ChildOf>,
+    scrolled: Query<(), Changed<ScrollPosition>>,
+    mut commands: Commands,
+) {
+    for (entity, state) in &combos {
+        if *state == ComboState::Open
+            && parents
+                .iter_ancestors(entity)
+                .any(|ancestor| scrolled.contains(ancestor))
+        {
+            commands.entity(entity).insert(ComboState::Closed);
+        }
+    }
+}
+
 fn place_open_lists(
     window: Single<&Window, With<PrimaryWindow>>,
     combos: Query<(&ComboState, &ComboRefs)>,
