@@ -1,0 +1,20 @@
+// Filtering the `long filter combo` down to one row leaves nothing to scroll, so its popup scroll
+// bar should hide. It does not yet: the Separated list's content is 6 px taller than its box
+// (#641). Remove `should_fail` when that is fixed.
+(
+    format_version: 3,
+    name: "a filter combo popup hides its scroll bar when the filtered rows fit",
+    setup: App(FilterCombos),
+    should_fail: Some("the bar stays visible when rows fit, #641"),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("long filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Type(text: "Option 80"),
+        Wait(3),
+        Check(Component(target: Nth(0, Within(Name("long filter combo"), Component("ItemView"))), path: "Node.display", is: Eq(None))),
+        Check(Component(target: Within(Name("long filter combo"), Name("ScrollBar")), path: "Visibility", is: Eq(Hidden))),
+    ],
+    expect: [],
+)
