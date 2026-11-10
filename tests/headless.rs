@@ -3047,6 +3047,38 @@ fn a_numeric_stepper_button_at_its_bound_is_disabled_until_the_value_moves() {
     assert!(!is_disabled(&app, increase));
 }
 
+#[test]
+fn a_numeric_stepper_shows_a_resize_cursor_and_a_text_cursor_on_its_value() {
+    use bevy::picking::cursor::EntityCursor;
+    use bevy::window::SystemCursorIcon;
+
+    let mut app = headless_app();
+    let (stepper, _, _) = spawn_stepper(&mut app, 1);
+    let label = app.world().entity(stepper).get::<Children>().unwrap()[2];
+
+    let cursor =
+        |app: &App, entity: Entity| app.world().entity(entity).get::<EntityCursor>().cloned();
+    assert_eq!(
+        cursor(&app, stepper),
+        Some(EntityCursor::System(SystemCursorIcon::ColResize)),
+        "a drag anywhere on the stepper scrubs it"
+    );
+    assert_eq!(
+        cursor(&app, label),
+        Some(EntityCursor::System(SystemCursorIcon::Text)),
+        "a click on the value opens the editor"
+    );
+
+    click_and_release(&mut app, label);
+    app.update();
+    let editor = single_entity_with::<TextField>(&mut app);
+    assert_eq!(
+        cursor(&app, editor),
+        Some(EntityCursor::System(SystemCursorIcon::Text)),
+        "the open editor is a text field"
+    );
+}
+
 fn toggle_theme(app: &mut App) {
     app.world_mut()
         .get_resource_mut::<Theme>()

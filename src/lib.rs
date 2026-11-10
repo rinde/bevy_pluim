@@ -52,6 +52,7 @@ pub mod virtual_list;
 use bevy::ecs::event::PropagateEntityTrigger;
 use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
+use bevy::picking::cursor::CursorIconPlugin;
 use bevy::picking::events::{PointerEvent, PointerTraversal};
 use bevy::prelude::*;
 use bevy::ui_widgets::{
@@ -190,6 +191,11 @@ impl Plugin for WidgetsPlugin {
         }
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
+        }
+        // Widgets name the cursor they want with `EntityCursor`; this plugin copies it to the
+        // window.
+        if !app.is_plugin_added::<CursorIconPlugin>() {
+            app.add_plugins(CursorIconPlugin);
         }
     }
 }

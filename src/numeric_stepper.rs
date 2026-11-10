@@ -23,10 +23,12 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
+use bevy::picking::cursor::EntityCursor;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
+use bevy::window::SystemCursorIcon;
 use itertools::Either;
 
 use crate::icon_button::{IconButton, IconButtonSize};
@@ -309,10 +311,11 @@ impl NumericStepper {
         }
         let stepper_entity = context.entity;
         let access_node = spin_button(&stepper, &value);
-        world
-            .commands()
-            .entity(context.entity)
-            .insert(AccessibilityNode::from(access_node));
+        world.commands().entity(context.entity).insert((
+            AccessibilityNode::from(access_node),
+            // The column resize cursor, a double arrow with a bar: a drag scrubs the value.
+            EntityCursor::System(SystemCursorIcon::ColResize),
+        ));
 
         // Inserting again replaces the parts: the old ones would be left behind as orphans.
         let old_parts: Vec<Entity> = world
@@ -358,10 +361,10 @@ impl NumericStepper {
                     spawner.spawn((
                         Name::new("Value"),
                         Text((stepper.format)(&value)),
-                        Pickable {
-                            should_block_lower: false,
-                            ..default()
-                        },
+                        // The text cursor: a click here opens the number editor. The label
+                        // blocks the stepper below it, so its cursor is the only one hovered.
+                        EntityCursor::System(SystemCursorIcon::Text),
+                        Pickable::default(),
                         Node {
                             min_width: Val::Px(stepper.label_min_width),
                             justify_content: JustifyContent::Center,
@@ -1034,6 +1037,7 @@ fn open_editor(
                 stepper,
                 restore_focus,
             },
+            EntityCursor::System(SystemCursorIcon::Text),
         ))
         .id();
     commands.entity(stepper).insert_children(index, &[editor]);
