@@ -769,16 +769,22 @@ pub(crate) fn popup_scroll_bar_hovered(
 /// Puts each popup bar at the right edge of the visible part of its list and shows it only
 /// while the list's rows overflow.
 fn place_popup_scroll_bars(
-    lists: Query<(&ComputedNode, &ScrollPosition)>,
+    lists: Query<(&ComputedNode, &ScrollPosition, &Node), Without<PopupScrollBar>>,
     mut bars: Query<(&PopupScrollBar, &mut Node, &mut Visibility)>,
 ) {
     for (bar, mut node, mut visibility) in &mut bars {
-        let Ok((computed, position)) = lists.get(bar.list) else {
+        let Ok((computed, position, list_node)) = lists.get(bar.list) else {
             continue;
         };
         let scale = computed.inverse_scale_factor();
         let visible = computed.size().y * scale;
-        let contents = computed.content_size().y * scale;
+        // Layout reports the content of a padded list (the separated one) as taller than its box
+        // by the bottom padding even when every row fits (#641), so the padding is not overflow.
+        let bottom_padding = match list_node.padding.bottom {
+            Val::Px(px) => px.max(0.0),
+            _ => 0.0,
+        };
+        let contents = computed.content_size().y.mul_add(scale, -bottom_padding);
         if visible < f32::EPSILON {
             continue;
         }
