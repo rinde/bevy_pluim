@@ -749,7 +749,7 @@ through the `justfile` and so do not use it.
 | Test | `just test` | `cargo test --all-targets` then `cargo test --doc` |
 | Run an example | `just example NAME` | `cargo run --example NAME` |
 | Play every scenario in a real window | `just gallery-test` | `cargo run --example gallery -- --run-all` |
-| Record the scenarios | `just record` | `cargo test --test recorded_scenarios_gpu --features record -- --include-ignored`; needs a GPU, see [Recording the scenarios](#recording-the-scenarios) |
+| Check rendered scenarios | `just record` (`just record --save` to save recordings) | Needs a GPU, see [Recording the scenarios](#recording-the-scenarios) |
 | All of CI | `just ci` | lint, test, `cargo machete --with-metadata` |
 
 **The first build is slow.** Bevy takes many minutes to compile from cold;
@@ -1292,16 +1292,17 @@ in `[dev-dependencies]` only.
 
 ### Recording the scenarios
 
-`just record` plays every file of `tests/ron/` in the tester's offscreen
-recorder (`Recorder`, feature `record`, which this crate's `record` feature
-turns on) and writes to `target/recordings/` (`RECORD_DIR` overrides it): per
-scenario PNGs at the step boundaries and every tenth frame, `filmstrip.png`,
-`scenario.gif` and `trace.html`, and an `index.html` per scenario in `target/recordings/<scenario>/`. Each recording is an ignored, independently runnable test named `record_<scenario>` in `recorded_scenarios_gpu`; output directories are separate for parallel runs.
-Open the index and look; no picture is compared with a golden one. It needs a
-GPU, or lavapipe (`mesa-vulkan-drivers libvulkan1` and `WGPU_BACKEND=vulkan`),
-so the test is `#[ignore]`d, its target needs the `record` feature, and
-`just test` and `just ci` never build it; lint it with `cargo clippy --test
-recorded_scenarios_gpu --features record`.
+`just record` plays every file of `tests/ron/` with the tester's offscreen
+recorder and checks the results without saving recordings. `just record --save`
+writes to `target/recordings/` (`RECORD_DIR` overrides it): per scenario PNGs
+at the step boundaries and every tenth frame, `filmstrip.png`, `scenario.gif`,
+`trace.html`, and `index.html` under `target/recordings/<scenario>/`. Open the
+index and look; no picture is compared with a golden one. Each scenario is an
+ignored, independently runnable test named `record_<scenario>` in
+`recorded_scenarios_gpu`, with separate output directories for parallel runs.
+It needs a GPU, or lavapipe (`mesa-vulkan-drivers libvulkan1` and
+`WGPU_BACKEND=vulkan`), so `just test` and `just ci` never build it; lint it
+with `cargo clippy --test recorded_scenarios_gpu --features record`.
 
 - **A drawn recording is not the headless one.** The recorder's cameras render
   to an `Image`, and Bevy's UI focus (`Interaction`, `RelativeCursorPosition`)
@@ -1315,9 +1316,10 @@ recorded_scenarios_gpu --features record`.
   there is no allowlist, so a
   scenario that only fails with the UI drawn to an image is a bug to fix, not a
   name to list.
-- **CI.** The `record` job of `ci.yml` runs `just record` on lavapipe and uploads
-  `target/recordings` as the `recordings` workflow artifact. It is not part of
-  `just ci`, and it was written without being run on GitHub.
+- **CI.** The `record` job of `ci.yml` sets `RECORD_CHECK_ONLY=1` and runs
+  the same scenario tests as `just record` on lavapipe. This uses
+  `Recorder::check` to run the rendered checks without generating recordings.
+  It is not part of `just ci`.
 
 ## Before you call it done
 

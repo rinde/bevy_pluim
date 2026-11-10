@@ -101,14 +101,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-targets --locked
 
-  # Renders every scenario of tests/ron offscreen on a software GPU (lavapipe)
-  # and keeps the recordings. Not part of `just ci`, and it has not been run on
-  # GitHub yet: see AGENTS.md.
+  # Checks every scenario offscreen on a software GPU (lavapipe).
   record:
-    name: Record scenarios
+    name: Check rendered scenarios
     runs-on: ubuntu-latest
     env:
       WGPU_BACKEND: vulkan
+      RECORD_CHECK_ONLY: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies and software Vulkan (lavapipe)
@@ -130,12 +129,5 @@ jobs:
       # Keep the target, features and selection in step with `just record`.
       - name: Compile scenario recorder
         run: cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all --no-run
-      - name: Record scenarios
+      - name: Check rendered scenarios
         run: cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: recordings
-          path: target/recordings
-          if-no-files-found: warn
-          retention-days: 14
