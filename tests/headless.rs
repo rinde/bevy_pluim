@@ -22,7 +22,7 @@ use bevy::mesh::MeshPlugin;
 use bevy::picking::DefaultPickingPlugins;
 use bevy::picking::backend::HitData;
 use bevy::picking::events::{
-    Pointer, PointerClick, PointerOut, PointerOver, PointerPress, PointerRelease,
+    Pointer, PointerClick, PointerDrag, PointerOut, PointerOver, PointerPress, PointerRelease,
 };
 use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
@@ -10435,6 +10435,112 @@ fn text_that_is_not_a_number_changes_nothing_and_closes_the_editor() {
     app.update();
     assert_eq!(stepper_value(&app, stepper), 3);
     assert!(scrub_editor_input(&app, stepper).is_none());
+}
+
+/// Gives `stepper` a laid-out width of 100 logical pixels, which a scrub measures against.
+fn give_width(app: &mut App, stepper: Entity) {
+    app.world_mut().entity_mut(stepper).insert(ComputedNode {
+        size: Vec2::new(100.0, 20.0),
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+}
+
+/// A press of `button` on `target` followed by a drag of `dx` logical pixels.
+fn press_and_drag(app: &mut App, target: Entity, button: PointerButton, dx: f32) {
+    app.world_mut().trigger(PointerPress {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
+    app.world_mut().trigger(PointerDrag {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        button,
+        distance: Vec2::new(dx, 0.0),
+        delta: Vec2::new(dx, 0.0),
+    });
+    app.update();
+}
+
+/// The width of the `ScrubFill` under `stepper`, as a percentage.
+fn fill_percent(app: &App, stepper: Entity) -> f32 {
+    let fill = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|kid| {
+            app.world()
+                .entity(*kid)
+                .get::<Name>()
+                .is_some_and(|name| name.as_str() == "ScrubFill")
+        })
+        .unwrap();
+    match app.world().entity(fill).get::<Node>().unwrap().width {
+        Val::Percent(percent) => percent,
+        _ => f32::NAN,
+    }
+}
+
+#[test]
+fn a_primary_drag_scrubs_but_a_right_button_drag_does_not() {
+    let (mut app, _, stepper, label) = scrub_stepper_app(0);
+    give_width(&mut app, stepper);
+    press_and_drag(&mut app, label, PointerButton::Secondary, 100.0);
+    assert_eq!(stepper_value(&app, stepper), 0);
+    press_and_drag(&mut app, label, PointerButton::Primary, 100.0);
+    assert_eq!(stepper_value(&app, stepper), 9);
+}
+
+#[test]
+fn scrubbing_a_mirror_stepper_changes_the_shared_value() {
+    let (mut app, _, shared, _) = scrub_stepper_app(0);
+    let mirror = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(shared)))
+        .id();
+    app.update();
+    app.update();
+    give_width(&mut app, mirror);
+    press_and_drag(&mut app, mirror, PointerButton::Primary, 100.0);
+    assert_eq!(stepper_value(&app, shared), 9);
+    assert!(app.world().entity(mirror).get::<Value>().is_none());
+}
+
+#[test]
+fn the_scrub_fill_follows_the_value() {
+    let (mut app, _, stepper, _) = scrub_stepper_app(0);
+    assert!(fill_percent(&app, stepper).abs() < 0.01);
+    *app.world_mut()
+        .entity_mut(stepper)
+        .get_mut::<Value>()
+        .unwrap() = Value::new_u8(9, 0, 9, 1).unwrap();
+    app.update();
+    app.update();
+    assert!((fill_percent(&app, stepper) - 100.0).abs() < 0.01);
+    *app.world_mut()
+        .entity_mut(stepper)
+        .get_mut::<Value>()
+        .unwrap() = Value::new_u8(3, 0, 6, 1).unwrap();
+    app.update();
+    app.update();
+    assert!((fill_percent(&app, stepper) - 50.0).abs() < 0.01);
+}
+
+#[test]
+fn a_drag_does_not_swallow_the_next_activate_once_all_pointers_are_up() {
+    let (mut app, _, stepper, _) = scrub_stepper_app(0);
+    give_width(&mut app, stepper);
+    let increase = app.world().entity(stepper).get::<Children>().unwrap()[3];
+    press_and_drag(&mut app, increase, PointerButton::Primary, 10.0);
+    app.update();
+    let before = stepper_value(&app, stepper);
+    activate(&mut app, increase);
+    assert_eq!(stepper_value(&app, stepper), before + 1);
 }
 
 #[test]

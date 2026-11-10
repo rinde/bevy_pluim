@@ -1,0 +1,31 @@
+// F2 on a focused stepper opens the number editor, as a click on the value does: Enter sets the
+// typed number and gives the keys back to the stepper's button, which F2 opens again, and Escape
+// leaves the value as it was. Enter on the button itself still steps.
+(
+    format_version: 3,
+    name: "a numeric stepper opens its number editor with F2",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("default stepper"), Name("Decrease"))))),
+        Tap(key: F2),
+        Wait(2),
+        Check(Exists(Within(Name("default stepper"), Component("TextInput")))),
+        Check(App(Accessible(of: Within(Name("default stepper"), Component("TextInput")), role: Some("TextInput"), label: Some("Value"), value: None, states: []))),
+        Type(text: "7", into: Within(Name("default stepper"), Component("TextInput"))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(TextOf(Name("default stepper"), Exact("7"))),
+        Check(Not(Exists(Within(Name("default stepper"), Component("TextInput"))))),
+        Check(App(Focused(of: Within(Name("default stepper"), Name("Decrease"))))),
+        Tap(key: F2),
+        Wait(2),
+        Type(text: "3", into: Within(Name("default stepper"), Component("TextInput"))),
+        Tap(key: Escape),
+        Wait(2),
+        Check(TextOf(Name("default stepper"), Exact("7"))),
+        Check(Not(Exists(Within(Name("default stepper"), Component("TextInput"))))),
+    ],
+    expect: [TextOf(Name("default stepper"), Exact("7"))],
+)

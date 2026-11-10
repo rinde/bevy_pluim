@@ -707,6 +707,9 @@ struct Scrub {
 #[derive(Component, Clone, Copy, Debug)]
 struct ScrubEditor {
     stepper: Entity,
+    /// The part of the stepper that had the keyboard focus when the editor was opened with the
+    /// keyboard, which gets it back when the editor closes with the focus unclaimed.
+    restore_focus: Option<Entity>,
 }
 /// An editor whose field has given up the focus, to be closed after its commit was handled.
 #[derive(Component, Clone, Copy, Debug)]
@@ -817,6 +820,10 @@ fn on_key_input(
     editors: Query<&ScrubEditor>,
     value_refs: Query<&ValueRef>,
     mut values: Query<&mut Value>,
+    labels: Query<(Entity, &NumericStepperLabel)>,
+    children: Query<&Children>,
+    mut nodes: Query<&mut Node>,
+    focus: Res<InputFocus>,
     mut commands: Commands,
 ) {
     let stepper = trigger.event_target();
@@ -828,6 +835,30 @@ fn on_key_input(
         return;
     }
     let input = &trigger.event().input;
+    // F2 opens the number editor, as it does to edit a cell in a spreadsheet. Enter is the
+    // focused button's own: it steps.
+    if input.key_code == KeyCode::F2 {
+        let opens = input.state == ButtonState::Pressed && !input.repeat;
+        trigger.propagate(false);
+        if opens {
+            let value_entity = value_refs
+                .get(stepper)
+                .map_or(stepper, |value_ref| value_ref.0);
+            if let Some((label, _)) = labels.iter().find(|(_, label)| label.0 == stepper) {
+                open_editor(
+                    stepper,
+                    label,
+                    focus.get(),
+                    value_entity,
+                    &children,
+                    &values,
+                    &mut nodes,
+                    &mut commands,
+                );
+            }
+        }
+        return;
+    }
     let up = match input.key_code {
         KeyCode::ArrowUp | KeyCode::ArrowRight => true,
         KeyCode::ArrowDown | KeyCode::ArrowLeft => false,
@@ -892,8 +923,9 @@ fn on_mouse(
     let event = *trigger.event();
     if !matches!(
         event.kind,
-        MouseKind::Pressed | MouseKind::Drag | MouseKind::Click(PointerButton::Primary)
-    ) {
+        MouseKind::Pressed | MouseKind::Drag | MouseKind::Click(_)
+    ) || event.button != Some(PointerButton::Primary)
+    {
         return;
     }
     let Some(stepper) = stepper_of(event.entity, &parents, &steppers) else {
@@ -948,37 +980,63 @@ fn on_mouse(
             let Ok(label) = labels.get(event.entity) else {
                 return;
             };
-            let Ok(value) = values.get(value_entity) else {
-                return;
-            };
-            let Some(index) = children
-                .get(stepper)
-                .ok()
-                .and_then(|kids| kids.iter().position(|kid| kid == event.entity))
-            else {
-                return;
-            };
-            let Ok(mut label_node) = nodes.get_mut(event.entity) else {
-                return;
-            };
-            let width = match label_node.min_width {
-                Val::Px(px) => Val::Px(px),
-                _ => Val::Px(DEFAULT_LABEL_MIN_WIDTH_PX),
-            };
-            label_node.display = Display::None;
-            let editor = commands
-                .spawn((
-                    TextField::new("")
-                        .with_placeholder(value.edit_text())
-                        .with_name("Value")
-                        .with_min_width(width)
-                        .with_max_width(width),
-                    ScrubEditor { stepper: label.0 },
-                ))
-                .id();
-            commands.entity(stepper).insert_children(index, &[editor]);
+            open_editor(
+                label.0,
+                event.entity,
+                None,
+                value_entity,
+                &children,
+                &values,
+                &mut nodes,
+                &mut commands,
+            );
         }
     }
+}
+
+/// Replaces the value label of a stepper with the number editor.
+fn open_editor(
+    stepper: Entity,
+    label: Entity,
+    restore_focus: Option<Entity>,
+    value_entity: Entity,
+    children: &Query<&Children>,
+    values: &Query<&mut Value>,
+    nodes: &mut Query<&mut Node>,
+    commands: &mut Commands,
+) {
+    let Ok(value) = values.get(value_entity) else {
+        return;
+    };
+    let Some(index) = children
+        .get(stepper)
+        .ok()
+        .and_then(|kids| kids.iter().position(|kid| kid == label))
+    else {
+        return;
+    };
+    let Ok(mut label_node) = nodes.get_mut(label) else {
+        return;
+    };
+    let width = match label_node.min_width {
+        Val::Px(px) => Val::Px(px),
+        _ => Val::Px(DEFAULT_LABEL_MIN_WIDTH_PX),
+    };
+    label_node.display = Display::None;
+    let editor = commands
+        .spawn((
+            TextField::new("")
+                .with_placeholder(value.edit_text())
+                .with_name("Value")
+                .with_min_width(width)
+                .with_max_width(width),
+            ScrubEditor {
+                stepper,
+                restore_focus,
+            },
+        ))
+        .id();
+    commands.entity(stepper).insert_children(index, &[editor]);
 }
 
 /// Sets the value to the number typed in the editor, if there is one.
@@ -1039,10 +1097,19 @@ fn focus_new_editors(
 fn finish_editors(
     done: Query<(Entity, &ScrubEditor), With<EditorDone>>,
     mut labels: Query<(&NumericStepperLabel, &mut Node)>,
+    buttons: Query<(), (With<bevy::ui_widgets::Button>, Without<InteractionDisabled>)>,
+    mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
     for (editor, scrub_editor) in &done {
         commands.entity(editor).despawn();
+        // Focus nobody claimed goes back to where the keys were before the editor.
+        if let Some(back) = scrub_editor.restore_focus
+            && focus.get().is_none()
+            && buttons.contains(back)
+        {
+            focus.set(back, FocusCause::Navigated);
+        }
         for (label, mut node) in &mut labels {
             if label.0 == scrub_editor.stepper {
                 node.display = Display::DEFAULT;
@@ -1051,9 +1118,16 @@ fn finish_editors(
     }
 }
 
-/// Forgets a press once the mouse button is up, so the next one starts afresh.
-fn end_scrub(buttons: Res<ButtonInput<MouseButton>>, mut scrubs: Query<&mut Scrub>) {
-    if buttons.pressed(MouseButton::Left) {
+/// Forgets a press once the mouse button is up and no finger is down, so the next one starts
+/// afresh and a stale drag never swallows a later keyboard `Activate`.
+fn end_scrub(
+    buttons: Res<ButtonInput<MouseButton>>,
+    touches: Option<Res<Touches>>,
+    mut scrubs: Query<&mut Scrub>,
+) {
+    if buttons.pressed(MouseButton::Left)
+        || touches.is_some_and(|touches| touches.iter().next().is_some())
+    {
         return;
     }
     for mut scrub in &mut scrubs {
