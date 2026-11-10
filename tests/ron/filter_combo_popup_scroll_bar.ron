@@ -1,0 +1,28 @@
+// A filter combo popup that is capped and scrolls (the `long filter combo`, 80 options) shows a
+// scroll bar while its rows overflow. A press on the bar is inside the popup, so it stays open,
+// also after the list is filtered. (That the bar hides when the filtered rows fit is
+// `filter_combo_popup_scroll_bar_hides_when_rows_fit.ron`.)
+(
+    format_version: 3,
+    name: "a filter combo popup shows a scroll bar while its list scrolls and a press on it keeps the popup open",
+    setup: App(FilterCombos),
+    steps: [
+        Wait(2),
+        MoveTo(Within(Name("long filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        Check(Component(target: Within(Name("long filter combo"), Name("ScrollBar")), path: "Visibility", is: Eq(Inherited))),
+        MoveTo(Within(Name("long filter combo"), Name("ScrollBar"))),
+        Click(Left),
+        Wait(2),
+        Check(Component(target: Name("long filter combo"), path: "ComboState", is: Eq(Open))),
+        Type(text: "Option 4"),
+        Wait(3),
+        Check(Component(target: Within(Name("long filter combo"), Name("ScrollBar")), path: "Visibility", is: Eq(Inherited))),
+        MoveTo(Within(Name("long filter combo"), Name("ScrollBar"))),
+        Click(Left),
+        Wait(2),
+        Check(Component(target: Name("long filter combo"), path: "ComboState", is: Eq(Open))),
+    ],
+    expect: [],
+)
