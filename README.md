@@ -73,11 +73,11 @@ Colours, fonts and radii come from the `Theme` resource; switch modes with
 Examples need a window. With [`just`](https://just.systems):
 
 ```sh
-just example widgets
+just example overview
 ```
 
-or `cargo run --example widgets`. `overview` shows every standalone widget on
-its own page, `hud` composes a game-style HUD, and `gallery` is the scenario
+or `cargo run --example overview`. `overview` shows every standalone widget on
+its own page (the theme editor too), `hud` composes a game-style HUD, and `gallery` is the scenario
 tester's window. The full list is in [AGENTS.md](AGENTS.md).
 
 ## Contributing
