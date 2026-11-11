@@ -112,6 +112,7 @@ pub struct WidgetsPlugin;
 impl Plugin for WidgetsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Theme>()
+            .init_resource::<HoverLock>()
             .add_plugins(FocusPlugin)
             .add_plugins(ListPlugin)
             .add_plugins(VirtualListPlugin)
@@ -337,10 +338,15 @@ impl ToMouseEvent for PointerOut {
     }
 }
 
+/// Whether a drag holds the pointer: while set, `MouseKind::Over` is not sent, so no control
+/// highlights as the pointer passes over it.
+#[derive(Resource, Debug, Default)]
+struct HoverLock(bool);
+
 /// Re-triggers a pointer event `E` as a [`MouseEvent`]. The `Trigger` bound says that
 /// `E` bubbles through [`PointerTraversal`], as every pointer event does, which is what
 /// gives `On<E>` its `original_event_target`.
-fn observer_transformer<E>(trigger: On<E>, mut commands: Commands)
+fn observer_transformer<E>(trigger: On<E>, hover_lock: Res<HoverLock>, mut commands: Commands)
 where
     E: PointerEvent
         + ToMouseEvent
@@ -355,10 +361,15 @@ where
     // `PointerDragEnd` and `PointerCancel` from bubbling, which would keep
     // them from ever reaching the root.
     let original = trigger.original_event_target();
+    let kind = trigger.event().to_mouse_kind();
+    // During a drag (a stepper being scrubbed) nothing else reacts to the pointer arriving.
+    if hover_lock.0 && matches!(kind, MouseKind::Over) {
+        return;
+    }
     if trigger.event_target() == original {
         commands.trigger(MouseEvent {
             entity: original,
-            kind: trigger.event().to_mouse_kind(),
+            kind,
             distance: trigger.event().distance(),
             button: trigger.event().button(),
         });
