@@ -298,12 +298,13 @@ fn stations() -> [(Item<String>, ItemNote); 3] {
     ]
 }
 
-/// A slider with a valid range and step, or an abort: these are fixed values.
+/// A slider with a valid range and step: these are fixed values.
+#[expect(clippy::expect_used, reason = "the sliders use fixed valid values")]
 fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
     Slider::new(value, min, max)
         .and_then(|slider| match step {
             Some(step) => slider.with_step(step),
             None => Ok(slider),
         })
-        .unwrap_or_else(|_| std::process::abort())
+        .expect("a valid slider")
 }

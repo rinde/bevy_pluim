@@ -47,7 +47,7 @@ pub(super) fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
                     @variant("Virtual list, separated", bsn! {
                         Node { width: px(220.0), height: px(260.0) }
                         @virtual_list_scroll_area(
-                            VirtualList::separated(row_height(44.0)).unwrap_or_else(|_| std::process::abort())
+                            separated_virtual_list(44.0)
                         )
                     })
                 ]
@@ -70,6 +70,12 @@ pub(super) fn virtual_list_scroll_area(list: VirtualList) -> impl Scene {
     )
 }
 
+#[expect(clippy::expect_used, reason = "the row heights are fixed valid values")]
 pub(super) fn row_height(height: f32) -> RowHeight {
-    RowHeight::new(height).unwrap_or_else(|_| std::process::abort())
+    RowHeight::new(height).expect("a valid row height")
+}
+
+#[expect(clippy::expect_used, reason = "the row height is a fixed valid value")]
+fn separated_virtual_list(height: f32) -> VirtualList {
+    VirtualList::separated(row_height(height)).expect("a row height above the chrome")
 }

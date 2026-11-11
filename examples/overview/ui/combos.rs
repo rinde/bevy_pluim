@@ -10,6 +10,13 @@
 use super::*;
 
 pub(super) fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
+    let shared = commands
+        .spawn(
+            Selection::builder()
+                .zero_or_more()
+                .build_with_items(countries()),
+        )
+        .id();
     spawner.spawn_scene(
         &mut commands,
         bsn! {
@@ -49,6 +56,55 @@ pub(super) fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
                     @variant("None or more", bsn! {
                         ~{Combo}
                         @{Selection::builder().zero_or_more().scene_with_items(countries())}
+                    })
+                    --
+                    // The buttons add to their parent, this box.
+                    @variant("A list and combos sharing one selection; the buttons add more", bsn! {
+                        Node {
+                            width: px(300.0),
+                            flex_direction: FlexDirection::Row,
+                            flex_wrap: FlexWrap::Wrap,
+                            align_items: AlignItems::FlexStart,
+                            column_gap: px(8.0),
+                            row_gap: px(8.0),
+                        }
+                        Children [
+                            List
+                            ~{Selection::reference(shared)}
+                            --
+                            ~{Combo}
+                            ~{Selection::reference(shared)}
+                            --
+                            ~{Combo}
+                            ~{Selection::reference(shared)}
+                            --
+                            ~{PushButton::from_label("Add List")}
+                            on(move |activate: On<Activate>, parents: Query<&ChildOf>, mut commands: Commands| {
+                                if let Ok(parent) = parents.get(activate.event_target()) {
+                                    commands
+                                        .entity(parent.parent())
+                                        .with_child((List, Selection::reference(shared)));
+                                }
+                            })
+                            --
+                            ~{PushButton::from_label("Add Combo")}
+                            on(move |activate: On<Activate>, parents: Query<&ChildOf>, mut commands: Commands| {
+                                if let Ok(parent) = parents.get(activate.event_target()) {
+                                    commands
+                                        .entity(parent.parent())
+                                        .with_child((Combo, Selection::reference(shared)));
+                                }
+                            })
+                            --
+                            ~{PushButton::from_label("Add PushButton")}
+                            on(|activate: On<Activate>, parents: Query<&ChildOf>, mut commands: Commands| {
+                                if let Ok(parent) = parents.get(activate.event_target()) {
+                                    commands
+                                        .entity(parent.parent())
+                                        .with_child(PushButton::from_label("Hello"));
+                                }
+                            })
+                        ]
                     })
                 ]
             ]
