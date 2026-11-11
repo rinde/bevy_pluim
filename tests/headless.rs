@@ -96,15 +96,8 @@ use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
 
-#[path = "../examples/theme_editor/ui.rs"]
-mod theme_editor_ui;
-
-#[path = "../examples/overview.rs"]
-#[expect(
-    dead_code,
-    unreachable_pub,
-    reason = "the example's own `main` is not run by the test, and its plugin is `pub` for it"
-)]
+#[path = "../examples/overview/ui/mod.rs"]
+#[expect(dead_code, reason = "the example's own `main` is not run by the test")]
 mod overview;
 
 /// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
@@ -6864,9 +6857,14 @@ fn theme_editor_app() -> App {
     app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
     app.init_resource::<ClearColor>();
     app.init_resource::<Assets<Image>>();
-    app.add_plugins((WidgetsPlugin, theme_editor_ui::ThemeEditorExamplePlugin));
+    app.add_plugins((WidgetsPlugin, overview::OverviewPlugin));
     app.finish();
     app.cleanup();
+    for _ in 0..6 {
+        app.update();
+    }
+    let bar = single_entity_with::<TabBar>(&mut app);
+    select_by_text(&mut app, bar, "Theme editor");
     for _ in 0..6 {
         app.update();
     }
@@ -7025,7 +7023,7 @@ fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
 #[test]
 fn the_theme_editor_pair_source_has_both_blocks_and_follows_an_edit_to_the_dark_half() {
     let mut theme = Theme::default();
-    let source = theme_editor_ui::pair_source(&theme);
+    let source = overview::theme_editor::pair_source(&theme);
     assert!(source.contains("const LIGHT: ThemeColors = ThemeColors {\n"));
     assert!(source.contains("const DARK: ThemeColors = ThemeColors {\n"));
 
@@ -7036,13 +7034,13 @@ fn the_theme_editor_pair_source_has_both_blocks_and_follows_an_edit_to_the_dark_
         Color::srgba(0.25, 0.5, 0.75, 1.0)
     ));
     theme.set_colors(ThemeMode::Dark, dark);
-    let edited = theme_editor_ui::pair_source(&theme);
+    let edited = overview::theme_editor::pair_source(&theme);
     let (light_block, dark_block) = edited.split_once("const DARK").unwrap();
     assert!(dark_block.contains("    accent: Color::srgba(0.25, 0.5, 0.75, 1"));
     assert!(!light_block.contains("0.25, 0.5, 0.75"));
     assert_eq!(
         light_block,
-        theme_editor_ui::pair_source(&Theme::default())
+        overview::theme_editor::pair_source(&Theme::default())
             .split_once("const DARK")
             .unwrap()
             .0,
@@ -7108,7 +7106,7 @@ fn count_toasts(app: &mut App) -> usize {
 #[test]
 fn the_theme_editor_exports_every_colour_slot_as_rust_text() {
     use bevy::reflect::structs::Struct as _;
-    let source = theme_editor_ui::colors_source("LIGHT", &DEFAULT_LIGHT_THEME_COLORS);
+    let source = overview::theme_editor::colors_source("LIGHT", &DEFAULT_LIGHT_THEME_COLORS);
     assert!(source.starts_with("const LIGHT: ThemeColors = ThemeColors {\n"));
     assert!(source.ends_with("};\n"));
     let lines = source.lines().count();
@@ -7160,6 +7158,7 @@ fn the_overview_example_builds_and_every_page_runs() {
         "Setting rows",
         "Scroll area",
         "Tooltip and toast",
+        "Theme editor",
     ];
     {
         let world = app.world_mut();
@@ -12978,7 +12977,7 @@ fn the_theme_editor_is_a_library_widget_that_needs_no_example_code() {
 
 #[test]
 fn the_theme_editor_example_exports_the_numbers_as_a_theme_function() {
-    let source = theme_editor_ui::theme_source(&Theme::default());
+    let source = overview::theme_editor::theme_source(&Theme::default());
     assert!(source.contains("const LIGHT: ThemeColors"));
     assert!(source.contains("fn theme() -> Theme {"));
     assert!(source.contains("        control_radius: Val::Px(8.0),"));

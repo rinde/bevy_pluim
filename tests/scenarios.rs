@@ -3952,12 +3952,8 @@ fn a_light_dark_toggle_does_not_take_the_focus_from_another_widget() {
 
 // ---- The overview example ----
 
-#[path = "../examples/overview.rs"]
-#[expect(
-    dead_code,
-    unreachable_pub,
-    reason = "the example's own `main` is not run by the test, and its plugin is `pub` for it"
-)]
+#[path = "../examples/overview/ui/mod.rs"]
+#[expect(dead_code, reason = "the example's own `main` is not run by the test")]
 mod overview;
 
 /// The overview at the default window size (1280 by 720): the tab bar and the theme toggle on the
@@ -4013,7 +4009,7 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
         .iter(world)
         .map(|item| item.data.clone())
         .collect();
-    assert_eq!(tabs.len(), 20);
+    assert_eq!(tabs.len(), 21);
     let mut area = None;
     for tab in &tabs {
         let name = tab.clone();
@@ -4191,7 +4187,7 @@ fn the_overview_scroll_area_page_has_rows_and_visible_scroll_bars() {
         .filter(|(_, v)| **v != Visibility::Hidden)
         .count();
     assert_eq!(
-        shown, 2,
-        "the vertical area's bar and the two-way area's vertical bar (the horizontal one needs text layout)"
+        shown, 8,
+        "the bars of the six areas that overflow: the two lists' and the squares' areas (the list areas' horizontal bar needs text layout)"
     );
 }

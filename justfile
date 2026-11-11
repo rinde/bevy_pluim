@@ -34,7 +34,7 @@ build:
 check:
     cargo check --quiet --all-targets
 
-# Run one of the examples, e.g. `just example widgets`.
+# Run one of the examples, e.g. `just example overview`.
 example NAME *ARGS:
     cargo run --example {{NAME}} -- {{ARGS}}
 
