@@ -13269,3 +13269,30 @@ fn the_scrub_track_runs_between_the_buttons_and_the_width_of_a_stepper_can_be_se
         "the widget leaves the app's width alone"
     );
 }
+
+#[test]
+fn a_tooltip_stays_hidden_while_a_numeric_stepper_is_scrubbed() {
+    let (mut app, _, stepper, label) = scrub_stepper_app(0);
+    give_width(&mut app, stepper);
+    let increase = app
+        .world_mut()
+        .query_filtered::<(Entity, &Tooltip), With<IconButton>>()
+        .iter(app.world())
+        .find(|(_, tip)| tip.text == "Increase")
+        .map(|(entity, _)| entity)
+        .unwrap();
+    // The button stays down, or `end_scrub` ends the drag in the first frame.
+    app.world_mut()
+        .get_resource_mut::<ButtonInput<MouseButton>>()
+        .unwrap()
+        .press(MouseButton::Left);
+    press_and_drag(&mut app, label, PointerButton::Primary, 20.0);
+    app.world_mut().entity_mut(increase).insert(Hovered(true));
+    for _ in 0..8 {
+        tick(&mut app);
+    }
+    assert!(
+        tooltip_popups(&mut app).is_empty(),
+        "a tooltip showed during a scrub"
+    );
+}

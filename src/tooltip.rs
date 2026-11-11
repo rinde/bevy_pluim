@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, Pressed, UiGlobalTransform};
 use bevy::window::PrimaryWindow;
 
+use crate::HoverLock;
 use crate::float::Float;
 use crate::theme::Theme;
 
@@ -133,10 +134,15 @@ fn update_tooltips(
     mut popup_texts: Query<&mut Text, With<TooltipText>>,
     popups: Query<&Children, With<TooltipPopup>>,
     theme: Res<Theme>,
+    hover_lock: Option<Res<HoverLock>>,
     mut commands: Commands,
 ) {
+    let locked = hover_lock.is_some_and(|lock| lock.0);
     for (entity, tooltip, hovered, pressed, mut clock, popup) in &mut nodes {
-        if !hovered.get() {
+        if locked {
+            // A scrub drag holds the pointer: no tooltip shows or starts counting.
+            clock.elapsed = 0.0;
+        } else if !hovered.get() {
             *clock = TooltipClock::default();
         } else if pressed {
             clock.suppressed = true;
@@ -144,7 +150,8 @@ fn update_tooltips(
         } else if !clock.suppressed {
             clock.elapsed += time.delta_secs();
         }
-        let wanted = hovered.get()
+        let wanted = !locked
+            && hovered.get()
             && !clock.suppressed
             && clock.elapsed >= TOOLTIP_DELAY_SECS
             && !tooltip.text.is_empty();
