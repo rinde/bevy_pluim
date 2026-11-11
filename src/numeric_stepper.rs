@@ -23,7 +23,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusCause, FocusLost, FocusedInput, InputFocus};
-use bevy::picking::cursor::EntityCursor;
+use bevy::picking::cursor::{EntityCursor, OverrideCursor};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::InteractionDisabled;
@@ -34,7 +34,7 @@ use itertools::Either;
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::text_field::{TextField, TextFieldCommit, TextFieldRefs};
 use crate::theme::Theme;
-use crate::{MouseEvent, MouseKind};
+use crate::{HoverLock, MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`NumericStepper`].
 ///
@@ -331,20 +331,33 @@ impl NumericStepper {
             .entity(context.entity)
             .insert(Children::spawn(SpawnWith(
                 move |spawner: &mut RelatedSpawner<ChildOf>| {
-                    spawner.spawn((
-                        Name::new("ScrubFill"),
-                        ScrubFill,
-                        Pickable::IGNORE,
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: Val::Px(0.0),
-                            top: Val::Px(0.0),
-                            bottom: Val::Px(0.0),
-                            width: Val::Percent(fraction_percent(&value)),
-                            ..default()
-                        },
-                        value_ref,
-                    ));
+                    // The track runs from the right edge of the decrease button to the left
+                    // edge of the increase button: the fill is empty at the minimum and
+                    // reaches the increase button at the maximum.
+                    spawner
+                        .spawn((
+                            Name::new("ScrubTrack"),
+                            Pickable::IGNORE,
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(BUTTON_WIDTH_PX),
+                                right: Val::Px(BUTTON_WIDTH_PX),
+                                top: Val::Px(0.0),
+                                bottom: Val::Px(0.0),
+                                ..default()
+                            },
+                        ))
+                        .with_child((
+                            Name::new("ScrubFill"),
+                            ScrubFill(stepper_entity),
+                            Pickable::IGNORE,
+                            Node {
+                                height: Val::Percent(100.0),
+                                width: Val::Percent(fraction_percent(&value)),
+                                ..default()
+                            },
+                            value_ref,
+                        ));
                     let mut decrease = spawner.spawn((
                         IconButton::new(
                             decrease_icon,
@@ -353,6 +366,8 @@ impl NumericStepper {
                         ),
                         Name::new(stepper.decrease_name.clone()),
                         Decrease,
+                        // Not the stepper's resize cursor: only the drag scrubs there.
+                        EntityCursor::default(),
                         value_ref,
                     ));
                     if !value.can_decrement() {
@@ -367,6 +382,9 @@ impl NumericStepper {
                         Pickable::default(),
                         Node {
                             min_width: Val::Px(stepper.label_min_width),
+                            // Takes the room a wider stepper leaves, so the buttons stay at
+                            // its ends.
+                            flex_grow: 1.0,
                             justify_content: JustifyContent::Center,
                             align_self: AlignSelf::Center,
                             ..default()
@@ -383,6 +401,7 @@ impl NumericStepper {
                         ),
                         Name::new(stepper.increase_name.clone()),
                         Increase,
+                        EntityCursor::default(),
                         value_ref,
                     ));
                     if !value.can_increment() {
@@ -695,9 +714,9 @@ impl std::fmt::Display for Value {
 struct Increase;
 #[derive(Component, Clone, Copy, Debug)]
 struct Decrease;
-/// The background fill of a stepper, as wide as the value is far between its bounds.
+/// The background fill of the stepper it holds, as wide as the value is far between its bounds.
 #[derive(Component, Clone, Copy, Debug)]
-struct ScrubFill;
+struct ScrubFill(Entity);
 /// What a stepper remembers about the press on it.
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct Scrub {
@@ -724,24 +743,23 @@ struct NumericStepperLabel(Entity);
 /// How opaque the fill behind the value is over the stepper's own background.
 const FILL_ALPHA: f32 = 0.25;
 /// How far the pointer has to move, in logical pixels, before a press is a drag.
+const SCRUB_CURSOR: EntityCursor = EntityCursor::System(SystemCursorIcon::ColResize);
 const DRAG_THRESHOLD: f32 = 3.0;
+/// The width of the small icon buttons at the ends of the stepper, in logical pixels.
+const BUTTON_WIDTH_PX: f32 = 30.0;
 
 fn theme_numeric_stepper(
     numeric_stepper_ref: In<Option<Entity>>,
     mut numeric_steppers: Query<(&mut Node, &mut BorderColor), With<NumericStepper>>,
     mut value_texts: Query<(&NumericStepperLabel, &mut TextColor, &mut TextFont)>,
-    mut fills: Query<
-        (&ChildOf, &mut BackgroundColor, &mut Node),
-        (With<ScrubFill>, Without<NumericStepper>),
-    >,
+    mut fills: Query<(&ScrubFill, &mut BackgroundColor)>,
     theme: Res<Theme>,
 ) {
-    for (parent, mut background, mut node) in &mut fills {
-        if numeric_stepper_ref.is_some_and(|stepper| stepper != parent.parent()) {
+    for (fill, mut background) in &mut fills {
+        if numeric_stepper_ref.is_some_and(|stepper| stepper != fill.0) {
             continue;
         }
         background.0 = theme.colors().slider_fill.with_alpha(FILL_ALPHA);
-        node.border_radius = BorderRadius::all(theme.control_radius);
     }
 
     for (label, mut text_color, mut text_font) in &mut value_texts {
@@ -922,6 +940,8 @@ fn on_mouse(
     mut values: Query<&mut Value>,
     mut nodes: Query<&mut Node>,
     mut commands: Commands,
+    mut cursor_override: Option<ResMut<OverrideCursor>>,
+    mut hover_lock: Option<ResMut<HoverLock>>,
 ) {
     let event = *trigger.event();
     if !matches!(
@@ -956,6 +976,16 @@ fn on_mouse(
             };
             if !scrub.dragged && event.distance.x.abs() < DRAG_THRESHOLD {
                 return;
+            }
+            if !scrub.dragged {
+                // For the whole drag the cursor is the resize cursor wherever the pointer is,
+                // and the other controls do not react to it.
+                if let Some(cursor) = cursor_override.as_deref_mut() {
+                    cursor.0 = Some(SCRUB_CURSOR);
+                }
+                if let Some(lock) = hover_lock.as_deref_mut() {
+                    lock.0 = true;
+                }
             }
             scrub.dragged = true;
             let width = f64::from(computed_node.size().x * computed_node.inverse_scale_factor());
@@ -1128,6 +1158,8 @@ fn end_scrub(
     buttons: Res<ButtonInput<MouseButton>>,
     touches: Option<Res<Touches>>,
     mut scrubs: Query<&mut Scrub>,
+    mut cursor_override: Option<ResMut<OverrideCursor>>,
+    mut hover_lock: Option<ResMut<HoverLock>>,
 ) {
     if buttons.pressed(MouseButton::Left)
         || touches.is_some_and(|touches| touches.iter().next().is_some())
@@ -1138,6 +1170,16 @@ fn end_scrub(
         if scrub.start.is_some() || scrub.dragged {
             *scrub = Scrub::default();
         }
+    }
+    if let Some(cursor) = cursor_override.as_deref_mut()
+        && cursor.0 == Some(SCRUB_CURSOR)
+    {
+        cursor.0 = None;
+    }
+    if let Some(lock) = hover_lock.as_deref_mut()
+        && lock.0
+    {
+        lock.0 = false;
     }
 }
 

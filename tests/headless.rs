@@ -10499,9 +10499,10 @@ fn press_and_drag(app: &mut App, target: Entity, button: PointerButton, dx: f32)
 
 /// The width of the `ScrubFill` under `stepper`, as a percentage.
 fn fill_percent(app: &App, stepper: Entity) -> f32 {
+    let track = app.world().entity(stepper).get::<Children>().unwrap()[0];
     let fill = app
         .world()
-        .entity(stepper)
+        .entity(track)
         .get::<Children>()
         .unwrap()
         .iter()
@@ -13194,5 +13195,78 @@ fn a_theme_number_that_is_not_in_pixels_shows_0_and_is_warned_about_once() {
             .unwrap()
             .border_thickness,
         Val::Px(2.0)
+    );
+}
+
+#[test]
+fn the_buttons_of_a_stepper_keep_the_default_cursor_and_a_drag_holds_the_resize_cursor() {
+    use bevy::picking::cursor::{EntityCursor, OverrideCursor};
+    use bevy::window::SystemCursorIcon;
+
+    let (mut app, _, stepper, label) = scrub_stepper_app(0);
+    give_width(&mut app, stepper);
+    let kids: Vec<Entity> = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .collect();
+    for button in [kids[1], kids[3]] {
+        assert_eq!(
+            app.world().entity(button).get::<EntityCursor>(),
+            Some(&EntityCursor::default()),
+            "hovering a button does not change the cursor"
+        );
+    }
+    assert_eq!(
+        app.world().get_resource::<OverrideCursor>().unwrap().0,
+        None
+    );
+    app.world_mut()
+        .get_resource_mut::<ButtonInput<MouseButton>>()
+        .unwrap()
+        .press(MouseButton::Left);
+    press_and_drag(&mut app, label, PointerButton::Primary, 50.0);
+    assert_eq!(
+        app.world().get_resource::<OverrideCursor>().unwrap().0,
+        Some(EntityCursor::System(SystemCursorIcon::ColResize)),
+        "a drag shows the resize cursor wherever the pointer is"
+    );
+    app.world_mut()
+        .get_resource_mut::<ButtonInput<MouseButton>>()
+        .unwrap()
+        .release(MouseButton::Left);
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<OverrideCursor>().unwrap().0,
+        None,
+        "the cursor is released with the drag"
+    );
+}
+
+#[test]
+fn the_scrub_track_runs_between_the_buttons_and_the_width_of_a_stepper_can_be_set() {
+    let mut app = headless_app();
+    let (stepper, _, _) = spawn_stepper(&mut app, 1);
+    let children = app.world().entity(stepper).get::<Children>().unwrap();
+    let (track, label) = (children[0], children[2]);
+    let node = app.world().entity(track).get::<Node>().unwrap();
+    assert_eq!((node.left, node.right), (Val::Px(30.0), Val::Px(30.0)));
+    assert!(
+        (app.world().entity(label).get::<Node>().unwrap().flex_grow - 1.0).abs() < f32::EPSILON
+    );
+
+    app.world_mut()
+        .entity_mut(stepper)
+        .get_mut::<Node>()
+        .unwrap()
+        .width = Val::Px(300.0);
+    app.update();
+    assert_eq!(
+        app.world().entity(stepper).get::<Node>().unwrap().width,
+        Val::Px(300.0),
+        "the widget leaves the app's width alone"
     );
 }
