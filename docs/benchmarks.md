@@ -50,6 +50,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
+| `tab-bars-idle` | 500 `TabBar`s of 3 tabs | idle frames of independent tab bars (#670) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
 | `roving-groups-focus` | the same | the `InputFocus` moves to a segment of another control every frame |
 | `roving-groups-selection` | the same | one control's `Selection` is replaced every frame, so `Changed<Selection>` fires for that control alone (the control's own redraw is part of the cost) |
@@ -199,3 +200,19 @@ selection change costs about 28 ms in both, which is the replaced control and th
 widgets that follow its `Selection`, not the roving groups, so the narrowing buys
 about 1 to 2 ms there. Tests: `a_selection_or_focus_change_looks_only_at_the_groups_it_concerns`
 and `a_shared_selection_change_looks_at_every_group_that_reads_it_and_no_other`.
+
+## Idle TabBar focus-index synchronization (#670)
+
+`tab_bar.rs`'s `sync_tab_index` used to visit every bar and its tabs each `PostUpdate` and walk the
+ancestors of every bar. It now looks only at bars that are new, whose `SelectedTab` or `Children`
+changed, that have a tab whose `InteractionDisabled` (added or removed) or `TabIndex` changed, that
+held or now hold the focus, or whose visibility, `Display::None` or parent changed (the shared
+`HiddenChanges` of `focus.rs`). Mean frame time in microseconds of
+`bench --workload tab-bars-idle --size 500`, three runs (shared cloud container, noisy):
+
+| before | after |
+| --- | --- |
+| 3557 / 3783 / 3464 | 3293 / 3536 / 3519 |
+
+The gain is a few percent: the rest of the idle frame is other systems. The point is that a quiet
+frame does no per-bar work (`a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is`).

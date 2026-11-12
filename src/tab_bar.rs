@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 
-use crate::focus::{AccessibilitySync, is_hidden, sync_label};
+use crate::focus::{AccessibilitySync, HiddenChanges, is_hidden, sync_label};
 use crate::indicator::{self, Indicator};
 use crate::segmented_control::segment_colors;
 use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
@@ -352,16 +352,57 @@ fn sync_accessibility(
 /// skips a hidden bar and reaches it again once it shows.
 ///
 /// The tab list writes its roving index only when the selection, the tabs or the focus change,
-/// so it would neither hide a bar nor bring one back; this writes it every frame, and only
-/// when it differs.
+/// so it would neither hide a bar nor bring one back. This looks only at the bars that may
+/// need a different answer: a new bar or tab, a changed `SelectedTab` or `Children`, a tab
+/// whose `InteractionDisabled` or `TabIndex` changed, a move of the focus (the bars of the
+/// tab that had it and the one that has it), and a bar whose visibility, `Display::None` (on
+/// it or an ancestor) or parent changed. A quiet frame does no work.
 fn sync_tab_index(
-    bars: Query<(Entity, &SelectedTab, &Children), With<TabBar>>,
-    mut tabs: Query<(&mut TabIndex, Has<InteractionDisabled>), With<TabBarTab>>,
+    mut hidden: HiddenChanges,
+    bars: Query<(&SelectedTab, &Children), With<TabBar>>,
+    mut tabs: ParamSet<(
+        Query<
+            &TabBarTab,
+            Or<(
+                Added<TabBarTab>,
+                Changed<TabIndex>,
+                Added<InteractionDisabled>,
+            )>,
+        >,
+        Query<(&mut TabIndex, Has<InteractionDisabled>), With<TabBarTab>>,
+    )>,
     focus: Res<InputFocus>,
+    mut previous_focus: Local<Option<Entity>>,
+    new_bars: Query<Entity, Added<TabBar>>,
+    changed_bars: Query<Entity, (With<TabBar>, Or<(Changed<SelectedTab>, Changed<Children>)>)>,
+    tab_owners: Query<&TabBarTab>,
+    mut disabled_removed: RemovedComponents<InteractionDisabled>,
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    for (bar, selected_tab, children) in &bars {
+    let mut dirty = hidden.dirty();
+    dirty.extend(new_bars.iter());
+    dirty.extend(changed_bars.iter());
+    dirty.extend(tabs.p0().iter().map(TabBarTab::owner));
+    dirty.extend(
+        disabled_removed
+            .read()
+            .filter_map(|tab| tab_owners.get(tab).ok().map(TabBarTab::owner)),
+    );
+    if focus.is_changed() || *previous_focus != focus.get() {
+        dirty.extend(
+            [*previous_focus, focus.get()]
+                .into_iter()
+                .flatten()
+                .filter_map(|tab| tab_owners.get(tab).ok().map(TabBarTab::owner)),
+        );
+        *previous_focus = focus.get();
+    }
+    for bar in dirty {
+        let Ok((selected_tab, children)) = bars.get(bar) else {
+            continue;
+        };
+        let mut tabs = tabs.p1();
         let enabled = |tab: &Entity| tabs.get(*tab).is_ok_and(|(_, disabled)| !disabled);
         let roving = if is_hidden(bar, &shown, &parents) {
             None

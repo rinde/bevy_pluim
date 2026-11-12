@@ -28,6 +28,7 @@ use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentedControl};
 use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
@@ -73,6 +74,8 @@ enum Workload {
     SegmentedControlsIdle,
     /// Many independent `Gallery`s of three cards, idle.
     GalleriesIdle,
+    /// Many independent `TabBar`s of three tabs, idle (#670).
+    TabBarsIdle,
     /// Many independent `SegmentedControl`s (roving-focus groups); the focus moves to
     /// another control's segment every frame.
     RovingGroupsFocus,
@@ -96,7 +99,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 23] = [
+    const ALL: [Self; 24] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -111,6 +114,7 @@ impl Workload {
         Self::SteppersSharedChanging,
         Self::SegmentedControlsIdle,
         Self::GalleriesIdle,
+        Self::TabBarsIdle,
         Self::RovingGroupsFocus,
         Self::RovingGroupsSelection,
         Self::RovingGroupsIdle,
@@ -138,6 +142,7 @@ impl Workload {
             Self::SteppersSharedChanging => "steppers-shared-changing",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::GalleriesIdle => "galleries-idle",
+            Self::TabBarsIdle => "tab-bars-idle",
             Self::RovingGroupsFocus => "roving-groups-focus",
             Self::RovingGroupsSelection => "roving-groups-selection",
             Self::RovingGroupsIdle => "roving-groups-idle",
@@ -160,6 +165,7 @@ impl Workload {
             | Self::FilterChipsIdle
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
+            | Self::TabBarsIdle
             | Self::RovingGroupsFocus
             | Self::RovingGroupsSelection
             | Self::RovingGroupsIdle => 500,
@@ -610,6 +616,16 @@ fn spawn(world: &mut World, run: Run) {
                         Selection::builder().one().build_with_items(
                             (0..3)
                                 .map(move |segment| Item::new(format!("Segment {row}.{segment}"))),
+                        ),
+                    ));
+                }
+            }
+            Workload::TabBarsIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        TabBar,
+                        Selection::builder().one().build_with_items(
+                            (0..3).map(move |tab| Item::new(format!("Tab {row}.{tab}"))),
                         ),
                     ));
                 }
