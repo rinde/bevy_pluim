@@ -82,6 +82,12 @@ impl Plugin for GalleryPlugin {
 /// the arrows also pick the item they land on (never toggling it off); for a selection of many
 /// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
 ///
+/// The gallery owns only the groups and dividers it spawns, and replaces just those when its
+/// items or groups change. Children the application puts under the gallery entity are never
+/// despawned by a rebuild. Those present before the first build stay before the gallery's own
+/// children; a child added later is not reordered, and a rebuild appends the new groups
+/// after it.
+///
 /// To a screen reader the gallery is a radio group and each card a radio button named after
 /// its label, checked while it is picked. The library gives the group no label; an app can
 /// insert Bevy's `AccessibleLabel` on the gallery.
@@ -183,6 +189,11 @@ pub struct GalleryCardRefs {
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 struct BuiltGroups(Vec<(String, Vec<Entity>)>);
 
+/// Marks the groups and dividers the gallery spawned itself, so a rebuild replaces those and
+/// leaves children the application put under the gallery alone.
+#[derive(Component, Debug, Copy, Clone)]
+struct GalleryOwned;
+
 fn label_font(theme: &Theme) -> TextFont {
     TextFont {
         font: theme.body_font.clone().into(),
@@ -196,6 +207,7 @@ fn label_font(theme: &Theme) -> TextFont {
 /// groups no longer match what was built.
 fn sync_cards(
     galleries: Query<(Entity, Option<&Children>, Option<&BuiltGroups>), With<Gallery>>,
+    owned: Query<(), With<GalleryOwned>>,
     items: Query<&Item<GalleryCard>>,
     selections: SelectionParam,
     theme: Res<Theme>,
@@ -220,15 +232,18 @@ fn sync_cards(
             continue;
         }
         for child in children.into_iter().flat_map(RelationshipTarget::iter) {
-            commands.entity(child).despawn();
+            if owned.contains(child) {
+                commands.entity(child).despawn();
+            }
         }
         for (index, (title, cards)) in wanted.0.iter().enumerate() {
             if index > 0 {
-                commands.spawn((Divider::vertical(), ChildOf(gallery)));
+                commands.spawn((Divider::vertical(), GalleryOwned, ChildOf(gallery)));
             }
             let group = commands
                 .spawn((
                     Name::new("GalleryGroup"),
+                    GalleryOwned,
                     Node {
                         flex_direction: FlexDirection::Column,
                         row_gap: Val::Px(HEADING_GAP),

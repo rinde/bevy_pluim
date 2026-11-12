@@ -5927,6 +5927,102 @@ fn gallery_groups(app: &App, gallery: Entity) -> Vec<(String, Vec<Entity>)> {
         .collect()
 }
 
+#[derive(Component)]
+struct AppOwnedChild;
+
+#[test]
+fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let card = |label: &str, group: &str| Item {
+        data: GalleryCard::new(Handle::default(), label.to_string(), group.to_string()),
+    };
+    let gallery = app
+        .world_mut()
+        .spawn((
+            Gallery,
+            Selection::builder()
+                .one()
+                .build_with_items([card("Steam", "Locomotives")]),
+            ChildOf(root),
+        ))
+        .id();
+    // Present before the first build.
+    let mine = app
+        .world_mut()
+        .spawn((AppOwnedChild, Node::default(), ChildOf(gallery)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(app.world().entity(mine).contains::<AppOwnedChild>());
+    assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 1);
+
+    // Adding an item in a new group rebuilds the groups.
+    let new_item = app
+        .world_mut()
+        .spawn((card("Passenger", "Wagons"), ItemOf(gallery)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(app.world().get_entity(mine).is_ok());
+    assert!(app.world().entity(mine).contains::<AppOwnedChild>());
+    assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 2);
+
+    // Changing a group rebuilds again.
+    app.world_mut()
+        .entity_mut(new_item)
+        .get_mut::<Item<GalleryCard>>()
+        .unwrap()
+        .data
+        .group = "Locomotives".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(app.world().entity(mine).contains::<AppOwnedChild>());
+    assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 1);
+    assert!(children_of(&app, gallery).contains(&mine));
+
+    // A child added after a build is kept through a later rebuild too.
+    let later = app
+        .world_mut()
+        .spawn((AppOwnedChild, Node::default(), ChildOf(gallery)))
+        .id();
+    app.world_mut()
+        .entity_mut(new_item)
+        .get_mut::<Item<GalleryCard>>()
+        .unwrap()
+        .data
+        .group = "Wagons".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(app.world().entity(later).contains::<AppOwnedChild>());
+    assert!(app.world().entity(mine).contains::<AppOwnedChild>());
+    let children = children_of(&app, gallery);
+    assert!(children.contains(&later) && children.contains(&mine));
+    assert_eq!(children[0], mine);
+}
+
+/// Like [`gallery_groups`], leaving out the app's own child.
+fn gallery_groups_skipping(app: &App, gallery: Entity, skip: Entity) -> Vec<(String, Vec<Entity>)> {
+    let mut app_children = Vec::new();
+    let world = app.world();
+    for child in children_of(app, gallery) {
+        if child != skip && !world.entity(child).contains::<Divider>() {
+            app_children.push(child);
+        }
+    }
+    app_children
+        .into_iter()
+        .map(|group| {
+            let parts = children_of(app, group);
+            (String::new(), children_of(app, parts[1]))
+        })
+        .collect()
+}
+
 fn card_label(app: &App, card: Entity) -> String {
     let refs = app.world().entity(card).get::<GalleryCardRefs>().unwrap();
     app.world()
