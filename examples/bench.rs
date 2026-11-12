@@ -1,0 +1,344 @@
+//! A repeatable CPU and memory benchmark of the widgets, in a headless app.
+//!
+//! Run it optimised: `just bench` (all workloads at their default sizes) or
+//! `just bench -- --workload tooltips --size 5000`. See `docs/benchmarks.md`
+//! for how to read and compare the numbers.
+//!
+//! Each workload spawns its widgets under one root, runs warm-up frames, then
+//! times `App::update` for a fixed number of frames of fixed 1/60 s time, and
+//! prints one markdown table row: frame time (mean, median, 95th percentile,
+//! maximum), entities, and the resident memory the workload added. The suite
+//! runs every workload in a fresh process so one cannot leave memory behind for
+//! the next. The `bevy *` workloads use no widget of this crate and are the
+//! Bevy baseline the library's overhead is read against.
+
+use std::io::Write as _;
+use std::process::{Command, ExitCode};
+use std::time::{Duration, Instant};
+
+use bevy::camera::ClearColor;
+use bevy::prelude::*;
+use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::push_button::PushButton;
+use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
+use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::tooltip::Tooltip;
+use bevy_pluim::virtual_list::{RowHeight, VirtualList};
+use bevy_stagecraft::HeadlessPlugins;
+
+/// Frames played before timing starts, so the first layout and spawns settle.
+const WARMUP_FRAMES: usize = 60;
+/// Frames timed unless `--frames` says otherwise.
+const DEFAULT_FRAMES: usize = 300;
+
+/// What is spawned and what happens each frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Workload {
+    /// Plain Bevy nodes with a text child: the baseline for the buttons.
+    BevyTexts,
+    /// Plain Bevy nodes: the baseline for the tooltips.
+    BevyNodes,
+    /// `PushButton`s, idle.
+    PushButtons,
+    /// Nodes with a `Tooltip`, idle (no pointer).
+    Tooltips,
+    /// A `VirtualList` of many items, idle.
+    VirtualList,
+    /// The same `VirtualList`, its scroll position moved every frame.
+    VirtualListScrolling,
+    /// Several `VirtualList`s side by side, idle.
+    VirtualLists,
+}
+
+impl Workload {
+    const ALL: [Self; 7] = [
+        Self::BevyTexts,
+        Self::PushButtons,
+        Self::BevyNodes,
+        Self::Tooltips,
+        Self::VirtualList,
+        Self::VirtualListScrolling,
+        Self::VirtualLists,
+    ];
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::BevyTexts => "bevy-texts",
+            Self::BevyNodes => "bevy-nodes",
+            Self::PushButtons => "push-buttons",
+            Self::Tooltips => "tooltips",
+            Self::VirtualList => "virtual-list",
+            Self::VirtualListScrolling => "virtual-list-scrolling",
+            Self::VirtualLists => "virtual-lists",
+        }
+    }
+
+    /// The size used when `--size` is not given: widgets, items or lists.
+    const fn default_size(self) -> usize {
+        match self {
+            Self::BevyTexts | Self::PushButtons => 1_000,
+            Self::BevyNodes | Self::Tooltips => 5_000,
+            Self::VirtualList | Self::VirtualListScrolling => 100_000,
+            Self::VirtualLists => 20,
+        }
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|workload| workload.name() == name)
+    }
+}
+
+/// What one run was asked to do.
+#[derive(Clone, Copy, Debug)]
+struct Run {
+    workload: Workload,
+    size: usize,
+    frames: usize,
+}
+
+fn main() -> ExitCode {
+    let mut workload = None;
+    let mut size = None;
+    let mut frames = DEFAULT_FRAMES;
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        let value = args.next();
+        match (arg.as_str(), value) {
+            ("--workload", Some(name)) => workload = Workload::parse(&name),
+            ("--size", Some(value)) => size = value.parse().ok(),
+            ("--frames", Some(value)) => frames = value.parse().unwrap_or(DEFAULT_FRAMES),
+            _ => return usage(),
+        }
+    }
+    workload.map_or_else(
+        || suite(size, frames),
+        |workload| {
+            let run = Run {
+                workload,
+                size: size.unwrap_or_else(|| workload.default_size()),
+                frames,
+            };
+            let _ = writeln!(std::io::stdout().lock(), "{}", measure(run));
+            ExitCode::SUCCESS
+        },
+    )
+}
+
+fn usage() -> ExitCode {
+    let names: Vec<_> = Workload::ALL.iter().map(|w| w.name()).collect();
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "usage: bench [--workload {}] [--size N] [--frames N]",
+        names.join("|")
+    );
+    ExitCode::from(2)
+}
+
+/// Runs every workload in a process of its own and prints the table.
+fn suite(size: Option<usize>, frames: usize) -> ExitCode {
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{}", environment());
+    let _ = writeln!(
+        out,
+        "| workload | size | mean us | median us | p95 us | max us | entities | memory added MiB |"
+    );
+    let _ = writeln!(
+        out,
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    );
+    let Ok(exe) = std::env::current_exe() else {
+        return usage();
+    };
+    for workload in Workload::ALL {
+        let mut command = Command::new(&exe);
+        command
+            .args(["--workload", workload.name()])
+            .args(["--frames", &frames.to_string()]);
+        if let Some(size) = size {
+            command.args(["--size", &size.to_string()]);
+        }
+        match command.output() {
+            Ok(output) if output.status.success() => {
+                let _ = out.write_all(&output.stdout);
+            }
+            _ => {
+                let _ = writeln!(out, "| {} | failed | | | | | | |", workload.name());
+            }
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// The build, hardware and workload header that makes numbers comparable.
+fn environment() -> String {
+    let cpu = std::fs::read_to_string("/proc/cpuinfo")
+        .ok()
+        .and_then(|info| {
+            info.lines()
+                .find(|line| line.starts_with("model name"))
+                .and_then(|line| line.split(':').nth(1))
+                .map(|name| name.trim().to_string())
+        })
+        .unwrap_or_else(|| "unknown cpu".into());
+    let threads = std::thread::available_parallelism().map_or(0, std::num::NonZero::get);
+    let profile = if cfg!(debug_assertions) {
+        "DEBUG (numbers are not meaningful, use `just bench`)"
+    } else {
+        "optimised"
+    };
+    format!(
+        "bevy_pluim bench, {profile} build, {cpu}, {threads} threads, {os} {arch}, \
+         {WARMUP_FRAMES} warm-up frames, fixed 1/60 s time, headless 1280x720 window, no GPU",
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+    )
+}
+
+/// Resident set size in bytes, 0 where `/proc` is not there.
+fn resident_bytes() -> u64 {
+    std::fs::read_to_string("/proc/self/statm")
+        .ok()
+        .and_then(|statm| statm.split_whitespace().nth(1)?.parse::<u64>().ok())
+        .map_or(0, |pages| pages * 4096)
+}
+
+fn measure(run: Run) -> String {
+    let mut app = App::new();
+    app.add_plugins(HeadlessPlugins::default());
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    // One frame for startup, so the empty app's memory is the reference.
+    app.update();
+    let before = resident_bytes();
+
+    spawn(app.world_mut(), run);
+    for _ in 0..WARMUP_FRAMES {
+        frame(&mut app, run.workload, 0);
+    }
+
+    let mut times = Vec::with_capacity(run.frames);
+    for index in 0..run.frames {
+        let start = Instant::now();
+        frame(&mut app, run.workload, index);
+        times.push(start.elapsed());
+    }
+    let after = resident_bytes();
+    let entities = app.world().entities().count_spawned();
+
+    times.sort_unstable();
+    let micros = |time: Duration| time.as_secs_f64() * 1e6;
+    let mean = times.iter().map(|time| micros(*time)).sum::<f64>() / times.len().max(1) as f64;
+    let at = |percent: usize| {
+        let index = (times.len() * percent / 100).min(times.len().saturating_sub(1));
+        times.get(index).map_or(0.0, |time| micros(*time))
+    };
+    format!(
+        "| {} | {} | {:.0} | {:.0} | {:.0} | {:.0} | {} | {:.1} |",
+        run.workload.name(),
+        run.size,
+        mean,
+        at(50),
+        at(95),
+        at(100),
+        entities,
+        after.saturating_sub(before) as f64 / (1024.0 * 1024.0),
+    )
+}
+
+/// One frame; the scrolling workload first moves the scroll position.
+fn frame(app: &mut App, workload: Workload, index: usize) {
+    if workload == Workload::VirtualListScrolling {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<&mut ScrollPosition, With<ScrollContents>>();
+        for mut position in query.iter_mut(world) {
+            position.0.y = (index * 7 % 100_000) as f32;
+        }
+    }
+    app.update();
+}
+
+fn spawn(world: &mut World, run: Run) {
+    world.spawn(Camera2d);
+    let root = world
+        .spawn(Node {
+            width: percent(100),
+            height: percent(100),
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::Wrap,
+            align_content: AlignContent::FlexStart,
+            ..default()
+        })
+        .id();
+    world
+        .entity_mut(root)
+        .with_children(|root| match run.workload {
+            Workload::BevyTexts => {
+                for index in 0..run.size {
+                    root.spawn((Node::default(), Text::new(format!("Button {index}"))));
+                }
+            }
+            Workload::BevyNodes => {
+                for _ in 0..run.size {
+                    root.spawn(Node {
+                        width: px(20),
+                        height: px(20),
+                        ..default()
+                    });
+                }
+            }
+            Workload::PushButtons => {
+                for index in 0..run.size {
+                    root.spawn(PushButton::from_label(format!("Button {index}")));
+                }
+            }
+            Workload::Tooltips => {
+                for index in 0..run.size {
+                    root.spawn((
+                        Node {
+                            width: px(20),
+                            height: px(20),
+                            ..default()
+                        },
+                        Tooltip::new(format!("Tip {index}")),
+                    ));
+                }
+            }
+            Workload::VirtualList | Workload::VirtualListScrolling => {
+                virtual_list(root, run.size);
+            }
+            Workload::VirtualLists => {
+                for _ in 0..run.size {
+                    virtual_list(root, 1_000);
+                }
+            }
+        });
+}
+
+fn virtual_list(parent: &mut ChildSpawner, items: usize) {
+    let Ok(row_height) = RowHeight::new(28.0) else {
+        return;
+    };
+    parent.spawn((
+        Node {
+            width: px(240),
+            height: px(200),
+            ..default()
+        },
+        ScrollArea::bundle(
+            move |area: &mut ChildSpawner| {
+                area.spawn((
+                    VirtualList::new(row_height),
+                    Selection::builder()
+                        .one()
+                        .build_with_items((1..=items).map(|row| Item::new(format!("Row {row}")))),
+                ));
+            },
+            true,
+            false,
+        ),
+    ));
+}

@@ -86,6 +86,12 @@ bevy-lint:
 record $option="":
     @case "$option" in "") RECORD_CHECK_ONLY=1 cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all ;; --save) unset RECORD_CHECK_ONLY; cargo nextest run --test recorded_scenarios_gpu --features record --run-ignored all && echo "recordings are in ${RECORD_DIR:-target/recordings}/<scenario>/index.html" ;; *) echo "usage: just record [--save]" >&2; exit 2 ;; esac
 
+# Benchmark the widgets' CPU time and memory in an optimised build and print a
+# markdown table, e.g. `just bench -- --workload tooltips --size 5000`. Not part
+# of `just ci`; see docs/benchmarks.md.
+bench *ARGS:
+    cargo run --release --example bench -- {{ARGS}}
+
 # Everything CI would run.
 ci: lint test unused-deps
 
