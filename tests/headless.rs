@@ -3057,6 +3057,169 @@ fn a_numeric_stepper_shows_its_custom_format_and_updates_it_on_a_change() {
     assert!(is_disabled(&app, children[1]));
 }
 
+/// The parts of a stepper: fill, decrease, label, increase (child order: track, "-", label, "+").
+fn stepper_label(app: &App, stepper: Entity) -> String {
+    let children: Vec<Entity> = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .collect();
+    app.world().get::<Text>(children[2]).unwrap().0.clone()
+}
+
+fn stepper_spin_text(app: &App, stepper: Entity) -> Option<String> {
+    app.world()
+        .get::<AccessibilityNode>(stepper)
+        .unwrap()
+        .value()
+        .map(ToString::to_string)
+}
+
+#[test]
+fn an_external_value_change_updates_only_the_steppers_that_show_that_value() {
+    let mut app = headless_app();
+    let shared = app
+        .world_mut()
+        .spawn(Value::new_u8(1, 0, 9, 1).unwrap())
+        .id();
+    let mirror_a = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(shared)))
+        .id();
+    let mirror_b = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(shared)))
+        .id();
+    let (other, _, _) = spawn_stepper(&mut app, 3);
+    app.update();
+    app.update();
+    assert_eq!(stepper_label(&app, mirror_a), "1");
+    assert_eq!(stepper_label(&app, other), "3");
+
+    app.world_mut()
+        .entity_mut(shared)
+        .get_mut::<Value>()
+        .unwrap()
+        .increment();
+    app.update();
+    app.update();
+    for mirror in [mirror_a, mirror_b] {
+        assert_eq!(stepper_label(&app, mirror), "2");
+        assert_eq!(stepper_spin_text(&app, mirror).as_deref(), Some("2"));
+    }
+    assert_eq!(stepper_label(&app, other), "3");
+}
+
+#[test]
+fn a_self_held_stepper_follows_an_external_change_of_its_own_value() {
+    let mut app = headless_app();
+    let (stepper, decrease, increase) = spawn_stepper(&mut app, 0);
+    app.update();
+    app.update();
+    assert!(is_disabled(&app, decrease));
+    app.world_mut()
+        .entity_mut(stepper)
+        .get_mut::<Value>()
+        .unwrap()
+        .increment();
+    app.update();
+    app.update();
+    assert_eq!(stepper_label(&app, stepper), "1");
+    assert_eq!(stepper_spin_text(&app, stepper).as_deref(), Some("1"));
+    assert!(!is_disabled(&app, decrease));
+    assert!(!is_disabled(&app, increase));
+}
+
+#[test]
+fn the_buttons_and_fill_of_every_mirror_follow_a_shared_value_to_its_limits() {
+    let mut app = headless_app();
+    let shared = app
+        .world_mut()
+        .spawn(Value::new_u8(0, 0, 2, 1).unwrap())
+        .id();
+    let mirrors: Vec<Entity> = (0..3)
+        .map(|_| {
+            app.world_mut()
+                .spawn((NumericStepper::default(), ValueRef(shared)))
+                .id()
+        })
+        .collect();
+    app.update();
+    app.update();
+    let parts = |app: &App, mirror: Entity| -> Vec<Entity> {
+        app.world()
+            .get::<Children>(mirror)
+            .unwrap()
+            .iter()
+            .collect()
+    };
+    let fill_width = |app: &App, mirror: Entity| {
+        let track = parts(app, mirror)[0];
+        let fill = app.world().get::<Children>(track).unwrap()[0];
+        app.world().get::<Node>(fill).unwrap().width
+    };
+    for mirror in &mirrors {
+        assert!(is_disabled(&app, parts(&app, *mirror)[1]));
+        assert!(!is_disabled(&app, parts(&app, *mirror)[3]));
+        assert_eq!(fill_width(&app, *mirror), Val::Percent(0.0));
+    }
+    for _ in 0..2 {
+        app.world_mut()
+            .entity_mut(shared)
+            .get_mut::<Value>()
+            .unwrap()
+            .increment();
+    }
+    app.update();
+    app.update();
+    for mirror in &mirrors {
+        assert!(!is_disabled(&app, parts(&app, *mirror)[1]));
+        assert!(is_disabled(&app, parts(&app, *mirror)[3]));
+        assert_eq!(fill_width(&app, *mirror), Val::Percent(100.0));
+        assert_eq!(stepper_label(&app, *mirror), "2");
+    }
+}
+
+#[test]
+fn a_stepper_pointed_at_another_value_stops_following_the_old_one() {
+    let mut app = headless_app();
+    let first = app
+        .world_mut()
+        .spawn(Value::new_u8(1, 0, 9, 1).unwrap())
+        .id();
+    let second = app
+        .world_mut()
+        .spawn(Value::new_u8(7, 0, 9, 1).unwrap())
+        .id();
+    let mirror = app
+        .world_mut()
+        .spawn((NumericStepper::default(), ValueRef(first)))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(mirror)
+        .insert((NumericStepper::default(), ValueRef(second)));
+    app.world_mut()
+        .entity_mut(second)
+        .get_mut::<Value>()
+        .unwrap()
+        .increment();
+    app.update();
+    app.update();
+    assert_eq!(stepper_label(&app, mirror), "8");
+    app.world_mut()
+        .entity_mut(first)
+        .get_mut::<Value>()
+        .unwrap()
+        .increment();
+    app.update();
+    app.update();
+    assert_eq!(stepper_label(&app, mirror), "8");
+}
+
 #[test]
 fn one_arrow_key_steps_a_reinserted_numeric_stepper_once() {
     use bevy::input::ButtonState;
@@ -6542,6 +6705,66 @@ fn a_tooltip_removed_and_inserted_again_shows_its_popup_on_the_next_hover() {
         tick(&mut app);
     }
     assert_eq!(tooltip_popups(&mut app), ["Again"]);
+}
+
+#[test]
+fn a_showing_tooltip_follows_a_changed_text() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Tooltip::new("Resume"));
+    tick(&mut app);
+    tick(&mut app);
+    assert_eq!(tooltip_popups(&mut app), ["Resume"]);
+}
+
+#[test]
+fn a_tooltip_inserted_on_a_node_the_pointer_already_rests_on_shows_after_the_delay() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    // Removed and inserted again while the pointer stays: `Hovered` does not change.
+    app.world_mut().entity_mut(button).remove::<Tooltip>();
+    tick(&mut app);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Tooltip::new("Again"));
+    tick(&mut app);
+    assert!(
+        tooltip_popups(&mut app).is_empty(),
+        "shown before the delay"
+    );
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Again"]);
+}
+
+#[test]
+fn a_tooltip_that_was_left_starts_its_delay_again_on_the_next_hover() {
+    let (mut app, button) = tooltip_app();
+    // Rest for less than the delay, leave, return: the earlier time must not count.
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    app.world_mut().entity_mut(button).insert(Hovered(false));
+    tick(&mut app);
+    tick(&mut app);
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    assert!(tooltip_popups(&mut app).is_empty(), "the delay was kept");
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
 }
 
 #[test]
@@ -13142,6 +13365,59 @@ fn added_removed_and_renamed_items_are_filtered_while_the_popup_is_open() {
     fa.settle();
     assert_eq!(fa.shown(), ["Delden", "Deventer"]);
     assert_eq!(fa.active().as_deref(), Some("Delden"));
+}
+
+#[test]
+fn renaming_an_item_of_another_source_does_not_rematch_an_open_filter_combo() {
+    let mut fa = filter_app();
+    let other = fa
+        .app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(vec![Item::new("Berlin"), Item::new("Bern")]),
+        )
+        .id();
+    fa.settle();
+    fa.open();
+    // Hide a row by hand: only a rematch of this combo shows it again.
+    let row = fa.row_of("Delft");
+    fa.app.world_mut().get_mut::<Node>(row).unwrap().display = Display::None;
+    let berlin = fa
+        .app
+        .world()
+        .entity(other)
+        .get::<ItemValues>()
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap();
+    fa.app
+        .world_mut()
+        .get_mut::<Item<String>>(berlin)
+        .unwrap()
+        .data = "Bremen".to_string();
+    fa.settle();
+    assert_eq!(
+        fa.app.world().get::<Node>(row).unwrap().display,
+        Display::None,
+        "a rename in an unrelated source rematched the combo"
+    );
+    // A rename in its own source does rematch it, keeping case-insensitive matching.
+    let utrecht = fa.item_of("Utrecht");
+    fa.app
+        .world_mut()
+        .get_mut::<Item<String>>(utrecht)
+        .unwrap()
+        .data = "UTRECHT-Zuid".to_string();
+    fa.settle();
+    assert_eq!(
+        fa.app.world().get::<Node>(row).unwrap().display,
+        Display::Flex
+    );
+    fa.type_text("zuid");
+    assert_eq!(fa.shown(), ["UTRECHT-Zuid"]);
 }
 
 #[test]

@@ -47,6 +47,9 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
 | `list-notes-changing` | 500 `List`s of 3 noted items | many independent lists; one `ItemNote` is marked changed every frame (no relayout), so a note sync that visits every row shows (#666) |
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
+| `steppers-idle` | 2 000 | independent `NumericStepper`s with no change: the floor the next two are read against (#663) |
+| `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
+| `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
@@ -132,6 +135,31 @@ needed extra per-list state and change-detection queries for no measurable gain.
 The invalidation paths a gate would have to keep (idle frames, theme, selection,
 item text, added items) are covered by tests in `tests/scenarios.rs` so a later
 gate has a guard. Re-measure with the workloads above before adding one.
+
+## NumericStepper value sync (#663)
+
+`on_change` used to scan every fill, label, spin button and increase and
+decrease button for each `Changed<Value>`. `ValueRef` is now a Bevy
+relationship whose target `ValueReferrers` lists the views of a value, so
+`on_change` visits only those, and it writes the label text, fill width and
+accessibility node only when they differ, so a `Value` that is touched without
+a visible change dirties no text, layout or accessibility node.
+
+Measured with `cargo build --release --example bench`, three runs each, mean
+frame time in ms (4 vCPU box, size 2 000), `main` against this change:
+
+| workload | before | after |
+| --- | --- | --- |
+| `steppers-idle` | 11.4 | 11.4 |
+| `steppers-changing` | 39 to 41 | 11.7 to 12.5 |
+| `steppers-shared-changing` | 40 to 41 | 11.9 to 12.6 |
+
+Memory added is unchanged (about 120 MiB, 24 323 entities). Only the scan
+removal alone made no measurable difference (40 to 42 ms): the cost was the
+rewritten text and node triggering text and UI layout, which the equality
+guards remove. A step that really changes the displayed number still pays for
+that layout, as it must. The idle floor (about 11 ms for 2 000 steppers) is
+other per-frame systems, not `on_change`.
 
 ## Idle accessibility synchronization (#661)
 
