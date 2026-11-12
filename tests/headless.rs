@@ -13560,3 +13560,79 @@ fn a_tooltip_stays_hidden_while_a_numeric_stepper_is_scrubbed() {
         "a tooltip showed during a scrub"
     );
 }
+
+/// Spawns `controls` icon-only segmented controls of `segments` items each, and returns them.
+fn spawn_many_icon_controls(app: &mut App, controls: usize, segments: usize) -> Vec<Entity> {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let ids: Vec<Entity> = (0..controls)
+        .map(|_| {
+            app.world_mut()
+                .spawn((
+                    SegmentedControl,
+                    SegmentLabels::Hidden,
+                    Selection::builder()
+                        .one()
+                        .build_with_items((0..segments).map(|i| format!("S{i}")).map(Item::new)),
+                    ChildOf(root),
+                ))
+                .id()
+        })
+        .collect();
+    for _ in 0..3 {
+        app.update();
+    }
+    ids
+}
+
+#[test]
+fn many_icon_segmented_controls_keep_one_icon_and_hidden_label_per_segment() {
+    let mut app = headless_app();
+    let controls = spawn_many_icon_controls(&mut app, 30, 40);
+    let items: Vec<Entity> = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<Entity, With<Item<String>>>()
+            .iter(world)
+            .collect()
+    };
+    for item in &items {
+        app.world_mut()
+            .entity_mut(*item)
+            .insert(ItemIcon(Handle::default()));
+    }
+    for _ in 0..3 {
+        app.update();
+    }
+    for _ in 0..20 {
+        app.world_mut()
+            .entity_mut(items[0])
+            .insert(ItemIcon(Handle::default()));
+        app.update();
+    }
+    for control in &controls {
+        for segment in segments_of(&app, *control) {
+            let icons = app
+                .world()
+                .entity(segment)
+                .get::<Children>()
+                .unwrap()
+                .iter()
+                .filter(|c| app.world().entity(*c).contains::<SegmentIcon>())
+                .count();
+            assert_eq!(icons, 1);
+            assert_eq!(label_display(&app, segment), Display::None);
+        }
+    }
+    for item in &items {
+        app.world_mut().entity_mut(*item).remove::<ItemIcon>();
+    }
+    for _ in 0..3 {
+        app.update();
+    }
+    for control in &controls {
+        for segment in segments_of(&app, *control) {
+            assert!(icon_of(&app, segment).is_none());
+            assert_eq!(label_display(&app, segment), Display::Flex);
+        }
+    }
+}
