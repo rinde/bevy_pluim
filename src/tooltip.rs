@@ -320,3 +320,88 @@ fn restyle_popups(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Theme>()
+            .add_observer(despawn_popup_with_owner)
+            .add_systems(Update, (track_active_tooltips, update_tooltips).chain());
+        app.finish();
+        app
+    }
+
+    fn tick(app: &mut App) {
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_millis(200));
+        app.world_mut().run_schedule(Update);
+    }
+
+    fn active(app: &mut App) -> usize {
+        let world = app.world_mut();
+        world
+            .query_filtered::<(), With<TooltipActive>>()
+            .iter(world)
+            .count()
+    }
+
+    #[test]
+    fn only_a_hovered_or_showing_tooltip_is_visited() {
+        let mut app = app();
+        let nodes: Vec<Entity> = (0..10)
+            .map(|_| app.world_mut().spawn(Tooltip::new("Tip")).id())
+            .collect();
+        for _ in 0..3 {
+            tick(&mut app);
+        }
+        assert_eq!(active(&mut app), 0, "idle tooltips are visited");
+
+        let hovered = *nodes.first().unwrap();
+        app.world_mut().entity_mut(hovered).insert(Hovered(true));
+        tick(&mut app);
+        assert_eq!(active(&mut app), 1, "only the hovered tooltip is marked");
+        for _ in 0..4 {
+            tick(&mut app);
+        }
+        assert!(app.world().get::<TooltipRef>(hovered).is_some());
+
+        app.world_mut().entity_mut(hovered).insert(Hovered(false));
+        tick(&mut app);
+        tick(&mut app);
+        assert!(app.world().get::<TooltipRef>(hovered).is_none());
+        assert_eq!(active(&mut app), 0, "the marker outlives the pointer");
+    }
+
+    #[test]
+    fn the_clock_of_an_idle_tooltip_is_not_written_in_a_quiet_frame() {
+        let mut app = app();
+        app.world_mut().spawn(Tooltip::new("Tip"));
+        for _ in 0..3 {
+            tick(&mut app);
+        }
+        let node = app
+            .world_mut()
+            .query_filtered::<Entity, With<Tooltip>>()
+            .single(app.world())
+            .unwrap();
+        let written = |app: &App| {
+            app.world()
+                .entity(node)
+                .get_ref::<TooltipClock>()
+                .unwrap()
+                .last_changed()
+        };
+        let before = written(&app);
+        for _ in 0..3 {
+            tick(&mut app);
+        }
+        assert_eq!(written(&app), before);
+    }
+}
