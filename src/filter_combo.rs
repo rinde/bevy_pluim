@@ -545,20 +545,8 @@ fn mark_dirty(
 }
 
 /// Whether the text of an option matches the query: it contains it, ignoring case.
-///
-/// `lowercase_query` is already lowercase. Plain ASCII text, the usual case, is compared
-/// without building a lowercase copy of the label.
 fn matches(label: &str, lowercase_query: &str) -> bool {
-    if lowercase_query.is_empty() {
-        return true;
-    }
-    if label.is_ascii() && lowercase_query.is_ascii() {
-        let (label, query) = (label.as_bytes(), lowercase_query.as_bytes());
-        return label
-            .windows(query.len())
-            .any(|window| window.eq_ignore_ascii_case(query));
-    }
-    label.to_lowercase().contains(lowercase_query)
+    lowercase_query.is_empty() || label.to_lowercase().contains(lowercase_query)
 }
 
 /// Hides the rows that do not match the query, and keeps the active option on a match.
