@@ -65,3 +65,17 @@ for any `WidgetsPlugin` app.
 
 Numbers are recorded in the PR that introduced the benchmark (hardware in the
 header line of each table); regenerate them rather than editing a copy here.
+
+## Idle virtual lists (#655)
+
+`show_rows` visits every `VirtualList` and its row pool each `PostUpdate`. A
+change-gated version (skip a list whose range, pool, item count, `Selection`
+and `ItemValues` are unchanged) was prototyped and measured against `main` on
+`virtual-list`, `virtual-list-scrolling` and `virtual-lists`, and so was a build
+with `show_rows` switched off entirely. All three were inside the run-to-run
+spread (about 2.0 to 2.7 ms a frame, of which an empty frame is about 1.95 ms),
+so the system costs well under 50 us for 20 lists and the gate was not kept: it
+needed extra per-list state and change-detection queries for no measurable gain.
+The invalidation paths a gate would have to keep (idle frames, theme, selection,
+item text, added items) are covered by tests in `tests/scenarios.rs` so a later
+gate has a guard. Re-measure with the workloads above before adding one.
