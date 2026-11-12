@@ -6545,6 +6545,66 @@ fn a_tooltip_removed_and_inserted_again_shows_its_popup_on_the_next_hover() {
 }
 
 #[test]
+fn a_showing_tooltip_follows_a_changed_text() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Tooltip::new("Resume"));
+    tick(&mut app);
+    tick(&mut app);
+    assert_eq!(tooltip_popups(&mut app), ["Resume"]);
+}
+
+#[test]
+fn a_tooltip_inserted_on_a_node_the_pointer_already_rests_on_shows_after_the_delay() {
+    let (mut app, button) = tooltip_app();
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    // Removed and inserted again while the pointer stays: `Hovered` does not change.
+    app.world_mut().entity_mut(button).remove::<Tooltip>();
+    tick(&mut app);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Tooltip::new("Again"));
+    tick(&mut app);
+    assert!(
+        tooltip_popups(&mut app).is_empty(),
+        "shown before the delay"
+    );
+    for _ in 0..6 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Again"]);
+}
+
+#[test]
+fn a_tooltip_that_was_left_starts_its_delay_again_on_the_next_hover() {
+    let (mut app, button) = tooltip_app();
+    // Rest for less than the delay, leave, return: the earlier time must not count.
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    app.world_mut().entity_mut(button).insert(Hovered(false));
+    tick(&mut app);
+    tick(&mut app);
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    tick(&mut app);
+    tick(&mut app);
+    assert!(tooltip_popups(&mut app).is_empty(), "the delay was kept");
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    assert_eq!(tooltip_popups(&mut app), ["Pause"]);
+}
+
+#[test]
 fn despawning_the_icon_button_removes_its_tooltip() {
     let (mut app, button) = tooltip_app();
     app.world_mut().entity_mut(button).insert(Hovered(true));
