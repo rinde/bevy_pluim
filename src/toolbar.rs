@@ -2,6 +2,7 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
@@ -725,25 +726,53 @@ fn sync_accessibility(
             Changed<AccessibilityNode>,
         ),
     >,
-    mut buttons: Query<(&ToolbarButton, &mut AccessibilityNode)>,
+    mut buttons: ParamSet<(
+        Query<
+            (&ToolbarButton, &mut AccessibilityNode),
+            Or<(Changed<AccessibilityNode>, Changed<ToolbarButton>)>,
+        >,
+        Query<(&ToolbarButton, &mut AccessibilityNode)>,
+    )>,
     items: Query<&Item<Tool>>,
     selections: SelectionParam,
+    mut changes: StructureChanges<Toolbar, Tool>,
 ) {
     // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
     // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut toolbars {
         sync_role(&mut node, Role::Toolbar);
     }
-    for (button, mut node) in &mut buttons {
-        let Ok(item) = items.get(button.item()) else {
-            continue;
-        };
-        let active = selections
-            .get(button.owner())
-            .is_some_and(|selection| selection.is_selected(button.item()));
-        sync_label(&mut node, &item.data.label);
-        sync_toggled(&mut node, Some(active));
+    // A button is looked at when Bevy reset its node or it is new, and (for its label and
+    // toggled state) when its toolbar's items or selection changed. A quiet frame does neither.
+    for (button, mut node) in &mut buttons.p0() {
+        sync_button(button, &mut node, &items, &selections);
     }
+    let affected: EntityHashSet = changes.affected(&selections).into_iter().collect();
+    if affected.is_empty() {
+        return;
+    }
+    for (button, mut node) in &mut buttons.p1() {
+        if affected.contains(&button.owner()) {
+            sync_button(button, &mut node, &items, &selections);
+        }
+    }
+}
+
+/// Writes the label and toggled state of one button's node, only where they differ.
+fn sync_button(
+    button: &ToolbarButton,
+    node: &mut Mut<AccessibilityNode>,
+    items: &Query<&Item<Tool>>,
+    selections: &SelectionParam,
+) {
+    let Ok(item) = items.get(button.item()) else {
+        return;
+    };
+    let active = selections
+        .get(button.owner())
+        .is_some_and(|selection| selection.is_selected(button.item()));
+    sync_label(node, &item.data.label);
+    sync_toggled(node, Some(active));
 }
 
 /// Gives the buttons of an underlined toolbar, whose labels are hidden, a [`Tooltip`] with the

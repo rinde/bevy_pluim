@@ -373,8 +373,11 @@ of them (`just example gallery -- --run-all stack link`).
   while eligible, else the first. Items are found by walking the group's descendants in tree
   order, which is the order shown (a gallery's groups included), so wrapping and Home / End are
   by item order, never by geometry. Only the groups that changed are looked at: an item added,
-  disabled, hidden or removed, the group's children, a `Selection` change (radio groups) or a
-  move of the focus; nothing walks every frame. `navigate_roving_group`, a global observer of
+  disabled, hidden or removed, the group's children, a change of the `Selection` the group reads (its own or the one its
+  `Selection::Ref` resolves to; radio groups) or a move of the focus into or out of the group (the group that held it, the
+  owner of the newly focused item); nothing walks every frame, and an unrelated group is never looked at
+  (`a_selection_or_focus_change_looks_only_at_the_groups_it_concerns`,
+  `a_shared_selection_change_looks_at_every_group_that_reads_it_and_no_other`; the `roving-groups-*` bench workloads). `navigate_roving_group`, a global observer of
   `FocusedInput<KeyboardInput>`, acts only when the `InputFocus` is on one of the group's own
   items: the radio widgets use left / up and right / down (previous and next, wrapping) and Home
   / End, the toolbar left / right and Home / End (up and down go on to the app). It stops those
@@ -593,6 +596,17 @@ of them (`just example gallery -- --run-all stack link`).
   `ComputedNode`. The wheel is untouched, and so is the `Scrollbar`, which
   follows the `ScrollPosition` it sets
   (`scroll_area_keyboard_scrolls_item_into_view.ron`).
+- **`sync_accessibility` systems look at what changed.** Bevy resets a node's role and
+  label in `UiSystems::PostLayout` through `DerefMut`, so `Changed<AccessibilityNode>` catches
+  every reset before `AccessibilitySync` runs. Gallery, filter chips, toolbar, segmented
+  control, tab bar, light-dark toggle, push button, icon button and link therefore query only
+  `Or<(Changed<AccessibilityNode>, Changed<View>, ..)>` (a `ParamSet` holds the unfiltered
+  query for the rest); the selection widgets add the owners `StructureChanges::affected` names,
+  a `SegmentedControl` also `Added<Selected>`, removed `Selected` and changed `Item<String>`,
+  buttons removed `ToggleState`, the light-dark toggle a changed `ThemePreference`. The `sync_*`
+  helpers write only on a difference, so a system never marks its own nodes changed; an idle
+  frame writes none (`filter_chips_leave_their_accessibility_nodes_alone_on_idle_frames_and_for_other_chips`).
+  New bench workloads `segmented-controls-idle` and `galleries-idle`; numbers in `docs/benchmarks.md`.
 - **Nothing that runs every frame walks the whole world.** An app may hand a widget ten
   thousand items, so a system that runs each frame touches what is on
   screen, not every item: `VirtualList` looks at its pooled rows only, and finds an item by

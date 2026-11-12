@@ -145,10 +145,16 @@ fn restyle_on_disabled_change(
 /// Keeps each link a link to assistive technology. Bevy makes a node a button again when its
 /// `Button` changes, so this runs after it.
 ///
-/// It runs every frame rather than on change: Bevy's reset of the role happens when the
-/// link's `Button` changes, which the link's `AccessibilityNode` does not show, so there is no
-/// cheaper filter. `sync_role` writes only when the role differs, so nothing is marked changed.
-fn sync_accessibility(mut links: Query<(&Link, &mut AccessibilityNode)>) {
+/// It looks only at links whose [`AccessibilityNode`] changed (every reset of Bevy's, the
+/// `label_changed` and `image_changed` systems and the bounds sync, writes the node through
+/// `DerefMut` in `UiSystems::PostLayout`, before this runs) or whose [`Link`] changed.
+/// `sync_role` writes only when the role differs, so this never marks the node changed itself.
+fn sync_accessibility(
+    mut links: Query<
+        (&Link, &mut AccessibilityNode),
+        Or<(Changed<AccessibilityNode>, Changed<Link>)>,
+    >,
+) {
     for (link, mut node) in &mut links {
         sync_role(&mut node, Role::Link);
         sync_label(&mut node, &link.label);

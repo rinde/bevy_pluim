@@ -3,6 +3,7 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
@@ -534,21 +535,61 @@ fn sync_accessibility(
             Changed<AccessibilityNode>,
         ),
     >,
-    mut segments: Query<(&Segment, &mut AccessibilityNode, Has<Selected>)>,
+    mut segments: ParamSet<(
+        Query<
+            (&Segment, &mut AccessibilityNode, Has<Selected>),
+            Or<(
+                Changed<AccessibilityNode>,
+                Changed<Segment>,
+                Added<Selected>,
+            )>,
+        >,
+        Query<(&Segment, &mut AccessibilityNode, Has<Selected>)>,
+    )>,
     items: Query<&Item<String>>,
+    changed_items: Query<Entity, Changed<Item<String>>>,
+    mut deselected: RemovedComponents<Selected>,
 ) {
     // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
     // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut controls {
         sync_role(&mut node, Role::RadioGroup);
     }
-    for (segment, mut node, selected) in &mut segments {
-        if let Ok(item) = items.get(segment.item()) {
-            sync_label(&mut node, &item.data);
-        }
-        sync_role(&mut node, Role::RadioButton);
-        sync_toggled(&mut node, Some(selected));
+    // A segment is looked at when Bevy reset its node, it is new, or it gained `Selected`; and
+    // below when it lost `Selected` or its item's text changed. A quiet frame does none.
+    for (segment, mut node, selected) in &mut segments.p0() {
+        sync_segment(segment, &mut node, selected, &items);
     }
+    let deselected: EntityHashSet = deselected.read().collect();
+    let changed_items: EntityHashSet = changed_items.iter().collect();
+    if deselected.is_empty() && changed_items.is_empty() {
+        return;
+    }
+    let mut all = segments.p1();
+    for (segment, mut node, selected) in &mut all {
+        if changed_items.contains(&segment.item()) {
+            sync_segment(segment, &mut node, selected, &items);
+        }
+    }
+    for entity in deselected {
+        if let Ok((segment, mut node, selected)) = all.get_mut(entity) {
+            sync_segment(segment, &mut node, selected, &items);
+        }
+    }
+}
+
+/// Writes the role, label and toggled state of one segment's node, only where they differ.
+fn sync_segment(
+    segment: &Segment,
+    node: &mut Mut<AccessibilityNode>,
+    selected: bool,
+    items: &Query<&Item<String>>,
+) {
+    if let Ok(item) = items.get(segment.item()) {
+        sync_label(node, &item.data);
+    }
+    sync_role(node, Role::RadioButton);
+    sync_toggled(node, Some(selected));
 }
 
 /// Restyles the segments of a control when a segment gains or loses the pointer.

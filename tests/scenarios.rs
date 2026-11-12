@@ -1030,6 +1030,107 @@ fn shared_selections_keep_one_stop_per_control_at_the_shared_selected_item() {
     assert_eq!(focus_of(&app), Some(one_buttons[1]));
 }
 
+/// Puts a `TabIndex` no group would choose on every button of `owner`, so a later look at
+/// the group (which rewrites the indices to 0 / -1) shows.
+fn plant_sentinel(app: &mut App, owner: Entity) -> Vec<Entity> {
+    let buttons = item_buttons(app, owner);
+    for button in &buttons {
+        app.world_mut().entity_mut(*button).insert(TabIndex(7));
+    }
+    buttons
+}
+
+fn is_untouched(app: &App, buttons: &[Entity]) -> bool {
+    buttons
+        .iter()
+        .all(|button| app.world().get::<TabIndex>(*button) == Some(&TabIndex(7)))
+}
+
+#[test]
+fn a_selection_or_focus_change_looks_only_at_the_groups_it_concerns() {
+    let mut app = composite_app();
+    let seg = named(&mut app, "seg");
+    let chips = named(&mut app, "chips");
+    let bar = named(&mut app, "bar");
+    let seg_buttons = item_buttons(&app, seg);
+    let chips_planted = plant_sentinel(&mut app, chips);
+    let bar_planted = plant_sentinel(&mut app, bar);
+
+    // A selection change of one control leaves independent groups alone.
+    let [_, b, _] = items_of(&app, seg);
+    change(&mut app, seg, move |s| s.set_selection([b]));
+    settle(&mut app);
+    assert_eq!(tab_stops(&app, seg), vec![seg_buttons[1]]);
+    assert!(is_untouched(&app, &chips_planted));
+    assert!(is_untouched(&app, &bar_planted));
+
+    // Focus moving inside a control, or from one group into another, looks at the group that
+    // had it and the one that gets it, not at the rest.
+    focus_on(&mut app, seg_buttons[2]);
+    assert_eq!(tab_stops(&app, seg), vec![seg_buttons[2]]);
+    assert!(is_untouched(&app, &chips_planted));
+    assert!(is_untouched(&app, &bar_planted));
+    focus_on(&mut app, chips_planted[1]);
+    assert_eq!(
+        tab_stops(&app, chips),
+        vec![chips_planted[1]],
+        "the group that got the focus follows it"
+    );
+    assert!(is_untouched(&app, &bar_planted));
+    focus_on(&mut app, seg_buttons[0]);
+    assert_eq!(tab_stops(&app, seg), vec![seg_buttons[0]]);
+    assert_eq!(
+        tab_stops(&app, chips),
+        vec![chips_planted[0]],
+        "the group that lost the focus goes back to its entry item"
+    );
+    assert!(is_untouched(&app, &bar_planted));
+}
+
+#[test]
+fn a_shared_selection_change_looks_at_every_group_that_reads_it_and_no_other() {
+    let mut app = directional_navigation_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let shared = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["Dark", "Light"].map(Item::new)),
+        )
+        .id();
+    app.world_mut().entity_mut(root).with_children(|root| {
+        for name in ["one", "two"] {
+            root.spawn((
+                Name::new(name),
+                SegmentedControl,
+                Selection::reference(shared),
+            ));
+        }
+        root.spawn((
+            Name::new("other"),
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["X", "Y"].map(Item::new)),
+        ));
+    });
+    settle(&mut app);
+    let one = named(&mut app, "one");
+    let two = named(&mut app, "two");
+    let other = named(&mut app, "other");
+    let one_planted = plant_sentinel(&mut app, one);
+    let two_planted = plant_sentinel(&mut app, two);
+    let other_planted = plant_sentinel(&mut app, other);
+
+    let [_, light] = items_of_two(&app, shared);
+    change(&mut app, shared, move |s| s.set_selection([light]));
+    settle(&mut app);
+    assert_eq!(tab_stops(&app, one), vec![one_planted[1]]);
+    assert_eq!(tab_stops(&app, two), vec![two_planted[1]]);
+    assert!(is_untouched(&app, &other_planted));
+}
+
 #[test]
 fn a_gallery_moves_linearly_through_its_cards_across_groups_and_wraps() {
     let mut app = composite_app();

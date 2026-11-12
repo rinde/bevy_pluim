@@ -3,6 +3,7 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
@@ -429,26 +430,54 @@ fn sync_accessibility(
             Changed<AccessibilityNode>,
         ),
     >,
-    mut cards: Query<(&GalleryCardView, &mut AccessibilityNode)>,
+    mut cards: ParamSet<(
+        Query<
+            (&GalleryCardView, &mut AccessibilityNode),
+            Or<(Changed<AccessibilityNode>, Changed<GalleryCardView>)>,
+        >,
+        Query<(&GalleryCardView, &mut AccessibilityNode)>,
+    )>,
     items: Query<&Item<GalleryCard>>,
     selections: SelectionParam,
+    mut changes: StructureChanges<Gallery, GalleryCard>,
 ) {
     // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
     // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut galleries {
         sync_role(&mut node, Role::RadioGroup);
     }
-    for (view, mut node) in &mut cards {
-        let Ok(item) = items.get(view.item) else {
-            continue;
-        };
-        let picked = selections
-            .get(view.owner())
-            .is_some_and(|selection| selection.is_selected(view.item));
-        sync_role(&mut node, Role::RadioButton);
-        sync_label(&mut node, &item.data.label);
-        sync_toggled(&mut node, Some(picked));
+    // A card is looked at when Bevy reset its node or it is new, and (for its label and
+    // toggled state) when its gallery's items or selection changed. A quiet frame does neither.
+    for (view, mut node) in &mut cards.p0() {
+        sync_card(view, &mut node, &items, &selections);
     }
+    let affected: EntityHashSet = changes.affected(&selections).into_iter().collect();
+    if affected.is_empty() {
+        return;
+    }
+    for (view, mut node) in &mut cards.p1() {
+        if affected.contains(&view.owner()) {
+            sync_card(view, &mut node, &items, &selections);
+        }
+    }
+}
+
+/// Writes the role, label and toggled state of one card's node, only where they differ.
+fn sync_card(
+    view: &GalleryCardView,
+    node: &mut Mut<AccessibilityNode>,
+    items: &Query<&Item<GalleryCard>>,
+    selections: &SelectionParam,
+) {
+    let Ok(item) = items.get(view.item) else {
+        return;
+    };
+    let picked = selections
+        .get(view.owner())
+        .is_some_and(|selection| selection.is_selected(view.item));
+    sync_role(node, Role::RadioButton);
+    sync_label(node, &item.data.label);
+    sync_toggled(node, Some(picked));
 }
 
 /// Picks the card that was used (a click, or Enter or Space on it).

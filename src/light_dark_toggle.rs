@@ -534,20 +534,50 @@ fn theme_toggles(
 /// label, toggled while it is the preference. Bevy makes a node a button again when its `Button`
 /// changes, so this runs after it.
 fn sync_accessibility(
-    mut toggles: Query<&mut AccessibilityNode, (With<LightDarkToggle>, Without<LightDarkOption>)>,
-    mut options: Query<(&LightDarkOption, &mut AccessibilityNode), Without<LightDarkToggle>>,
+    mut toggles: Query<
+        &mut AccessibilityNode,
+        (
+            With<LightDarkToggle>,
+            Without<LightDarkOption>,
+            Changed<AccessibilityNode>,
+        ),
+    >,
+    mut options: ParamSet<(
+        Query<
+            (&LightDarkOption, &mut AccessibilityNode),
+            (
+                Without<LightDarkToggle>,
+                Or<(Changed<AccessibilityNode>, Changed<LightDarkOption>)>,
+            ),
+        >,
+        Query<(&LightDarkOption, &mut AccessibilityNode), Without<LightDarkToggle>>,
+    )>,
     preference: Option<Res<ThemePreference>>,
 ) {
     for mut node in &mut toggles {
         sync_role(&mut node, Role::RadioGroup);
         sync_label(&mut node, "Theme");
     }
-    for (option, mut node) in &mut options {
-        sync_label(&mut node, option.preference.label());
-        sync_role(&mut node, Role::RadioButton);
-        sync_toggled(
-            &mut node,
-            Some(preference.as_deref() == Some(&option.preference)),
-        );
+    // An option is looked at when Bevy reset its node or it is new, and all of them when the
+    // preference changed; an idle frame touches none.
+    let current = preference.as_deref().copied();
+    for (option, mut node) in &mut options.p0() {
+        sync_option(*option, &mut node, current);
     }
+    if preference.as_ref().is_some_and(DetectChanges::is_changed) {
+        for (option, mut node) in &mut options.p1() {
+            sync_option(*option, &mut node, current);
+        }
+    }
+}
+
+/// Writes the label, role and toggled state of one option's node, only where they differ.
+fn sync_option(
+    option: LightDarkOption,
+    node: &mut Mut<AccessibilityNode>,
+    current: Option<ThemePreference>,
+) {
+    sync_label(node, option.preference.label());
+    sync_role(node, Role::RadioButton);
+    sync_toggled(node, Some(current == Some(option.preference)));
 }
