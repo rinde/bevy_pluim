@@ -23,6 +23,7 @@ use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
+use bevy_pluim::list::{ItemNote, List};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentedControl};
@@ -57,6 +58,10 @@ enum Workload {
     FilterChipsOneChanging,
     /// The same `FilterChips`, idle: the floor the changing workload is read against.
     FilterChipsIdle,
+    /// Many independent `List`s of three noted items; one note is marked changed every frame.
+    ListNotesChanging,
+    /// The same lists, idle: the floor the changing workload is read against.
+    ListNotesIdle,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
     /// Many independent `Gallery`s of three cards, idle.
@@ -84,7 +89,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 20] = [
+    const ALL: [Self; 22] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -94,6 +99,8 @@ impl Workload {
         Self::VirtualLists,
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
+        Self::ListNotesChanging,
+        Self::ListNotesIdle,
         Self::SegmentedControlsIdle,
         Self::GalleriesIdle,
         Self::RovingGroupsFocus,
@@ -118,6 +125,8 @@ impl Workload {
             Self::VirtualLists => "virtual-lists",
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
+            Self::ListNotesChanging => "list-notes-changing",
+            Self::ListNotesIdle => "list-notes-idle",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::GalleriesIdle => "galleries-idle",
             Self::RovingGroupsFocus => "roving-groups-focus",
@@ -140,6 +149,8 @@ impl Workload {
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
+            | Self::ListNotesChanging
+            | Self::ListNotesIdle
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
             | Self::RovingGroupsFocus
@@ -437,6 +448,18 @@ fn frame(app: &mut App, workload: Workload, index: usize) {
             chips.set_changed();
         }
     }
+    if workload == Workload::ListNotesChanging {
+        // Marks one note changed without altering it, so the frame shows what finding the
+        // affected rows costs and not a relayout.
+        let world = app.world_mut();
+        let mut query = world.query::<&mut ItemNote>();
+        let count = query.iter(world).count();
+        if count > 0
+            && let Some(mut note) = query.iter_mut(world).nth(index * 7 % count)
+        {
+            note.set_changed();
+        }
+    }
     if workload == Workload::RovingGroupsFocus {
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<Segment>>();
@@ -547,6 +570,21 @@ fn spawn(world: &mut World, run: Run) {
                             .one()
                             .build_with_items((0..3).map(move |chip| Item {
                                 data: Chip::new(format!("Chip {row}.{chip}")),
+                            })),
+                    ));
+                }
+            }
+            Workload::ListNotesChanging | Workload::ListNotesIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        List,
+                        Selection::builder()
+                            .one()
+                            .build_with_items((0..3).map(move |item| {
+                                (
+                                    Item::new(format!("Item {row}.{item}")),
+                                    ItemNote::new(format!("Note {row}.{item}")),
+                                )
                             })),
                     ));
                 }
