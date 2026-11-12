@@ -11250,6 +11250,62 @@ fn two_roots_each_get_their_own_toast_stack() {
     assert_eq!(parent_of(&app, b), Some(second));
 }
 
+#[test]
+fn same_frame_duplicate_toasts_restart_the_kept_one_with_the_latest_duration() {
+    use bevy::time::TimeUpdateStrategy;
+    use bevy_pluim::toast::Toast;
+    use std::time::Duration;
+
+    let mut app = headless_app();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        250,
+    )));
+    let first_root = app.world_mut().spawn(Node::default()).id();
+    let second_root = app.world_mut().spawn(Node::default()).id();
+    let spawn = |app: &mut App, root: Entity, duration: f32| {
+        app.world_mut()
+            .spawn((Toast::new("Saved").with_duration(duration), ChildOf(root)))
+            .id()
+    };
+    // One update: three duplicates under one parent, one under another.
+    let kept = spawn(&mut app, first_root, 0.5);
+    let dup_a = spawn(&mut app, first_root, 1.0);
+    let dup_b = spawn(&mut app, first_root, 3.0);
+    let other = spawn(&mut app, second_root, 0.5);
+    app.update();
+    app.update();
+    assert!(
+        app.world().get_entity(kept).is_ok(),
+        "the first was dropped"
+    );
+    assert!(app.world().get_entity(dup_a).is_err(), "a duplicate stayed");
+    assert!(app.world().get_entity(dup_b).is_err(), "a duplicate stayed");
+    assert!(
+        app.world().get_entity(other).is_ok(),
+        "another parent's toast was dropped"
+    );
+    // After about 2 s the kept toast (restarted to 3 s by the last duplicate)
+    // lives, and the other parent's 0.5 s toast is gone.
+    for _ in 0..7 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(kept).is_ok(),
+        "the kept toast did not take the latest duration"
+    );
+    assert!(
+        app.world().get_entity(other).is_err(),
+        "the other parent's toast took a duration of another parent's"
+    );
+    for _ in 0..8 {
+        app.update();
+    }
+    assert!(
+        app.world().get_entity(kept).is_err(),
+        "the kept toast stayed"
+    );
+}
+
 /// A headless app with a root node, for the toast tests below.
 fn toast_app() -> (App, Entity) {
     let mut app = headless_app();

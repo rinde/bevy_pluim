@@ -204,7 +204,8 @@ fn place_toasts(
         .iter()
         .map(|(stack, parent)| (parent.parent(), stack))
         .collect();
-    let mut kept: Vec<(Entity, String)> = Vec::new();
+    // Toasts kept this run: (stack, text, entity), so a later duplicate can restart them.
+    let mut kept: Vec<(Entity, String, Entity)> = Vec::new();
     for (entity, toast, mut timer, parent) in &mut fresh {
         let Some(parent) = parent.map(ChildOf::parent) else {
             error!(
@@ -224,18 +225,24 @@ fn place_toasts(
         let existing = shown
             .iter_mut()
             .find(|(of, other, _)| of.parent() == target && other.text == toast.text);
-        let duplicate = kept
+        if let Some((_, _, mut other_timer)) = existing {
+            *other_timer = ToastTimer::for_duration(toast.duration);
+            commands.entity(entity).despawn();
+            continue;
+        }
+        if let Some((_, _, first)) = kept
             .iter()
-            .any(|(s, text)| *s == target && *text == toast.text);
-        if existing.is_some() || duplicate {
-            if let Some((_, _, mut other_timer)) = existing {
-                *other_timer = ToastTimer::for_duration(toast.duration);
-            }
+            .find(|(s, text, _)| *s == target && *text == toast.text)
+        {
+            // Same as an already shown duplicate: the later duration restarts the kept toast.
+            commands
+                .entity(*first)
+                .insert(ToastTimer::for_duration(toast.duration));
             commands.entity(entity).despawn();
             continue;
         }
         *timer = ToastTimer::for_duration(toast.duration);
-        kept.push((target, toast.text.clone()));
+        kept.push((target, toast.text.clone(), entity));
         commands
             .entity(entity)
             .insert((ToastShown, ChildOf(target)));
