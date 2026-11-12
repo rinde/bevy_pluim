@@ -610,7 +610,7 @@ struct RovingChanges<'w, 's> {
     unreachable_removed: RemovedComponents<'w, 's, Unreachable>,
     items_removed: RemovedComponents<'w, 's, RovingItem>,
     changed_children: Query<'w, 's, Entity, (Changed<Children>, With<RovingGroup>)>,
-    changed_selections: Query<'w, 's, (), Changed<crate::select::Selection>>,
+    changed_selections: Query<'w, 's, Entity, Changed<crate::select::Selection>>,
     marked_added: Query<'w, 's, &'static RovingItem, Added<Selected>>,
     marked_removed: RemovedComponents<'w, 's, Selected>,
 }
@@ -624,8 +624,9 @@ struct RovingChanges<'w, 's> {
 /// the next eligible item, or the previous one at the end, and is cleared when none is left;
 /// focus that went elsewhere is never taken.
 ///
-/// A group is looked at only when one of its items changed, its own children changed, a
-/// selection changed (for a group that enters at the selected item) or the focus moved.
+/// A group is looked at only when one of its items changed, its own children changed, the
+/// selection it reads changed (for a group that enters at the selected item) or the focus moved
+/// into or out of it.
 fn sync_roving_groups(
     mut changes: HiddenChanges,
     mut roving: RovingChanges,
@@ -659,14 +660,30 @@ fn sync_roving_groups(
             dirty_groups.insert(item.owner);
         }
     }
+    // Focus and selection changes concern only the groups that read them: the group that held
+    // the focus (it may have lost it), the one that owns the newly focused item, and the groups
+    // that enter at the selected item of a selection that changed (own or referenced).
     let focus_moved = focus.is_changed();
-    let selection_changed = !roving.changed_selections.is_empty();
-    for (entity, group) in &groups {
-        if focus_moved
-            || (selection_changed && group.entry == RovingEntry::Selected)
-            || (!gone.is_empty() && group.order.iter().any(|(item, _)| gone.contains(item)))
-        {
-            dirty_groups.insert(entity);
+    let focused_owner = focus
+        .get()
+        .and_then(|entity| items.get(entity).ok())
+        .map(|(item, _, _)| item.owner);
+    let changed_selections: EntityHashSet = roving.changed_selections.iter().collect();
+    if focus_moved || !changed_selections.is_empty() || !gone.is_empty() {
+        for (entity, group) in &groups {
+            let focus_concerns =
+                focus_moved && (group.holds_focus || focused_owner == Some(entity));
+            let selection_concerns = group.entry == RovingEntry::Selected
+                && !changed_selections.is_empty()
+                && (changed_selections.contains(&entity)
+                    || selections
+                        .get_ref(entity)
+                        .is_some_and(|source| changed_selections.contains(&source)));
+            let item_gone =
+                !gone.is_empty() && group.order.iter().any(|(item, _)| gone.contains(item));
+            if focus_concerns || selection_concerns || item_gone {
+                dirty_groups.insert(entity);
+            }
         }
     }
 
