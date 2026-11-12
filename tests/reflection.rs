@@ -38,7 +38,7 @@ use bevy_pluim::light_dark_toggle::{
 };
 use bevy_pluim::link::Link;
 use bevy_pluim::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
-use bevy_pluim::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef};
+use bevy_pluim::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef, ValueReferrers};
 use bevy_pluim::panel::Panel;
 use bevy_pluim::pill::{Pill, PillTone};
 use bevy_pluim::push_button::{ButtonSize, IconPlacement, PushButton};
@@ -126,6 +126,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<Slider>(registry);
         assert_component::<SliderRefs>(registry);
         assert_component::<ValueRef>(registry);
+        assert_component::<ValueReferrers>(registry);
         assert_component::<ScrollArea>(registry);
         assert_component::<ClearOfCorners>(registry);
         assert_component::<ScrollContents>(registry);
