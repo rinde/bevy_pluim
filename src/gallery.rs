@@ -84,7 +84,9 @@ impl Plugin for GalleryPlugin {
 ///
 /// The gallery owns only the groups and dividers it spawns, and replaces just those when its
 /// items or groups change. Children the application puts under the gallery entity are never
-/// despawned or moved by a rebuild, and stay before the gallery's own children.
+/// despawned by a rebuild. Those present before the first build stay before the gallery's own
+/// children; a child added later is not reordered, and a rebuild appends the new groups
+/// after it.
 ///
 /// To a screen reader the gallery is a radio group and each card a radio button named after
 /// its label, checked while it is picked. The library gives the group no label; an app can

@@ -5983,6 +5983,26 @@ fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
     assert!(app.world().entity(mine).contains::<AppOwnedChild>());
     assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 1);
     assert!(children_of(&app, gallery).contains(&mine));
+
+    // A child added after a build is kept through a later rebuild too.
+    let later = app
+        .world_mut()
+        .spawn((AppOwnedChild, Node::default(), ChildOf(gallery)))
+        .id();
+    app.world_mut()
+        .entity_mut(new_item)
+        .get_mut::<Item<GalleryCard>>()
+        .unwrap()
+        .data
+        .group = "Wagons".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(app.world().entity(later).contains::<AppOwnedChild>());
+    assert!(app.world().entity(mine).contains::<AppOwnedChild>());
+    let children = children_of(&app, gallery);
+    assert!(children.contains(&later) && children.contains(&mine));
+    assert_eq!(children[0], mine);
 }
 
 /// Like [`gallery_groups`], leaving out the app's own child.
