@@ -384,18 +384,18 @@ mod tests {
         assert_eq!(active(&mut app), 0, "the marker outlives the pointer");
     }
 
+    /// A tooltip nobody is on is never visited. Its clock is given a value that `update_tooltips`
+    /// would reset (an unhovered node's clock is always the default), so a visit shows as a
+    /// changed value and as a write.
     #[test]
-    fn the_clock_of_an_idle_tooltip_is_not_written_in_a_quiet_frame() {
+    fn an_unmarked_tooltip_is_not_visited_in_a_quiet_frame() {
         let mut app = app();
-        app.world_mut().spawn(Tooltip::new("Tip"));
-        for _ in 0..3 {
-            tick(&mut app);
-        }
-        let node = app
-            .world_mut()
-            .query_filtered::<Entity, With<Tooltip>>()
-            .single(app.world())
-            .unwrap();
+        let stale = TooltipClock {
+            elapsed: 0.3,
+            suppressed: true,
+        };
+        let node = app.world_mut().spawn((Tooltip::new("Tip"), stale)).id();
+        tick(&mut app);
         let written = |app: &App| {
             app.world()
                 .entity(node)
@@ -407,6 +407,11 @@ mod tests {
         for _ in 0..3 {
             tick(&mut app);
         }
-        assert_eq!(written(&app), before);
+        assert_eq!(
+            app.world().get::<TooltipClock>(node),
+            Some(&stale),
+            "an idle tooltip was visited"
+        );
+        assert_eq!(written(&app), before, "an idle tooltip's clock was written");
     }
 }
