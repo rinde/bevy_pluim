@@ -1199,16 +1199,92 @@ fn end_scrub(
 }
 
 /// The leading number of `text`: the longest start of it that is a finite number.
+///
+/// The number grammar is Rust's `f64` one (sign, digits with an optional point,
+/// optional exponent), so the text is scanned once to find where a number could
+/// end, and only a few candidate prefixes are parsed: the longest, then (only
+/// when that overflows to infinity) a binary search over the exponent digits
+/// and over the mantissa digits, whose values grow with their length. That is
+/// O(n log n) in the worst case, however long the pasted text is, where trying
+/// every prefix was O(n^2).
 fn parse_number(text: &str) -> Option<f64> {
     let text = text.trim();
-    (1..=text.len())
-        .rev()
-        .filter(|end| text.is_char_boundary(*end))
-        .find_map(|end| {
-            text.get(..end)
-                .and_then(|prefix| prefix.parse::<f64>().ok())
-                .filter(|number| number.is_finite())
+    let bytes = text.as_bytes();
+    let digits_from = |from: usize| {
+        bytes.get(from..).map_or(0, |rest| {
+            rest.iter().take_while(|b| b.is_ascii_digit()).count()
         })
+    };
+    let finite = |end: usize| {
+        text.get(..end)
+            .and_then(|prefix| prefix.parse::<f64>().ok())
+            .filter(|number| number.is_finite())
+    };
+
+    let mut at = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let int_digits = digits_from(at);
+    at += int_digits;
+    let mut frac_digits = 0;
+    if bytes.get(at) == Some(&b'.') {
+        frac_digits = digits_from(at + 1);
+        at += 1 + frac_digits;
+    }
+    if int_digits + frac_digits == 0 {
+        return None;
+    }
+    let mantissa_end = at;
+
+    // An exponent needs at least one digit after `e` and an optional sign.
+    let mut exponent = None;
+    if matches!(bytes.get(at), Some(b'e' | b'E')) {
+        let sign_at = at + 1;
+        let negative = bytes.get(sign_at) == Some(&b'-');
+        let digits_at = sign_at + usize::from(matches!(bytes.get(sign_at), Some(b'+' | b'-')));
+        let count = digits_from(digits_at);
+        if count > 0 {
+            exponent = Some((digits_at, count, negative));
+        }
+    }
+
+    if let Some((digits_at, count, negative)) = exponent {
+        let full = digits_at + count;
+        if let Some(number) = finite(full) {
+            return Some(number);
+        }
+        // Infinite. A positive exponent grows with its digits, so find the
+        // most digits that stay finite. A negative one only shrinks the
+        // number, so no exponent prefix helps.
+        if !negative {
+            let (mut low, mut high) = (0, count);
+            while low + 1 < high {
+                let mid = usize::midpoint(low, high);
+                if finite(digits_at + mid).is_some() {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            if low > 0 {
+                return finite(digits_at + low);
+            }
+        }
+    }
+    if let Some(number) = finite(mantissa_end) {
+        return Some(number);
+    }
+    // The mantissa alone overflows. Its prefixes grow with their length, and
+    // every one with a digit is valid, so find the longest finite one.
+    let first_digit = bytes.iter().position(u8::is_ascii_digit)?;
+    let (mut low, mut high) = (first_digit + 1, mantissa_end);
+    while low + 1 < high {
+        let mid = usize::midpoint(low, high);
+        if finite(mid).is_some() {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    finite(low)
 }
 
 /// How far `value` is between its bounds, as a CSS percentage.
@@ -1736,5 +1812,144 @@ mod tests {
         assert_eq!(parse_number(""), None);
         assert_eq!(parse_number("NaN"), None);
         assert_eq!(parse_number("inf"), None);
+    }
+
+    /// The definition: try every prefix, longest first.
+    fn longest_finite_prefix(text: &str) -> Option<f64> {
+        let text = text.trim();
+        (1..=text.len())
+            .rev()
+            .filter(|end| text.is_char_boundary(*end))
+            .find_map(|end| {
+                text.get(..end)
+                    .and_then(|prefix| prefix.parse::<f64>().ok())
+                    .filter(|number| number.is_finite())
+            })
+    }
+
+    #[test]
+    fn parse_number_reads_exponents_suffixes_and_malformed_text() {
+        assert_eq!(parse_number("1e3"), Some(1000.0));
+        assert_eq!(parse_number("1E+3x"), Some(1000.0));
+        assert_eq!(parse_number("2.5e-1 units"), Some(0.25));
+        assert_eq!(parse_number("1e"), Some(1.0));
+        assert_eq!(parse_number("1e+"), Some(1.0));
+        assert_eq!(parse_number("1e3e4"), Some(1000.0));
+        assert_eq!(parse_number("5."), Some(5.0));
+        assert_eq!(parse_number(".5"), Some(0.5));
+        assert_eq!(parse_number("1.2.3"), Some(1.2));
+        assert_eq!(parse_number("+"), None);
+        assert_eq!(parse_number("-."), None);
+        assert_eq!(parse_number("."), None);
+        assert_eq!(parse_number(".e5"), None);
+        assert_eq!(parse_number("e5"), None);
+        assert_eq!(parse_number("-infinity"), None);
+        assert_eq!(parse_number("1nan"), Some(1.0));
+        assert_eq!(parse_number("1_000"), Some(1.0));
+    }
+
+    #[test]
+    fn parse_number_stops_at_unicode_boundaries() {
+        assert_eq!(parse_number("12\u{e9}3"), Some(12.0));
+        assert_eq!(parse_number("7\u{ff10}"), Some(7.0));
+        assert_eq!(parse_number("\u{2212}3"), None);
+        assert_eq!(parse_number("\u{a0}4\u{2003}"), Some(4.0));
+        assert_eq!(parse_number("3.5\u{1f600}"), Some(3.5));
+    }
+
+    #[test]
+    fn parse_number_keeps_the_longest_finite_prefix_of_overflowing_text() {
+        assert_eq!(parse_number("1e999"), longest_finite_prefix("1e999"));
+        assert_eq!(parse_number("1e999"), Some(1e99));
+        assert_eq!(parse_number("1e-999"), Some(0.0));
+        let huge = format!("1{}", "0".repeat(400));
+        assert_eq!(parse_number(&huge), longest_finite_prefix(&huge));
+        assert_eq!(parse_number(&huge), Some(1e308));
+        let shrunk = format!("1{}e-100", "0".repeat(400));
+        assert_eq!(parse_number(&shrunk), Some(1e300));
+        assert_eq!(parse_number("-1e400"), longest_finite_prefix("-1e400"));
+    }
+
+    #[test]
+    fn parse_number_matches_trying_every_prefix() {
+        let pieces = [
+            "",
+            "1",
+            "9",
+            "0",
+            "-",
+            "+",
+            ".",
+            "e",
+            "E",
+            "3",
+            "5",
+            "00",
+            "e-",
+            "e+",
+            " ",
+            "x",
+            "\u{e9}",
+            "inf",
+            "nan",
+            "99999999999999999999",
+        ];
+        let mut cases = vec![String::new()];
+        for _ in 0..4 {
+            let mut next = cases.clone();
+            for case in &cases {
+                for piece in pieces {
+                    next.push(format!("{case}{piece}"));
+                }
+            }
+            next.sort();
+            next.dedup();
+            next.truncate(60_000);
+            cases = next;
+        }
+        for case in cases {
+            assert_eq!(
+                parse_number(&case),
+                longest_finite_prefix(&case),
+                "{case:?}"
+            );
+        }
+        for case in [
+            "1e308",
+            "1e309",
+            "1.7976931348623157e308",
+            "1.7976931348623159e308",
+            "9e307e5",
+            "0e999999",
+            "1e00999",
+            "123456789e300",
+        ] {
+            assert_eq!(parse_number(case), longest_finite_prefix(case), "{case:?}");
+        }
+    }
+
+    #[test]
+    fn a_very_long_paste_is_parsed_in_bounded_work() {
+        let start = std::time::Instant::now();
+        let n = 2_000_000;
+        let digits = "9".repeat(n);
+        let cases = [
+            digits.clone(),
+            format!("1e{digits}"),
+            format!("1e-{digits}"),
+            format!("1.{digits}"),
+            format!("1{} trailing", "x".repeat(n)),
+            format!("{}1", "0".repeat(n)),
+            "\u{e9}".repeat(n),
+            format!("1e5{}", "\u{e9}".repeat(n)),
+        ];
+        let results: Vec<_> = cases.iter().map(|case| parse_number(case)).collect();
+        assert_eq!(results.get(4), Some(&Some(1.0)));
+        assert_eq!(results.get(5), Some(&Some(1.0)));
+        assert_eq!(results.get(6), Some(&None));
+        assert_eq!(results.get(7), Some(&Some(1e5)));
+        assert_eq!(results.get(1), Some(&Some(1e99)));
+        assert!(matches!(results.first(), Some(Some(n)) if n.is_finite()));
+        assert!(start.elapsed().as_secs() < 20, "took {:?}", start.elapsed());
     }
 }
