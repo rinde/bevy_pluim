@@ -51,6 +51,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
+| `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
+| `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `tab-bars-idle` | 500 `TabBar`s of 3 tabs | idle frames of independent tab bars (#670) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
@@ -239,3 +241,33 @@ longer grows with the number of unrelated lists. The frame time of the idle
 workload is unchanged, as expected. Test:
 `a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_them`
 (fails on the old code: the unrelated list was resynced).
+
+## Sliding-indicator lifecycle (#677)
+
+`indicator.rs`'s `spawn` ran every `Update` for `SegmentedControl`, `TabBar` and `LightDarkToggle`
+and, for each track, scanned all indicators for one with that owner: N tracks cost N squared owner
+checks per idle frame. It now checks a track by its own `Children`, and only for candidates: the
+tracks whose component changed (`Changed<T>`, which includes a new track) or, after any indicator of
+that kind was removed (`RemovedComponents<I>`), every track once. A quiet frame visits no track, a
+re-inserted track keeps its one indicator, and a despawned indicator is made again once with the
+right owner (`every_track_has_exactly_one_indicator_after_reinsertions`,
+`a_removed_indicator_is_made_again_once_and_other_tracks_keep_theirs`,
+`despawning_a_track_leaves_the_indicators_of_the_others_alone`,
+`a_track_that_gains_its_widget_later_gets_one_indicator`). `animate` is linear in the tracks (one
+child lookup each) and is unchanged. Mean frame time in microseconds, three runs (shared cloud
+container, noisy), `bench --workload NAME --size N`:
+
+| workload | size | before | after |
+| --- | --- | --- | --- |
+| `segmented-controls-idle` | 500 | 4238 / 4517 / 4304 | 3965 / 3926 / 4100 |
+| `segmented-controls-idle` | 2000 | 14046 / 13166 / 12720 | 11099 / 10991 / 10997 |
+| `indicators-animating` | 500 | 30673 / 32289 / 32972 | 30399 / 31099 / 30793 |
+| `indicators-animating` | 2000 | 205235 / 206140 / 210757 | 205189 / 204951 / 205033 |
+| `indicators-removed` | 500 | 8719 / 8819 / 8295 | 8609 / 8157 / 8247 |
+| `indicators-removed` | 2000 | 33661 / 32753 / 32676 | 31694 / 33546 / 32489 |
+
+Entities (7829 and 30329) and memory added (about 40 and 153 MiB) are unchanged. Idle frames gain
+about 7 % at 500 controls and 15 % at 2000, growing with the count as the quadratic term goes; the
+rest of the frame is other systems. Animation and removal are dominated by something else:
+`indicators-animating` replaces a `Selection` every frame (about 30 ms at 500 controls), which
+costs the selection widgets' own systems, not the indicator (follow-up ticket).

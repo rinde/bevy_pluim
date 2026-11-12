@@ -27,8 +27,8 @@ use bevy_pluim::list::{ItemNote, List};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
-use bevy_pluim::segmented_control::{Segment, SegmentedControl};
-use bevy_pluim::select::{Item, Selection};
+use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
+use bevy_pluim::select::{Item, ItemValues, Selection, SelectionValue};
 use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
@@ -77,6 +77,12 @@ enum Workload {
     SteppersSharedChanging,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
+    /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
+    /// every frame, so its indicator slides (#677).
+    IndicatorsAnimating,
+    /// The same controls; one control's indicator is despawned every frame and must be made again
+    /// (#677).
+    IndicatorsRemoved,
     /// Many independent `Gallery`s of three cards, idle.
     GalleriesIdle,
     /// Many independent `TabBar`s of three tabs, idle (#670).
@@ -104,7 +110,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 26] = [
+    const ALL: [Self; 28] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -120,6 +126,8 @@ impl Workload {
         Self::SteppersChanging,
         Self::SteppersSharedChanging,
         Self::SegmentedControlsIdle,
+        Self::IndicatorsAnimating,
+        Self::IndicatorsRemoved,
         Self::GalleriesIdle,
         Self::TabBarsIdle,
         Self::RovingGroupsFocus,
@@ -150,6 +158,8 @@ impl Workload {
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
+            Self::IndicatorsAnimating => "indicators-animating",
+            Self::IndicatorsRemoved => "indicators-removed",
             Self::GalleriesIdle => "galleries-idle",
             Self::TabBarsIdle => "tab-bars-idle",
             Self::RovingGroupsFocus => "roving-groups-focus",
@@ -176,6 +186,8 @@ impl Workload {
             | Self::ListNotesIdle
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
+            | Self::IndicatorsAnimating
+            | Self::IndicatorsRemoved
             | Self::TabBarsIdle
             | Self::RovingGroupsFocus
             | Self::RovingGroupsSelection
@@ -523,6 +535,31 @@ fn frame(app: &mut App, workload: Workload, index: usize) {
             world.entity_mut(entity).insert(selection);
         }
     }
+    if workload == Workload::IndicatorsAnimating {
+        // Moves the selection of one control to its next segment, so that control's indicator
+        // slides over the following frames while the others stay settled.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<(Entity, &ItemValues), With<SegmentedControl>>();
+        let count = query.iter(world).count();
+        let next = query
+            .iter(world)
+            .nth(index * 7 % count.max(1))
+            .and_then(|(entity, items)| items.iter().nth(index % 3).map(|item| (entity, item)));
+        if let Some((entity, item)) = next {
+            world
+                .entity_mut(entity)
+                .insert(SelectionValue::One(item).into_component());
+        }
+    }
+    if workload == Workload::IndicatorsRemoved {
+        // Despawns the indicator of one control; the next frame makes it again.
+        let world = app.world_mut();
+        let mut indicators = world.query_filtered::<Entity, With<SegmentIndicator>>();
+        let all: Vec<Entity> = indicators.iter(world).collect();
+        if let Some(entity) = all.get(index * 7 % all.len().max(1)).copied() {
+            world.despawn(entity);
+        }
+    }
     app.update();
 }
 
@@ -647,7 +684,9 @@ fn spawn(world: &mut World, run: Run) {
                     ));
                 }
             }
-            Workload::SegmentedControlsIdle => {
+            Workload::SegmentedControlsIdle
+            | Workload::IndicatorsAnimating
+            | Workload::IndicatorsRemoved => {
                 for row in 0..run.size {
                     root.spawn((
                         SegmentedControl,
