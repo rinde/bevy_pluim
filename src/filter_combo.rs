@@ -10,6 +10,7 @@
 
 use accesskit::{Live, Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
@@ -36,7 +37,7 @@ use crate::list::{CornerStyle, ItemView, List};
 use crate::popup::{self, ButtonLook};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::scroll_area::{PopupScrollBar, popup_scroll_bar, popup_scroll_bar_hovered};
-use crate::select::{Item, Selection, SelectionParam, SelectionValue};
+use crate::select::{Item, ItemOf, Selection, SelectionParam, SelectionValue};
 use crate::text_field::{OwnKeys, TextField, TextFieldChange, TextFieldRefs};
 use crate::theme::Theme;
 
@@ -513,10 +514,14 @@ fn on_state(
 }
 
 /// Marks the open combos whose rows or items changed.
+///
+/// A renamed item marks only the open combos that draw from its items entity, so an edit to
+/// one source leaves every other combo alone.
 fn mark_dirty(
     lists: Query<&FilterPart, (With<FilterList>, Changed<Children>)>,
-    renamed: Query<(), Changed<Item<String>>>,
-    combos: Query<(Entity, &ComboState), With<FilterCombo>>,
+    renamed: Query<&ItemOf, Changed<Item<String>>>,
+    combos: Query<(Entity, &FilterComboRefs, &ComboState)>,
+    selections: SelectionParam,
     mut commands: Commands,
 ) {
     for part in &lists {
@@ -524,11 +529,17 @@ fn mark_dirty(
             combo.insert(FilterDirty);
         }
     }
-    if !renamed.is_empty() {
-        for (combo, state) in &combos {
-            if *state == ComboState::Open {
-                commands.entity(combo).insert(FilterDirty);
-            }
+    if renamed.is_empty() {
+        return;
+    }
+    let owners: EntityHashSet = renamed.iter().map(|owner| owner.0).collect();
+    for (combo, refs, state) in &combos {
+        if *state == ComboState::Open
+            && selections
+                .sources_of(refs.list)
+                .is_some_and(|(_, items)| owners.contains(&items))
+        {
+            commands.entity(combo).insert(FilterDirty);
         }
     }
 }
