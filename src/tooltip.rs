@@ -322,6 +322,11 @@ fn restyle_popups(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    clippy::disallowed_methods,
+    reason = "tests may abort loudly"
+)]
 mod tests {
     use std::time::Duration;
 
