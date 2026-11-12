@@ -3310,6 +3310,143 @@ fn a_virtual_list_over_a_selection_reference_shows_and_marks_the_referenced_sele
     assert_eq!(selected, [Some(b)]);
 }
 
+/// The background colour of every shown row, in the order of their items.
+fn shown_row_backgrounds(app: &mut App) -> Vec<Color> {
+    let world = app.world_mut();
+    let mut rows: Vec<(usize, Color)> = world
+        .query::<(&VirtualListRow, &Node, &BackgroundColor)>()
+        .iter(world)
+        .filter(|(_, node, _)| node.display != Display::None)
+        .filter_map(|(row, _, background)| Some((row.shown?.index, background.0)))
+        .collect();
+    rows.sort_unstable_by_key(|(index, _)| *index);
+    rows.into_iter().map(|(_, color)| color).collect()
+}
+
+/// Settles a virtual list screen and returns the app.
+fn settled_virtual_list_app() -> App {
+    let mut app = widgets_app();
+    WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    app
+}
+
+#[test]
+fn idle_frames_leave_a_virtual_lists_rows_as_they_were() {
+    let mut app = settled_virtual_list_app();
+    let text = shown_rows(&mut app);
+    let backgrounds = shown_row_backgrounds(&mut app);
+    let counts = rows_and_entities(&mut app);
+    for _ in 0..30 {
+        app.update();
+    }
+    assert_eq!(shown_rows(&mut app), text);
+    assert_eq!(shown_row_backgrounds(&mut app), backgrounds);
+    assert_eq!(rows_and_entities(&mut app), counts);
+}
+
+#[test]
+fn a_virtual_list_row_follows_a_theme_change_after_idle_frames() {
+    let mut app = settled_virtual_list_app();
+    for _ in 0..10 {
+        app.update();
+    }
+    let before = shown_row_backgrounds(&mut app);
+    let mut theme = app.world_mut().get_resource_mut::<Theme>().unwrap();
+    let mode = if theme.mode() == ThemeMode::Dark {
+        ThemeMode::Light
+    } else {
+        ThemeMode::Dark
+    };
+    theme.set_mode(mode);
+    app.update();
+    app.update();
+    let after = shown_row_backgrounds(&mut app);
+    assert_eq!(before.len(), after.len());
+    assert_ne!(before, after, "the rows kept the old theme's colours");
+}
+
+#[test]
+fn a_virtual_list_row_follows_a_selection_change_after_idle_frames() {
+    let mut app = settled_virtual_list_app();
+    for _ in 0..10 {
+        app.update();
+    }
+    let (list, _) = virtual_list_and_contents(&mut app);
+    let before = shown_row_backgrounds(&mut app);
+    let third = app
+        .world()
+        .get::<ItemValues>(list)
+        .unwrap()
+        .iter()
+        .nth(2)
+        .unwrap();
+    change(&mut app, list, move |selection| {
+        selection.set_selection([third])
+    });
+    app.update();
+
+    let world = app.world_mut();
+    let selected: Vec<Option<Entity>> = world
+        .query_filtered::<&VirtualListRow, With<Selected>>()
+        .iter(world)
+        .map(|row| row.shown.map(|shown| shown.item))
+        .collect();
+    assert_eq!(selected, [Some(third)]);
+    assert_ne!(before, shown_row_backgrounds(&mut app));
+}
+
+#[test]
+fn a_virtual_list_row_follows_a_text_change_after_idle_frames() {
+    let mut app = settled_virtual_list_app();
+    for _ in 0..10 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let row_two = world
+        .query::<(Entity, &Item<String>)>()
+        .iter(world)
+        .find_map(|(entity, item)| (item.data == "Row 2").then_some(entity))
+        .unwrap();
+    world.entity_mut(row_two).insert(Item::new("Renamed"));
+    app.update();
+    assert_eq!(
+        shown_rows(&mut app).get(1).map(String::as_str),
+        Some("Renamed")
+    );
+}
+
+#[test]
+fn a_virtual_list_shows_an_item_added_after_idle_frames() {
+    let mut app = widgets_app();
+    let root = spawn_camera_and_root(app.world_mut());
+    let shared = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b", "c"].map(Item::new)),
+        )
+        .id();
+    app.world_mut().entity_mut(root).with_children(|root| {
+        root.spawn((
+            VirtualList::new(RowHeight::new(28.0).unwrap()),
+            Selection::reference(shared),
+        ));
+    });
+    for _ in 0..12 {
+        app.update();
+    }
+    assert_eq!(shown_rows(&mut app), ["a", "b", "c"]);
+
+    app.world_mut().spawn((Item::new("d"), ItemOf(shared)));
+    app.update();
+    app.update();
+    assert_eq!(shown_rows(&mut app), ["a", "b", "c", "d"]);
+}
+
 #[test]
 fn invalid_virtual_list_row_heights_are_rejected_and_the_minimum_keeps_the_pool_bounded() {
     for row_height in [0.0, -1.0, f32::NAN, f32::INFINITY, 1e-30] {
