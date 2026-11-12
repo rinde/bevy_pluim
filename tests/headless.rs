@@ -9820,6 +9820,40 @@ fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the
 }
 
 #[test]
+fn a_stack_over_a_selection_ref_follows_the_selection_it_refers_to() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let source = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let reference = app.world_mut().spawn(Selection::reference(source)).id();
+    let stack = stack_over(&mut app, reference);
+    let panel_a = single_entity_with::<PanelA>(&mut app);
+    assert!(no_entity_with::<PanelB>(&mut app));
+
+    let items = item_entities_of(&app, source);
+    select_one(&mut app, source, items[1]);
+    for _ in 0..3 {
+        app.update();
+    }
+    let panel_b = single_entity_with::<PanelB>(&mut app);
+    assert_eq!(node_display(&app, panel_a), Display::None);
+    assert_eq!(node_display(&app, panel_b), Display::Flex);
+
+    // Despawning the stack leaves nothing that reacts to the selection.
+    app.world_mut().entity_mut(stack).despawn();
+    select_one(&mut app, source, items[0]);
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
 fn replacing_a_stacks_selection_ref_with_an_entity_without_a_selection_hides_the_children() {
     let mut app = headless_app();
     let create_a = app.world_mut().register_system(spawn_panel_a);

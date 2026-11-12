@@ -66,17 +66,24 @@ fn on_insert_stack(t: On<Insert<Stack>>, stacks: Query<&Stack>, mut commands: Co
     commands.run_system_cached_with(switch_view, (stack_ref, stack));
 }
 
-/// Switches every live stack showing the selection that was just inserted.
+/// Switches every live stack showing the selection that was just inserted: one whose
+/// `selection_ref` is that entity, or a `Selection::Ref` pointing to it (one hop, as everywhere).
 ///
 /// One global observer, so a despawned stack leaves nothing behind that reacts to the selection.
 fn on_selection_insert(
     t: On<Insert<Selection>>,
     stacks: Query<(Entity, &Stack)>,
+    selections: Query<&Selection>,
     mut commands: Commands,
 ) {
     let selection = t.event_target();
     for (stack_ref, stack) in &stacks {
-        if stack.selection_ref == selection {
+        let refers_to_it = stack.selection_ref == selection
+            || matches!(
+                selections.get(stack.selection_ref),
+                Ok(Selection::Ref(target)) if *target == selection
+            );
+        if refers_to_it {
             commands.run_system_cached_with(switch_view, (stack_ref, *stack));
         }
     }
