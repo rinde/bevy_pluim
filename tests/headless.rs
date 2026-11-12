@@ -13031,6 +13031,59 @@ fn added_removed_and_renamed_items_are_filtered_while_the_popup_is_open() {
 }
 
 #[test]
+fn renaming_an_item_of_another_source_does_not_rematch_an_open_filter_combo() {
+    let mut fa = filter_app();
+    let other = fa
+        .app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(vec![Item::new("Berlin"), Item::new("Bern")]),
+        )
+        .id();
+    fa.settle();
+    fa.open();
+    // Hide a row by hand: only a rematch of this combo shows it again.
+    let row = fa.row_of("Delft");
+    fa.app.world_mut().get_mut::<Node>(row).unwrap().display = Display::None;
+    let berlin = fa
+        .app
+        .world()
+        .entity(other)
+        .get::<ItemValues>()
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap();
+    fa.app
+        .world_mut()
+        .get_mut::<Item<String>>(berlin)
+        .unwrap()
+        .data = "Bremen".to_string();
+    fa.settle();
+    assert_eq!(
+        fa.app.world().get::<Node>(row).unwrap().display,
+        Display::None,
+        "a rename in an unrelated source rematched the combo"
+    );
+    // A rename in its own source does rematch it, keeping case-insensitive matching.
+    let utrecht = fa.item_of("Utrecht");
+    fa.app
+        .world_mut()
+        .get_mut::<Item<String>>(utrecht)
+        .unwrap()
+        .data = "UTRECHT-Zuid".to_string();
+    fa.settle();
+    assert_eq!(
+        fa.app.world().get::<Node>(row).unwrap().display,
+        Display::Flex
+    );
+    fa.type_text("zuid");
+    assert_eq!(fa.shown(), ["UTRECHT-Zuid"]);
+}
+
+#[test]
 fn pointing_the_combo_at_other_items_filters_the_new_ones() {
     let mut fa = filter_app();
     let other = fa
