@@ -697,6 +697,102 @@ fn bread_crumbs_follow_a_reordered_selection_and_trim_from_the_new_order() {
     assert_eq!(crumb_texts(&app, crumbs), ["c", "a"]);
 }
 
+#[test]
+fn bread_crumbs_follow_item_text_changes_and_trim_to_the_current_position() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(Selection::builder().one_or_more().build_with_items([
+            (Item::new("a"),),
+            (Item::new("b"),),
+            (Item::new("c"),),
+        ]))
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let (a, b, c) = (items[0], items[1], items[2]);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let crumbs = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            BreadCrumbs,
+            Selection::reference(selection),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(selection, |s| s.set_selection(vec![a, b, c]))
+        })
+        .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "b", "c"]);
+
+    // Editing the text of a selected item alone updates its crumb.
+    app.world_mut().get_mut::<Item<String>>(b).unwrap().data = "B".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "B", "c"]);
+
+    // Removing the text drops the crumb; the later crumb still trims to its position.
+    app.world_mut().entity_mut(b).remove::<Item<String>>();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "c"]);
+
+    // A formerly unlabelled item gaining text gets a crumb again, in its place.
+    app.world_mut().entity_mut(b).insert(Item::new("again"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "again", "c"]);
+
+    // Exactly the last crumb is current, and clicking "again" trims to its position (2).
+    let world = app.world_mut();
+    let mut links = world.query::<(Entity, &Link, Has<InteractionDisabled>)>();
+    let found = links
+        .iter(world)
+        .map(|(e, _, d)| (e, d))
+        .collect::<Vec<_>>();
+    assert_eq!(found.iter().filter(|(_, d)| *d).count(), 1);
+    let again = found
+        .iter()
+        .map(|(e, _)| *e)
+        .find(|e| {
+            world
+                .get::<Children>(*e)
+                .into_iter()
+                .flatten()
+                .any(|c| world.get::<Text>(*c).is_some_and(|t| t.0 == "again"))
+        })
+        .unwrap();
+    app.world_mut().trigger(Activate { entity: again });
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "again"]);
+    let sel = app
+        .world_mut()
+        .run_system_once(move |selections: SelectionParam| {
+            selections
+                .get(selection)
+                .map(|s| s.iter().collect::<Vec<_>>())
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(sel, [a, b]);
+}
+
 /// The texts of the crumbs of a trail, in the order shown (separators left out).
 fn crumb_texts(app: &App, crumbs: Entity) -> Vec<String> {
     fn collect(world: &World, entity: Entity, out: &mut Vec<String>) {
