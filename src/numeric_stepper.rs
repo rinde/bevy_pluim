@@ -437,9 +437,24 @@ fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
 }
 
 /// Points a [`NumericStepper`] to the entity holding its [`Value`].
+///
+/// Immutable, like every Bevy relationship: insert a new one to point elsewhere. The parts of a
+/// stepper carry one too, so the [`ValueReferrers`] of a value lists the views to update when it
+/// changes.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
+#[component(immutable)]
+#[relationship(relationship_target = ValueReferrers)]
 #[reflect(Component)]
 pub struct ValueRef(pub Entity);
+
+/// The entities that refer to a [`Value`] through a [`ValueRef`].
+///
+/// These are the mirror steppers and the parts (fill, label and buttons) of every stepper showing
+/// it. Derived by Bevy's relationship hooks and read-only.
+#[derive(Component, Debug, Default, Reflect)]
+#[relationship_target(relationship = ValueRef)]
+#[reflect(Component)]
+pub struct ValueReferrers(Vec<Entity>);
 
 /// Why a [`Value`], [`UIntValue`] or [`FloatValue`] could not be built.
 ///
@@ -1202,48 +1217,48 @@ fn fraction_percent(value: &Value) -> f32 {
 }
 
 fn on_change(
-    changed_values: Query<(Entity, &Value), Changed<Value>>,
-    mut numeric_stepper_labels: Query<(&ValueRef, &NumericStepperLabel, &mut Text)>,
+    changed_values: Query<(Entity, &Value, Option<&ValueReferrers>), Changed<Value>>,
+    mut labels: Query<(&NumericStepperLabel, &mut Text)>,
     steppers: Query<&NumericStepper>,
-    mut spin_buttons: Query<(
-        Entity,
-        Option<&ValueRef>,
-        &NumericStepper,
-        &mut AccessibilityNode,
-    )>,
-    decrease: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Decrease>>,
-    increase: Query<(Entity, &ValueRef, Has<InteractionDisabled>), With<Increase>>,
-    mut fills: Query<(&ValueRef, &mut Node), (With<ScrubFill>, Without<NumericStepper>)>,
+    mut spin_buttons: Query<(&NumericStepper, &mut AccessibilityNode)>,
+    own_value_steppers: Query<(), (With<NumericStepper>, Without<ValueRef>)>,
+    decrease: Query<Has<InteractionDisabled>, With<Decrease>>,
+    increase: Query<Has<InteractionDisabled>, With<Increase>>,
+    mut fills: Query<&mut Node, (With<ScrubFill>, Without<NumericStepper>)>,
     mut commands: Commands,
 ) {
-    for (value_ref, value) in &changed_values {
-        for (fill_value_ref, mut node) in &mut fills {
-            if fill_value_ref.0 == value_ref {
-                node.width = Val::Percent(fraction_percent(value));
-            }
+    // Only the views that refer to a changed value are visited, through its `ValueReferrers`.
+    for (value_entity, value, referrers) in &changed_values {
+        // A stepper holding its own value has no `ValueRef`.
+        if own_value_steppers.contains(value_entity)
+            && let Ok((stepper, mut node)) = spin_buttons.get_mut(value_entity)
+        {
+            set_spin_value(&mut node, stepper.format, value);
         }
-        for (text_value_ref, label, mut text) in &mut numeric_stepper_labels {
-            if text_value_ref.0 == value_ref {
+        for &view in referrers.map_or(&[][..], |referrers| &referrers.0[..]) {
+            if let Ok(mut node) = fills.get_mut(view) {
+                let width = Val::Percent(fraction_percent(value));
+                if node.width != width {
+                    node.width = width;
+                }
+            }
+            if let Ok((label, mut text)) = labels.get_mut(view) {
                 let format = steppers
                     .get(label.0)
                     .map_or(default_format as ValueFormat, |s| s.format);
-                text.0 = format(value);
+                let shown = format(value);
+                if text.0 != shown {
+                    text.0 = shown;
+                }
             }
-        }
-        for (stepper_entity, stepper_value_ref, stepper, mut node) in &mut spin_buttons {
-            // A stepper holding its own value has no `ValueRef`.
-            if stepper_value_ref.map_or(stepper_entity, |r| r.0) == value_ref {
+            if let Ok((stepper, mut node)) = spin_buttons.get_mut(view) {
                 set_spin_value(&mut node, stepper.format, value);
             }
-        }
-        for (button, button_value_ref, disabled) in &decrease {
-            if button_value_ref.0 == value_ref {
-                set_disabled(&mut commands, button, disabled, !value.can_decrement());
+            if let Ok(disabled) = decrease.get(view) {
+                set_disabled(&mut commands, view, disabled, !value.can_decrement());
             }
-        }
-        for (button, button_value_ref, disabled) in &increase {
-            if button_value_ref.0 == value_ref {
-                set_disabled(&mut commands, button, disabled, !value.can_increment());
+            if let Ok(disabled) = increase.get(view) {
+                set_disabled(&mut commands, view, disabled, !value.can_increment());
             }
         }
     }

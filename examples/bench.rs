@@ -23,6 +23,7 @@ use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
+use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentedControl};
@@ -35,6 +36,10 @@ use bevy_stagecraft::HeadlessPlugins;
 const WARMUP_FRAMES: usize = 60;
 /// Frames timed unless `--frames` says otherwise.
 const DEFAULT_FRAMES: usize = 300;
+/// Values changed per frame by the stepper workloads.
+const CHANGED_STEPPERS: usize = 20;
+/// Steppers mirroring each shared value in `steppers-shared-changing`.
+const MIRRORS: usize = 10;
 
 /// What is spawned and what happens each frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +62,13 @@ enum Workload {
     FilterChipsOneChanging,
     /// The same `FilterChips`, idle: the floor the changing workload is read against.
     FilterChipsIdle,
+    /// Many independent `NumericStepper`s, idle: the floor the changing workloads are read against.
+    SteppersIdle,
+    /// The same steppers; `CHANGED_STEPPERS` values are marked changed every frame.
+    SteppersChanging,
+    /// Groups of ten `NumericStepper`s mirroring one shared `Value`; `CHANGED_STEPPERS` shared
+    /// values are changed every frame.
+    SteppersSharedChanging,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
     /// Many independent `Gallery`s of three cards, idle.
@@ -84,7 +96,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 20] = [
+    const ALL: [Self; 23] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -94,6 +106,9 @@ impl Workload {
         Self::VirtualLists,
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
+        Self::SteppersIdle,
+        Self::SteppersChanging,
+        Self::SteppersSharedChanging,
         Self::SegmentedControlsIdle,
         Self::GalleriesIdle,
         Self::RovingGroupsFocus,
@@ -118,6 +133,9 @@ impl Workload {
             Self::VirtualLists => "virtual-lists",
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
+            Self::SteppersIdle => "steppers-idle",
+            Self::SteppersChanging => "steppers-changing",
+            Self::SteppersSharedChanging => "steppers-shared-changing",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::GalleriesIdle => "galleries-idle",
             Self::RovingGroupsFocus => "roving-groups-focus",
@@ -145,6 +163,7 @@ impl Workload {
             | Self::RovingGroupsFocus
             | Self::RovingGroupsSelection
             | Self::RovingGroupsIdle => 500,
+            Self::SteppersIdle | Self::SteppersChanging | Self::SteppersSharedChanging => 2_000,
             Self::VirtualList
             | Self::VirtualListScrolling
             | Self::TicksFilterIdle
@@ -437,6 +456,21 @@ fn frame(app: &mut App, workload: Workload, index: usize) {
             chips.set_changed();
         }
     }
+    if matches!(
+        workload,
+        Workload::SteppersChanging | Workload::SteppersSharedChanging
+    ) {
+        // Marks `CHANGED_STEPPERS` values changed without moving them, so the frame shows what
+        // the stepper systems cost and not a relayout of the root for a wider label.
+        let world = app.world_mut();
+        let mut query = world.query::<&mut Value>();
+        let count = query.iter(world).count();
+        for offset in 0..CHANGED_STEPPERS.min(count) {
+            if let Some(mut value) = query.iter_mut(world).nth((index * 7 + offset * 13) % count) {
+                value.set_changed();
+            }
+        }
+    }
     if workload == Workload::RovingGroupsFocus {
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<Segment>>();
@@ -507,6 +541,24 @@ fn spawn(world: &mut World, run: Run) {
                         },
                         Tooltip::new(format!("Tip {index}")),
                     ));
+                }
+            }
+            Workload::SteppersIdle | Workload::SteppersChanging => {
+                for _ in 0..run.size {
+                    if let Ok(value) = Value::new_u32(0, 0, u32::MAX, 1) {
+                        root.spawn((NumericStepper::default(), value));
+                    }
+                }
+            }
+            Workload::SteppersSharedChanging => {
+                for _ in 0..run.size.div_ceil(MIRRORS) {
+                    let Ok(value) = Value::new_u32(0, 0, u32::MAX, 1) else {
+                        continue;
+                    };
+                    let shared = root.spawn(value).id();
+                    for _ in 0..MIRRORS {
+                        root.spawn((NumericStepper::default(), ValueRef(shared)));
+                    }
                 }
             }
             Workload::TicksFilterIdle | Workload::TicksFilterOne | Workload::TicksFilterAll => {
