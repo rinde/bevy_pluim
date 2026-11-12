@@ -14,7 +14,7 @@ record = ["bevy_stagecraft/record"]
 
 [dependencies]
 accesskit = "0.24"
-bevy = "0.20.0"
+bevy = "0.20.1"
 derive_more = { version = "2.0.1", features = ["deref"] }
 educe = { version = "0.6.0", default-features = false, features = ["Default"] }
 itertools = "0.14.0"
@@ -25,11 +25,11 @@ strum = { version = "0.27.2", features = ["derive"] }
 # The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
 # `debug` is Bevy's switch for `ScheduleBuildSettings::shuffle_seed`, which
 # `tests/scenarios.rs` shuffles the schedules with.
-bevy = { version = "0.20.0", features = ["bevy_ui_debug", "debug"] }
+bevy = { version = "0.20.1", features = ["bevy_ui_debug", "debug"] }
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
-bevy_stagecraft = { git = "https://github.com/rinde/bevy_stagecraft", rev = "cd54a1bfbd7f12867ec1917a2133898f01b86dda", features = ["gallery"] }
+bevy_stagecraft = { git = "https://github.com/rinde/bevy_stagecraft", rev = "06591fede6c323f392d8cc0d04d54c1bb1246e55", features = ["gallery"] }
 
 # Plays every `.ron` file and variant in tests/ron as an individual libtest
 # case. `build.rs` generates the cases so libtest can schedule them in parallel.

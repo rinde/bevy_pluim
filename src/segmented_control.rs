@@ -400,12 +400,18 @@ fn sync_icons(
     changed_labels: Query<(), Changed<SegmentLabels>>,
     changed_items: Query<(), Changed<Item<String>>>,
     added: Query<(), Added<Segment>>,
-    segments: Query<(Entity, &Segment, Option<&Tooltip>, Option<&OwnedTooltip>)>,
+    segments: Query<(
+        Entity,
+        &Segment,
+        Option<&Tooltip>,
+        Option<&OwnedTooltip>,
+        Option<&Children>,
+    )>,
     item_icons: Query<&ItemIcon>,
     items: Query<&Item<String>>,
     controls: Query<&SegmentLabels>,
-    mut icons: Query<(Entity, &ChildOf, &mut ImageNode), With<SegmentIcon>>,
-    mut labels: Query<(&ChildOf, &mut Node), With<SegmentLabel>>,
+    mut icons: Query<&mut ImageNode, With<SegmentIcon>>,
+    mut labels: Query<&mut Node, With<SegmentLabel>>,
     mut commands: Commands,
 ) {
     let removed = removed_icons.read().count() > 0;
@@ -418,16 +424,19 @@ fn sync_icons(
         return;
     }
     let mut restyle = Vec::new();
-    for (segment_id, segment, tooltip, owned) in &segments {
+    for (segment_id, segment, tooltip, owned, children) in &segments {
+        let children = children.map_or(&[][..], |c| &c[..]);
         let icon = item_icons.get(segment.item()).ok();
         let hidden = controls
             .get(segment.owner())
             .is_ok_and(|labels| *labels == SegmentLabels::Hidden)
             && icon.is_some();
-        let existing = icons.iter_mut().find(|(_, c, _)| c.parent() == segment_id);
-        match (icon, existing) {
-            (Some(icon), Some((_, _, mut image))) => {
-                if image.image != icon.0 {
+        let existing_id = children.iter().copied().find(|c| icons.contains(*c));
+        match (icon, existing_id) {
+            (Some(icon), Some(id)) => {
+                if let Ok(mut image) = icons.get_mut(id)
+                    && image.image != icon.0
+                {
                     image.image = icon.0.clone();
                 }
             }
@@ -448,17 +457,17 @@ fn sync_icons(
                 commands.entity(segment_id).insert_children(0, &[id]);
                 restyle.push(segment.owner());
             }
-            (None, Some((id, _, _))) => {
+            (None, Some(id)) => {
                 commands.entity(id).despawn();
             }
             (None, None) => {}
         }
-        for (child_of, mut node) in &mut labels {
-            if child_of.parent() == segment_id {
-                let display = if hidden { Display::None } else { Display::Flex };
-                if node.display != display {
-                    node.display = display;
-                }
+        let display = if hidden { Display::None } else { Display::Flex };
+        for &child in children {
+            if let Ok(mut node) = labels.get_mut(child)
+                && node.display != display
+            {
+                node.display = display;
             }
         }
         // A tooltip whose text is not the one the widget added replaced it: it is the app's.
