@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use bevy::camera::ClearColor;
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::select::{Item, Selection};
@@ -48,10 +49,14 @@ enum Workload {
     VirtualListScrolling,
     /// Several `VirtualList`s side by side, idle.
     VirtualLists,
+    /// Many independent `FilterChips`; one row is marked changed every frame.
+    FilterChipsOneChanging,
+    /// The same `FilterChips`, idle: the floor the changing workload is read against.
+    FilterChipsIdle,
 }
 
 impl Workload {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 9] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -59,6 +64,8 @@ impl Workload {
         Self::VirtualList,
         Self::VirtualListScrolling,
         Self::VirtualLists,
+        Self::FilterChipsOneChanging,
+        Self::FilterChipsIdle,
     ];
 
     const fn name(self) -> &'static str {
@@ -70,6 +77,8 @@ impl Workload {
             Self::VirtualList => "virtual-list",
             Self::VirtualListScrolling => "virtual-list-scrolling",
             Self::VirtualLists => "virtual-lists",
+            Self::FilterChipsOneChanging => "filter-chips-one-changing",
+            Self::FilterChipsIdle => "filter-chips-idle",
         }
     }
 
@@ -80,6 +89,7 @@ impl Workload {
             Self::BevyNodes | Self::Tooltips => 5_000,
             Self::VirtualList | Self::VirtualListScrolling => 100_000,
             Self::VirtualLists => 20,
+            Self::FilterChipsOneChanging | Self::FilterChipsIdle => 500,
         }
     }
 
@@ -258,6 +268,18 @@ fn frame(app: &mut App, workload: Workload, index: usize) {
             position.0.y = (index * 7 % 100_000) as f32;
         }
     }
+    if workload == Workload::FilterChipsOneChanging {
+        // Marks one row changed without touching what layout sees, so the frame shows
+        // what the widgets' structure systems cost and not a relayout.
+        let world = app.world_mut();
+        let mut query = world.query::<&mut FilterChips>();
+        let count = query.iter(world).count();
+        if count > 0
+            && let Some(mut chips) = query.iter_mut(world).nth(index * 7 % count)
+        {
+            chips.set_changed();
+        }
+    }
     app.update();
 }
 
@@ -313,6 +335,18 @@ fn spawn(world: &mut World, run: Run) {
             Workload::VirtualLists => {
                 for _ in 0..run.size {
                     virtual_list(root, 1_000);
+                }
+            }
+            Workload::FilterChipsOneChanging | Workload::FilterChipsIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        FilterChips,
+                        Selection::builder()
+                            .one()
+                            .build_with_items((0..3).map(move |chip| Item {
+                                data: Chip::new(format!("Chip {row}.{chip}")),
+                            })),
+                    ));
                 }
             }
         });

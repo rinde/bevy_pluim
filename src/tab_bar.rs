@@ -2,6 +2,7 @@
 
 use bevy::a11y::AccessibilityNode;
 use bevy::camera::visibility::VisibilitySystems;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
@@ -403,14 +404,24 @@ fn sync_selected_tab(
 /// Keeps [`SelectedTab`] and the colours of the tabs in step with the selection, own or
 /// referenced.
 fn selection_change(
-    changed: Query<(), Changed<Selection>>,
+    changed: Query<Entity, Changed<Selection>>,
     bars: Query<Entity, With<TabBar>>,
+    selections: SelectionParam,
     mut commands: Commands,
 ) {
+    let changed: EntityHashSet = changed.iter().collect();
     if changed.is_empty() {
         return;
     }
+    // Only the bars whose own selection, or the one they refer to, changed.
     for bar in &bars {
+        if !changed.contains(&bar)
+            && !selections
+                .get_ref(bar)
+                .is_some_and(|r| changed.contains(&r))
+        {
+            continue;
+        }
         commands.run_system_cached_with(sync_selected_tab, bar);
         commands.run_system_cached_with(theme_tab_bars, Some(bar));
     }

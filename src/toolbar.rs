@@ -12,7 +12,7 @@ use crate::focus::{
 };
 use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
-use crate::select::{Item, SelectionParam, structure_may_have_changed};
+use crate::select::{Item, SelectionParam, StructureChanges};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
@@ -58,12 +58,7 @@ impl Plugin for ToolbarPlugin {
             .register_type::<ToolbarButton>()
             .add_systems(
                 Update,
-                (
-                    sync_buttons.run_if(structure_may_have_changed::<Toolbar, Tool>),
-                    update_buttons,
-                    sync_tooltips,
-                )
-                    .chain(),
+                (sync_buttons, update_buttons, sync_tooltips).chain(),
             )
             .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
@@ -324,7 +319,8 @@ enum Slot {
 /// Spawns the buttons and group dividers of every [`Toolbar`] again when its items, their
 /// groups or its style no longer match the children.
 fn sync_buttons(
-    toolbars: Query<(Entity, &Toolbar, Option<&Children>)>,
+    mut changes: StructureChanges<Toolbar, Tool>,
+    toolbars: Query<(&Toolbar, Option<&Children>)>,
     buttons: Query<(&ToolbarButton, &ToolbarButtonRefs)>,
     dividers: Query<(), With<GroupDivider>>,
     items: Query<&Item<Tool>>,
@@ -332,7 +328,10 @@ fn sync_buttons(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (toolbar_ref, toolbar, children) in &toolbars {
+    for toolbar_ref in changes.affected(&selections) {
+        let Ok((toolbar, children)) = toolbars.get(toolbar_ref) else {
+            continue;
+        };
         let Some((_, values)) = selections.get_item_values(toolbar_ref) else {
             continue;
         };

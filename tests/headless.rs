@@ -9701,6 +9701,263 @@ fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
     assert_eq!(chip_views(&app, chips).len(), 3);
 }
 
+/// Breaks a chips row by hand (one chip view despawned) so only a rebuild repairs it.
+fn break_chips(app: &mut App, chips: Entity) -> Entity {
+    let views = chip_views(app, chips);
+    let item = app.world().get::<ChipView>(views[1]).unwrap().item();
+    app.world_mut().entity_mut(views[1]).despawn();
+    item
+}
+
+#[test]
+fn a_change_to_one_chips_source_leaves_independent_chips_alone() {
+    let mut app = headless_app();
+    let (_, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, three_chips());
+    let item = break_chips(&mut app, first);
+    break_chips(&mut app, second);
+    settle(&mut app);
+    assert_eq!(chip_views(&app, first).len(), 2);
+    assert_eq!(chip_views(&app, second).len(), 2);
+
+    app.world_mut()
+        .get_mut::<Item<Chip>>(item)
+        .unwrap()
+        .set_changed();
+    settle(&mut app);
+    assert_eq!(
+        chip_views(&app, first).len(),
+        3,
+        "the changed source rebuilds"
+    );
+    assert_eq!(
+        chip_views(&app, second).len(),
+        2,
+        "an independent one is not looked at"
+    );
+}
+
+#[test]
+fn chips_sharing_a_selection_or_items_are_all_rebuilt_by_a_change_to_the_source() {
+    let mut app = headless_app();
+    let (root, first) = spawn_chips(&mut app, three_chips());
+    let (_, other) = spawn_chips(&mut app, three_chips());
+    let shared = app
+        .world_mut()
+        .spawn((FilterChips, Selection::reference(first), ChildOf(root)))
+        .id();
+    let over_items = app
+        .world_mut()
+        .spawn((
+            FilterChips,
+            Selection::Value(SelectionValue::ZeroOrOne(None)),
+            ItemsRef(first),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    for chips in [first, shared, over_items, other] {
+        assert_eq!(chip_views(&app, chips).len(), 3);
+    }
+    let item = break_chips(&mut app, first);
+    break_chips(&mut app, shared);
+    break_chips(&mut app, over_items);
+    break_chips(&mut app, other);
+    settle(&mut app);
+
+    app.world_mut()
+        .get_mut::<Item<Chip>>(item)
+        .unwrap()
+        .set_changed();
+    settle(&mut app);
+    for chips in [first, shared, over_items] {
+        assert_eq!(chip_views(&app, chips).len(), 3);
+    }
+    assert_eq!(chip_views(&app, other).len(), 2);
+
+    // A new item of the source reaches every widget that draws from it, and only those.
+    app.world_mut().spawn((
+        Item {
+            data: Chip::new("Extra"),
+        },
+        ItemOf(first),
+    ));
+    settle(&mut app);
+    for chips in [first, shared, over_items] {
+        assert_eq!(chip_views(&app, chips).len(), 4);
+    }
+    assert_eq!(chip_views(&app, other).len(), 2);
+}
+
+#[test]
+fn replacing_the_items_ref_moves_the_chips_to_the_new_source_and_removals_are_seen() {
+    let mut app = headless_app();
+    let (root, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, [Chip::new("X"), Chip::new("Y"), Chip::new("Z")]);
+    let over = app
+        .world_mut()
+        .spawn((
+            FilterChips,
+            Selection::Value(SelectionValue::ZeroOrOne(None)),
+            ItemsRef(first),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    let texts = |app: &App| -> Vec<String> {
+        chip_views(app, over)
+            .into_iter()
+            .map(|v| chip_texts(app, v).0)
+            .collect()
+    };
+    assert_eq!(texts(&app), ["All", "Running", "Problems"]);
+
+    app.world_mut().entity_mut(over).insert(ItemsRef(second));
+    settle(&mut app);
+    assert_eq!(texts(&app), ["X", "Y", "Z"]);
+
+    // A removal in the old source no longer reaches it; one in the new source does.
+    let old_item = app
+        .world()
+        .get::<ChipView>(chip_views(&app, first)[0])
+        .unwrap()
+        .item();
+    app.world_mut().entity_mut(old_item).despawn();
+    settle(&mut app);
+    assert_eq!(texts(&app), ["X", "Y", "Z"]);
+    assert_eq!(chip_views(&app, first).len(), 2);
+
+    let new_item = app
+        .world()
+        .get::<ChipView>(chip_views(&app, second)[2])
+        .unwrap()
+        .item();
+    app.world_mut().entity_mut(new_item).despawn();
+    settle(&mut app);
+    assert_eq!(texts(&app), ["X", "Y"]);
+    assert_eq!(chip_views(&app, second).len(), 2);
+
+    // An item that stays under its owner but stops being a chip.
+    let kept = app
+        .world()
+        .get::<ChipView>(chip_views(&app, second)[0])
+        .unwrap()
+        .item();
+    app.world_mut().entity_mut(kept).remove::<Item<Chip>>();
+    settle(&mut app);
+    assert_eq!(texts(&app), ["Y"]);
+    assert_eq!(chip_views(&app, second).len(), 1);
+}
+
+#[test]
+fn a_pending_selection_is_repaired_when_its_items_arrive_and_the_chips_follow() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let chips = app
+        .world_mut()
+        .spawn((
+            FilterChips,
+            Selection::builder()
+                .one()
+                .build_with_items(std::iter::empty::<Item<Chip>>()),
+            ChildOf(root),
+        ))
+        .id();
+    let other = app
+        .world_mut()
+        .spawn((
+            FilterChips,
+            Selection::builder().one().build_with_items([Item {
+                data: Chip::new("Only"),
+            }]),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    assert!(chip_views(&app, chips).is_empty());
+    let other_before = chip_views(&app, other);
+    assert_eq!(other_before.len(), 1);
+    app.world_mut().entity_mut(other_before[0]).despawn();
+
+    app.world_mut().spawn((
+        Item {
+            data: Chip::new("First"),
+        },
+        ItemOf(chips),
+    ));
+    settle(&mut app);
+    let views = chip_views(&app, chips);
+    assert_eq!(views.len(), 1);
+    assert_eq!(chip_texts(&app, views[0]).0, "First");
+    let selected = app
+        .world()
+        .get::<Selection>(chips)
+        .unwrap()
+        .as_selection()
+        .unwrap()
+        .single();
+    assert_eq!(
+        selected,
+        Some(app.world().get::<ChipView>(views[0]).unwrap().item())
+    );
+    assert!(
+        chip_views(&app, other).is_empty(),
+        "the unrelated row is left alone"
+    );
+}
+
+#[test]
+fn a_tab_bar_follows_only_the_selection_it_draws_from() {
+    let mut app = headless_app();
+    let items = || ["General", "Audio", "Input"].map(Item::new);
+    let first = spawn_tab_bar(
+        &mut app,
+        Selection::builder().one().build_with_items(items()),
+    );
+    let second = spawn_tab_bar(
+        &mut app,
+        Selection::builder().one().build_with_items(items()),
+    );
+    let root = app.world().get::<ChildOf>(first).unwrap().parent();
+    let shared = app
+        .world_mut()
+        .spawn((TabBar, Selection::reference(first), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let tab_item = |app: &App, bar: Entity, i: usize| {
+        app.world()
+            .get::<TabBarTab>(tabs_of(app, bar)[i])
+            .unwrap()
+            .item()
+    };
+    let wanted = tab_item(&app, first, 2);
+
+    // Knock the second bar's `SelectedTab` out of step without a selection change.
+    app.world_mut().entity_mut(second).insert(SelectedTab(None));
+    settle(&mut app);
+    assert_eq!(selected_tab(&app, second), None);
+
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    settle(&mut app);
+    assert_eq!(selected_tab(&app, first), Some(tabs_of(&app, first)[2]));
+    assert_eq!(selected_tab(&app, shared), Some(tabs_of(&app, shared)[2]));
+    assert_eq!(
+        selected_tab(&app, second),
+        None,
+        "the independent bar is not looked at"
+    );
+
+    // Its own selection change does reach it.
+    let own = tab_item(&app, second, 1);
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Selection::Value(SelectionValue::One(own)));
+    settle(&mut app);
+    assert_eq!(selected_tab(&app, second), Some(tabs_of(&app, second)[1]));
+}
+
 #[test]
 fn a_toolbar_does_not_look_at_its_buttons_in_a_frame_without_a_change() {
     let mut app = headless_app();
