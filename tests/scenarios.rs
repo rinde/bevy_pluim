@@ -2121,9 +2121,24 @@ fn image_target_app() -> App {
 /// otherwise never is.
 fn draw_to_the_image(
     image: Res<TargetImage>,
+    mut images: ResMut<Assets<Image>>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     mut cameras: Query<(Entity, &mut RenderTarget), With<Camera>>,
     mut commands: Commands,
 ) {
+    // The image is as large as the window the scenario asks for (`window_size`), so popups,
+    // which are placed inside their UI target, see the same room in both variants.
+    if let Some(window) = windows.iter().next() {
+        let width = window.resolution.physical_width().max(1);
+        let height = window.resolution.physical_height().max(1);
+        if let Some(mut target) = images.get_mut(&image.0)
+            && (target.width(), target.height()) != (width, height)
+        {
+            target.texture_descriptor.size.width = width;
+            target.texture_descriptor.size.height = height;
+            target.data = None;
+        }
+    }
     for (camera, mut target) in &mut cameras {
         if matches!(*target, RenderTarget::Window(_)) {
             *target = RenderTarget::Image(image.0.clone().into());

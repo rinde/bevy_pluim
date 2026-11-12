@@ -12,9 +12,9 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Selected, UiSystems};
 use bevy::ui_widgets::{ActiveDescendant, Button, ListItem};
-use bevy::window::PrimaryWindow;
 use itertools::Either;
 
+use crate::float::UiViewport;
 use crate::focus::{AccessibilitySync, DrawFocusRing, FOCUS_RING_REACH, TabStop};
 use crate::list::{
     CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, SEPARATED_ITEM_PADDING,
@@ -135,7 +135,7 @@ impl std::error::Error for RowHeightError {}
 /// that size, whatever the number of items.
 ///
 /// Put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) that scrolls vertically: the
-/// view is the nearest ancestor whose [`Node::overflow`] scrolls along y, or the window when
+/// view is the nearest ancestor whose [`Node::overflow`] scrolls along y, or the UI target (the window, image or camera viewport it is drawn to) when
 /// there is none. It is as wide as its parent.
 ///
 /// A row shows the text of an `Item<String>`. With an [`ItemViewCreator`] (added with the
@@ -400,7 +400,7 @@ struct Views<'w, 's> {
         ),
         (Without<VirtualList>, Without<VirtualListRow>),
     >,
-    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    viewport: UiViewport<'w, 's>,
 }
 
 impl Views<'_, '_> {
@@ -421,7 +421,7 @@ impl Views<'_, '_> {
         let Some((area, (_, area_computed, area_transform, scroll))) =
             area.and_then(|area| Some((area, self.areas.get(area).ok()?)))
         else {
-            let height = self.windows.iter().next().map_or(0.0, Window::height);
+            let height = self.viewport.size_of(list).map_or(0.0, |size| size.y);
             return Some(View {
                 area: None,
                 offset: list_top,

@@ -480,6 +480,18 @@ of them (`just example gallery -- --run-all stack link`).
   home-made `Float`, not `bevy_ui_widgets`' `MenuButton` / popover: that would
   change positioning, z-index and outside-click behaviour, so it is a ticket of
   its own if wanted.
+- **Popups are placed against the UI target of their widget, not the primary window (#669).**
+  `float.rs`'s crate-private `UiViewport::size_of(node)` returns the logical size of the render
+  target the node is drawn to: Bevy's `ComputedUiRenderTargetInfo` (the camera's viewport in
+  physical pixels over its scale factor, `UiScale` included), so a camera with a restricted
+  viewport, a second window or an image target clamps against its own space. UI coordinates are
+  viewport-local, so no offset is added. Unusable data (no camera, an empty viewport, a scale that
+  is not positive and finite) falls back to the primary window's size (`target_size`), and with
+  neither the popup is left where it is. `Combo`, `FilterCombo`, `ColorPaletteCombo`, `Tooltip`
+  and `VirtualList`'s fallback height (no scroll area around it) all use it
+  (`a_combo_list_stays_inside_the_ui_target_of_its_button_and_falls_back_to_the_window`,
+  `a_tooltip_popup_stays_inside_a_restricted_viewport_not_the_primary_window`; the headless app has
+  no camera, so the tests set the target data by reflection).
 - **A `Float` stays in its window (investigation #506, not built).** Putting a popup in a
   window of its own, so it can leave the application window, was looked at against Bevy 0.20
   and not implemented. What the Bevy source says: a UI tree is drawn by the camera of its
@@ -505,7 +517,7 @@ of them (`just example gallery -- --run-all stack link`).
     keyboard focus" change meaning; a tooltip must never take focus at all;
   - every placement system (`place_open_lists`, the palette combo, `Tooltip`,
     `VirtualList`'s window height, `float.rs`'s `keep_in_window_x` / `below_or_above`) reads
-    `Single<&Window, With<PrimaryWindow>>` and works in the primary window's logical pixels;
+    the UI target's logical size (`UiViewport`, see above), which a popup window would have to replace;
     a popup window needs screen coordinates (`Window::position` plus the widget's offset,
     the scale factor of whichever monitor it is on) and a reflow of the window when the popup
     resizes;

@@ -30,7 +30,8 @@ use bevy::prelude::*;
 use bevy::reflect::structs::Struct;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
 use bevy::ui::{
-    ComputedNode, FixedNode, InteractionDisabled, Pressed, Selected, UiGlobalTransform,
+    ComputedNode, ComputedUiRenderTargetInfo, FixedNode, InteractionDisabled, Pressed, Selected,
+    UiGlobalTransform,
 };
 use bevy::ui_widgets::{
     Activate, ActiveDescendant, Button, ControlOrientation, ListBox, ListBoxMultiSelect, ListItem,
@@ -6622,6 +6623,80 @@ fn placed_popup(app: &mut App, popup_size: Vec2) -> (f32, f32) {
         _ => None,
     };
     (px(node.left).unwrap(), px(node.top).unwrap())
+}
+
+/// Gives `node` the target data Bevy would propagate from its camera: a viewport of `physical`
+/// pixels on a target with `scale_factor` (the headless app has no camera to compute it).
+fn set_render_target(app: &mut App, node: Entity, physical: UVec2, scale_factor: f32) {
+    let mut info = ComputedUiRenderTargetInfo::default();
+    info.field_mut("physical_size").unwrap().apply(&physical);
+    info.field_mut("scale_factor").unwrap().apply(&scale_factor);
+    app.world_mut().entity_mut(node).insert(info);
+}
+
+#[test]
+fn a_tooltip_popup_stays_inside_a_restricted_viewport_not_the_primary_window() {
+    let popup = Vec2::new(100.0, 20.0);
+    // Without target data the primary window (800 wide) is the space: centred on 390.
+    let (mut app, _) = placement_app((800, 600), Vec2::new(390.0, 100.0), Vec2::new(20.0, 20.0));
+    assert!((placed_popup(&mut app, popup).0 - 340.0).abs() < 0.01);
+    // A 400 x 300 logical viewport (800 x 600 physical at scale 2) pushes it in from its edge.
+    let (mut app, node) = placement_app((800, 600), Vec2::new(390.0, 100.0), Vec2::new(20.0, 20.0));
+    set_render_target(&mut app, node, UVec2::new(800, 600), 2.0);
+    let (left, _) = placed_popup(&mut app, popup);
+    assert!(
+        (left + popup.x - (400.0 - 6.0)).abs() < 0.01,
+        "left {left} does not keep 6 px from the viewport's right edge"
+    );
+    // An empty viewport is unusable data and falls back to the primary window.
+    let (mut app, node) = placement_app((800, 600), Vec2::new(390.0, 100.0), Vec2::new(20.0, 20.0));
+    set_render_target(&mut app, node, UVec2::ZERO, 1.0);
+    assert!((placed_popup(&mut app, popup).0 - 340.0).abs() < 0.01);
+}
+
+#[test]
+fn a_combo_list_stays_inside_the_ui_target_of_its_button_and_falls_back_to_the_window() {
+    let list_left = |target: Option<(UVec2, f32)>| {
+        let mut app = headless_app();
+        app.world_mut().spawn((
+            Window {
+                resolution: (800, 600).into(),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+        let (combo, button) = spawn_combo(&mut app);
+        let list = app.world().entity(combo).get::<ComboRefs>().unwrap().list();
+        app.world_mut().entity_mut(button).insert((
+            ComputedNode {
+                size: Vec2::new(40.0, 20.0),
+                inverse_scale_factor: 1.0,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(390.0, 100.0)),
+        ));
+        app.world_mut().entity_mut(list).insert(ComputedNode {
+            size: Vec2::new(100.0, 50.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+        if let Some((physical, scale)) = target {
+            set_render_target(&mut app, button, physical, scale);
+        }
+        click(&mut app, button);
+        app.update();
+        let Val::Px(left) = app.world().get::<Node>(list).unwrap().left else {
+            return f32::NAN;
+        };
+        left
+    };
+    // The button's left edge, 370, fits the window.
+    assert!((list_left(None) - 370.0).abs() < 0.01);
+    // A 400 wide viewport keeps the 100 wide list 10 px inside its right edge.
+    assert!((list_left(Some((UVec2::new(400, 300), 1.0))) - 290.0).abs() < 0.01);
+    assert!((list_left(Some((UVec2::new(800, 600), 2.0))) - 290.0).abs() < 0.01);
+    // Unusable target data falls back to the primary window.
+    assert!((list_left(Some((UVec2::ZERO, 1.0))) - 370.0).abs() < 0.01);
 }
 
 #[test]
