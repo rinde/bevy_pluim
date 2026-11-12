@@ -6,6 +6,7 @@
 //! through [`ItemsRef`]. Widgets read and change selections through
 //! [`SelectionParam`].
 
+use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::query::{QueryData, QueryFilter, QuerySingleError, ROQueryItem};
 use bevy::ecs::relationship::RelatedSpawner;
@@ -822,6 +823,17 @@ where
         self.item_values.get(items_ref).ok()
     }
 
+    /// The entity holding the value of the selection on `widget` and the entity its items are
+    /// on, whether or not that one has any [`ItemValues`] yet.
+    pub(crate) fn sources_of(&self, widget: Entity) -> Option<(Entity, Entity)> {
+        let root = self.get_ref(widget)?;
+        let items = self
+            .items_refs
+            .get(root)
+            .map_or(root, |(_, ItemsRef(sel))| *sel);
+        Some((root, items))
+    }
+
     /// Changes the one selection matching the filter.
     ///
     /// `updater` returns the new value, or `None` to leave it as it is. Returns whether the selection changed.
@@ -913,27 +925,76 @@ impl<T: Into<String>> From<T> for Item<String> {
     }
 }
 
-/// A run condition for a system that builds one child per item of a widget `W` over items of
-/// type `T`: true in a frame where something it builds from may have changed (a widget added or
-/// changed, an item added, removed or changed, a selection or its [`ItemsRef`] changed), and
-/// false in every other frame, so the system does no per-item work then.
-pub(crate) fn structure_may_have_changed<W: Component, T: Send + Sync + 'static>(
-    widgets: Query<(), Changed<W>>,
-    values: Query<(), Changed<ItemValues>>,
-    items: Query<(), Changed<Item<T>>>,
-    selections: Query<(), Changed<Selection>>,
-    items_refs: Query<(), Changed<ItemsRef>>,
-    mut removed_items: RemovedComponents<Item<T>>,
-    mut removed_item_of: RemovedComponents<ItemOf>,
-) -> bool {
-    // Both readers are drained, so neither keeps the condition true in the next frame.
-    let removed = removed_items.read().count() + removed_item_of.read().count() > 0;
-    removed
-        || !widgets.is_empty()
-        || !values.is_empty()
-        || !items.is_empty()
-        || !selections.is_empty()
-        || !items_refs.is_empty()
+/// What changed since the system last ran that a widget `W` over items of type `T` builds its
+/// children from, resolved to the widgets it affects.
+///
+/// [`Self::affected`] is empty in a frame where nothing changed, so a system that builds a child
+/// per item does no per-item work then. In a frame with a change it names only the widgets
+/// whose own entity, selection entity (a [`Selection::Ref`] followed) or items entity
+/// ([`ItemsRef`] followed) was touched, so a change to one source leaves independent widgets
+/// alone while every widget sharing the source is still named. A widget that changed itself is
+/// always named.
+#[derive(SystemParam)]
+pub(crate) struct StructureChanges<'w, 's, W: Component, T: Send + Sync + 'static> {
+    widgets: Query<'w, 's, Entity, Changed<W>>,
+    all_widgets: Query<'w, 's, Entity, With<W>>,
+    values: Query<'w, 's, Entity, Changed<ItemValues>>,
+    items: Query<'w, 's, &'static ItemOf, Changed<Item<T>>>,
+    selections: Query<'w, 's, Entity, Changed<Selection>>,
+    items_refs: Query<'w, 's, Entity, Changed<ItemsRef>>,
+    item_owners: Query<'w, 's, &'static ItemOf>,
+    removed_values: RemovedComponents<'w, 's, ItemValues>,
+    removed_items: RemovedComponents<'w, 's, Item<T>>,
+    removed_item_of: RemovedComponents<'w, 's, ItemOf>,
+}
+
+impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
+    /// The widgets that need to look at their items again this frame.
+    pub(crate) fn affected(&mut self, selections: &SelectionParam) -> Vec<Entity> {
+        // Both readers are drained, so neither keeps the result non-empty in the next frame.
+        // A despawned or moved item changed the `ItemValues` of its owner, which is seen
+        // below; only an item that lost its `Item<T>` but kept its owner needs the lookup.
+        let removed: Vec<Entity> = self
+            .removed_items
+            .read()
+            .chain(self.removed_item_of.read())
+            .collect();
+
+        // Entities whose items changed, matched against a widget's items entity, and entities
+        // whose selection changed, matched against its selection entity. `ItemValues` goes
+        // when its last item does, which `Changed` does not see.
+        let mut item_sources: EntityHashSet = EntityHashSet::default();
+        item_sources.extend(self.values.iter());
+        item_sources.extend(self.removed_values.read());
+        item_sources.extend(self.items.iter().map(|owner| owner.0));
+        item_sources.extend(
+            removed
+                .into_iter()
+                .filter_map(|item| self.item_owners.get(item).ok().map(|owner| owner.0)),
+        );
+        let selection_sources: EntityHashSet = self.selections.iter().collect();
+        // A widget whose own `ItemsRef` was replaced is named through its own entity.
+        let replaced: EntityHashSet = self.items_refs.iter().collect();
+
+        let mut affected: EntityHashSet = self.widgets.iter().collect();
+        if !(item_sources.is_empty() && selection_sources.is_empty() && replaced.is_empty()) {
+            for widget in &self.all_widgets {
+                if affected.contains(&widget) {
+                    continue;
+                }
+                let named = item_sources.contains(&widget)
+                    || selection_sources.contains(&widget)
+                    || replaced.contains(&widget)
+                    || selections.sources_of(widget).is_some_and(|(root, items)| {
+                        selection_sources.contains(&root) || item_sources.contains(&items)
+                    });
+                if named {
+                    affected.insert(widget);
+                }
+            }
+        }
+        affected.into_iter().collect()
+    }
 }
 
 /// Triggered on an [`ItemValues`] entity when its items change; holds the new items.
@@ -1078,55 +1139,165 @@ mod tests {
     struct Widget;
 
     #[derive(Resource, Default)]
-    struct Runs(u32);
+    struct Affected(Vec<Entity>);
 
     fn structure_app() -> App {
         let mut app = App::new();
-        app.init_resource::<Runs>().add_systems(
+        app.init_resource::<Affected>().add_systems(
             Update,
-            (|mut runs: ResMut<Runs>| runs.0 += 1)
-                .run_if(structure_may_have_changed::<Widget, String>),
+            |mut changes: StructureChanges<Widget, String>,
+             selections: SelectionParam,
+             mut affected: ResMut<Affected>| {
+                affected.0 = changes.affected(&selections);
+                affected.0.sort();
+            },
         );
         app
     }
 
-    fn runs_in_next_frame(app: &mut App) -> u32 {
-        let runs = |app: &App| app.world().get_resource::<Runs>().map_or(0, |r| r.0);
-        let before = runs(app);
+    /// The widgets named by the next frame, sorted.
+    fn affected_in_next_frame(app: &mut App) -> Vec<Entity> {
         app.update();
-        runs(app) - before
+        app.world()
+            .get_resource::<Affected>()
+            .map(|a| a.0.clone())
+            .unwrap_or_default()
+    }
+
+    fn sorted<const N: usize>(mut entities: [Entity; N]) -> Vec<Entity> {
+        entities.sort();
+        entities.to_vec()
+    }
+
+    /// A widget over a selection of its own with one item.
+    fn widget_with_items(app: &mut App, label: &str) -> (Entity, Entity) {
+        let widget = app
+            .world_mut()
+            .spawn((Widget, Selection::Value(SelectionValue::ZeroOrOne(None))))
+            .id();
+        let item = app
+            .world_mut()
+            .spawn((Item::new(label), ItemOf(widget)))
+            .id();
+        (widget, item)
     }
 
     #[test]
-    fn the_structure_condition_is_false_in_a_frame_without_a_change_and_true_after_one() {
+    fn the_structure_changes_name_no_widget_in_a_frame_without_a_change_and_the_widget_after_one() {
         let mut app = structure_app();
-        let widget = app.world_mut().spawn(Widget).id();
-        let values = app.world_mut().spawn_empty().id();
-        let item = app.world_mut().spawn((Item::new("a"), ItemOf(values))).id();
-        assert_eq!(runs_in_next_frame(&mut app), 1, "new entities are changes");
+        let (widget, item) = widget_with_items(&mut app, "a");
+        assert_eq!(
+            affected_in_next_frame(&mut app),
+            vec![widget],
+            "new entities are changes"
+        );
         for _ in 0..3 {
-            assert_eq!(runs_in_next_frame(&mut app), 0);
+            assert!(affected_in_next_frame(&mut app).is_empty());
         }
 
         if let Some(mut changed) = app.world_mut().get_mut::<Widget>(widget) {
             changed.set_changed();
         }
-        assert_eq!(runs_in_next_frame(&mut app), 1);
-        assert_eq!(runs_in_next_frame(&mut app), 0);
+        assert_eq!(affected_in_next_frame(&mut app), vec![widget]);
+        assert!(affected_in_next_frame(&mut app).is_empty());
 
         if let Some(mut changed) = app.world_mut().get_mut::<Item<String>>(item) {
             changed.set_changed();
         }
-        assert_eq!(runs_in_next_frame(&mut app), 1);
-        assert_eq!(runs_in_next_frame(&mut app), 0);
+        assert_eq!(affected_in_next_frame(&mut app), vec![widget]);
+        assert!(affected_in_next_frame(&mut app).is_empty());
 
         app.world_mut().entity_mut(item).despawn();
         assert_eq!(
-            runs_in_next_frame(&mut app),
-            1,
+            affected_in_next_frame(&mut app),
+            vec![widget],
             "a removed item is a change"
         );
-        assert_eq!(runs_in_next_frame(&mut app), 0);
+        assert!(affected_in_next_frame(&mut app).is_empty());
+    }
+
+    #[test]
+    fn a_change_to_one_source_names_only_the_widgets_that_draw_from_it() {
+        let mut app = structure_app();
+        let (first, first_item) = widget_with_items(&mut app, "a");
+        let (second, _) = widget_with_items(&mut app, "b");
+        // Two more widgets sharing the first one's selection and its items.
+        let shared = app
+            .world_mut()
+            .spawn((Widget, Selection::reference(first)))
+            .id();
+        // One with a selection of its own over the first one's items.
+        let own = app
+            .world_mut()
+            .spawn((
+                Widget,
+                Selection::Value(SelectionValue::ZeroOrOne(None)),
+                ItemsRef(first),
+            ))
+            .id();
+        let _ = affected_in_next_frame(&mut app);
+        assert!(affected_in_next_frame(&mut app).is_empty());
+
+        // A new item of the first source: its widget, the sharing one and the one over its items.
+        app.world_mut().spawn((Item::new("c"), ItemOf(first)));
+        assert_eq!(
+            affected_in_next_frame(&mut app),
+            sorted([first, shared, own])
+        );
+
+        // An item changed in place.
+        if let Some(mut changed) = app.world_mut().get_mut::<Item<String>>(first_item) {
+            changed.set_changed();
+        }
+        assert_eq!(
+            affected_in_next_frame(&mut app),
+            sorted([first, shared, own])
+        );
+
+        // The second source is independent of all of them.
+        app.world_mut().spawn((Item::new("d"), ItemOf(second)));
+        assert_eq!(affected_in_next_frame(&mut app), vec![second]);
+
+        // A selection change on the one over the first items touches only it.
+        app.world_mut()
+            .entity_mut(own)
+            .insert(Selection::Value(SelectionValue::ZeroOrOne(None)));
+        assert_eq!(affected_in_next_frame(&mut app), vec![own]);
+
+        // The shared one follows the selection it refers to.
+        app.world_mut()
+            .entity_mut(first)
+            .insert(Selection::Value(SelectionValue::ZeroOrOne(None)));
+        assert_eq!(affected_in_next_frame(&mut app), sorted([first, shared]));
+    }
+
+    #[test]
+    fn replacing_the_items_ref_names_the_widget_and_a_removed_item_that_kept_its_owner_names_the_source()
+     {
+        let mut app = structure_app();
+        let (first, first_item) = widget_with_items(&mut app, "a");
+        let (second, _) = widget_with_items(&mut app, "b");
+        let _ = affected_in_next_frame(&mut app);
+        let own = app
+            .world_mut()
+            .spawn((
+                Widget,
+                Selection::Value(SelectionValue::ZeroOrOne(None)),
+                ItemsRef(first),
+            ))
+            .id();
+        let _ = affected_in_next_frame(&mut app);
+
+        app.world_mut().entity_mut(own).insert(ItemsRef(second));
+        assert_eq!(affected_in_next_frame(&mut app), vec![own]);
+        assert!(affected_in_next_frame(&mut app).is_empty());
+
+        // An item that stays under its owner but stops being an `Item<String>`.
+        app.world_mut()
+            .entity_mut(first_item)
+            .remove::<Item<String>>();
+        assert_eq!(affected_in_next_frame(&mut app), vec![first]);
+        assert!(affected_in_next_frame(&mut app).is_empty());
     }
 
     fn entity(index: u32) -> Entity {

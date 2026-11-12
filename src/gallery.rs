@@ -13,7 +13,7 @@ use crate::focus::{
 };
 use crate::icon::Icon;
 use crate::label::Label;
-use crate::select::{Item, SelectionParam, structure_may_have_changed};
+use crate::select::{Item, SelectionParam, StructureChanges};
 use crate::theme::{Theme, ThemeColors};
 
 /// The width of a card, in logical pixels.
@@ -49,14 +49,7 @@ impl Plugin for GalleryPlugin {
             .register_type::<GalleryCard>()
             .register_type::<Gallery>()
             .register_type::<GalleryCardView>()
-            .add_systems(
-                Update,
-                (
-                    sync_cards.run_if(structure_may_have_changed::<Gallery, GalleryCard>),
-                    update_cards,
-                )
-                    .chain(),
-            )
+            .add_systems(Update, (sync_cards, update_cards).chain())
             .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
             .add_observer(on_activate);
     }
@@ -206,14 +199,18 @@ fn label_font(theme: &Theme) -> TextFont {
 /// Spawns the groups, dividers and cards of every [`Gallery`] again when its items or their
 /// groups no longer match what was built.
 fn sync_cards(
-    galleries: Query<(Entity, Option<&Children>, Option<&BuiltGroups>), With<Gallery>>,
+    mut changes: StructureChanges<Gallery, GalleryCard>,
+    galleries: Query<(Option<&Children>, Option<&BuiltGroups>), With<Gallery>>,
     owned: Query<(), With<GalleryOwned>>,
     items: Query<&Item<GalleryCard>>,
     selections: SelectionParam,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (gallery, children, built) in &galleries {
+    for gallery in changes.affected(&selections) {
+        let Ok((children, built)) = galleries.get(gallery) else {
+            continue;
+        };
         let Some((_, values)) = selections.get_item_values(gallery) else {
             continue;
         };

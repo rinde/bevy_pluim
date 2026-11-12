@@ -12,7 +12,7 @@ use bevy::ui_widgets::{Activate, Button};
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
 };
-use crate::select::{Item, Selection, SelectionParam, structure_may_have_changed};
+use crate::select::{Item, Selection, SelectionParam, StructureChanges};
 use crate::theme::{Theme, ThemeColors};
 
 /// The height of a chip.
@@ -40,7 +40,7 @@ impl Plugin for FilterChipsPlugin {
             .add_systems(
                 Update,
                 (
-                    sync_chips.run_if(structure_may_have_changed::<FilterChips, Chip>),
+                    sync_chips,
                     (|| None::<Entity>)
                         .pipe(theme_chips)
                         .run_if(resource_changed::<Theme>),
@@ -192,14 +192,18 @@ pub struct ChipCount;
 /// Spawns a chip for every item of a [`FilterChips`] that has none, and drops the chips of
 /// items that are gone, keeping the order of the items.
 fn sync_chips(
-    chips: Query<(Entity, Option<&Children>), With<FilterChips>>,
+    mut changes: StructureChanges<FilterChips, Chip>,
+    chips: Query<Option<&Children>, With<FilterChips>>,
     views: Query<&ChipView>,
     items: Query<&Item<Chip>>,
     selections: SelectionParam,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (chips_ref, children) in &chips {
+    for chips_ref in changes.affected(&selections) {
+        let Ok(children) = chips.get(chips_ref) else {
+            continue;
+        };
         let Some((_, values)) = selections.get_item_values(chips_ref) else {
             continue;
         };

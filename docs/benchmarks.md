@@ -43,6 +43,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `virtual-list` | 100 000 items | one `VirtualList` in a scroll area, idle |
 | `virtual-list-scrolling` | 100 000 items | the same list, scroll position moved every frame |
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
+| `filter-chips-one-changing` | 500 rows of 3 chips | many independent `FilterChips`; one row is marked changed every frame (no relayout), so a rebuild check that visits every row shows |
+| `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
 | `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
