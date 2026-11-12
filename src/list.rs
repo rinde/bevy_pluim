@@ -255,12 +255,37 @@ fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Hovered, ListItem)]
+#[component(on_insert = ItemView::on_insert)]
 pub struct ItemView {
     /// The item this view shows.
     pub item_ref: Entity,
     /// The list this view belongs to.
     pub list_ref: Entity,
 }
+
+impl ItemView {
+    /// Records the view on its item, so a change to the item's note finds the views to look at.
+    fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let Some(item) = world.get::<Self>(context.entity).map(|view| view.item_ref) else {
+            return;
+        };
+        world
+            .commands()
+            .entity(context.entity)
+            .insert(NoteViewOf(item));
+    }
+}
+
+/// Private relationship from a view to the item it shows: the item's [`NoteViews`] lists the
+/// views a change of its [`ItemNote`] concerns, whichever lists they belong to.
+#[derive(Component, Debug, Clone, Copy)]
+#[relationship(relationship_target = NoteViews)]
+struct NoteViewOf(Entity);
+
+/// The views that show an item.
+#[derive(Component, Debug)]
+#[relationship_target(relationship = NoteViewOf)]
+struct NoteViews(Vec<Entity>);
 
 /// A note shown after the label of an item.
 ///
@@ -359,12 +384,34 @@ fn item_notes_changed(
 /// [`ItemNote`].
 fn sync_item_notes(
     views: Query<(Entity, &ItemView, Option<&Children>, &BackgroundColor), Without<CustomView>>,
+    changed_notes: Query<Entity, Changed<ItemNote>>,
+    mut removed_notes: RemovedComponents<ItemNote>,
+    new_views: Query<Entity, Added<ItemView>>,
+    views_of_item: Query<&NoteViews>,
     notes: Query<&ItemNote>,
     mut note_texts: Query<(&mut Text, &mut TextColor, &mut TextFont, &mut ItemNoteView)>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (view, ItemView { item_ref, .. }, children, background) in &views {
+    // A theme change restyles every note; otherwise only the new views and the views of the
+    // items whose note changed or went are looked at, so an unrelated list costs nothing.
+    let affected: Vec<Entity> = if theme.is_changed() {
+        views.iter().map(|(view, ..)| view).collect()
+    } else {
+        let mut affected: Vec<Entity> = new_views.iter().collect();
+        for item in changed_notes.iter().chain(removed_notes.read()) {
+            if let Ok(of_item) = views_of_item.get(item) {
+                affected.extend(of_item.0.iter().copied());
+            }
+        }
+        affected
+    };
+    // Drain the removals when the theme branch skipped them, or they would be read again.
+    removed_notes.clear();
+    for view in affected {
+        let Ok((view, ItemView { item_ref, .. }, children, background)) = views.get(view) else {
+            continue;
+        };
         let wanted = notes
             .get(*item_ref)
             .ok()
