@@ -330,7 +330,7 @@ pub(crate) fn is_hidden(
 /// descendants as changes of their own), but `Display::None` does not touch it, so when the
 /// display of a node flips or a node is reparented the whole subtree is dirty too.
 #[derive(SystemParam)]
-struct HiddenChanges<'w, 's> {
+pub(crate) struct HiddenChanges<'w, 's> {
     visibility: Query<'w, 's, Entity, Changed<InheritedVisibility>>,
     nodes: Query<'w, 's, (Entity, &'static Node), Changed<Node>>,
     reparented: Query<'w, 's, Entity, Changed<ChildOf>>,
@@ -343,7 +343,7 @@ struct HiddenChanges<'w, 's> {
 
 impl HiddenChanges<'_, '_> {
     /// The entities whose hidden state may have changed since the last call.
-    fn dirty(&mut self) -> EntityHashSet {
+    pub(crate) fn dirty(&mut self) -> EntityHashSet {
         let mut dirty = EntityHashSet::default();
         let mut subtrees = Vec::new();
         dirty.extend(self.visibility.iter());

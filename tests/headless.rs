@@ -4894,6 +4894,69 @@ fn a_hidden_tab_bar_gives_its_tabs_tab_index_minus_one_until_shown() {
     assert_eq!(indices(&app), [-1, 0, -1]);
 }
 
+#[test]
+fn a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let tabs = tabs_of(&app, bar);
+    let index = |app: &App, tab: Entity| app.world().entity(tab).get::<TabIndex>().unwrap().0;
+
+    // Plant a wrong index without marking it changed: a quiet frame must leave it alone.
+    app.world_mut()
+        .entity_mut(tabs[2])
+        .get_mut::<TabIndex>()
+        .unwrap()
+        .bypass_change_detection()
+        .0 = 0;
+    app.update();
+    app.update();
+    assert_eq!(index(&app, tabs[2]), 0, "an idle bar was looked at");
+
+    // A move of the focus onto a tab brings the bar back in step.
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(tabs[1]));
+    app.update();
+    app.update();
+    assert_eq!(
+        tabs.iter().map(|t| index(&app, *t)).collect::<Vec<_>>(),
+        [-1, 0, -1]
+    );
+
+    // Focus gone: back to the selected tab.
+    app.world_mut().insert_resource(InputFocus::default());
+    app.update();
+    app.update();
+    assert_eq!(
+        tabs.iter().map(|t| index(&app, *t)).collect::<Vec<_>>(),
+        [0, -1, -1]
+    );
+
+    // Disabling the roving tab moves the stop to the next enabled one; enabling restores it.
+    app.world_mut()
+        .entity_mut(tabs[0])
+        .insert(InteractionDisabled);
+    app.update();
+    app.update();
+    assert_eq!(
+        tabs.iter().map(|t| index(&app, *t)).collect::<Vec<_>>(),
+        [-1, 0, -1]
+    );
+    app.world_mut()
+        .entity_mut(tabs[0])
+        .remove::<InteractionDisabled>();
+    app.update();
+    app.update();
+    assert_eq!(
+        tabs.iter().map(|t| index(&app, *t)).collect::<Vec<_>>(),
+        [0, -1, -1]
+    );
+}
+
 // ---- Separated lists ----
 
 /// A `CornerStyle::Separated` list over a `One` selection of `labels`.
