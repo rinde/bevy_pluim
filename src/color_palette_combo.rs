@@ -6,12 +6,11 @@ use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use bevy::window::PrimaryWindow;
 use itertools::Either;
 
 use crate::color_palette::ColorPalette;
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
-use crate::float::{Float, fit_vertically, keep_in_window_x};
+use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::list::{ItemView, ListLayout};
 use crate::popup::{self, ButtonLook};
@@ -380,7 +379,7 @@ fn on_insert_state(
 /// like any other.
 fn position_float(
     sub_refs: In<SubRefs>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    viewport: UiViewport,
     mut dims: Query<(&mut Node, &ComputedNode), With<ColorPaletteComboFloat>>,
     parent_dims: Query<
         (&ComputedNode, &UiGlobalTransform),
@@ -399,20 +398,23 @@ fn position_float(
         return;
     };
 
+    let Some(target) = viewport.size_of(sub_refs.button) else {
+        return;
+    };
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let float_size = float_computed_node.size() * float_computed_node.inverse_scale_factor();
     // `UiGlobalTransform` holds the centre of the node.
     let button_center = button_transform.translation * button_computed_node.inverse_scale_factor();
 
-    // Centred under the button, then pushed back inside the window.
+    // Centred under the button, then pushed back inside the UI target.
     let centered_x = button_center.x - float_size.x / 2.0;
-    node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, window.width()));
+    node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, target.x));
     let fit = fit_vertically(
         button_center.y - button_size.y / 2.0,
         button_center.y + button_size.y / 2.0,
         BUTTON_FLOAT_DIST,
         float_size.y,
-        window.height(),
+        target.y,
     );
     node.top = Val::Px(fit.top);
     // A popup taller than the window scrolls with the wheel instead of running off it.

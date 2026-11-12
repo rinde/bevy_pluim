@@ -1,9 +1,11 @@
 //! `Float`: a popup layer placed in the viewport, used by combos and tooltips.
 
 use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::system::SystemParam;
 use bevy::ecs::world::DeferredWorld;
 use bevy::prelude::*;
-use bevy::ui::FixedNode;
+use bevy::ui::{ComputedUiRenderTargetInfo, FixedNode};
+use bevy::window::PrimaryWindow;
 use itertools::Either;
 
 use crate::theme::Theme;
@@ -65,6 +67,47 @@ fn theme_float(
     }
 }
 
+/// The size, in logical pixels, of the UI target a node is drawn to: its camera's viewport
+/// divided by the target's scale factor (with `UiScale`), which is the space `left`, `top` and
+/// `UiGlobalTransform` of a [`FixedNode`] are in.
+///
+/// `target` is the physical viewport size and scale factor Bevy computed for the node, `window`
+/// the primary window's logical size. An unusable target (no camera, an empty viewport, a
+/// scale that is not positive and finite) falls back to the primary window, and with neither
+/// there is no size: the caller leaves the popup where it is.
+pub(crate) fn target_size(target: Option<(UVec2, f32)>, window: Option<Vec2>) -> Option<Vec2> {
+    target
+        .filter(|(size, scale)| size.x > 0 && size.y > 0 && scale.is_finite() && *scale > 0.0)
+        .map(|(size, scale)| size.as_vec2() / scale)
+        .or(window)
+}
+
+/// Looks up the UI target size of a node for placing its popup, see [`target_size`].
+#[derive(SystemParam)]
+pub(crate) struct UiViewport<'w, 's> {
+    targets: Query<'w, 's, &'static ComputedUiRenderTargetInfo>,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+}
+
+impl UiViewport<'_, '_> {
+    /// The logical size of the UI target `node` is drawn to, or of the primary window when the
+    /// node has no usable target data, or `None` with neither.
+    pub(crate) fn size_of(&self, node: Entity) -> Option<Vec2> {
+        let target = self
+            .targets
+            .get(node)
+            .ok()
+            .map(|info| (info.physical_size(), info.scale_factor()));
+        target_size(
+            target,
+            self.windows
+                .iter()
+                .next()
+                .map(|window| Vec2::new(window.width(), window.height())),
+        )
+    }
+}
+
 /// The distance a popup keeps from the window's edges, in logical pixels.
 pub(crate) const WINDOW_MARGIN: f32 = 10.0;
 
@@ -122,6 +165,25 @@ pub(crate) fn fit_vertically(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_target_size_is_the_viewport_in_logical_pixels_else_the_window() {
+        let window = Some(Vec2::new(1280.0, 720.0));
+        // A restricted viewport of a scale 2 target.
+        assert_eq!(
+            target_size(Some((UVec2::new(600, 400), 2.0)), window),
+            Some(Vec2::new(300.0, 200.0))
+        );
+        // Unavailable or unusable target data uses the primary window, else nothing.
+        assert_eq!(target_size(None, window), window);
+        assert_eq!(target_size(Some((UVec2::ZERO, 1.0)), window), window);
+        assert_eq!(target_size(Some((UVec2::new(10, 10), 0.0)), window), window);
+        assert_eq!(
+            target_size(Some((UVec2::new(10, 10), f32::NAN)), window),
+            window
+        );
+        assert_eq!(target_size(None, None), None);
+    }
 
     #[test]
     fn a_popup_is_kept_inside_the_window_margins() {
