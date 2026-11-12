@@ -17,6 +17,7 @@ use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
 use bevy::camera::ClearColor;
+use bevy::ecs::system::SystemChangeTick;
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
@@ -53,10 +54,23 @@ enum Workload {
     FilterChipsOneChanging,
     /// The same `FilterChips`, idle: the floor the changing workload is read against.
     FilterChipsIdle,
+    /// Change-detection microbenchmark (see `ticks`): a `Changed` filter reader
+    /// over a component without a summary tick, nothing mutates.
+    TicksFilterIdle,
+    /// The same, a contiguous reader that skips on the summary tick, nothing mutates.
+    TicksSummaryIdle,
+    /// `Changed` filter reader, one entity mutated per frame.
+    TicksFilterOne,
+    /// Summary-tick reader, one entity mutated per frame (the skip never applies).
+    TicksSummaryOne,
+    /// `Changed` filter reader, every entity mutated per frame.
+    TicksFilterAll,
+    /// Summary-tick reader, every entity mutated per frame.
+    TicksSummaryAll,
 }
 
 impl Workload {
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 15] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -66,6 +80,12 @@ impl Workload {
         Self::VirtualLists,
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
+        Self::TicksFilterIdle,
+        Self::TicksSummaryIdle,
+        Self::TicksFilterOne,
+        Self::TicksSummaryOne,
+        Self::TicksFilterAll,
+        Self::TicksSummaryAll,
     ];
 
     const fn name(self) -> &'static str {
@@ -79,6 +99,12 @@ impl Workload {
             Self::VirtualLists => "virtual-lists",
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
+            Self::TicksFilterIdle => "ticks-filter-idle",
+            Self::TicksSummaryIdle => "ticks-summary-idle",
+            Self::TicksFilterOne => "ticks-filter-one",
+            Self::TicksSummaryOne => "ticks-summary-one",
+            Self::TicksFilterAll => "ticks-filter-all",
+            Self::TicksSummaryAll => "ticks-summary-all",
         }
     }
 
@@ -87,9 +113,16 @@ impl Workload {
         match self {
             Self::BevyTexts | Self::PushButtons => 1_000,
             Self::BevyNodes | Self::Tooltips => 5_000,
-            Self::VirtualList | Self::VirtualListScrolling => 100_000,
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging | Self::FilterChipsIdle => 500,
+            Self::VirtualList
+            | Self::VirtualListScrolling
+            | Self::TicksFilterIdle
+            | Self::TicksSummaryIdle
+            | Self::TicksFilterOne
+            | Self::TicksSummaryOne
+            | Self::TicksFilterAll
+            | Self::TicksSummaryAll => 100_000,
         }
     }
 
@@ -214,11 +247,105 @@ fn resident_bytes() -> u64 {
         .map_or(0, |pages| pages * 4096)
 }
 
+/// Table component without a summary tick, for the change-detection workloads.
+#[derive(Component)]
+struct Plain(u32);
+
+/// The same with `#[component(summary_tick)]`.
+#[derive(Component)]
+#[component(summary_tick)]
+struct Summarised(u32);
+
+/// Keeps the readers' work observable so it is not optimised away.
+#[derive(Resource, Default)]
+struct Sink(u64);
+
+/// Reader of the status quo: a `Changed` filter visits every row's ticks.
+fn read_with_filter(query: Query<&Plain, Changed<Plain>>, mut sink: ResMut<Sink>) {
+    let mut sum = 0_u64;
+    for plain in &query {
+        sum += u64::from(plain.0);
+    }
+    sink.0 = sum;
+}
+
+/// Contiguous reader: a table whose summary tick is old is skipped whole, else
+/// its rows' change ticks are compared one by one.
+fn read_with_summary(
+    query: Query<Ref<Summarised>>,
+    ticks: SystemChangeTick,
+    mut sink: ResMut<Sink>,
+) {
+    let mut sum = 0_u64;
+    let Ok(iter) = query.contiguous_iter() else {
+        return;
+    };
+    for tables in iter {
+        let (values, table_ticks) = ContiguousRef::split(tables);
+        if table_ticks.summary_tick_is_changed() == Some(false) {
+            continue;
+        }
+        for (value, tick) in values.iter().zip(table_ticks.changed()) {
+            if tick.is_newer_than(ticks.last_run(), ticks.this_run()) {
+                sum += u64::from(value.0);
+            }
+        }
+    }
+    sink.0 = sum;
+}
+
+/// Mutates the first entity (`one`) or all of them through change detection.
+fn mutate_plain<const ALL: bool>(mut query: Query<&mut Plain>) {
+    for mut plain in &mut query {
+        plain.0 = plain.0.wrapping_add(1);
+        if !ALL {
+            break;
+        }
+    }
+}
+
+fn mutate_summarised<const ALL: bool>(mut query: Query<&mut Summarised>) {
+    for mut value in &mut query {
+        value.0 = value.0.wrapping_add(1);
+        if !ALL {
+            break;
+        }
+    }
+}
+
 fn measure(run: Run) -> String {
     let mut app = App::new();
     app.add_plugins(HeadlessPlugins::default());
     app.init_resource::<ClearColor>();
     app.add_plugins(WidgetsPlugin);
+    app.init_resource::<Sink>();
+    match run.workload {
+        Workload::TicksFilterIdle => {
+            app.add_systems(Update, read_with_filter);
+        }
+        Workload::TicksFilterOne => {
+            app.add_systems(Update, (mutate_plain::<false>, read_with_filter).chain());
+        }
+        Workload::TicksFilterAll => {
+            app.add_systems(Update, (mutate_plain::<true>, read_with_filter).chain());
+        }
+        Workload::TicksSummaryIdle => {
+            app.add_systems(Update, read_with_summary);
+        }
+        Workload::TicksSummaryOne => {
+            app.add_systems(
+                Update,
+                (mutate_summarised::<false>, read_with_summary).chain(),
+            );
+        }
+        Workload::TicksSummaryAll => {
+            app.add_systems(
+                Update,
+                (mutate_summarised::<true>, read_with_summary).chain(),
+            );
+        }
+        _ => {}
+    }
     app.finish();
     app.cleanup();
     // One frame for startup, so the empty app's memory is the reference.
@@ -327,6 +454,16 @@ fn spawn(world: &mut World, run: Run) {
                         },
                         Tooltip::new(format!("Tip {index}")),
                     ));
+                }
+            }
+            Workload::TicksFilterIdle | Workload::TicksFilterOne | Workload::TicksFilterAll => {
+                for index in 0..run.size {
+                    root.spawn(Plain(index as u32));
+                }
+            }
+            Workload::TicksSummaryIdle | Workload::TicksSummaryOne | Workload::TicksSummaryAll => {
+                for index in 0..run.size {
+                    root.spawn(Summarised(index as u32));
                 }
             }
             Workload::VirtualList | Workload::VirtualListScrolling => {

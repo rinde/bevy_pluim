@@ -45,6 +45,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
 | `filter-chips-one-changing` | 500 rows of 3 chips | many independent `FilterChips`; one row is marked changed every frame (no relayout), so a rebuild check that visits every row shows |
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
+| `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
 baseline** (`push-buttons` minus `bevy-texts`, `tooltips` minus `bevy-nodes`).
@@ -67,3 +68,60 @@ for any `WidgetsPlugin` app.
 
 Numbers are recorded in the PR that introduced the benchmark (hardware in the
 header line of each table); regenerate them rather than editing a copy here.
+
+## Bevy 0.20 summary ticks (#656)
+
+`#[component(summary_tick)]` keeps one tick per table column, so a reader
+using `Query::contiguous_iter` can skip a whole table when nothing in the column
+changed. The cost is a store of the summary tick on every mutation, and it only
+works for dense, table-stored queries without `Changed<T>`. The `ticks-*`
+workloads put 100 000 entities with one `u32` component in the app, mutate
+none, the first or all of them per frame, and read them with either reader.
+Median `App::update` in us, three runs each (4 vCPU Intel Xeon 2.1 GHz,
+`target/release/examples/bench --workload NAME`):
+
+| Mutated per frame | `Changed<T>` filter | summary tick |
+| --- | --- | --- |
+| none | 5539 / 5528 / 6112 | 5515 / 5886 / 6971 |
+| one | 5401 / 5706 / 5994 | 5433 / 5736 / 5846 |
+| all | 5694 / 5983 / 6331 | 6443 / 6446 / 6594 |
+
+Idle and one-mutation are indistinguishable (the spread between runs is larger
+than any difference, and the frame is dominated by work other than the reader).
+Mutating every entity costs about 0.5 ms more with the summary tick, with
+nothing saved on the read side. **Decision: not adopted.** The library's
+per-frame systems already read `Changed<..>` on sparse sets of entities or
+walk only what is on screen, most widget components are immutable and changed by
+re-insert (which a summary tick does not help), and a dense unfiltered scan is
+exactly what "nothing that runs every frame walks the whole world" rules out.
+The read saving is below the noise of this benchmark at 100 000 entities, so no
+follow-up ticket is filed.
+
+## Headless widgets of Bevy 0.20 (#656)
+
+Reviewed against the `bevy_ui_widgets` 0.20 source (the release notes site was
+not reachable from the build container):
+
+- Already used: `Button`, `ListBox`, `Scrollbar`, `Slider`, `TabList` / `Tab`
+  (`tab_bar.rs`), text input, `FixedNode`, rem sizing and shuffled schedules.
+- `RadioGroup` / `RadioButton`: not adopted. `RovingGroup` also serves the
+  toolbar, gallery, chips and `LightDarkToggle`, supports many-selections and
+  a `Selection` that keeps the last word; the headless group would be a second
+  model for the same keys with no code or measured overhead saved.
+- `ScrollArea`: not adopted, see the wheel handling in `AGENTS.md`.
+- Popover, menu and dialog: not adopted; changing `Float` is the separate
+  ticket described in `AGENTS.md`.
+
+## Idle virtual lists (#655)
+
+`show_rows` visits every `VirtualList` and its row pool each `PostUpdate`. A
+change-gated version (skip a list whose range, pool, item count, `Selection`
+and `ItemValues` are unchanged) was prototyped and measured against `main` on
+`virtual-list`, `virtual-list-scrolling` and `virtual-lists`, and so was a build
+with `show_rows` switched off entirely. All three were inside the run-to-run
+spread (about 2.0 to 2.7 ms a frame, of which an empty frame is about 1.95 ms),
+so the system costs well under 50 us for 20 lists and the gate was not kept: it
+needed extra per-list state and change-detection queries for no measurable gain.
+The invalidation paths a gate would have to keep (idle frames, theme, selection,
+item text, added items) are covered by tests in `tests/scenarios.rs` so a later
+gate has a guard. Re-measure with the workloads above before adding one.
