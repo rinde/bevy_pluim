@@ -33,6 +33,7 @@ impl Plugin for TooltipPlugin {
         app.add_observer(despawn_popup_with_owner).add_systems(
             Update,
             (
+                track_active_tooltips,
                 update_tooltips,
                 place_popups,
                 restyle_popups.run_if(resource_changed::<Theme>),
@@ -80,6 +81,11 @@ struct TooltipClock {
     suppressed: bool,
 }
 
+/// Marks a [`Tooltip`] node that `update_tooltips` must visit: the pointer is on it, or it has
+/// state to wind down. Idle tooltips have none, so a quiet frame visits nothing.
+#[derive(Component, Clone, Copy, Debug)]
+struct TooltipActive;
+
 /// The popup of a [`Tooltip`] node that is showing.
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
@@ -121,16 +127,38 @@ fn text_font(theme: &Theme) -> TextFont {
     }
 }
 
+/// Marks the tooltip nodes the pointer has come onto, when `Hovered` or the `Tooltip` changes.
+fn track_active_tooltips(
+    changed: Query<
+        (Entity, &Hovered),
+        (
+            With<Tooltip>,
+            Without<TooltipActive>,
+            Or<(Changed<Hovered>, Changed<Tooltip>)>,
+        ),
+    >,
+    mut commands: Commands,
+) {
+    for (entity, hovered) in &changed {
+        if hovered.get() {
+            commands.entity(entity).insert(TooltipActive);
+        }
+    }
+}
+
 fn update_tooltips(
     time: Res<Time>,
-    mut nodes: Query<(
-        Entity,
-        &Tooltip,
-        &Hovered,
-        Has<Pressed>,
-        &mut TooltipClock,
-        Option<&TooltipRef>,
-    )>,
+    mut nodes: Query<
+        (
+            Entity,
+            &Tooltip,
+            &Hovered,
+            Has<Pressed>,
+            &mut TooltipClock,
+            Option<&TooltipRef>,
+        ),
+        With<TooltipActive>,
+    >,
     mut popup_texts: Query<&mut Text, With<TooltipText>>,
     popups: Query<&Children, With<TooltipPopup>>,
     theme: Res<Theme>,
@@ -139,11 +167,13 @@ fn update_tooltips(
 ) {
     let locked = hover_lock.is_some_and(|lock| lock.0);
     for (entity, tooltip, hovered, pressed, mut clock, popup) in &mut nodes {
-        if locked {
+        if !hovered.get() {
+            if *clock != TooltipClock::default() {
+                *clock = TooltipClock::default();
+            }
+        } else if locked {
             // A scrub drag holds the pointer: no tooltip shows or starts counting.
             clock.elapsed = 0.0;
-        } else if !hovered.get() {
-            *clock = TooltipClock::default();
         } else if pressed {
             clock.suppressed = true;
             clock.elapsed = 0.0;
@@ -177,6 +207,10 @@ fn update_tooltips(
                 commands.entity(entity).remove::<TooltipRef>();
             }
             (false, None) => {}
+        }
+        if !hovered.get() && !wanted && popup.is_none() {
+            // Nothing left to wind down: stop visiting until the pointer returns.
+            commands.entity(entity).remove::<TooltipActive>();
         }
     }
 }
@@ -222,7 +256,7 @@ fn despawn_popup_with_owner(
     // these.)
     commands
         .entity(node)
-        .try_remove::<TooltipRef>()
+        .try_remove::<(TooltipRef, TooltipActive)>()
         .try_insert(TooltipClock::default());
 }
 
@@ -284,5 +318,100 @@ fn restyle_popups(
                 color.0 = theme.colors().text_primary;
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    clippy::disallowed_methods,
+    reason = "tests may abort loudly"
+)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Theme>()
+            .add_observer(despawn_popup_with_owner)
+            .add_systems(Update, (track_active_tooltips, update_tooltips).chain());
+        app.finish();
+        app
+    }
+
+    fn tick(app: &mut App) {
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_millis(200));
+        app.world_mut().run_schedule(Update);
+    }
+
+    fn active(app: &mut App) -> usize {
+        let world = app.world_mut();
+        world
+            .query_filtered::<(), With<TooltipActive>>()
+            .iter(world)
+            .count()
+    }
+
+    #[test]
+    fn only_a_hovered_or_showing_tooltip_is_visited() {
+        let mut app = app();
+        let nodes: Vec<Entity> = (0..10)
+            .map(|_| app.world_mut().spawn(Tooltip::new("Tip")).id())
+            .collect();
+        for _ in 0..3 {
+            tick(&mut app);
+        }
+        assert_eq!(active(&mut app), 0, "idle tooltips are visited");
+
+        let hovered = *nodes.first().unwrap();
+        app.world_mut().entity_mut(hovered).insert(Hovered(true));
+        tick(&mut app);
+        assert_eq!(active(&mut app), 1, "only the hovered tooltip is marked");
+        for _ in 0..4 {
+            tick(&mut app);
+        }
+        assert!(app.world().get::<TooltipRef>(hovered).is_some());
+
+        app.world_mut().entity_mut(hovered).insert(Hovered(false));
+        tick(&mut app);
+        tick(&mut app);
+        assert!(app.world().get::<TooltipRef>(hovered).is_none());
+        assert_eq!(active(&mut app), 0, "the marker outlives the pointer");
+    }
+
+    /// A tooltip nobody is on is never visited. Its clock is given a value that `update_tooltips`
+    /// would reset (an unhovered node's clock is always the default), so a visit shows as a
+    /// changed value and as a write.
+    #[test]
+    fn an_unmarked_tooltip_is_not_visited_in_a_quiet_frame() {
+        let mut app = app();
+        let stale = TooltipClock {
+            elapsed: 0.3,
+            suppressed: true,
+        };
+        let node = app.world_mut().spawn((Tooltip::new("Tip"), stale)).id();
+        tick(&mut app);
+        let written = |app: &App| {
+            app.world()
+                .entity(node)
+                .get_ref::<TooltipClock>()
+                .unwrap()
+                .last_changed()
+        };
+        let before = written(&app);
+        for _ in 0..3 {
+            tick(&mut app);
+        }
+        assert_eq!(
+            app.world().get::<TooltipClock>(node),
+            Some(&stale),
+            "an idle tooltip was visited"
+        );
+        assert_eq!(written(&app), before, "an idle tooltip's clock was written");
     }
 }
