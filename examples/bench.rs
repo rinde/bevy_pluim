@@ -18,13 +18,14 @@ use std::time::{Duration, Instant};
 
 use bevy::camera::ClearColor;
 use bevy::ecs::system::SystemChangeTick;
+use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
-use bevy_pluim::segmented_control::SegmentedControl;
+use bevy_pluim::segmented_control::{Segment, SegmentedControl};
 use bevy_pluim::select::{Item, Selection};
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
@@ -60,6 +61,13 @@ enum Workload {
     SegmentedControlsIdle,
     /// Many independent `Gallery`s of three cards, idle.
     GalleriesIdle,
+    /// Many independent `SegmentedControl`s (roving-focus groups); the focus moves to
+    /// another control's segment every frame.
+    RovingGroupsFocus,
+    /// The same controls; one control's selection is replaced every frame.
+    RovingGroupsSelection,
+    /// The same controls, idle: the floor the two roving workloads are read against.
+    RovingGroupsIdle,
     /// Change-detection microbenchmark (see `ticks`): a `Changed` filter reader
     /// over a component without a summary tick, nothing mutates.
     TicksFilterIdle,
@@ -76,7 +84,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 17] = [
+    const ALL: [Self; 20] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -88,6 +96,9 @@ impl Workload {
         Self::FilterChipsIdle,
         Self::SegmentedControlsIdle,
         Self::GalleriesIdle,
+        Self::RovingGroupsFocus,
+        Self::RovingGroupsSelection,
+        Self::RovingGroupsIdle,
         Self::TicksFilterIdle,
         Self::TicksSummaryIdle,
         Self::TicksFilterOne,
@@ -109,6 +120,9 @@ impl Workload {
             Self::FilterChipsIdle => "filter-chips-idle",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::GalleriesIdle => "galleries-idle",
+            Self::RovingGroupsFocus => "roving-groups-focus",
+            Self::RovingGroupsSelection => "roving-groups-selection",
+            Self::RovingGroupsIdle => "roving-groups-idle",
             Self::TicksFilterIdle => "ticks-filter-idle",
             Self::TicksSummaryIdle => "ticks-summary-idle",
             Self::TicksFilterOne => "ticks-filter-one",
@@ -127,7 +141,10 @@ impl Workload {
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
             | Self::SegmentedControlsIdle
-            | Self::GalleriesIdle => 500,
+            | Self::GalleriesIdle
+            | Self::RovingGroupsFocus
+            | Self::RovingGroupsSelection
+            | Self::RovingGroupsIdle => 500,
             Self::VirtualList
             | Self::VirtualListScrolling
             | Self::TicksFilterIdle
@@ -420,6 +437,29 @@ fn frame(app: &mut App, workload: Workload, index: usize) {
             chips.set_changed();
         }
     }
+    if workload == Workload::RovingGroupsFocus {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<Segment>>();
+        let count = query.iter(world).count();
+        let target = query.iter(world).nth(index * 7 % count.max(1));
+        if let (Some(target), Some(mut focus)) = (target, world.get_resource_mut::<InputFocus>()) {
+            focus.set(target, FocusCause::Navigated);
+        }
+    }
+    if workload == Workload::RovingGroupsSelection {
+        // Replaces the selection of one control (an immutable component) with a clone, so
+        // `Changed<Selection>` fires for that control alone.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<(Entity, &Selection), With<SegmentedControl>>();
+        let count = query.iter(world).count();
+        let picked = query
+            .iter(world)
+            .nth(index * 7 % count.max(1))
+            .map(|(entity, selection)| (entity, selection.clone()));
+        if let Some((entity, selection)) = picked {
+            world.entity_mut(entity).insert(selection);
+        }
+    }
     app.update();
 }
 
@@ -485,6 +525,18 @@ fn spawn(world: &mut World, run: Run) {
             Workload::VirtualLists => {
                 for _ in 0..run.size {
                     virtual_list(root, 1_000);
+                }
+            }
+            Workload::RovingGroupsFocus
+            | Workload::RovingGroupsSelection
+            | Workload::RovingGroupsIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        SegmentedControl,
+                        Selection::builder().one().build_with_items(
+                            ["A", "B", "C"].map(move |label| Item::new(format!("{label} {row}"))),
+                        ),
+                    ));
                 }
             }
             Workload::FilterChipsOneChanging | Workload::FilterChipsIdle => {

@@ -47,6 +47,9 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
+| `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
+| `roving-groups-focus` | the same | the `InputFocus` moves to a segment of another control every frame |
+| `roving-groups-selection` | the same | one control's `Selection` is replaced every frame, so `Changed<Selection>` fires for that control alone (the control's own redraw is part of the cost) |
 | `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
@@ -146,3 +149,25 @@ three times each (mean frame time in microseconds; shared cloud container, noisy
 
 The gain is within noise to a few percent: the idle frame of these workloads is dominated by other
 systems, so the change is mainly a scaling guarantee (no per-view work on a quiet frame).
+## Roving-focus invalidation (#662)
+
+`sync_roving_groups` used to look at every group on any focus move, and at every
+group that enters at the selected item on any `Selection` change, each look walking
+the group's descendants and allocating its item list. It now looks at a group on a
+focus move only when the group held the focus or owns the newly focused item, and on a
+selection change only when the changed `Selection` is the group's own or the one its
+`Selection::Ref` resolves to. Item, children, visibility, disabling and removal
+triggers are unchanged. Measured on the workloads above (500 groups, release build,
+mean frame time in us, two runs each, same machine):
+
+| workload | before | after |
+| --- | --- | --- |
+| `roving-groups-idle` | 5169 / 4645 | 4742 / 4727 |
+| `roving-groups-focus` | 5280 / 4961 | 4757 / 4544 |
+| `roving-groups-selection` | 35386 / 34036 | 32830 / 32567 |
+
+Focus moves went from about 0.5 ms over idle to inside the run-to-run spread. A
+selection change costs about 28 ms in both, which is the replaced control and the
+widgets that follow its `Selection`, not the roving groups, so the narrowing buys
+about 1 to 2 ms there. Tests: `a_selection_or_focus_change_looks_only_at_the_groups_it_concerns`
+and `a_shared_selection_change_looks_at_every_group_that_reads_it_and_no_other`.
