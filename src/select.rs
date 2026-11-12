@@ -657,7 +657,12 @@ impl SelectionValue {
         }
     }
 
-    /// Replaces the selection with `iter`.
+    /// Replaces the selection with `iter`, keeping its order (duplicates dropped).
+    ///
+    /// Order is significant for `OneOrMore` and `ZeroOrMore`, because [`Self::iter`]
+    /// yields selection order and [`Self::trim_to_length`] keeps the first items: the
+    /// same items in another order are a change and give `Some`. `None` means no
+    /// change (the same items in the same order) or a refused change.
     #[must_use]
     pub fn set_selection(&self, iter: impl IntoIterator<Item = Entity>) -> Option<Self> {
         let mut iter = iter.into_iter().unique();
@@ -683,7 +688,7 @@ impl SelectionValue {
                 if new_vals.is_empty() {
                     // a `OneOrMore` must keep at least one element
                     None
-                } else if x.len() == new_vals.len() && x.iter().all(|v| new_vals.contains(v)) {
+                } else if x.as_slice() == new_vals.as_slice() {
                     None
                 } else {
                     Some(Self::OneOrMore(new_vals))
@@ -691,7 +696,7 @@ impl SelectionValue {
             }
             Self::ZeroOrMore(x) => {
                 let new_vals = iter.collect::<SelectionVec>();
-                if x.len() == new_vals.len() && x.iter().all(|v| new_vals.contains(v)) {
+                if x.as_slice() == new_vals.as_slice() {
                     None
                 } else {
                     Some(Self::ZeroOrMore(new_vals))
@@ -1403,9 +1408,18 @@ mod tests {
     }
 
     #[test]
-    fn setting_one_or_more_to_the_same_entities_is_a_no_op() {
+    fn setting_one_or_more_to_the_same_entities_in_the_same_order_is_a_no_op() {
         let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
-        assert_eq!(value.set_selection([entity(2), entity(1)]), None);
+        assert_eq!(value.set_selection([entity(1), entity(2)]), None);
+    }
+
+    #[test]
+    fn setting_one_or_more_to_the_same_entities_in_another_order_reorders_it() {
+        let value = SelectionValue::OneOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(
+            value.set_selection([entity(2), entity(1)]),
+            Some(SelectionValue::OneOrMore(smallvec![entity(2), entity(1)]))
+        );
     }
 
     #[test]
@@ -1495,9 +1509,18 @@ mod tests {
     }
 
     #[test]
-    fn setting_zero_or_more_to_the_same_entities_is_a_no_op() {
+    fn setting_zero_or_more_to_the_same_entities_in_the_same_order_is_a_no_op() {
         let value = SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]);
-        assert_eq!(value.set_selection([entity(2), entity(1)]), None);
+        assert_eq!(value.set_selection([entity(1), entity(2)]), None);
+    }
+
+    #[test]
+    fn setting_zero_or_more_to_the_same_entities_in_another_order_reorders_it() {
+        let value = SelectionValue::ZeroOrMore(smallvec![entity(1), entity(2)]);
+        assert_eq!(
+            value.set_selection([entity(2), entity(1)]),
+            Some(SelectionValue::ZeroOrMore(smallvec![entity(2), entity(1)]))
+        );
     }
 
     // Cross-variant behaviour

@@ -636,6 +636,84 @@ fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is
 }
 
 #[test]
+fn bread_crumbs_follow_a_reordered_selection_and_trim_from_the_new_order() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(Selection::builder().one_or_more().build_with_items([
+            (Item::new("a"),),
+            (Item::new("b"),),
+            (Item::new("c"),),
+        ]))
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let crumbs = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            BreadCrumbs,
+            Selection::reference(selection),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+
+    let (a, b, c) = (items[0], items[1], items[2]);
+    let set = |app: &mut App, order: Vec<Entity>| {
+        app.world_mut()
+            .run_system_once(move |mut selections: SelectionParam| {
+                selections.update_selection(selection, |s| s.set_selection(order.clone()))
+            })
+            .unwrap()
+    };
+    assert!(set(&mut app, vec![a, b, c]));
+    app.update();
+    app.update();
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "b", "c"]);
+
+    // The same items in another order are a change: the trail follows it.
+    assert!(set(&mut app, vec![c, a, b]));
+    app.update();
+    app.update();
+    assert_eq!(crumb_texts(&app, crumbs), ["c", "a", "b"]);
+    // Setting the same order again is no change.
+    assert!(!set(&mut app, vec![c, a, b]));
+
+    // Trimming (what a click on a crumb does) keeps the first of the new order.
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(selection, |s| s.trim_to_length(2))
+        })
+        .unwrap();
+    app.update();
+    app.update();
+    assert_eq!(crumb_texts(&app, crumbs), ["c", "a"]);
+}
+
+/// The texts of the crumbs of a trail, in the order shown (separators left out).
+fn crumb_texts(app: &App, crumbs: Entity) -> Vec<String> {
+    fn collect(world: &World, entity: Entity, out: &mut Vec<String>) {
+        if let Some(text) = world.get::<Text>(entity)
+            && text.0 != " > "
+        {
+            out.push(text.0.clone());
+        }
+        for child in world.get::<Children>(entity).into_iter().flatten() {
+            collect(world, *child, out);
+        }
+    }
+    let mut out = Vec::new();
+    collect(app.world(), crumbs, &mut out);
+    out
+}
+
+#[test]
 fn a_despawned_stack_does_not_react_to_its_selection_changing() {
     let mut app = headless_app();
     let create_a = app.world_mut().register_system(spawn_panel_a);
