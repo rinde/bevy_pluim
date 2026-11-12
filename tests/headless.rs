@@ -14500,3 +14500,64 @@ fn many_icon_segmented_controls_keep_one_icon_and_hidden_label_per_segment() {
         }
     }
 }
+
+// ---- List selection sync with several changes in one frame (#671) ----
+
+#[test]
+fn simultaneous_selection_changes_update_only_the_lists_that_follow_them() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let spawn_list = |app: &mut App, items: [&'static str; 2]| {
+        app.world_mut()
+            .spawn((
+                List,
+                Selection::builder()
+                    .one()
+                    .build_with_items(items.map(Item::new)),
+                ChildOf(root),
+            ))
+            .id()
+    };
+    let a = spawn_list(&mut app, ["a1", "a2"]);
+    let b = spawn_list(&mut app, ["b1", "b2"]);
+    let c = spawn_list(&mut app, ["c1", "c2"]);
+    let source = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["s1", "s2"].map(Item::new)),
+        )
+        .id();
+    let first = app
+        .world_mut()
+        .spawn((List, Selection::reference(source), ChildOf(root)))
+        .id();
+    let second = app
+        .world_mut()
+        .spawn((List, Selection::reference(source), ChildOf(root)))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+
+    // `a`, `b` and the shared source change in one frame; `c` does not.
+    app.world_mut()
+        .run_system_once(
+            move |mut selections: SelectionParam, items: Query<(Entity, &Item<String>)>| {
+                for (selection, text) in [(a, "a2"), (b, "b2"), (source, "s2")] {
+                    let item = items.iter().find(|(_, i)| i.data == text).unwrap().0;
+                    selections.update_selection(selection, |s| s.set_selection([item]));
+                }
+            },
+        )
+        .unwrap();
+    app.update();
+    app.update();
+
+    assert_eq!(selected_labels(&app, a), ["a2"]);
+    assert_eq!(selected_labels(&app, b), ["b2"]);
+    assert_eq!(selected_labels(&app, c), ["c1"]);
+    assert_eq!(selected_labels(&app, first), ["s2"]);
+    assert_eq!(selected_labels(&app, second), ["s2"]);
+}
