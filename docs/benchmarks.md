@@ -45,6 +45,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
 | `filter-chips-one-changing` | 500 rows of 3 chips | many independent `FilterChips`; one row is marked changed every frame (no relayout), so a rebuild check that visits every row shows |
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
+| `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
+| `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
@@ -125,3 +127,22 @@ needed extra per-list state and change-detection queries for no measurable gain.
 The invalidation paths a gate would have to keep (idle frames, theme, selection,
 item text, added items) are covered by tests in `tests/scenarios.rs` so a later
 gate has a guard. Re-measure with the workloads above before adding one.
+
+## Idle accessibility synchronization (#661)
+
+`sync_accessibility` in the item-view widgets used to visit every view each `PostUpdate`.
+They now look only at views whose `AccessibilityNode` changed (every Bevy reset writes it
+through `DerefMut` in `UiSystems::PostLayout`, before `AccessibilitySync`), whose view component
+changed, or, for the selection widgets, that `StructureChanges::affected` names; `SegmentedControl`
+also follows `Added<Selected>`, removed `Selected` and changed `Item<String>`.
+`cargo build --release --example bench`, then `./target/release/examples/bench --workload NAME --size 500`
+three times each (mean frame time in microseconds; shared cloud container, noisy):
+
+| workload | before (3 runs) | after (3 runs) |
+| --- | --- | --- |
+| `filter-chips-idle` | 4316 / 4462 / 4157 | 4159 / 4109 / 4204 |
+| `segmented-controls-idle` | 4090 (1 run) | 4277 / 4398 / 4197 |
+| `galleries-idle` | 5039 (1 run) | 4942 / 4900 / 4859 |
+
+The gain is within noise to a few percent: the idle frame of these workloads is dominated by other
+systems, so the change is mainly a scaling guarantee (no per-view work on a quiet frame).

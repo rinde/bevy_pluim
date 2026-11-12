@@ -410,11 +410,31 @@ fn restyle_on_disabled_change(
 /// toggled state at its [`ToggleState`], or unset without one. Bevy clears the
 /// label of a button without text when the button is added, so this runs after it.
 fn sync_accessibility(
-    mut buttons: Query<(&IconButton, Option<&ToggleState>, &mut AccessibilityNode)>,
+    mut buttons: ParamSet<(
+        Query<
+            (&IconButton, Option<&ToggleState>, &mut AccessibilityNode),
+            Or<(
+                Changed<AccessibilityNode>,
+                Changed<IconButton>,
+                Changed<ToggleState>,
+            )>,
+        >,
+        Query<(&IconButton, Option<&ToggleState>, &mut AccessibilityNode)>,
+    )>,
+    mut untoggled: RemovedComponents<ToggleState>,
 ) {
-    for (button, toggle, mut node) in &mut buttons {
+    // Only buttons whose node Bevy reset, whose name changed or whose toggle was inserted are
+    // looked at, plus those that lost their `ToggleState`; an idle frame touches none.
+    for (button, toggle, mut node) in &mut buttons.p0() {
         sync_label(&mut node, &button.name);
         sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
+    }
+    let mut all = buttons.p1();
+    for entity in untoggled.read() {
+        if let Ok((button, toggle, mut node)) = all.get_mut(entity) {
+            sync_label(&mut node, &button.name);
+            sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
+        }
     }
 }
 

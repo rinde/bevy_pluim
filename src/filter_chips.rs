@@ -3,6 +3,7 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
@@ -424,26 +425,54 @@ fn sync_accessibility(
             Changed<AccessibilityNode>,
         ),
     >,
-    mut chips: Query<(&ChipView, &mut AccessibilityNode)>,
+    mut chips: ParamSet<(
+        Query<
+            (&ChipView, &mut AccessibilityNode),
+            Or<(Changed<AccessibilityNode>, Changed<ChipView>)>,
+        >,
+        Query<(&ChipView, &mut AccessibilityNode)>,
+    )>,
     items: Query<&Item<Chip>>,
     selections: SelectionParam,
+    mut changes: StructureChanges<FilterChips, Chip>,
 ) {
     // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
     // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut rows {
         sync_role(&mut node, Role::RadioGroup);
     }
-    for (view, mut node) in &mut chips {
-        let Ok(item) = items.get(view.item) else {
-            continue;
-        };
-        let active = selections
-            .get(view.owner())
-            .is_some_and(|selection| selection.is_selected(view.item));
-        sync_role(&mut node, Role::RadioButton);
-        sync_label(&mut node, &accessible_name(&item.data));
-        sync_toggled(&mut node, Some(active));
+    // A chip is looked at when Bevy reset its node or it is new, and (for its name and
+    // toggled state) when its row's items or selection changed. A quiet frame does neither.
+    for (view, mut node) in &mut chips.p0() {
+        sync_chip(view, &mut node, &items, &selections);
     }
+    let affected: EntityHashSet = changes.affected(&selections).into_iter().collect();
+    if affected.is_empty() {
+        return;
+    }
+    for (view, mut node) in &mut chips.p1() {
+        if affected.contains(&view.owner()) {
+            sync_chip(view, &mut node, &items, &selections);
+        }
+    }
+}
+
+/// Writes the role, name and toggled state of one chip's node, only where they differ.
+fn sync_chip(
+    view: &ChipView,
+    node: &mut Mut<AccessibilityNode>,
+    items: &Query<&Item<Chip>>,
+    selections: &SelectionParam,
+) {
+    let Ok(item) = items.get(view.item) else {
+        return;
+    };
+    let active = selections
+        .get(view.owner())
+        .is_some_and(|selection| selection.is_selected(view.item));
+    sync_role(node, Role::RadioButton);
+    sync_label(node, &accessible_name(&item.data));
+    sync_toggled(node, Some(active));
 }
 
 /// Picks the chip that was used (a click, or Enter or Space on it).

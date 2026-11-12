@@ -21,8 +21,10 @@ use bevy::ecs::system::SystemChangeTick;
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
+use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
+use bevy_pluim::segmented_control::SegmentedControl;
 use bevy_pluim::select::{Item, Selection};
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
@@ -54,6 +56,10 @@ enum Workload {
     FilterChipsOneChanging,
     /// The same `FilterChips`, idle: the floor the changing workload is read against.
     FilterChipsIdle,
+    /// Many independent `SegmentedControl`s of three segments, idle.
+    SegmentedControlsIdle,
+    /// Many independent `Gallery`s of three cards, idle.
+    GalleriesIdle,
     /// Change-detection microbenchmark (see `ticks`): a `Changed` filter reader
     /// over a component without a summary tick, nothing mutates.
     TicksFilterIdle,
@@ -70,7 +76,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 15] = [
+    const ALL: [Self; 17] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -80,6 +86,8 @@ impl Workload {
         Self::VirtualLists,
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
+        Self::SegmentedControlsIdle,
+        Self::GalleriesIdle,
         Self::TicksFilterIdle,
         Self::TicksSummaryIdle,
         Self::TicksFilterOne,
@@ -99,6 +107,8 @@ impl Workload {
             Self::VirtualLists => "virtual-lists",
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
+            Self::SegmentedControlsIdle => "segmented-controls-idle",
+            Self::GalleriesIdle => "galleries-idle",
             Self::TicksFilterIdle => "ticks-filter-idle",
             Self::TicksSummaryIdle => "ticks-summary-idle",
             Self::TicksFilterOne => "ticks-filter-one",
@@ -114,7 +124,10 @@ impl Workload {
             Self::BevyTexts | Self::PushButtons => 1_000,
             Self::BevyNodes | Self::Tooltips => 5_000,
             Self::VirtualLists => 20,
-            Self::FilterChipsOneChanging | Self::FilterChipsIdle => 500,
+            Self::FilterChipsOneChanging
+            | Self::FilterChipsIdle
+            | Self::SegmentedControlsIdle
+            | Self::GalleriesIdle => 500,
             Self::VirtualList
             | Self::VirtualListScrolling
             | Self::TicksFilterIdle
@@ -482,6 +495,33 @@ fn spawn(world: &mut World, run: Run) {
                             .one()
                             .build_with_items((0..3).map(move |chip| Item {
                                 data: Chip::new(format!("Chip {row}.{chip}")),
+                            })),
+                    ));
+                }
+            }
+            Workload::SegmentedControlsIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        SegmentedControl,
+                        Selection::builder().one().build_with_items(
+                            (0..3)
+                                .map(move |segment| Item::new(format!("Segment {row}.{segment}"))),
+                        ),
+                    ));
+                }
+            }
+            Workload::GalleriesIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        Gallery,
+                        Selection::builder()
+                            .one()
+                            .build_with_items((0..3).map(move |card| Item {
+                                data: GalleryCard::new(
+                                    Handle::default(),
+                                    format!("Card {row}.{card}"),
+                                    "Group",
+                                ),
                             })),
                     ));
                 }
