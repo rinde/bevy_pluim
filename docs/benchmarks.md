@@ -45,6 +45,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
 | `filter-chips-one-changing` | 500 rows of 3 chips | many independent `FilterChips`; one row is marked changed every frame (no relayout), so a rebuild check that visits every row shows |
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
+| `list-notes-changing` | 500 `List`s of 3 noted items | many independent lists; one `ItemNote` is marked changed every frame (no relayout), so a note sync that visits every row shows (#666) |
+| `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
 | `steppers-idle` | 2 000 | independent `NumericStepper`s with no change: the floor the next two are read against (#663) |
 | `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
@@ -216,3 +218,24 @@ held or now hold the focus, or whose visibility, `Display::None` or parent chang
 
 The gain is a few percent: the rest of the idle frame is other systems. The point is that a quiet
 frame does no per-bar work (`a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is`).
+
+## Note synchronisation of lists (#666)
+
+`sync_item_notes` used to visit every default `ItemView` of the world when any
+`ItemNote` changed or was removed. It now looks at the views of the changed
+item only (a private `NoteViewOf` / `NoteViews` relationship), and at all of
+them when the `Theme` changes. Workloads `list-notes-changing` (one note
+changed per frame) and `list-notes-idle`, 500 independent lists, release build,
+mean frame time in microseconds, three runs each:
+
+| Workload | Before | After |
+| --- | --- | --- |
+| `list-notes-changing` | 4739, 5203, 4644 (mean 4862) | 4883, 4414, 4133 (mean 4477) |
+| `list-notes-idle` | 4639, 4569, 4596 (mean 4601) | 4749, 4443, 4436 (mean 4543) |
+
+The saving is about 8 % per changing frame, inside the run-to-run spread of a
+frame that is dominated by the rest of the app; the point is that the work no
+longer grows with the number of unrelated lists. The frame time of the idle
+workload is unchanged, as expected. Test:
+`a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_them`
+(fails on the old code: the unrelated list was resynced).

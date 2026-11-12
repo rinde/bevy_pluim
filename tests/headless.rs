@@ -8395,6 +8395,120 @@ fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
 }
 
 #[test]
+fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_them() {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let spawn_list = |world: &mut World, label: &str| {
+        world
+            .spawn((
+                Node::default(),
+                List,
+                Selection::builder()
+                    .one()
+                    .build_with_items([(Item::new(label.to_string()), ItemNote::new("note"))]),
+            ))
+            .id()
+    };
+    let first = spawn_list(world, "First");
+    let second = spawn_list(world, "Second");
+    // A third list draws from the first one's items, so one note shows in two lists.
+    let sharing = world
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder().one().build_with_items_ref(first),
+        ))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+
+    // The note text of each row of a list, found through its views.
+    let notes_of = |app: &mut App, list: Entity| -> Vec<Entity> {
+        let world = app.world_mut();
+        let mut views = world.query::<(Entity, &ItemView)>();
+        let views: Vec<Entity> = views
+            .iter(world)
+            .filter(|(_, view)| view.list_ref == list)
+            .map(|(view, _)| view)
+            .collect();
+        views
+            .into_iter()
+            .flat_map(|view| {
+                world
+                    .get::<Children>(view)
+                    .map(|c| c.iter().collect::<Vec<_>>())
+                    .unwrap_or_default()
+            })
+            .filter(|child| {
+                world
+                    .get::<Text>(*child)
+                    .is_some_and(|t| t.0 == "note" || t.0 == "stale")
+            })
+            .collect()
+    };
+    let (first_notes, second_notes, shared_notes) = (
+        notes_of(&mut app, first),
+        notes_of(&mut app, second),
+        notes_of(&mut app, sharing),
+    );
+    assert_eq!(
+        (first_notes.len(), second_notes.len(), shared_notes.len()),
+        (1, 1, 1)
+    );
+
+    // Mark every note text so a row that is looked at again shows.
+    for note in [first_notes[0], second_notes[0], shared_notes[0]] {
+        app.world_mut().get_mut::<Text>(note).unwrap().0 = "stale".to_string();
+    }
+    let item_of = |app: &App, list: Entity| {
+        let mut views = app.world().try_query::<&ItemView>().unwrap();
+        views
+            .iter(app.world())
+            .find(|view| view.list_ref == list)
+            .unwrap()
+            .item_ref
+    };
+    let first_item = item_of(&app, first);
+    app.world_mut()
+        .entity_mut(first_item)
+        .insert(ItemNote::warning("changed"));
+    for _ in 0..3 {
+        app.update();
+    }
+    let text = |app: &App, note: Entity| app.world().get::<Text>(note).unwrap().0.clone();
+    assert_eq!(text(&app, first_notes[0]), "changed");
+    assert_eq!(text(&app, shared_notes[0]), "changed", "a shared note");
+    assert_eq!(
+        text(&app, second_notes[0]),
+        "stale",
+        "an unrelated list is not looked at"
+    );
+
+    // Emptying and removing a note still takes the text from the shared rows.
+    app.world_mut()
+        .entity_mut(first_item)
+        .insert(ItemNote::new(""));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(notes_of(&mut app, first).is_empty());
+    assert!(app.world().get_entity(shared_notes[0]).is_err());
+    assert_eq!(text(&app, second_notes[0]), "stale");
+
+    // A theme change restyles every row.
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(text(&app, second_notes[0]), "note");
+}
+
+#[test]
 fn reinserting_a_toast_on_a_live_entity_restarts_its_timer() {
     use bevy::time::TimeUpdateStrategy;
     use bevy_pluim::toast::Toast;
