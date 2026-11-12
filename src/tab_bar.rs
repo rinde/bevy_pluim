@@ -315,11 +315,31 @@ fn theme_tab_bars(
 /// Names each tab after its item's text. The roles are `bevy_ui_widgets`' own, and the
 /// selected state follows Bevy's `Selected`, which the tab list derives from [`SelectedTab`].
 fn sync_accessibility(
-    mut tabs: Query<(&TabBarTab, &mut AccessibilityNode)>,
+    mut tabs: ParamSet<(
+        Query<
+            (&TabBarTab, &mut AccessibilityNode),
+            Or<(Changed<AccessibilityNode>, Changed<TabBarTab>)>,
+        >,
+        Query<(&TabBarTab, &mut AccessibilityNode)>,
+    )>,
     items: Query<&Item<String>>,
+    changed_items: Query<Entity, Changed<Item<String>>>,
 ) {
-    for (tab, mut node) in &mut tabs {
+    // A tab is looked at when Bevy reset its node or it is new, and when its item's text
+    // changed; an idle frame touches none.
+    for (tab, mut node) in &mut tabs.p0() {
         if let Ok(item) = items.get(tab.item()) {
+            sync_label(&mut node, &item.data);
+        }
+    }
+    let changed_items: EntityHashSet = changed_items.iter().collect();
+    if changed_items.is_empty() {
+        return;
+    }
+    for (tab, mut node) in &mut tabs.p1() {
+        if changed_items.contains(&tab.item())
+            && let Ok(item) = items.get(tab.item())
+        {
             sync_label(&mut node, &item.data);
         }
     }

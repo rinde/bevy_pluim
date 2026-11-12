@@ -22,6 +22,7 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
+use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentedControl};
@@ -56,6 +57,10 @@ enum Workload {
     FilterChipsOneChanging,
     /// The same `FilterChips`, idle: the floor the changing workload is read against.
     FilterChipsIdle,
+    /// Many independent `SegmentedControl`s of three segments, idle.
+    SegmentedControlsIdle,
+    /// Many independent `Gallery`s of three cards, idle.
+    GalleriesIdle,
     /// Many independent `SegmentedControl`s (roving-focus groups); the focus moves to
     /// another control's segment every frame.
     RovingGroupsFocus,
@@ -79,7 +84,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 18] = [
+    const ALL: [Self; 20] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -89,6 +94,8 @@ impl Workload {
         Self::VirtualLists,
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
+        Self::SegmentedControlsIdle,
+        Self::GalleriesIdle,
         Self::RovingGroupsFocus,
         Self::RovingGroupsSelection,
         Self::RovingGroupsIdle,
@@ -111,6 +118,8 @@ impl Workload {
             Self::VirtualLists => "virtual-lists",
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
+            Self::SegmentedControlsIdle => "segmented-controls-idle",
+            Self::GalleriesIdle => "galleries-idle",
             Self::RovingGroupsFocus => "roving-groups-focus",
             Self::RovingGroupsSelection => "roving-groups-selection",
             Self::RovingGroupsIdle => "roving-groups-idle",
@@ -131,6 +140,8 @@ impl Workload {
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
+            | Self::SegmentedControlsIdle
+            | Self::GalleriesIdle
             | Self::RovingGroupsFocus
             | Self::RovingGroupsSelection
             | Self::RovingGroupsIdle => 500,
@@ -536,6 +547,33 @@ fn spawn(world: &mut World, run: Run) {
                             .one()
                             .build_with_items((0..3).map(move |chip| Item {
                                 data: Chip::new(format!("Chip {row}.{chip}")),
+                            })),
+                    ));
+                }
+            }
+            Workload::SegmentedControlsIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        SegmentedControl,
+                        Selection::builder().one().build_with_items(
+                            (0..3)
+                                .map(move |segment| Item::new(format!("Segment {row}.{segment}"))),
+                        ),
+                    ));
+                }
+            }
+            Workload::GalleriesIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        Gallery,
+                        Selection::builder()
+                            .one()
+                            .build_with_items((0..3).map(move |card| Item {
+                                data: GalleryCard::new(
+                                    Handle::default(),
+                                    format!("Card {row}.{card}"),
+                                    "Group",
+                                ),
                             })),
                     ));
                 }

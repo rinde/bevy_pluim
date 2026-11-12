@@ -59,14 +59,34 @@ fn restyle_on_toggle(
 /// [`bevy::ui_widgets::Button`] unlabelled. A combo's button is left alone: it is a
 /// combo box whose value says the selection.
 fn sync_accessibility(
-    mut buttons: Query<
-        (&PushButton, Option<&ToggleState>, &mut AccessibilityNode),
-        Without<ComboButton>,
-    >,
+    mut buttons: ParamSet<(
+        Query<
+            (&PushButton, Option<&ToggleState>, &mut AccessibilityNode),
+            (
+                Without<ComboButton>,
+                Or<(
+                    Changed<AccessibilityNode>,
+                    Changed<PushButton>,
+                    Changed<ToggleState>,
+                )>,
+            ),
+        >,
+        Query<(&PushButton, Option<&ToggleState>, &mut AccessibilityNode), Without<ComboButton>>,
+    )>,
+    mut untoggled: RemovedComponents<ToggleState>,
 ) {
-    for (button, toggle, mut node) in &mut buttons {
+    // Only buttons whose node Bevy reset, whose text changed or whose toggle was inserted are
+    // looked at, plus those that lost their `ToggleState`; an idle frame touches none.
+    for (button, toggle, mut node) in &mut buttons.p0() {
         sync_label(&mut node, &button.label);
         sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
+    }
+    let mut all = buttons.p1();
+    for entity in untoggled.read() {
+        if let Ok((button, toggle, mut node)) = all.get_mut(entity) {
+            sync_label(&mut node, &button.label);
+            sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
+        }
     }
 }
 

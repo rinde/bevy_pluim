@@ -13818,6 +13818,223 @@ fn a_tooltip_stays_hidden_while_a_numeric_stepper_is_scrubbed() {
     );
 }
 
+/// Replaces the node as Bevy's own resets do (a plain button with no label), through `DerefMut`.
+fn reset_accessibility_node(app: &mut App, entity: Entity) {
+    let mut node = app
+        .world_mut()
+        .get_mut::<AccessibilityNode>(entity)
+        .unwrap();
+    *node = AccessibilityNode(accesskit::Node::new(accesskit::Role::Button));
+}
+
+fn accessibility_node_of(app: &App, entity: Entity) -> &AccessibilityNode {
+    app.world().get::<AccessibilityNode>(entity).unwrap()
+}
+
+#[test]
+fn filter_chips_restore_role_label_and_toggle_after_a_reset_and_follow_the_selection() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let node = accessibility_node_of(&app, views[0]);
+    assert_eq!(node.role(), accesskit::Role::RadioButton);
+    assert_eq!(node.label(), Some("All 4"));
+    assert_eq!(node.toggled(), Some(accesskit::Toggled::True));
+
+    reset_accessibility_node(&mut app, views[1]);
+    app.update();
+    let node = accessibility_node_of(&app, views[1]);
+    assert_eq!(node.role(), accesskit::Role::RadioButton);
+    assert_eq!(node.label(), Some("Running 2"));
+    assert_eq!(node.toggled(), Some(accesskit::Toggled::False));
+
+    activate(&mut app, views[1]);
+    app.update();
+    assert_eq!(
+        accessibility_node_of(&app, views[0]).toggled(),
+        Some(accesskit::Toggled::False)
+    );
+    assert_eq!(
+        accessibility_node_of(&app, views[1]).toggled(),
+        Some(accesskit::Toggled::True)
+    );
+}
+
+#[test]
+fn filter_chips_leave_their_accessibility_nodes_alone_on_idle_frames_and_for_other_chips() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let (_, other) = spawn_chips(&mut app, three_chips());
+    let views = chip_views(&app, chips);
+    let others = chip_views(&app, other);
+    let all: Vec<_> = views.iter().chain(&others).copied().collect();
+    let before: Vec<_> = all
+        .iter()
+        .map(|e| accessibility_changed_at(&app, *e))
+        .collect();
+    app.update();
+    app.update();
+    let now: Vec<_> = all
+        .iter()
+        .map(|e| accessibility_changed_at(&app, *e))
+        .collect();
+    assert_eq!(before, now, "idle frames wrote a node");
+
+    activate(&mut app, views[2]);
+    app.update();
+    for e in &others {
+        assert_eq!(
+            accessibility_changed_at(&app, *e),
+            before[all.iter().position(|a| a == e).unwrap()],
+            "a chip of another widget was written"
+        );
+    }
+    assert_eq!(
+        accessibility_node_of(&app, views[2]).toggled(),
+        Some(accesskit::Toggled::True)
+    );
+}
+
+#[test]
+fn a_segmented_control_keeps_its_accessibility_nodes_right_through_resets_and_selection_changes() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let other = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+    let others = segments_of(&app, other);
+    let node = accessibility_node_of(&app, segments[0]);
+    assert_eq!(node.role(), accesskit::Role::RadioButton);
+    assert_eq!(node.label(), Some("Auto"));
+    assert_eq!(node.toggled(), Some(accesskit::Toggled::True));
+
+    let before: Vec<_> = others
+        .iter()
+        .map(|e| accessibility_changed_at(&app, *e))
+        .collect();
+    app.update();
+    app.update();
+    for (e, tick) in others.iter().zip(&before) {
+        assert_eq!(accessibility_changed_at(&app, *e), *tick, "idle write");
+    }
+
+    reset_accessibility_node(&mut app, segments[1]);
+    app.update();
+    let node = accessibility_node_of(&app, segments[1]);
+    assert_eq!(node.role(), accesskit::Role::RadioButton);
+    assert_eq!(node.label(), Some("Manual"));
+    assert_eq!(node.toggled(), Some(accesskit::Toggled::False));
+
+    select_by_text(&mut app, control, "Manual");
+    assert_eq!(
+        accessibility_node_of(&app, segments[0]).toggled(),
+        Some(accesskit::Toggled::False)
+    );
+    assert_eq!(
+        accessibility_node_of(&app, segments[1]).toggled(),
+        Some(accesskit::Toggled::True)
+    );
+    for (e, tick) in others.iter().zip(&before) {
+        assert_eq!(accessibility_changed_at(&app, *e), *tick, "other control");
+    }
+}
+
+#[test]
+fn a_segment_label_follows_a_change_of_its_items_text_in_the_accessibility_node() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let segments = segments_of(&app, control);
+    let item = app
+        .world()
+        .get::<Segment>(segments[2])
+        .map(Segment::item)
+        .unwrap();
+    app.world_mut().get_mut::<Item<String>>(item).unwrap().data = "Never".into();
+    app.update();
+    app.update();
+    assert_eq!(
+        accessibility_node_of(&app, segments[2]).label(),
+        Some("Never")
+    );
+}
+
+#[test]
+fn a_gallery_keeps_its_card_accessibility_nodes_right_through_resets_and_leaves_idle_frames_alone()
+{
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let cards: Vec<Entity> = app
+        .world_mut()
+        .query_filtered::<Entity, With<GalleryCardView>>()
+        .iter(app.world())
+        .collect();
+    assert_eq!(cards.len(), 5);
+    let _ = gallery;
+    let before: Vec<_> = cards
+        .iter()
+        .map(|e| accessibility_changed_at(&app, *e))
+        .collect();
+    app.update();
+    app.update();
+    for (e, tick) in cards.iter().zip(&before) {
+        assert_eq!(accessibility_changed_at(&app, *e), *tick, "idle write");
+    }
+    let card = cards[3];
+    reset_accessibility_node(&mut app, card);
+    app.update();
+    let node = accessibility_node_of(&app, card);
+    assert_eq!(node.role(), accesskit::Role::RadioButton);
+    assert!(node.label().is_some());
+    assert_eq!(node.toggled(), Some(accesskit::Toggled::False));
+}
+
+#[test]
+fn a_link_and_buttons_restore_their_accessibility_nodes_after_a_reset_and_idle_frames_write_nothing()
+ {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let link = app
+        .world_mut()
+        .spawn((Link::new("Docs"), ChildOf(root)))
+        .id();
+    let push = app
+        .world_mut()
+        .spawn((
+            PushButton::from_label("Go"),
+            ToggleState(true),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let ticks = [
+        accessibility_changed_at(&app, link),
+        accessibility_changed_at(&app, push),
+    ];
+    app.update();
+    app.update();
+    assert_eq!(accessibility_changed_at(&app, link), ticks[0], "link idle");
+    assert_eq!(
+        accessibility_changed_at(&app, push),
+        ticks[1],
+        "button idle"
+    );
+
+    reset_accessibility_node(&mut app, link);
+    reset_accessibility_node(&mut app, push);
+    app.update();
+    let node = accessibility_node_of(&app, link);
+    assert_eq!(node.role(), accesskit::Role::Link);
+    assert_eq!(node.label(), Some("Docs"));
+    let node = accessibility_node_of(&app, push);
+    assert_eq!(node.label(), Some("Go"));
+    assert_eq!(node.toggled(), Some(accesskit::Toggled::True));
+
+    app.world_mut().entity_mut(push).remove::<ToggleState>();
+    app.update();
+    assert_eq!(accessibility_node_of(&app, push).toggled(), None);
+}
+
 /// Spawns `controls` icon-only segmented controls of `segments` items each, and returns them.
 fn spawn_many_icon_controls(app: &mut App, controls: usize, segments: usize) -> Vec<Entity> {
     let root = app.world_mut().spawn(Node::default()).id();
