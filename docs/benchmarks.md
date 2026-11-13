@@ -351,9 +351,17 @@ container, noisy), `bench --workload NAME --size N`:
 
 Entities (7829 and 30329) and memory added (about 40 and 153 MiB) are unchanged. Idle frames gain
 about 7 % at 500 controls and 15 % at 2000, growing with the count as the quadratic term goes; the
-rest of the frame is other systems. Animation and removal are dominated by something else:
-`indicators-animating` replaces a `Selection` every frame (about 30 ms at 500 controls), which
-costs the selection widgets' own systems, not the indicator (follow-up ticket).
+rest of the frame is other systems. Animation and removal are dominated by something else. A profile
+of `indicators-animating` (#726, callgrind, 500 controls) puts about 83 % of the instructions in
+`ui_layout_system`: the sliding indicators write `Node::left` and `width` every frame, which dirties
+their ancestors up to the root, and taffy lays the whole tree out again. The selection widgets' own
+systems are small. The largest was `theme_segmented_controls`, which scanned every control, segment,
+indicator, label and icon for each control whose selection changed; it now visits only that control
+and its children (`replacing_one_controls_selection_restyles_only_that_control`). Measured on one
+machine back to back, mean frame time of `indicators-animating` before and after the change is 9.2 ms
+and 8.1 ms at 500 controls and 40.4 ms and 35.3 ms at 2000, so the gain is about 12 %. The 30 ms and
+205 ms in the table above predate other changes on `main` and are stale; moving the indicator without
+a layout pass is the follow-up #768.
 
 ## Selection restyling (#709)
 

@@ -305,10 +305,51 @@ fn on_activate(t: On<Activate>, segments: Query<&Segment>, mut selections: Selec
     });
 }
 
+fn style_control(theme: &Theme, node: &mut Node, background: &mut BackgroundColor) {
+    node.border_radius = BorderRadius::all(theme.control_radius);
+    background.0 = theme.colors().segmented_track;
+}
+
+fn style_segment(theme: &Theme, node: &mut Node, background: &mut BackgroundColor) {
+    node.height = Val::Px(SEGMENT_HEIGHT);
+    node.min_width = Val::Px(SEGMENT_MIN_WIDTH);
+    node.padding = UiRect::axes(Val::Px(SEGMENT_SIDE_PADDING), Val::ZERO);
+    node.align_items = AlignItems::Center;
+    node.justify_content = JustifyContent::Center;
+    node.column_gap = Val::Px(SEGMENT_ICON_GAP);
+    node.border_radius = BorderRadius::all(theme.control_radius);
+    background.0 = Color::NONE;
+}
+
+fn style_indicator(theme: &Theme, node: &mut Node, background: &mut BackgroundColor) {
+    node.border_radius = BorderRadius::all(theme.control_radius);
+    background.0 = theme.colors().segmented_selected;
+}
+
+fn style_label(
+    theme: &Theme,
+    ink: Color,
+    text_color: &mut TextColor,
+    mut text_font: Mut<TextFont>,
+) {
+    text_color.0 = ink;
+    // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+    text_font.set_if_neq(TextFont {
+        font: theme.body_font.clone().into(),
+        font_size: Theme::font_size(SEGMENT_FONT_SIZE),
+        weight: FontWeight::SEMIBOLD,
+        ..default()
+    });
+}
+
+/// Themes the controls: with `Some(control)` only that control, its segments, indicator and
+/// their labels and icons, found through `Children`, so the work does not grow with the number
+/// of controls; with `None` all of them.
 fn theme_segmented_controls(
     control_id: In<Option<Entity>>,
     theme: Res<Theme>,
     selections: SelectionParam,
+    children: Query<&Children>,
     mut controls: Query<
         (Entity, &mut Node, &mut BackgroundColor),
         (
@@ -329,69 +370,78 @@ fn theme_segmented_controls(
     mut icons: Query<(&ChildOf, &mut ImageNode), With<SegmentIcon>>,
     states: Query<(&Segment, &Hovered)>,
 ) {
-    for (control, mut node, mut background) in &mut controls {
-        if control_id.0.is_some_and(|id| id != control) {
-            continue;
-        }
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors().segmented_track;
-    }
-
-    for (segment, mut node, mut background) in &mut segments {
-        if control_id.0.is_some_and(|id| id != segment.owner()) {
-            continue;
-        }
-        node.height = Val::Px(SEGMENT_HEIGHT);
-        node.min_width = Val::Px(SEGMENT_MIN_WIDTH);
-        node.padding = UiRect::axes(Val::Px(SEGMENT_SIDE_PADDING), Val::ZERO);
-        node.align_items = AlignItems::Center;
-        node.justify_content = JustifyContent::Center;
-        node.column_gap = Val::Px(SEGMENT_ICON_GAP);
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = Color::NONE;
-    }
-
-    for (indicator, mut node, mut background) in &mut indicators {
-        if control_id.0.is_some_and(|id| id != indicator.owner()) {
-            continue;
-        }
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors().segmented_selected;
-    }
-
-    for (child_of, mut text_color, mut text_font) in &mut labels {
-        let Ok((segment, hovered)) = states.get(child_of.parent()) else {
-            continue;
-        };
-        if control_id.0.is_some_and(|id| id != segment.owner()) {
-            continue;
-        }
+    let ink_of = |segment: &Segment, hovered: &Hovered| {
         let selected = selections
             .get(segment.owner())
             .is_some_and(|selection| selection.is_selected(segment.item()));
-        text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
-        // Written only when it differs: a write makes Bevy lay the tree out again (#710).
-        text_font.set_if_neq(TextFont {
-            font: theme.body_font.clone().into(),
-            font_size: Theme::font_size(SEGMENT_FONT_SIZE),
-            weight: FontWeight::SEMIBOLD,
-            ..default()
-        });
+        segment_colors(theme.colors(), selected, hovered.get()).1
+    };
+
+    if let Some(id) = control_id.0 {
+        let Ok((_, mut node, mut background)) = controls.get_mut(id) else {
+            return;
+        };
+        style_control(&theme, &mut node, &mut background);
+        let Ok(kids) = children.get(id) else {
+            return;
+        };
+        for kid in kids.iter() {
+            if let Ok((indicator, mut node, mut background)) = indicators.get_mut(kid) {
+                if indicator.owner() == id {
+                    style_indicator(&theme, &mut node, &mut background);
+                }
+                continue;
+            }
+            let Ok((segment, mut node, mut background)) = segments.get_mut(kid) else {
+                continue;
+            };
+            if segment.owner() != id {
+                continue;
+            }
+            style_segment(&theme, &mut node, &mut background);
+            let Ok((_, hovered)) = states.get(kid) else {
+                continue;
+            };
+            let ink = ink_of(segment, hovered);
+            let Ok(grandkids) = children.get(kid) else {
+                continue;
+            };
+            for grandkid in grandkids.iter() {
+                if let Ok((_, mut text_color, text_font)) = labels.get_mut(grandkid) {
+                    style_label(&theme, ink, &mut text_color, text_font);
+                }
+                if let Ok((_, mut image)) = icons.get_mut(grandkid)
+                    && image.color != ink
+                {
+                    image.color = ink;
+                }
+            }
+        }
+        return;
     }
 
+    for (_, mut node, mut background) in &mut controls {
+        style_control(&theme, &mut node, &mut background);
+    }
+    for (_, mut node, mut background) in &mut segments {
+        style_segment(&theme, &mut node, &mut background);
+    }
+    for (_, mut node, mut background) in &mut indicators {
+        style_indicator(&theme, &mut node, &mut background);
+    }
+    for (child_of, mut text_color, text_font) in &mut labels {
+        let Ok((segment, hovered)) = states.get(child_of.parent()) else {
+            continue;
+        };
+        style_label(&theme, ink_of(segment, hovered), &mut text_color, text_font);
+    }
     for (child_of, mut image) in &mut icons {
         let Ok((segment, hovered)) = states.get(child_of.parent()) else {
             continue;
         };
-        if control_id.0.is_some_and(|id| id != segment.owner()) {
-            continue;
-        }
-        let selected = selections
-            .get(segment.owner())
-            .is_some_and(|selection| selection.is_selected(segment.item()));
-        let color = segment_colors(theme.colors(), selected, hovered.get()).1;
-        if image.color != color {
-            image.color = color;
+        let ink = ink_of(segment, hovered);
+        if image.color != ink {
+            image.color = ink;
         }
     }
 }

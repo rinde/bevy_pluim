@@ -1343,8 +1343,7 @@ mod tests {
         app.update();
         app.world()
             .get_resource::<Affected>()
-            .map(|a| a.0.clone())
-            .unwrap_or_default()
+            .map_or_default(|a| a.0.clone())
     }
 
     fn sorted<const N: usize>(mut entities: [Entity; N]) -> Vec<Entity> {
@@ -2140,8 +2139,7 @@ mod tests {
     fn item_entities(app: &App, owner: Entity) -> Vec<Entity> {
         app.world()
             .get::<ItemValues>(owner)
-            .map(|items| items.iter().collect())
-            .unwrap_or_default()
+            .map_or_default(|items| items.iter().collect())
     }
 
     fn pending_count(app: &App) -> usize {
@@ -2362,8 +2360,7 @@ mod tests {
         fn seen(app: &App) -> Vec<(Entity, usize)> {
             app.world()
                 .get_resource::<Seen>()
-                .map(|seen| seen.0.clone())
-                .unwrap_or_default()
+                .map_or_default(|seen| seen.0.clone())
         }
 
         let mut app = items_app();
@@ -2422,8 +2419,7 @@ mod tests {
         let snapshots = app
             .world()
             .get_resource::<Snapshots>()
-            .map(|seen| seen.0.clone())
-            .unwrap_or_default();
+            .map_or_default(|seen| seen.0.clone());
         assert_eq!(snapshots.len(), 3);
         for snapshot in &snapshots {
             assert!(snapshots.iter().all(|other| Arc::ptr_eq(snapshot, other)));
@@ -2458,8 +2454,7 @@ mod tests {
         let kept = app
             .world()
             .get_resource::<Kept>()
-            .map(|kept| kept.0.clone())
-            .unwrap_or_default();
+            .map_or_default(|kept| kept.0.clone());
         assert_eq!(
             kept.iter().map(|items| items.len()).collect::<Vec<_>>(),
             vec![2, 3, 2]

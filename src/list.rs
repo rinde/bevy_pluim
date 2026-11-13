@@ -929,7 +929,7 @@ fn selection_change(
         };
         sync_multi_select(&mut commands, list_ref, is_multi, selection);
 
-        for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
+        for item_view_id in children.map_or_default(RelationshipTarget::iter) {
             let Ok((item_view, hovered, mut bg, mut border_color, was_selected)) =
                 item_views.get_mut(item_view_id)
             else {
@@ -966,13 +966,11 @@ fn on_items_changed(
     };
     let selection = selections.get(*list_ref);
 
-    let existing = children
-        .map(|c| {
-            c.iter()
-                .filter_map(|c| item_views.get(c).ok())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let existing = children.map_or_default(|c| {
+        c.iter()
+            .filter_map(|c| item_views.get(c).ok())
+            .collect::<Vec<_>>()
+    });
 
     let mut commands_run = Vec::new();
     // Linear reconciliation: one set of the wanted items, one of the items
