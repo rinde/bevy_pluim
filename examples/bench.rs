@@ -79,6 +79,38 @@ fn fake_hover(
     }
 }
 
+/// Frames the fake pointer rests on one tooltip host: longer than the tooltip
+/// delay (0.5 s is 30 frames at 60 per second), so each popup spawns, is laid
+/// out and placed before the pointer moves on and despawns it.
+const HOVER_REST_FRAMES: usize = 45;
+
+/// Moves a fake mouse pointer over the `Tooltip` hosts one after the other,
+/// resting on each for `HOVER_REST_FRAMES`, after picking has rebuilt the hover map and before it updates `Hovered`.
+fn hover_tooltip_hosts(
+    hosts: Query<Entity, With<Tooltip>>,
+    mut hover_map: ResMut<bevy::picking::hover::HoverMap>,
+    mut order: Local<Vec<Entity>>,
+    mut frame: Local<usize>,
+) {
+    use bevy::picking::backend::HitData;
+    use bevy::picking::pointer::PointerId;
+    if order.is_empty() {
+        order.extend(&hosts);
+    }
+    let step = *frame / HOVER_REST_FRAMES;
+    *frame += 1;
+    if order.is_empty() {
+        return;
+    }
+    let index = step % order.len();
+    if let Some(&host) = order.get(index) {
+        hover_map
+            .entry(PointerId::Mouse)
+            .or_default()
+            .insert(host, HitData::new(Entity::PLACEHOLDER, 0.0, None, None));
+    }
+}
+
 /// What is spawned and what happens each frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Workload {
@@ -86,10 +118,16 @@ enum Workload {
     BevyTexts,
     /// Plain Bevy nodes: the baseline for the tooltips.
     BevyNodes,
+    /// A node with a `Text` child: the baseline for the push buttons that has
+    /// their parent and child entities.
+    BevyTextChildren,
     /// `PushButton`s, idle.
     PushButtons,
     /// Nodes with a `Tooltip`, idle (no pointer).
     Tooltips,
+    /// Nodes with a `Tooltip`, the pointer moving over them one at a time and
+    /// resting long enough for each popup to show: hover and popup cost.
+    TooltipsHovering,
     /// A `VirtualList` of many items, idle.
     VirtualList,
     /// The same `VirtualList`, its scroll position moved every frame.
@@ -205,9 +243,11 @@ enum Workload {
 impl Workload {
     const ALL: [Self; 54] = [
         Self::BevyTexts,
+        Self::BevyTextChildren,
         Self::PushButtons,
         Self::BevyNodes,
         Self::Tooltips,
+        Self::TooltipsHovering,
         Self::VirtualList,
         Self::VirtualListScrolling,
         Self::VirtualLists,
@@ -264,8 +304,10 @@ impl Workload {
         match self {
             Self::BevyTexts => "bevy-texts",
             Self::BevyNodes => "bevy-nodes",
+            Self::BevyTextChildren => "bevy-text-children",
             Self::PushButtons => "push-buttons",
             Self::Tooltips => "tooltips",
+            Self::TooltipsHovering => "tooltips-hovering",
             Self::VirtualList => "virtual-list",
             Self::VirtualListScrolling => "virtual-list-scrolling",
             Self::VirtualLists => "virtual-lists",
@@ -322,9 +364,10 @@ impl Workload {
     /// The size used when `--size` is not given: widgets, items or lists.
     const fn default_size(self) -> usize {
         match self {
-            Self::BevyTexts | Self::PushButtons => 1_000,
+            Self::BevyTexts | Self::BevyTextChildren | Self::PushButtons => 1_000,
             Self::BevyNodes
             | Self::Tooltips
+            | Self::TooltipsHovering
             | Self::ListItemsInitial
             | Self::ListItemsAdding
             | Self::PaletteItemsAdding
@@ -401,7 +444,10 @@ fn main() -> ExitCode {
     while let Some(arg) = args.next() {
         let value = args.next();
         match (arg.as_str(), value) {
-            ("--workload", Some(name)) => workload = Workload::parse(&name),
+            ("--workload", Some(name)) => match Workload::parse(&name) {
+                Some(parsed) => workload = Some(parsed),
+                None => return unknown_workload(&name),
+            },
             ("--size", Some(value)) => size = value.parse().ok(),
             ("--frames", Some(value)) => frames = value.parse().unwrap_or(DEFAULT_FRAMES),
             _ => return usage(),
@@ -419,6 +465,17 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         },
     )
+}
+
+/// Reports a `--workload` name that is none of the workloads and lists the valid ones.
+fn unknown_workload(name: &str) -> ExitCode {
+    let names: Vec<_> = Workload::ALL.iter().map(|w| w.name()).collect();
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "unknown workload `{name}`; valid workloads: {}",
+        names.join(", ")
+    );
+    ExitCode::from(2)
 }
 
 fn usage() -> ExitCode {
@@ -571,6 +628,14 @@ fn measure(run: Run) -> String {
     app.init_resource::<ClearColor>();
     app.add_plugins(WidgetsPlugin);
     app.init_resource::<Sink>();
+    if run.workload == Workload::TooltipsHovering {
+        app.add_systems(
+            PreUpdate,
+            hover_tooltip_hosts
+                .after(bevy::picking::hover::generate_hovermap)
+                .before(bevy::picking::hover::update_is_hovered),
+        );
+    }
     if matches!(run.workload, Workload::WheelDeep | Workload::WheelDeepIdle) {
         app.add_systems(
             PreUpdate,
@@ -997,12 +1062,18 @@ fn spawn(world: &mut World, run: Run) {
                     });
                 }
             }
+            Workload::BevyTextChildren => {
+                for index in 0..run.size {
+                    root.spawn(Node::default())
+                        .with_child(Text::new(format!("Button {index}")));
+                }
+            }
             Workload::PushButtons => {
                 for index in 0..run.size {
                     root.spawn(PushButton::from_label(format!("Button {index}")));
                 }
             }
-            Workload::Tooltips => {
+            Workload::Tooltips | Workload::TooltipsHovering => {
                 for index in 0..run.size {
                     root.spawn((
                         Node {

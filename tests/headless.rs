@@ -9468,6 +9468,97 @@ fn a_system_preference_follows_the_system_theme_as_it_changes() {
     );
 }
 
+fn theme_message(app: &mut App, window: Entity, theme: WindowTheme) {
+    app.world_mut()
+        .write_message(WindowThemeChanged { window, theme });
+    app.update();
+    app.update();
+}
+
+fn system_theme_of(app: &App) -> Option<ThemeMode> {
+    app.world().get_resource::<SystemTheme>().unwrap().0
+}
+
+#[test]
+fn theme_messages_of_a_secondary_window_do_not_change_the_system_theme() {
+    let mut app = headless_app();
+    let primary = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let secondary = app
+        .world_mut()
+        .spawn(Window {
+            window_theme: Some(WindowTheme::Dark),
+            ..default()
+        })
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    theme_message(&mut app, secondary, WindowTheme::Dark);
+    assert_eq!(system_theme_of(&app), None);
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Light
+    );
+    theme_message(&mut app, primary, WindowTheme::Dark);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Dark));
+    theme_message(&mut app, secondary, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Dark));
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Dark
+    );
+}
+
+#[test]
+fn a_fixed_preference_ignores_theme_messages_of_every_window() {
+    let mut app = headless_app();
+    let primary = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let secondary = app.world_mut().spawn(Window::default()).id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    let dark = light_dark_option(&mut app, ThemePreference::Dark);
+    app.world_mut().trigger(Activate { entity: dark });
+    app.update();
+    theme_message(&mut app, secondary, WindowTheme::Light);
+    theme_message(&mut app, primary, WindowTheme::Light);
+    assert_eq!(
+        app.world().get_resource::<Theme>().unwrap().mode(),
+        ThemeMode::Dark
+    );
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Light));
+}
+
+#[test]
+fn theme_messages_are_ignored_without_a_primary_window_and_a_replacement_is_followed() {
+    let mut app = headless_app();
+    let first = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    theme_message(&mut app, first, WindowTheme::Dark);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Dark));
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    theme_message(&mut app, first, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Dark), "no primary");
+    let second = app.world_mut().spawn(Window::default()).id();
+    theme_message(&mut app, second, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Dark), "not primary");
+    app.world_mut().entity_mut(second).insert(PrimaryWindow);
+    app.update();
+    theme_message(&mut app, first, WindowTheme::Dark);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Dark), "old window");
+    theme_message(&mut app, second, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Light));
+}
+
 #[test]
 fn a_window_created_with_a_fixed_theme_is_not_taken_for_the_system_theme() {
     let mut app = headless_app();
