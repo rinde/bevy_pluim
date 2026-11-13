@@ -2,6 +2,7 @@
 //!
 //! Clicking a crumb trims the selection back to it.
 
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
@@ -26,7 +27,8 @@ impl Plugin for BreadCrumbsPlugin {
 ///
 /// Clicking a crumb trims the selection back to it. The current (last) crumb is a [`Link`] with
 /// [`InteractionDisabled`], so it shows plain text and never activates; a crumb that stops being
-/// the last is built again without the marker.
+/// the last is built again without the marker. Adding, editing or removing the `Item<String>` of a
+/// selected item rebuilds the trail too, so labels and the positions a click trims to stay current.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("BreadCrumbs"), Node)]
@@ -39,6 +41,8 @@ pub struct BreadCrumb(Entity);
 
 fn selection_change(
     q: Query<(), Changed<Selection>>,
+    changed_items: Query<Entity, Changed<Item<String>>>,
+    mut removed_items: RemovedComponents<Item<String>>,
     selections: SelectionParam,
     lists: Query<(Entity, Option<&Children>, &Selection), With<BreadCrumbs>>,
     items: Query<&Item<String>>,
@@ -53,10 +57,20 @@ fn selection_change(
     // A trail is rebuilt once a run, whether its own selection changed, the one it refers to,
     // or both: two passes would both see the children from before the first and spawn the
     // trail twice.
+    // Items whose text was added, edited or removed this run: a trail showing one of them is
+    // rebuilt in full, since the diff below compares entities, not labels or positions.
+    let touched_items = changed_items
+        .iter()
+        .chain(removed_items.read())
+        .collect::<HashSet<Entity>>();
     for (bread_crumbs_ref, children, list_selection) in lists {
-        let is_changed = q.contains(bread_crumbs_ref)
+        let selection_changed = q.contains(bread_crumbs_ref)
             || matches!(list_selection, Selection::Ref(entity) if q.contains(*entity));
-        if is_changed {
+        let items_touched = !touched_items.is_empty()
+            && selections
+                .get(bread_crumbs_ref)
+                .is_some_and(|s| s.iter().any(|e| touched_items.contains(&e)));
+        if selection_changed || items_touched {
             let Some(selection) = selections.get(bread_crumbs_ref) else {
                 continue;
             };
@@ -78,15 +92,19 @@ fn selection_change(
                 .map(|(position, e)| (position, BreadCrumb(e)))
                 .collect::<Vec<_>>();
 
-            let first_diff = existing
-                .iter()
-                .enumerate()
-                .find_map(|(i, (_, bc))| {
-                    let sel = selected.get(i);
-                    sel.is_none_or(|(_, sel)| sel.0 != bc.0).then_some(i)
-                })
-                .unwrap_or(existing.len())
-                .saturating_sub(1);
+            let first_diff = if items_touched {
+                0
+            } else {
+                existing
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, (_, bc))| {
+                        let sel = selected.get(i);
+                        sel.is_none_or(|(_, sel)| sel.0 != bc.0).then_some(i)
+                    })
+                    .unwrap_or(existing.len())
+                    .saturating_sub(1)
+            };
 
             for (existing_bc_view, _) in existing.iter().skip(first_diff) {
                 commands.entity(*existing_bc_view).despawn();

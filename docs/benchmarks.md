@@ -47,6 +47,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
 | `list-notes-changing` | 500 `List`s of 3 noted items | many independent lists; one `ItemNote` is marked changed every frame (no relayout), so a note sync that visits every row shows (#666) |
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
+| `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
+| `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
 | `steppers-idle` | 2 000 | independent `NumericStepper`s with no change: the floor the next two are read against (#663) |
 | `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
@@ -271,3 +273,33 @@ about 7 % at 500 controls and 15 % at 2000, growing with the count as the quadra
 rest of the frame is other systems. Animation and removal are dominated by something else:
 `indicators-animating` replaces a `Selection` every frame (about 30 ms at 500 controls), which
 costs the selection widgets' own systems, not the indicator (follow-up ticket).
+
+## Large item changes in a `List` (#676)
+
+`on_items_changed` in `list.rs` cloned the item list and called `retain` once
+per existing view, so reconciling N views with N items was quadratic. It now
+builds one `HashSet` of the wanted items and one of the items that already have
+a view, and is linear. Views are kept, in place, when their item is wanted and
+no earlier view shows it; any other view is despawned; new items get views in
+item order, custom views and selection as before.
+
+Measured with `--frames 15` (Intel Xeon @ 2.10 GHz, 4 threads, release build),
+mean frame time in microseconds and memory added in MiB, before and after:
+
+| Workload | Items | Before | After | Memory added |
+| --- | --- | --- | --- | --- |
+| `list-items-initial` | 1 000 | 98 000-101 000 | 91 700 | 32 / 32 |
+| `list-items-initial` | 4 000 | 797 000-822 000 | 790 000 | 124 / 124 |
+| `list-items-initial` | 16 000 | 7 560 000 | not rerun | 490 |
+| `list-items-adding` | 1 000 | 56 000-61 000 | 57 000 | 27.5 / 27.5 |
+| `list-items-adding` | 4 000 | 603 000-643 000 | 604 000 | 93 / 93 |
+
+The frame time hardly moves because `on_items_changed` was never the bottleneck:
+the Taffy grid layout and `ui_layout_system` of the rows take almost all of the
+frame (about 600 ms for 4 000 rows, by sampling). Timing the observer alone
+(temporary instrumentation, not committed), in microseconds: initial build
+1 000 items 216-273 to 160-190, 4 000 items 940-1 580 to 614-900, 16 000 items
+3 100-6 700 to 2 500-3 100; adding one item to 4 000, 205-230 to about 150.
+Temporary memory is two `HashSet`s of N entities (about 16 bytes an entry),
+replacing the cloned `Vec` and its per-row clone, so it is the same order and
+does not show in the resident set. For long lists use `VirtualList`.

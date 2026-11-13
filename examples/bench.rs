@@ -28,7 +28,7 @@ use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
-use bevy_pluim::select::{Item, ItemValues, Selection, SelectionValue};
+use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionValue};
 use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
@@ -68,6 +68,11 @@ enum Workload {
     ListNotesChanging,
     /// The same lists, idle: the floor the changing workload is read against.
     ListNotesIdle,
+    /// One `List` of many items, replaced by a new one with all its items every frame:
+    /// the initial build of the views.
+    ListItemsInitial,
+    /// One `List` of many items; one item is added every frame: an incremental change.
+    ListItemsAdding,
     /// Many independent `NumericStepper`s, idle: the floor the changing workloads are read against.
     SteppersIdle,
     /// The same steppers; `CHANGED_STEPPERS` values are marked changed every frame.
@@ -110,7 +115,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 28] = [
+    const ALL: [Self; 30] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -123,6 +128,8 @@ impl Workload {
         Self::ListNotesChanging,
         Self::ListNotesIdle,
         Self::SteppersIdle,
+        Self::ListItemsInitial,
+        Self::ListItemsAdding,
         Self::SteppersChanging,
         Self::SteppersSharedChanging,
         Self::SegmentedControlsIdle,
@@ -154,6 +161,8 @@ impl Workload {
             Self::FilterChipsIdle => "filter-chips-idle",
             Self::ListNotesChanging => "list-notes-changing",
             Self::ListNotesIdle => "list-notes-idle",
+            Self::ListItemsInitial => "list-items-initial",
+            Self::ListItemsAdding => "list-items-adding",
             Self::SteppersIdle => "steppers-idle",
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
@@ -178,7 +187,9 @@ impl Workload {
     const fn default_size(self) -> usize {
         match self {
             Self::BevyTexts | Self::PushButtons => 1_000,
-            Self::BevyNodes | Self::Tooltips => 5_000,
+            Self::BevyNodes | Self::Tooltips | Self::ListItemsInitial | Self::ListItemsAdding => {
+                5_000
+            }
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
@@ -432,13 +443,13 @@ fn measure(run: Run) -> String {
 
     spawn(app.world_mut(), run);
     for _ in 0..WARMUP_FRAMES {
-        frame(&mut app, run.workload, 0);
+        frame(&mut app, run.workload, run.size, 0);
     }
 
     let mut times = Vec::with_capacity(run.frames);
     for index in 0..run.frames {
         let start = Instant::now();
-        frame(&mut app, run.workload, index);
+        frame(&mut app, run.workload, run.size, index);
         times.push(start.elapsed());
     }
     let after = resident_bytes();
@@ -465,7 +476,31 @@ fn measure(run: Run) -> String {
 }
 
 /// One frame; the scrolling workload first moves the scroll position.
-fn frame(app: &mut App, workload: Workload, index: usize) {
+fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
+    if workload == Workload::ListItemsInitial {
+        // A new list with all its items each frame, so every frame builds `size` views.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<List>>();
+        let old: Vec<Entity> = query.iter(world).collect();
+        let parent = old
+            .first()
+            .and_then(|list| world.get::<ChildOf>(*list))
+            .map(ChildOf::parent);
+        for list in old {
+            world.entity_mut(list).despawn();
+        }
+        if let Some(parent) = parent {
+            world.spawn((List, list_items(size), ChildOf(parent)));
+        }
+    }
+    if workload == Workload::ListItemsAdding {
+        // One more item for the list's `ItemValues`, so one `ItemsChanged` per frame.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<List>>();
+        if let Some(list) = query.iter(world).next() {
+            world.spawn((Item::new(format!("Added {index}")), ItemOf(list)));
+        }
+    }
     if workload == Workload::VirtualListScrolling {
         let world = app.world_mut();
         let mut query = world.query_filtered::<&mut ScrollPosition, With<ScrollContents>>();
@@ -684,6 +719,9 @@ fn spawn(world: &mut World, run: Run) {
                     ));
                 }
             }
+            Workload::ListItemsInitial | Workload::ListItemsAdding => {
+                root.spawn((List, list_items(run.size)));
+            }
             Workload::SegmentedControlsIdle
             | Workload::IndicatorsAnimating
             | Workload::IndicatorsRemoved => {
@@ -724,6 +762,13 @@ fn spawn(world: &mut World, run: Run) {
                 }
             }
         });
+}
+
+/// A `One` selection over `size` items, for the list workloads.
+fn list_items(size: usize) -> impl Bundle {
+    Selection::builder()
+        .one()
+        .build_with_items((0..size).map(|item| Item::new(format!("Item {item}"))))
 }
 
 fn virtual_list(parent: &mut ChildSpawner, items: usize) {

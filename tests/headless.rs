@@ -697,6 +697,102 @@ fn bread_crumbs_follow_a_reordered_selection_and_trim_from_the_new_order() {
     assert_eq!(crumb_texts(&app, crumbs), ["c", "a"]);
 }
 
+#[test]
+fn bread_crumbs_follow_item_text_changes_and_trim_to_the_current_position() {
+    let mut app = headless_app();
+    let selection = app
+        .world_mut()
+        .spawn(Selection::builder().one_or_more().build_with_items([
+            (Item::new("a"),),
+            (Item::new("b"),),
+            (Item::new("c"),),
+        ]))
+        .id();
+    let items = app
+        .world()
+        .get::<ItemValues>(selection)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let (a, b, c) = (items[0], items[1], items[2]);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let crumbs = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            BreadCrumbs,
+            Selection::reference(selection),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            selections.update_selection(selection, |s| s.set_selection(vec![a, b, c]))
+        })
+        .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "b", "c"]);
+
+    // Editing the text of a selected item alone updates its crumb.
+    app.world_mut().get_mut::<Item<String>>(b).unwrap().data = "B".into();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "B", "c"]);
+
+    // Removing the text drops the crumb; the later crumb still trims to its position.
+    app.world_mut().entity_mut(b).remove::<Item<String>>();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "c"]);
+
+    // A formerly unlabelled item gaining text gets a crumb again, in its place.
+    app.world_mut().entity_mut(b).insert(Item::new("again"));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "again", "c"]);
+
+    // Exactly the last crumb is current, and clicking "again" trims to its position (2).
+    let world = app.world_mut();
+    let mut links = world.query::<(Entity, &Link, Has<InteractionDisabled>)>();
+    let found = links
+        .iter(world)
+        .map(|(e, _, d)| (e, d))
+        .collect::<Vec<_>>();
+    assert_eq!(found.iter().filter(|(_, d)| *d).count(), 1);
+    let again = found
+        .iter()
+        .map(|(e, _)| *e)
+        .find(|e| {
+            world
+                .get::<Children>(*e)
+                .into_iter()
+                .flatten()
+                .any(|c| world.get::<Text>(*c).is_some_and(|t| t.0 == "again"))
+        })
+        .unwrap();
+    app.world_mut().trigger(Activate { entity: again });
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(crumb_texts(&app, crumbs), ["a", "again"]);
+    let sel = app
+        .world_mut()
+        .run_system_once(move |selections: SelectionParam| {
+            selections
+                .get(selection)
+                .map(|s| s.iter().collect::<Vec<_>>())
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(sel, [a, b]);
+}
+
 /// The texts of the crumbs of a trail, in the order shown (separators left out).
 fn crumb_texts(app: &App, crumbs: Entity) -> Vec<String> {
     fn collect(world: &World, entity: Entity, out: &mut Vec<String>) {
@@ -10725,6 +10821,143 @@ fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the
     assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
 }
 
+fn children_with<C: Component>(app: &mut App, stack: Entity) -> Vec<Entity> {
+    let world = app.world_mut();
+    let children = world
+        .get::<Children>(stack)
+        .map(|c| c.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    children
+        .into_iter()
+        .filter(|c| world.entity(*c).contains::<C>())
+        .collect()
+}
+
+#[test]
+fn two_stacks_sharing_a_selection_each_get_a_child_of_their_own() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new_with_reference(0, create_a)),
+            (Item::new("a again"), StackItem::new_reference(0)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let first = stack_over(&mut app, selection_ref);
+    let second = stack_over(&mut app, selection_ref);
+
+    // Both stacks show the selected item, each with a child parented to itself.
+    let a_first = children_with::<PanelA>(&mut app, first);
+    let a_second = children_with::<PanelA>(&mut app, second);
+    assert_eq!((a_first.len(), a_second.len()), (1, 1));
+    assert_ne!(a_first[0], a_second[0]);
+    assert_eq!(node_display(&app, a_first[0]), Display::Flex);
+    assert_eq!(node_display(&app, a_second[0]), Display::Flex);
+
+    // Switching shows the matching child in both; nothing is created lazily before it is picked.
+    select_one(&mut app, selection_ref, items[2]);
+    assert_eq!(count_entities_with::<PanelB>(&mut app), 2);
+    assert_eq!(node_display(&app, a_first[0]), Display::None);
+    assert_eq!(node_display(&app, a_second[0]), Display::None);
+
+    // A reference reuses the creator's child of each stack, not the other stack's.
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(children_with::<PanelA>(&mut app, first), a_first);
+    assert_eq!(children_with::<PanelA>(&mut app, second), a_second);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+    assert_eq!(node_display(&app, a_first[0]), Display::Flex);
+    assert_eq!(node_display(&app, a_second[0]), Display::Flex);
+}
+
+#[test]
+fn two_stacks_sharing_a_selection_each_build_their_own_scene_child() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let create = app.world_mut().register_system(spawn_panel_scene);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("scene"), StackItem::new(create)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stacks = [(); 2].map(|()| {
+        app.world_mut()
+            .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+            .id()
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+    for stack in stacks {
+        assert_eq!(children_with::<PanelA>(&mut app, stack).len(), 1);
+    }
+    // Switching away and back reuses each stack's scene root.
+    select_one(&mut app, selection_ref, items[1]);
+    select_one(&mut app, selection_ref, items[0]);
+    for stack in stacks {
+        let roots = children_with::<PanelA>(&mut app, stack);
+        assert_eq!(roots.len(), 1);
+        assert_eq!(node_display(&app, roots[0]), Display::Flex);
+    }
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+}
+
+#[test]
+fn despawning_a_stack_leaves_the_other_one_and_a_recreated_stack_gets_new_children() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let first = stack_over(&mut app, selection_ref);
+    let second = stack_over(&mut app, selection_ref);
+    let kept = children_with::<PanelA>(&mut app, second)[0];
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+    select_one(&mut app, selection_ref, items[1]);
+    select_one(&mut app, selection_ref, items[0]);
+    assert_eq!(children_with::<PanelA>(&mut app, second), [kept]);
+    assert_eq!(node_display(&app, kept), Display::Flex);
+
+    // A new stack over the same items makes its own children; the old stack's are not reused.
+    let third = stack_over(&mut app, selection_ref);
+    let fresh = children_with::<PanelA>(&mut app, third);
+    assert_eq!(fresh.len(), 1);
+    assert_ne!(fresh[0], kept);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(children_with::<PanelB>(&mut app, third).len(), 1);
+    assert_eq!(children_with::<PanelB>(&mut app, second).len(), 1);
+}
+
 #[test]
 fn a_stack_over_a_selection_ref_follows_the_selection_it_refers_to() {
     let mut app = headless_app();
@@ -14775,4 +15008,124 @@ fn a_track_that_gains_its_widget_later_gets_one_indicator() {
             .owner(),
         control
     );
+}
+
+/// The labels shown by the views of `list`, in the order of the list.
+fn view_labels(app: &App, list: Entity) -> Vec<String> {
+    item_views(app, list)
+        .into_iter()
+        .map(|view| item_label(app, app.world().get::<ItemView>(view).unwrap().item_ref))
+        .collect()
+}
+
+#[test]
+fn a_list_keeps_its_views_and_their_children_when_items_are_added_and_removed() {
+    let mut app = headless_app();
+    let (list, items) = spawn_custom_list(&mut app, Selection::builder().one());
+    let before = item_views(&app, list);
+    assert_eq!(before.len(), 2);
+    let app_child = app.world_mut().spawn(Name::new("app child")).id();
+    app.world_mut().entity_mut(before[0]).add_child(app_child);
+    app.world_mut()
+        .get_resource_mut::<CreatedViews>()
+        .unwrap()
+        .0
+        .clear();
+
+    app.world_mut().spawn((Item::new("c"), ItemOf(items)));
+    app.update();
+    app.update();
+    let after = item_views(&app, list);
+    assert_eq!(view_labels(&app, list), ["a", "b", "c"]);
+    assert_eq!(
+        after[..2],
+        before[..],
+        "existing views are the same entities"
+    );
+    assert!(app.world().get::<ChildOf>(app_child).is_some());
+    let created = &app.world().get_resource::<CreatedViews>().unwrap().0;
+    assert_eq!(created.len(), 1, "the creator runs for the new item only");
+    assert_eq!(created[0].1, after[2]);
+
+    let b = app.world().get::<ItemView>(after[1]).unwrap().item_ref;
+    app.world_mut().entity_mut(b).despawn();
+    app.update();
+    app.update();
+    assert_eq!(view_labels(&app, list), ["a", "c"]);
+    assert!(app.world().get_entity(after[1]).is_err());
+    assert_eq!(item_views(&app, list), [after[0], after[2]]);
+    assert!(app.world().get::<ChildOf>(app_child).is_some());
+}
+
+#[test]
+fn a_list_despawns_a_second_view_of_the_same_item() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(Item::new)),
+        )
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((List, Selection::reference(items), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let views = item_views(&app, list);
+    let item = app.world().get::<ItemView>(views[0]).unwrap().item_ref;
+    let twin = app
+        .world_mut()
+        .spawn((
+            ItemView {
+                item_ref: item,
+                list_ref: list,
+            },
+            ChildOf(list),
+        ))
+        .id();
+    app.world_mut().spawn((Item::new("c"), ItemOf(items)));
+    app.update();
+    app.update();
+    assert!(app.world().get_entity(twin).is_err());
+    assert_eq!(view_labels(&app, list), ["a", "b", "c"]);
+    assert_eq!(item_views(&app, list)[..2], views[..]);
+}
+
+#[test]
+fn a_list_of_thousands_of_items_gets_one_view_each_and_marks_the_selected_one() {
+    const COUNT: usize = 4_000;
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items((0..COUNT).map(|i| Item::new(format!("item {i}")))),
+        )
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((List, Selection::reference(items), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let labels = view_labels(&app, list);
+    assert_eq!(labels.len(), COUNT);
+    assert_eq!(labels.first().map(String::as_str), Some("item 0"));
+    assert_eq!(labels.last().map(String::as_str), Some("item 3999"));
+    assert_eq!(selected_labels(&app, list), ["item 0"]);
+
+    let first_views = item_views(&app, list);
+    app.world_mut().spawn((Item::new("last"), ItemOf(items)));
+    app.update();
+    app.update();
+    let views = item_views(&app, list);
+    assert_eq!(views.len(), COUNT + 1);
+    assert_eq!(views[..COUNT], first_views[..]);
+    assert_eq!(selected_labels(&app, list), ["item 0"]);
 }
