@@ -92,7 +92,7 @@ use bevy_pluim::toolbar::{
     Tool, Toolbar, ToolbarButton, ToolbarButtonRefs, ToolbarLabels, ToolbarStyle,
 };
 use bevy_pluim::tooltip::{Tooltip, TooltipPopup};
-use bevy_pluim::virtual_list::{RowHeight, VirtualList};
+use bevy_pluim::virtual_list::{RowHeight, VirtualList, VirtualListRow};
 
 #[path = "../examples/hud/ui/mod.rs"]
 mod hud_ui;
@@ -11840,6 +11840,49 @@ fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_sele
             "a `One` keeps its item"
         );
     }
+}
+
+/// The pool row of `list` that shows `item`.
+fn virtual_row_of(app: &mut App, item: Entity) -> Entity {
+    let mut rows = app.world_mut().query::<(Entity, &VirtualListRow)>();
+    rows.iter(app.world())
+        .find(|(_, row)| row.shown.is_some_and(|shown| shown.item == item))
+        .map(|(row, _)| row)
+        .unwrap()
+}
+
+fn click_with(app: &mut App, target: Entity, button: PointerButton, pointer: PointerId) {
+    app.world_mut().trigger(PointerClick {
+        entity: target,
+        pointer: Pointer::new(pointer, pointer_location()),
+        count: 1,
+        button,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        duration: std::time::Duration::ZERO,
+    });
+    app.update();
+}
+
+#[test]
+fn only_a_primary_click_or_touch_picks_a_virtual_list_row() {
+    let (mut app, list, items) = focused_virtual_list(SelectionBuilder::zero_or_more);
+    let row = virtual_row_of(&mut app, items[1]);
+    for button in [PointerButton::Secondary, PointerButton::Middle] {
+        click_with(&mut app, row, button, PointerId::Mouse);
+        assert!(
+            selected_items(&app, list).is_empty(),
+            "{button:?} picks nothing"
+        );
+    }
+    click_with(&mut app, row, PointerButton::Primary, PointerId::Touch(1));
+    assert_eq!(selected_items(&app, list), vec![items[1]], "a touch picks");
+    click_with(&mut app, row, PointerButton::Secondary, PointerId::Mouse);
+    assert_eq!(selected_items(&app, list), vec![items[1]], "no deselect");
+    click_with(&mut app, row, PointerButton::Primary, PointerId::Mouse);
+    assert!(
+        selected_items(&app, list).is_empty(),
+        "a primary click toggles"
+    );
 }
 
 /// What the events of a [`TextField`] and the keys that bubbled past it came to.

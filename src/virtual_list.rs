@@ -627,8 +627,10 @@ fn show_rows(
     }
 }
 
-/// Picks the item of a clicked row, as far as the selection allows, and makes it the active
-/// row. A click inside a [`Button`] in a row is the button's.
+/// Picks the item of a row clicked with the primary button (a touch counts), as far as the
+/// selection allows, and makes it the active row, like a [`List`](crate::list::List). A click
+/// inside a [`Button`] in a row is the button's; other pointer buttons are left alone and the
+/// event goes on to bubble, so an app can open a context menu.
 fn pick_on_click(
     t: On<MouseEvent>,
     parents: Query<&ChildOf>,
@@ -637,7 +639,7 @@ fn pick_on_click(
     mut states: Query<&mut VirtualListState>,
     mut selections: SelectionParam,
 ) {
-    if !matches!(t.event().kind, MouseKind::Click(_)) {
+    if !matches!(t.event().kind, MouseKind::Click(PointerButton::Primary)) {
         return;
     }
     let mut current = t.event().event_target();
