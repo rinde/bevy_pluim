@@ -61,6 +61,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
+| `palette-combos-idle` | 50 | closed `ColorPaletteCombo`s over the 242 Tailwind colours, nothing changing (#680) |
+| `theme-editors-idle` | 1 | `ThemeEditor`s with every popup closed, nothing changing (#680) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `tab-bars-idle` | 500 `TabBar`s of 3 tabs | idle frames of independent tab bars (#670) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
@@ -383,3 +385,23 @@ per-frame cost is the views each list reconciles (8 x 5 000), not the copy
 of 5 000 `Entity` ids (40 KB per copy). The change removes the copies
 (`1 + N` down to 1 per change, and the `Vec` per watcher) but this workload
 cannot show a gain; there is no allocation counter (see above).
+
+## Closed palette popups (#680)
+
+A `ColorPaletteCombo` built a swatch per item (242 in the theme editor) even
+while its popup was hidden. The palette is now dormant while the popup is
+closed (no `ItemView` children, `PaletteDormant`); opening wakes it and builds
+the swatches before layout, closing despawns them (deferred to `Last`, so a pick
+that closes the popup is still seen by the `ListBox`). The popup is shown after
+it has been placed, one frame after the click. Selection stays on the combo.
+
+Release build, one run each, before / after:
+
+| Workload | Mean frame (us) | p95 (us) | Entities | RSS (MB) |
+| --- | --- | --- | --- | --- |
+| `palette-combos-idle` 50 | 27348 / 1644 | 35424 / 1936 | 37580 / 1278 | 232.9 / 3.9 |
+| `theme-editors-idle` 1 | 23171 / 2183 | 29192 / 2832 | 33701 / 1755 | 220.2 / 14.1 |
+| `theme-editors-idle` 5 | 124847 / 4147 | not recorded | 167117 / 7395 | 1026.1 / 44.1 |
+
+Startup time is not measured separately; the five-editor run took 47.9 s of wall
+time before.

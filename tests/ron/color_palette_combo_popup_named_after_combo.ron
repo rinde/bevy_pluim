@@ -13,6 +13,7 @@
         Check(Not(Visible(Name("own palette combo popup")))),
         MoveTo(Within(Name("own palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(1),
         Check(Component(target: Name("own palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         Check(Visible(Name("own palette combo popup"))),
         Check(Not(Visible(Name("first palette combo popup")))),
