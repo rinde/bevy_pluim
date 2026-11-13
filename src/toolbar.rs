@@ -334,9 +334,10 @@ fn sync_buttons(
         let Ok((toolbar, children)) = toolbars.get(toolbar_ref) else {
             continue;
         };
-        let Some((_, values)) = selections.get_items(toolbar_ref) else {
-            continue;
-        };
+        // A selection that no longer resolves has no items: the views are cleared.
+        let values = selections
+            .get_items(toolbar_ref)
+            .map_or(&[][..], |(_, values)| values);
         let mut wanted = Vec::new();
         let mut last_group = None;
         for item in values.iter().copied() {

@@ -838,6 +838,15 @@ where
         Some((items_entity, items))
     }
 
+    /// Whether `widget` has a [`Selection::Ref`] that no longer resolves (its target was
+    /// despawned or lost its selection), so it has no items to draw.
+    pub(crate) fn is_dangling(&self, widget: Entity) -> bool {
+        self.selection_refs
+            .get(widget)
+            .is_ok_and(|selection| matches!(selection, Selection::Ref(_)))
+            && self.sources_of(widget).is_none()
+    }
+
     /// The entity holding the value of the selection on `widget` and the entity its items are
     /// on, whether or not that one has any [`ItemValues`] yet.
     pub(crate) fn sources_of(&self, widget: Entity) -> Option<(Entity, Entity)> {
@@ -959,6 +968,7 @@ pub(crate) struct StructureChanges<'w, 's, W: Component, T: Send + Sync + 'stati
     items_refs: Query<'w, 's, Entity, Changed<ItemsRef>>,
     item_owners: Query<'w, 's, &'static ItemOf>,
     removed_values: RemovedComponents<'w, 's, ItemValues>,
+    removed_selections: RemovedComponents<'w, 's, Selection>,
     removed_items: RemovedComponents<'w, 's, Item<T>>,
     removed_item_of: RemovedComponents<'w, 's, ItemOf>,
 }
@@ -980,7 +990,13 @@ impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
         // when its last item does, which `Changed` does not see.
         let mut item_sources: EntityHashSet = EntityHashSet::default();
         item_sources.extend(self.values.iter());
+        // A despawned source takes its `Selection` and `ItemValues` with it, and a widget that
+        // pointed at it through a `Selection::Ref` no longer resolves: it is named below to
+        // clear its views, which no observer on the source can do any more.
+        let removed_sources = self.removed_selections.read().count() > 0;
+        let before = item_sources.len();
         item_sources.extend(self.removed_values.read());
+        let removed_sources = removed_sources || item_sources.len() > before;
         item_sources.extend(self.items.iter().map(|owner| owner.0));
         item_sources.extend(
             removed
@@ -992,12 +1008,15 @@ impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
         let replaced: EntityHashSet = self.items_refs.iter().collect();
 
         let mut affected: EntityHashSet = self.widgets.iter().collect();
-        if !(item_sources.is_empty() && selection_sources.is_empty() && replaced.is_empty()) {
+        if removed_sources
+            || !(item_sources.is_empty() && selection_sources.is_empty() && replaced.is_empty())
+        {
             for widget in &self.all_widgets {
                 if affected.contains(&widget) {
                     continue;
                 }
-                let named = item_sources.contains(&widget)
+                let named = (removed_sources && selections.is_dangling(widget))
+                    || item_sources.contains(&widget)
                     || selection_sources.contains(&widget)
                     || replaced.contains(&widget)
                     || selections.sources_of(widget).is_some_and(|(root, items)| {
