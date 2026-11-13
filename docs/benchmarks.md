@@ -41,7 +41,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `push-buttons` | 1 000 | idle `PushButton`s |
 | `bevy-nodes` | 5 000 | Bevy baseline: plain 20 px nodes, the same count as `tooltips` |
 | `tooltips` | 5 000 | idle nodes each with a `Tooltip` (no pointer, so none shows) |
-| `tooltips-hovering` | 5 000 | the same hosts with a fake mouse pointer that rests on one host after another for 45 frames (longer than the 0.5 s delay), so each frame measures hover tracking and each popup's spawn, layout, placement and despawn; read it against `tooltips`. `HoverLock` is not covered: it is crate-private and set only by a `NumericStepper` scrub drag |
+| `tooltips-hovering` | 5 000 | the same hosts with a fake mouse pointer that rests on one host after another for 45 frames (longer than the 0.5 s delay), so each frame measures hover tracking and each popup's spawn, layout, placement and despawn; read it against `tooltips`; `HoverLock` is covered by `tooltips-scrubbing` |
+| `tooltips-scrubbing` | 5 000 | the `tooltips-hovering` hosts and the same fake pointer, plus one `NumericStepper` held in a scrub drag (a primary `PointerPress` once and a `PointerDrag` past the 3 px threshold every frame, with Left held in `ButtonInput<MouseButton>` so `end_scrub` keeps it), so the crate-private `HoverLock` is on: `MouseKind::Over` is dropped and `update_tooltips` shows no popup; read it against `tooltips-hovering` |
 | `virtual-list` | 100 000 items | one `VirtualList` in a scroll area, idle |
 | `virtual-list-scrolling` | 100 000 items | the same list, scroll position moved every frame |
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
@@ -637,3 +638,29 @@ inside run-to-run noise next to layout and accessibility work; the change remove
 allocation and the walk, which grow with the number of columns. There is no allocation counter
 (it needs `unsafe`), so the allocation count is by construction: one `Vec` per non-empty column
 per frame before, none after.
+
+## HoverLock during a scrub drag (#756)
+
+`HoverLock` is crate-private and set only while a `NumericStepper` scrub drag is on, so
+the bench cannot set it. `tooltips-scrubbing` drives a real drag through Bevy's public
+picking events (`PointerPress`, then `PointerDrag` each frame) on one stepper, so the
+stepper's own observer sets the lock; the library gets no bench hook. Left is held in
+`ButtonInput<MouseButton>` because `end_scrub` (`Last`) clears the lock otherwise. The
+fake pointer of `tooltips-hovering` keeps moving over the 5 000 hosts, so the lock is
+what separates the two runs.
+
+Measured (release build, size 5 000, two runs each, 4 vCPU Intel Xeon @ 2.10 GHz,
+`cargo run --release --example bench -- --workload NAME`; columns as in the bench
+output: mean, median, p95 and max frame time in us):
+
+| workload | mean | median | p95 | max |
+| --- | --- | --- | --- | --- |
+| `tooltips-hovering` | 2863 / 2715 | 2585 / 2451 | 5705 / 4074 | 8752 / 11193 |
+| `tooltips-scrubbing` | 2508 / 2486 | 2453 / 2490 | 2872 / 2731 | 4230 / 3560 |
+
+With the lock on, no popup is spawned, laid out or despawned, so the tail (p95, max) drops
+to the floor of hover tracking; the median is about the same because most frames of
+`tooltips-hovering` show no popup either. The lock itself costs nothing measurable: a
+`bool` read in the `MouseEvent` observer transformer and once per hovered tooltip. Memory
+is the stepper's 16 more entities. Run-to-run variation is about 0.2 ms, so read the
+difference loosely.
