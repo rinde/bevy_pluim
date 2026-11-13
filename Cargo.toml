@@ -14,7 +14,12 @@ record = ["bevy_stagecraft/record"]
 
 [dependencies]
 accesskit = "0.24"
-bevy = "0.20.1"
+# Bevy's default features (audio, 3D / PBR, glTF, the windowing backends, ..) are
+# left to the application: the library needs only the UI, picking, scene and
+# render types (`bevy_render` for the `Image` formats of the icons it draws).
+# The application picks its own platform and renderer features (the `ui`
+# profile, or `default`, is what the examples use); see AGENTS.md.
+bevy = { version = "0.20.1", default-features = false, features = ["ui_api", "scene", "picking", "bevy_ui_widgets", "bevy_render"] }
 derive_more = { version = "2.0.1", features = ["deref"] }
 educe = { version = "0.6.0", default-features = false, features = ["Default"] }
 itertools = "0.14.0"
@@ -22,10 +27,13 @@ smallvec = "1.15.1"
 strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
+# The examples and tests run a full app (`DefaultPlugins`, the renderer, a
+# window), so they take Bevy's default features, which the library itself does
+# not force on downstream apps (see `[dependencies]`).
 # The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
 # `debug` is Bevy's switch for `ScheduleBuildSettings::shuffle_seed`, which
 # `tests/scenarios.rs` shuffles the schedules with.
-bevy = { version = "0.20.1", features = ["bevy_ui_debug", "debug"] }
+bevy = { version = "0.20.1", default-features = true, features = ["bevy_ui_debug", "debug"] }
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
