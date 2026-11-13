@@ -18251,6 +18251,92 @@ fn simultaneous_selection_changes_update_only_the_lists_that_follow_them() {
     assert_eq!(selected_labels(&app, second), ["s2"]);
 }
 
+/// Counts, once per frame, the entities whose `TextFont` was written since the last frame:
+/// Bevy lays the text, and so the whole tree, out again for every one of them (#710).
+#[derive(Resource, Default)]
+struct FontWrites(usize);
+
+fn count_font_writes(changed: Query<(), Changed<TextFont>>, mut writes: ResMut<FontWrites>) {
+    writes.0 += changed.iter().count();
+}
+
+fn app_counting_font_writes() -> App {
+    let mut app = headless_app();
+    app.init_resource::<FontWrites>();
+    app.add_systems(Last, count_font_writes);
+    app
+}
+
+/// Restyles every widget with the theme as it is and returns the `TextFont`s written by it.
+fn font_writes_of_a_restyle(app: &mut App, change: impl FnOnce(&mut Theme)) -> usize {
+    settle(app);
+    app.world_mut().get_resource_mut::<FontWrites>().unwrap().0 = 0;
+    let mut theme = app.world_mut().get_resource_mut::<Theme>().unwrap();
+    theme.set_changed();
+    change(&mut theme);
+    settle(app);
+    app.world().get_resource::<FontWrites>().unwrap().0
+}
+
+#[test]
+fn restyling_filter_chips_with_an_unchanged_font_writes_no_text_font() {
+    let mut app = app_counting_font_writes();
+    spawn_chips(&mut app, three_chips());
+    assert_eq!(font_writes_of_a_restyle(&mut app, |_| ()), 0);
+}
+
+#[test]
+fn restyling_filter_chips_with_a_changed_font_still_writes_it() {
+    let mut app = app_counting_font_writes();
+    spawn_chips(&mut app, three_chips());
+    let writes = font_writes_of_a_restyle(&mut app, |theme| theme.font_size_chip += 2.0);
+    assert!(writes >= 3, "every chip label takes the new size: {writes}");
+}
+
+#[test]
+fn hovering_a_filter_chip_writes_no_text_font() {
+    let mut app = app_counting_font_writes();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let view = chip_views(&app, chips)[1];
+    settle(&mut app);
+    app.world_mut().get_resource_mut::<FontWrites>().unwrap().0 = 0;
+    app.world_mut().entity_mut(view).insert(Hovered(true));
+    settle(&mut app);
+    assert_eq!(app.world().get_resource::<FontWrites>().unwrap().0, 0);
+}
+
+#[test]
+fn restyling_segments_tabs_and_toggle_options_with_an_unchanged_font_writes_no_text_font() {
+    let mut app = app_counting_font_writes();
+    spawn_segmented_control(&mut app);
+    spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["One", "Two"].map(Item::new)),
+    );
+    app.world_mut().spawn(LightDarkToggle);
+    assert_eq!(font_writes_of_a_restyle(&mut app, |_| ()), 0);
+}
+
+#[test]
+fn restyling_segments_tabs_and_toggle_options_with_a_changed_font_still_writes_it() {
+    let mut app = app_counting_font_writes();
+    spawn_segmented_control(&mut app);
+    spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["One", "Two"].map(Item::new)),
+    );
+    app.world_mut().spawn(LightDarkToggle);
+    let writes = font_writes_of_a_restyle(&mut app, |theme| {
+        theme.body_font = bevy::asset::uuid_handle!("7a10b3c4-5d6e-4f70-8a91-b2c3d4e5f607");
+    });
+    // Three segments, two tabs and three options.
+    assert!(writes >= 8, "every label takes the new font: {writes}");
+}
+
 /// Plays the despawning of the source behind a widget's selection: the widget refers to a
 /// selection entity (`spawn` gets its entity) that holds the `ItemsRef`, so despawning the source
 /// takes that entity with it and the widget's `Selection::Ref` dangles. `shown` counts what the

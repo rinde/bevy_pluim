@@ -326,14 +326,20 @@ fn style_indicator(theme: &Theme, node: &mut Node, background: &mut BackgroundCo
     background.0 = theme.colors().segmented_selected;
 }
 
-fn style_label(theme: &Theme, ink: Color, text_color: &mut TextColor, text_font: &mut TextFont) {
+fn style_label(
+    theme: &Theme,
+    ink: Color,
+    text_color: &mut TextColor,
+    mut text_font: Mut<TextFont>,
+) {
     text_color.0 = ink;
-    *text_font = TextFont {
+    // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+    text_font.set_if_neq(TextFont {
         font: theme.body_font.clone().into(),
         font_size: Theme::font_size(SEGMENT_FONT_SIZE),
         weight: FontWeight::SEMIBOLD,
         ..default()
-    };
+    });
 }
 
 /// Themes the controls: with `Some(control)` only that control, its segments, indicator and
@@ -401,8 +407,8 @@ fn theme_segmented_controls(
                 continue;
             };
             for grandkid in grandkids.iter() {
-                if let Ok((_, mut text_color, mut text_font)) = labels.get_mut(grandkid) {
-                    style_label(&theme, ink, &mut text_color, &mut text_font);
+                if let Ok((_, mut text_color, text_font)) = labels.get_mut(grandkid) {
+                    style_label(&theme, ink, &mut text_color, text_font);
                 }
                 if let Ok((_, mut image)) = icons.get_mut(grandkid)
                     && image.color != ink
@@ -423,16 +429,11 @@ fn theme_segmented_controls(
     for (_, mut node, mut background) in &mut indicators {
         style_indicator(&theme, &mut node, &mut background);
     }
-    for (child_of, mut text_color, mut text_font) in &mut labels {
+    for (child_of, mut text_color, text_font) in &mut labels {
         let Ok((segment, hovered)) = states.get(child_of.parent()) else {
             continue;
         };
-        style_label(
-            &theme,
-            ink_of(segment, hovered),
-            &mut text_color,
-            &mut text_font,
-        );
+        style_label(&theme, ink_of(segment, hovered), &mut text_color, text_font);
     }
     for (child_of, mut image) in &mut icons {
         let Ok((segment, hovered)) = states.get(child_of.parent()) else {

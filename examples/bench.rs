@@ -39,6 +39,7 @@ use bevy_pluim::setting_row::{SettingRow, SettingRows};
 use bevy_pluim::slider::Slider;
 use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tailwind::COLORS;
+use bevy_pluim::theme::Theme;
 use bevy_pluim::theme_editor::ThemeEditor;
 use bevy_pluim::toast::Toast;
 use bevy_pluim::toolbar::{Tool, Toolbar, ToolbarStyle};
@@ -146,6 +147,9 @@ enum Workload {
     /// The same `FilterChips`; one row's selection moves to its next chip every frame, so only
     /// that row is restyled (#709).
     FilterChipsSelectionChanging,
+    /// The same `FilterChips`; every frame the `Theme` is marked changed, so every chip is
+    /// restyled but none gets a new font (#710).
+    FilterChipsRestyling,
     /// Many independent `List`s of three noted items; one note is marked changed every frame.
     ListNotesChanging,
     /// The same lists, idle: the floor the changing workload is read against.
@@ -257,7 +261,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 60] = [
+    const ALL: [Self; 61] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
@@ -270,6 +274,7 @@ impl Workload {
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
         Self::FilterChipsSelectionChanging,
+        Self::FilterChipsRestyling,
         Self::ListNotesChanging,
         Self::ListNotesIdle,
         Self::ListsSelectionChanging,
@@ -334,6 +339,7 @@ impl Workload {
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
             Self::FilterChipsSelectionChanging => "filter-chips-selection-changing",
+            Self::FilterChipsRestyling => "filter-chips-restyling",
             Self::ListNotesChanging => "list-notes-changing",
             Self::ListNotesIdle => "list-notes-idle",
             Self::ListsSelectionChanging => "lists-selection-changing",
@@ -407,6 +413,7 @@ impl Workload {
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
             | Self::FilterChipsSelectionChanging
+            | Self::FilterChipsRestyling
             | Self::ListNotesChanging
             | Self::ListNotesIdle
             | Self::ListsSelectionChanging
@@ -1079,6 +1086,12 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             }
         }
     }
+    if workload == Workload::FilterChipsRestyling {
+        // Every chip is restyled; none has a new font, so nothing may be laid out again.
+        if let Some(mut theme) = app.world_mut().get_resource_mut::<Theme>() {
+            theme.set_changed();
+        }
+    }
     app.update();
 }
 
@@ -1217,7 +1230,8 @@ fn spawn(world: &mut World, run: Run) {
             }
             Workload::FilterChipsOneChanging
             | Workload::FilterChipsIdle
-            | Workload::FilterChipsSelectionChanging => {
+            | Workload::FilterChipsSelectionChanging
+            | Workload::FilterChipsRestyling => {
                 for row in 0..run.size {
                     root.spawn((
                         FilterChips,

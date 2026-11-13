@@ -86,6 +86,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `wheel-deep-idle` | the same | the same tree and hover map, no wheel messages: the floor `wheel-deep` is read against |
 | `sliders-idle` | 2000 sliders | no change: the floor `sliders-pressing` is read against (#698) |
 | `sliders-pressing` | 2000 sliders | one slider released and another pressed every frame, so `restyle_sliders` visits only those (#698) |
+| `filter-chips-restyling` | 500 rows of 3 chips | the same rows with the `Theme` marked changed every frame, so every chip is restyled with the font it has; the font is written only on a difference, so no relayout (#710): mean 28.3 ms per frame with the unconditional write, 4.0 ms without (release build, 500 rows) |
 | `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
