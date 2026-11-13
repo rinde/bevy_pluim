@@ -825,6 +825,19 @@ where
         self.item_values.get(items_ref).ok()
     }
 
+    /// The items that the selection on `selection_ref` chooses from, with the entity they are
+    /// on. A source without [`ItemValues`] (no item added yet, or the last one removed) has
+    /// no items, so the slice is empty then where [`Self::get_item_values`] is `None`; `None`
+    /// only when the selection does not resolve.
+    pub(crate) fn get_items(&self, selection_ref: Entity) -> Option<(Entity, &[Entity])> {
+        let (_, items_entity) = self.sources_of(selection_ref)?;
+        let items = self
+            .item_values
+            .get(items_entity)
+            .map_or(&[][..], |(_, values)| values.as_slice());
+        Some((items_entity, items))
+    }
+
     /// The entity holding the value of the selection on `widget` and the entity its items are
     /// on, whether or not that one has any [`ItemValues`] yet.
     pub(crate) fn sources_of(&self, widget: Entity) -> Option<(Entity, Entity)> {
@@ -1162,12 +1175,29 @@ pub(crate) fn watch_items(
     true
 }
 
-fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut commands: Commands) {
+/// Triggers [`ItemsChanged`] for every changed [`ItemValues`], and, with no items, for a live
+/// entity that has just lost its last item and so its `ItemValues`, so the widgets drawn from it
+/// clear their views.
+fn items_change(
+    q: Query<(Entity, &ItemValues), Changed<ItemValues>>,
+    mut removed: RemovedComponents<ItemValues>,
+    values: Query<(), With<ItemValues>>,
+    live: Query<Entity>,
+    mut commands: Commands,
+) {
     for (items_ref, items) in q {
         commands.trigger(ItemsChanged {
             entity: items_ref,
             items: items.iter().collect(),
         });
+    }
+    for entity in removed.read() {
+        if !values.contains(entity) && live.contains(entity) {
+            commands.trigger(ItemsChanged {
+                entity,
+                items: Arc::from([]),
+            });
+        }
     }
 }
 

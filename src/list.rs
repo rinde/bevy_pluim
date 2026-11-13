@@ -1078,7 +1078,7 @@ pub(crate) fn watch_items<M: 'static>(
     mut commands: Commands,
     on_items_changed: impl IntoSystem<In<ItemsChangedInput>, (), M> + Copy + Send + Sync + 'static,
 ) {
-    let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
+    let Some((values_ref, all_items)) = selections.get_items(list_ref) else {
         return;
     };
     if watch.is_some_and(|watch| watch.values == values_ref) {
@@ -1114,7 +1114,7 @@ pub(crate) fn watch_items<M: 'static>(
         on_items_changed,
         ItemsChangedInput {
             list_ref,
-            items: all_items.iter().collect(),
+            items: all_items.iter().copied().collect(),
         },
     );
 }

@@ -206,11 +206,12 @@ fn sync_chips(
         let Ok(children) = chips.get(chips_ref) else {
             continue;
         };
-        let Some((_, values)) = selections.get_item_values(chips_ref) else {
+        let Some((_, values)) = selections.get_items(chips_ref) else {
             continue;
         };
         let wanted = values
             .iter()
+            .copied()
             .filter(|item| items.contains(*item))
             .collect::<Vec<_>>();
         let children = children

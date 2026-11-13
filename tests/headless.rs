@@ -16891,3 +16891,441 @@ fn two_inserts_of_an_icon_button_in_one_command_batch_build_one_icon_and_one_set
         "one toggle observer flips the state once"
     );
 }
+
+// ---- A source without items clears the views drawn from it (#695) ----
+
+/// What `widget` shows, as the texts of its views, for each widget kind of the test.
+#[derive(Clone, Copy, Debug)]
+enum Drawn {
+    List,
+    VirtualList,
+    Segments,
+    Tabs,
+}
+
+fn spawn_drawn(
+    app: &mut App,
+    kind: Drawn,
+    source: Entity,
+    selection: fn(SelectionBuilder) -> SelectionBuilderWithValue,
+) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let selection = selection(Selection::builder()).build_with_items_ref(source);
+    let widget = match kind {
+        Drawn::List => app.world_mut().spawn((List, selection, ChildOf(root))).id(),
+        Drawn::VirtualList => app
+            .world_mut()
+            .spawn((
+                VirtualList::new(RowHeight::new(28.0).unwrap()),
+                selection,
+                ChildOf(root),
+            ))
+            .id(),
+        Drawn::Segments => app
+            .world_mut()
+            .spawn((SegmentedControl, selection, ChildOf(root)))
+            .id(),
+        Drawn::Tabs => app
+            .world_mut()
+            .spawn((TabBar, selection, ChildOf(root)))
+            .id(),
+    };
+    for _ in 0..3 {
+        app.update();
+    }
+    widget
+}
+
+fn drawn_texts(app: &mut App, kind: Drawn, widget: Entity) -> Vec<String> {
+    match kind {
+        Drawn::List => item_views(app, widget)
+            .into_iter()
+            .map(|view| {
+                let item = app.world().get::<ItemView>(view).unwrap().item_ref;
+                item_label(app, item)
+            })
+            .collect(),
+        Drawn::VirtualList => {
+            let mut rows = app.world_mut().query::<&VirtualListRow>();
+            let shown: Vec<Entity> = rows
+                .iter(app.world())
+                .filter_map(|row| row.shown.map(|shown| shown.item))
+                .collect();
+            let mut texts: Vec<String> = shown.into_iter().map(|i| item_label(app, i)).collect();
+            texts.sort();
+            texts
+        }
+        Drawn::Segments => segment_texts(app, widget),
+        Drawn::Tabs => tabs_of(app, widget)
+            .into_iter()
+            .map(|tab| {
+                let item = app.world().get::<TabBarTab>(tab).unwrap().item();
+                item_label(app, item)
+            })
+            .collect(),
+    }
+}
+
+fn settle_frames(app: &mut App) {
+    for _ in 0..4 {
+        app.update();
+    }
+}
+
+#[test]
+fn switching_to_a_source_without_items_clears_the_views_and_follows_its_first_item() {
+    let selections: [(
+        &str,
+        fn(SelectionBuilder) -> SelectionBuilderWithValue,
+        bool,
+    ); 2] = [
+        ("one", SelectionBuilder::one, true),
+        ("zero or one", SelectionBuilder::zero_or_one, false),
+    ];
+    for kind in [
+        Drawn::List,
+        Drawn::VirtualList,
+        Drawn::Segments,
+        Drawn::Tabs,
+    ] {
+        for (name, selection, mandatory) in selections {
+            let context = format!("{kind:?} over a {name} selection");
+            let mut app = headless_app();
+            let a = spawn_item_source(&mut app, &["a", "b"]);
+            let b = app.world_mut().spawn_empty().id();
+            let widget = spawn_drawn(&mut app, kind, a, selection);
+            assert_eq!(drawn_texts(&mut app, kind, widget), ["a", "b"], "{context}");
+
+            app.world_mut().entity_mut(widget).insert(ItemsRef(b));
+            settle_frames(&mut app);
+            assert!(
+                drawn_texts(&mut app, kind, widget).is_empty(),
+                "{context}: cleared"
+            );
+            assert!(
+                selection_labels(&app, widget).is_empty(),
+                "{context}: nothing selected"
+            );
+
+            // The old source no longer reaches the widget.
+            app.world_mut().spawn((Item::new("e"), ItemOf(a)));
+            settle_frames(&mut app);
+            assert!(
+                drawn_texts(&mut app, kind, widget).is_empty(),
+                "{context}: old source"
+            );
+
+            // The first item of the new source appears, and a mandatory selection takes it.
+            app.world_mut().spawn((Item::new("x"), ItemOf(b)));
+            settle_frames(&mut app);
+            assert_eq!(
+                drawn_texts(&mut app, kind, widget),
+                ["x"],
+                "{context}: first item"
+            );
+            let expected: &[&str] = if mandatory { &["x"] } else { &[] };
+            assert_eq!(
+                selection_labels(&app, widget),
+                expected,
+                "{context}: selection"
+            );
+
+            // And back to the first source, which has grown meanwhile.
+            app.world_mut().entity_mut(widget).insert(ItemsRef(a));
+            settle_frames(&mut app);
+            assert_eq!(
+                drawn_texts(&mut app, kind, widget),
+                ["a", "b", "e"],
+                "{context}: back"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_virtual_list_over_a_source_without_items_has_no_active_row_and_no_items_for_a_screen_reader() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let a = spawn_item_source(&mut app, &["a", "b"]);
+    let b = app.world_mut().spawn_empty().id();
+    let list = spawn_drawn(
+        &mut app,
+        Drawn::VirtualList,
+        a,
+        SelectionBuilder::zero_or_more,
+    );
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, bevy::input_focus::FocusCause::Navigated);
+    settle_frames(&mut app);
+    press_key_on(&mut app, KeyCode::ArrowDown);
+    assert!(
+        app.world()
+            .get::<ActiveDescendant>(list)
+            .unwrap()
+            .0
+            .is_some()
+    );
+
+    app.world_mut().entity_mut(list).insert(ItemsRef(b));
+    settle_frames(&mut app);
+    assert_eq!(app.world().get::<ActiveDescendant>(list).unwrap().0, None);
+    assert_eq!(
+        app.world()
+            .get::<AccessibilityNode>(list)
+            .unwrap()
+            .size_of_set(),
+        Some(0)
+    );
+    let mut rows = app.world_mut().query::<&VirtualListRow>();
+    assert!(rows.iter(app.world()).all(|row| row.shown.is_none()));
+
+    // The first item of the new source shows up, and the old active row did not survive.
+    app.world_mut().spawn((Item::new("x"), ItemOf(b)));
+    settle_frames(&mut app);
+    assert_eq!(drawn_texts(&mut app, Drawn::VirtualList, list), ["x"]);
+    assert_eq!(app.world().get::<ActiveDescendant>(list).unwrap().0, None);
+}
+
+/// A source entity holding `items` as `Item<T>`s.
+fn typed_source<T: Send + Sync + 'static>(
+    app: &mut App,
+    items: impl IntoIterator<Item = T>,
+) -> Entity {
+    let source = app.world_mut().spawn_empty().id();
+    for data in items {
+        app.world_mut().spawn((Item { data }, ItemOf(source)));
+    }
+    app.update();
+    source
+}
+
+/// Plays the replacement of a populated source `a` by an empty one `b` and its aftermath for a
+/// widget drawn from `Item<T>`s: `shown` counts what the widget has built.
+fn replaces_a_source_by_an_empty_one<T: Send + Sync + 'static>(
+    name: &str,
+    spawn: impl FnOnce(&mut App, Entity) -> Entity,
+    items: [T; 5],
+    shown: impl Fn(&App, Entity) -> usize,
+) {
+    let mut app = headless_app();
+    let [a1, a2, a_later, b_first, b_again] = items;
+    let a = typed_source(&mut app, [a1, a2]);
+    let b = app.world_mut().spawn_empty().id();
+    let widget = spawn(&mut app, a);
+    let built = shown(&app, widget);
+    assert!(built > 0, "{name}: built over a");
+
+    app.world_mut().entity_mut(widget).insert(ItemsRef(b));
+    settle_frames(&mut app);
+    assert_eq!(shown(&app, widget), 0, "{name}: cleared by an empty source");
+
+    app.world_mut().spawn((Item { data: a_later }, ItemOf(a)));
+    settle_frames(&mut app);
+    assert_eq!(
+        shown(&app, widget),
+        0,
+        "{name}: the old source is not watched"
+    );
+
+    app.world_mut().spawn((Item { data: b_first }, ItemOf(b)));
+    settle_frames(&mut app);
+    assert!(shown(&app, widget) > 0, "{name}: first item of b appears");
+
+    // Removing the last item takes the `ItemValues` away.
+    let only = app
+        .world()
+        .get::<ItemValues>(b)
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap();
+    app.world_mut().entity_mut(only).despawn();
+    settle_frames(&mut app);
+    assert!(app.world().get::<ItemValues>(b).is_none());
+    assert_eq!(
+        shown(&app, widget),
+        0,
+        "{name}: cleared by the last removal"
+    );
+
+    // The source is still live: a new item comes back.
+    app.world_mut().spawn((Item { data: b_again }, ItemOf(b)));
+    settle_frames(&mut app);
+    assert!(shown(&app, widget) > 0, "{name}: b refilled");
+
+    app.world_mut().entity_mut(widget).insert(ItemsRef(a));
+    settle_frames(&mut app);
+    assert!(shown(&app, widget) >= built, "{name}: back to a");
+}
+
+fn five<T>(make: impl Fn(&str) -> T) -> [T; 5] {
+    ["p", "q", "r", "s", "t"].map(make)
+}
+
+#[test]
+fn a_filter_chips_row_clears_and_refills_as_its_source_is_replaced_emptied_and_restored() {
+    replaces_a_source_by_an_empty_one(
+        "filter chips",
+        |app, source| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let chips = app
+                .world_mut()
+                .spawn((
+                    FilterChips,
+                    Selection::builder().one().build_with_items_ref(source),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            chips
+        },
+        five(|l| Chip::new(l)),
+        |app, chips| chip_views(app, chips).len(),
+    );
+}
+
+#[test]
+fn a_toolbar_clears_and_refills_as_its_source_is_replaced_emptied_and_restored() {
+    replaces_a_source_by_an_empty_one(
+        "toolbar",
+        |app, source| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let toolbar = app
+                .world_mut()
+                .spawn((
+                    Toolbar::new(ToolbarStyle::Filled),
+                    Selection::builder().one().build_with_items_ref(source),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            toolbar
+        },
+        five(|label| Tool::in_group(Handle::default(), label, 0)),
+        |app, toolbar| toolbar_buttons(app, toolbar).len(),
+    );
+}
+
+#[test]
+fn a_gallery_clears_and_refills_as_its_source_is_replaced_emptied_and_restored() {
+    replaces_a_source_by_an_empty_one(
+        "gallery",
+        |app, source| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let gallery = app
+                .world_mut()
+                .spawn((
+                    Gallery,
+                    Selection::builder().one().build_with_items_ref(source),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            gallery
+        },
+        five(|label| GalleryCard::new(Handle::default(), label, "Group")),
+        |app, gallery| children_of(app, gallery).len(),
+    );
+}
+
+#[test]
+fn a_color_palette_clears_and_refills_as_its_source_is_replaced_emptied_and_restored() {
+    replaces_a_source_by_an_empty_one(
+        "color palette",
+        |app, source| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let palette = app
+                .world_mut()
+                .spawn((
+                    ColorPalette,
+                    Selection::builder().one().build_with_items_ref(source),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            palette
+        },
+        [
+            Color::WHITE,
+            Color::BLACK,
+            Color::srgb(1.0, 0.0, 0.0),
+            Color::srgb(0.0, 1.0, 0.0),
+            Color::srgb(0.0, 0.0, 1.0),
+        ],
+        |app, palette| item_views(app, palette).len(),
+    );
+}
+
+#[test]
+fn a_dormant_palette_woken_over_an_empty_source_has_no_swatches_until_its_first_item() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let a = typed_source(&mut app, [Color::WHITE, Color::BLACK]);
+    let b = app.world_mut().spawn_empty().id();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            ColorPaletteCombo,
+            Selection::builder().zero_or_one().build_with_items_ref(a),
+            ChildOf(root),
+        ))
+        .id();
+    settle_frames(&mut app);
+    // Replace the source while the popup is closed, then open it.
+    app.world_mut().entity_mut(combo).insert(ItemsRef(b));
+    settle_frames(&mut app);
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
+    settle_frames(&mut app);
+    let palette = single_entity_with::<ColorPalette>(&mut app);
+    assert!(item_views(&app, palette).is_empty(), "woken over b");
+
+    app.world_mut()
+        .spawn((Item { data: Color::WHITE }, ItemOf(b)));
+    settle_frames(&mut app);
+    assert_eq!(item_views(&app, palette).len(), 1, "first item of b");
+
+    app.world_mut().entity_mut(combo).insert(ItemsRef(a));
+    settle_frames(&mut app);
+    assert_eq!(item_views(&app, palette).len(), 2, "back to a");
+}
+
+#[test]
+fn a_list_drops_selected_from_its_views_when_cleared_and_gives_a_one_selection_its_first_item() {
+    let mut app = headless_app();
+    let a = spawn_item_source(&mut app, &["a", "b"]);
+    let b = app.world_mut().spawn_empty().id();
+    let list = spawn_drawn(&mut app, Drawn::List, a, SelectionBuilder::one);
+    let old_views = item_views(&app, list);
+    assert_eq!(old_views.len(), 2);
+    assert!(app.world().entity(old_views[0]).contains::<Selected>());
+
+    app.world_mut().entity_mut(list).insert(ItemsRef(b));
+    settle_frames(&mut app);
+    assert!(item_views(&app, list).is_empty());
+    assert!(
+        old_views
+            .iter()
+            .all(|view| app.world().get_entity(*view).is_err()),
+        "no stale view stays"
+    );
+    assert!(selection_labels(&app, list).is_empty());
+
+    app.world_mut().spawn((Item::new("x"), ItemOf(b)));
+    settle_frames(&mut app);
+    let views = item_views(&app, list);
+    assert_eq!(views.len(), 1);
+    assert!(app.world().entity(views[0]).contains::<Selected>());
+    assert_eq!(selection_labels(&app, list), ["x"]);
+
+    // The last item goes: no view, no `Selected` anywhere.
+    let only = app.world().get::<ItemValues>(b).unwrap()[0];
+    app.world_mut().entity_mut(only).despawn();
+    settle_frames(&mut app);
+    assert!(item_views(&app, list).is_empty());
+    let mut selected = app.world_mut().query_filtered::<Entity, With<Selected>>();
+    assert_eq!(selected.iter(app.world()).count(), 0);
+}

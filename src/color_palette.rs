@@ -74,11 +74,11 @@ pub(crate) struct PaletteDormant;
 /// Builds the swatches of a dormant palette from all the items it draws from and lets
 /// [`on_items_changed`] keep them in step again.
 pub(crate) fn wake(palette: In<Entity>, selections: SelectionParam, mut commands: Commands) {
-    let Some((_, values)) = selections.get_item_values(palette.0) else {
+    let Some((_, values)) = selections.get_items(palette.0) else {
         commands.entity(palette.0).remove::<PaletteDormant>();
         return;
     };
-    let items = values.iter().collect();
+    let items = values.iter().copied().collect();
     commands.entity(palette.0).remove::<PaletteDormant>();
     commands.run_system_cached_with(
         on_items_changed,
@@ -264,7 +264,7 @@ fn on_insert_palette(t: On<Insert<ColorPalette>>, mut commands: Commands) {
 
 /// Starts watching the items of the palette. Run as a deferred system by both observers, so the
 /// second of two in one frame sees the `ItemsWatch` the first inserted.
-fn watch_palette(
+pub(crate) fn watch_palette(
     palette: In<Entity>,
     color_palettes: Query<Option<&ItemsWatch>, (With<ColorPalette>, With<Selection>)>,
     selections: SelectionParam,

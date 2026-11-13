@@ -603,7 +603,7 @@ fn on_insert_selection(
     if bars.get(bar_ref).is_err() {
         return;
     }
-    let Some((values_ref, all_items)) = selections.get_item_values(bar_ref) else {
+    let Some((values_ref, all_items)) = selections.get_items(bar_ref) else {
         return;
     };
     let on_changed: fn(&mut Commands, Entity, Arc<[Entity]>) = |commands, bar_ref, items| {
@@ -624,7 +624,7 @@ fn on_insert_selection(
         on_items_changed,
         ItemsChangedInput {
             bar_ref,
-            items: all_items.iter().collect(),
+            items: all_items.iter().copied().collect(),
         },
     );
 }

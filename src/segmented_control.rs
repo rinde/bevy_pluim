@@ -726,7 +726,7 @@ fn on_insert_selection(
     if controls.get(control_ref).is_err() {
         return;
     }
-    let Some((values_ref, all_items)) = selections.get_item_values(control_ref) else {
+    let Some((values_ref, all_items)) = selections.get_items(control_ref) else {
         return;
     };
     let on_changed: fn(&mut Commands, Entity, Arc<[Entity]>) = |commands, control_ref, items| {
@@ -747,7 +747,7 @@ fn on_insert_selection(
         on_items_changed,
         ItemsChangedInput {
             control_ref,
-            items: all_items.iter().collect(),
+            items: all_items.iter().copied().collect(),
         },
     );
 }
