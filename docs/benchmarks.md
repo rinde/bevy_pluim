@@ -37,9 +37,11 @@ and a Bevy `trace`/Tracy build for per-system time.
 | Workload | Default size | What it isolates |
 | --- | --- | --- |
 | `bevy-texts` | 1 000 | Bevy baseline: nodes with `Text`, the same count as `push-buttons` |
+| `bevy-text-children` | 1 000 | Bevy baseline with the buttons' entity structure: a node with a `Text` child each, two entities per button (`push-buttons` has about four) |
 | `push-buttons` | 1 000 | idle `PushButton`s |
 | `bevy-nodes` | 5 000 | Bevy baseline: plain 20 px nodes, the same count as `tooltips` |
 | `tooltips` | 5 000 | idle nodes each with a `Tooltip` (no pointer, so none shows) |
+| `tooltips-hovering` | 5 000 | the same hosts with a fake mouse pointer that rests on one host after another for 45 frames (longer than the 0.5 s delay), so each frame measures hover tracking and each popup's spawn, layout, placement and despawn; read it against `tooltips`. `HoverLock` is not covered: it is crate-private and set only by a `NumericStepper` scrub drag |
 | `virtual-list` | 100 000 items | one `VirtualList` in a scroll area, idle |
 | `virtual-list-scrolling` | 100 000 items | the same list, scroll position moved every frame |
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
@@ -82,6 +84,14 @@ and a Bevy `trace`/Tracy build for per-system time.
 
 **Library overhead is the difference between a widget workload and its Bevy
 baseline** (`push-buttons` minus `bevy-texts`, `tooltips` minus `bevy-nodes`).
+`bevy-texts` has one entity per button and `push-buttons` several (a button, its
+label and what Bevy requires of them), so that difference includes the cost of
+the child entities themselves, not only the library's systems. `bevy-text-children`
+is a closer baseline: a node with a `Text` child (about 2 300 entities at the
+default size, against 1 300 for `bevy-texts` and 4 300 for `push-buttons`). It still
+has fewer entities than `push-buttons`, so compare the `entities` column and read
+`push-buttons` minus `bevy-text-children` as an upper bound of the library's own cost.
+An unknown `--workload` name is an error (exit code 2) that lists the valid names.
 The virtual list has no like-for-like Bevy baseline; read it against an empty
 frame (`bevy-nodes --size 1`) and against its scrolling variant. Per-widget
 costs include the library's theme, accessibility and focus systems, which run
