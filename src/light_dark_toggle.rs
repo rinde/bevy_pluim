@@ -116,7 +116,8 @@ impl ThemePreference {
 ///
 /// Read from the primary window when the app starts, and kept up to date from Bevy's
 /// [`WindowThemeChanged`] messages, which the windowing system sends when the person changes
-/// the setting. `None` when no window has told (headless, or a system without the setting).
+/// the setting, of the primary window only (those of other windows are ignored, also while there
+/// is no primary window). `None` when no window has told (headless, or a system without the setting).
 /// A primary window spawned with a fixed [`Window::window_theme`] says nothing about the system:
 /// the windowing system reports that theme back as the window's, so it is not read, and
 /// `SystemTheme` stays `None` until a [`WindowThemeChanged`] arrives.
@@ -150,23 +151,35 @@ fn mark_preset_window_theme(add: On<Add<Window>>, windows: Query<&Window>, mut c
     }
 }
 
-/// Keeps [`SystemTheme`] up to date.
+/// Keeps [`SystemTheme`] up to date from the primary window only.
+///
+/// A [`WindowThemeChanged`] counts only when its `window` is the current primary window; those of
+/// other windows (which may have a fixed theme) are ignored, and so are all of them while there
+/// is no primary window. A primary window that is a different entity from the one read before
+/// (the old one was despawned and another marked) is read once, like the first, and a theme
+/// already known stays until then, or while there is none.
 fn track_system_theme(
     mut changes: MessageReader<WindowThemeChanged>,
-    windows: Query<(&Window, Has<PresetWindowTheme>), With<PrimaryWindow>>,
+    windows: Query<(Entity, &Window, Has<PresetWindowTheme>), With<PrimaryWindow>>,
     mut system: ResMut<SystemTheme>,
-    mut probed: Local<bool>,
+    mut probed: Local<Option<Entity>>,
 ) {
     // The window's own theme is the system's until we fix it, which we only do later, unless
     // the app fixed it at creation.
-    if !*probed && let Some((window, preset)) = windows.iter().next() {
-        *probed = true;
+    let primary = windows.iter().next();
+    if let Some((entity, window, preset)) = primary
+        && *probed != Some(entity)
+    {
+        *probed = Some(entity);
         if !preset && let Some(theme) = window.window_theme {
             system.set_if_neq(SystemTheme(Some(mode_of(theme))));
         }
     }
+    let primary = primary.map(|(entity, ..)| entity);
     for change in changes.read() {
-        system.set_if_neq(SystemTheme(Some(mode_of(change.theme))));
+        if Some(change.window) == primary {
+            system.set_if_neq(SystemTheme(Some(mode_of(change.theme))));
+        }
     }
 }
 
