@@ -19,6 +19,7 @@ use itertools::Itertools;
 use crate::MouseEvent;
 use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
+use crate::glyph_images::{GlyphKey, shared};
 use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
 use crate::popup::{self, ButtonLook};
@@ -222,9 +223,7 @@ impl Combo {
         let placeholder = world
             .get::<ComboPlaceholder>(context.entity)
             .map_or_else(|| PLACEHOLDER_TEXT.to_string(), |p| p.0.clone());
-        let chevron = world
-            .get_resource_mut::<Assets<Image>>()
-            .map_or_else(Handle::default, |mut images| images.add(chevron()));
+        let chevron = shared(&mut world, GlyphKey::Chevron, chevron);
         world.commands().entity(context.entity).with_children(|x| {
             button_id = x
                 .spawn((

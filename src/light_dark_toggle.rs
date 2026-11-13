@@ -15,6 +15,7 @@ use bevy::window::{PrimaryWindow, WindowTheme, WindowThemeChanged};
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
 };
+use crate::glyph_images::{GlyphKey, shared};
 use crate::indicator::{self, Indicator};
 use crate::list::sync_selected;
 use crate::segmented_control::segment_colors;
@@ -297,16 +298,19 @@ impl LightDarkToggle {
             .get_resource::<ThemePreference>()
             .copied()
             .unwrap_or_default();
-        let icons =
-            world
-                .get_resource_mut::<Assets<Image>>()
-                .map_or([None, None, None], |mut images| {
-                    [
-                        Some(images.add(icon_image(Glyph::Sun))),
-                        Some(images.add(icon_image(Glyph::Computer))),
-                        Some(images.add(icon_image(Glyph::Moon))),
-                    ]
-                });
+        let icons = if world.contains_resource::<Assets<Image>>() {
+            [
+                Some(shared(&mut world, GlyphKey::Sun, || icon_image(Glyph::Sun))),
+                Some(shared(&mut world, GlyphKey::Computer, || {
+                    icon_image(Glyph::Computer)
+                })),
+                Some(shared(&mut world, GlyphKey::Moon, || {
+                    icon_image(Glyph::Moon)
+                })),
+            ]
+        } else {
+            [None, None, None]
+        };
         let toggle = context.entity;
         let mut commands = world.commands();
         for (preference, icon) in [
