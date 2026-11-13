@@ -1053,6 +1053,84 @@ pub(crate) fn items_in_order(
     wanted
 }
 
+/// What to do with the views a widget owns when its wanted views change: `slots` has one entry
+/// per wanted view, the existing view to keep for it or `None` for one to spawn, and `stale` the
+/// existing views to despawn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ViewPlan {
+    pub(crate) slots: Vec<Option<Entity>>,
+    pub(crate) stale: Vec<Entity>,
+}
+
+/// Matches the `existing` views, in child order, with the `wanted` keys: a wanted key takes the
+/// first unused existing view of that key, so views of unchanged items keep their entity.
+/// An existing view with a `None` key is never kept (it is of the wrong kind), and so is a second
+/// view of one key when only one is wanted. Linear: one map of the views per key.
+pub(crate) fn plan_views<K: Eq + std::hash::Hash>(
+    existing: impl IntoIterator<Item = (Entity, Option<K>)>,
+    wanted: &[K],
+) -> ViewPlan {
+    let mut pool: bevy::platform::collections::HashMap<K, std::collections::VecDeque<Entity>> =
+        bevy::platform::collections::HashMap::new();
+    let mut stale = Vec::new();
+    for (view, key) in existing {
+        match key {
+            Some(key) => pool.entry(key).or_default().push_back(view),
+            None => stale.push(view),
+        }
+    }
+    let slots = wanted
+        .iter()
+        .map(|key| {
+            pool.get_mut(key)
+                .and_then(std::collections::VecDeque::pop_front)
+        })
+        .collect();
+    stale.extend(pool.into_values().flatten());
+    ViewPlan { slots, stale }
+}
+
+/// The children a widget must be given so that its `views` (the kept ones and the entities just
+/// spawned, in the order wanted) are in that order as one run, at the place of its first current
+/// view and after the children that are not views, which keep their order. `None` when
+/// despawning the `stale` views and appending the new ones, which is what the commands do alone,
+/// already gives that order.
+pub(crate) fn order_views(
+    children: &[Entity],
+    is_view: impl Fn(Entity) -> bool,
+    views: &[Entity],
+    stale: &[Entity],
+) -> Option<Vec<Entity>> {
+    let current: bevy::platform::collections::HashSet<Entity> = children.iter().copied().collect();
+    let mut ordered = Vec::with_capacity(children.len() + views.len());
+    let mut placed = false;
+    for child in children {
+        if is_view(*child) {
+            if !placed {
+                ordered.extend_from_slice(views);
+                placed = true;
+            }
+        } else {
+            ordered.push(*child);
+        }
+    }
+    if !placed {
+        ordered.extend_from_slice(views);
+    }
+    let stale: bevy::platform::collections::HashSet<Entity> = stale.iter().copied().collect();
+    let without_stale = children
+        .iter()
+        .filter(|child| !stale.contains(*child))
+        .copied()
+        .chain(
+            views
+                .iter()
+                .filter(|view| !current.contains(*view))
+                .copied(),
+        );
+    (!ordered.iter().copied().eq(without_stale)).then_some(ordered)
+}
+
 /// Has `on_changed(commands, widget, items)` called when the items of `values` change, once
 /// per widget and values entity: returns `false`, doing nothing, when `widget` already
 /// watches `values`. Watching other values replaces the earlier observer.
@@ -1165,6 +1243,53 @@ mod tests {
 
     #[derive(Component)]
     struct Widget;
+
+    fn e(n: u32) -> Entity {
+        Entity::from_raw_u32(n).unwrap_or(Entity::PLACEHOLDER)
+    }
+
+    #[test]
+    fn a_view_plan_keeps_the_view_of_each_wanted_key_and_drops_the_rest() {
+        let plan = plan_views(
+            [(e(1), Some('a')), (e(2), Some('b')), (e(3), Some('a'))],
+            &['b', 'c', 'a'],
+        );
+        assert_eq!(plan.slots, vec![Some(e(2)), None, Some(e(1))]);
+        assert_eq!(plan.stale, vec![e(3)]);
+    }
+
+    #[test]
+    fn a_view_plan_never_keeps_a_view_without_a_key_and_reuses_equal_keys_in_order() {
+        let plan = plan_views([(e(1), None), (e(2), Some(0)), (e(3), Some(0))], &[0, 0, 0]);
+        assert_eq!(plan.slots, vec![Some(e(2)), Some(e(3)), None]);
+        assert_eq!(plan.stale, vec![e(1)]);
+    }
+
+    #[test]
+    fn views_are_ordered_as_one_run_at_the_first_view_around_the_apps_children() {
+        // children: app(1), view(2), app(3), view(4); wanted views 4, 5 (new), 2.
+        let views = [e(4), e(5), e(2)];
+        let is_view = |c: Entity| c == e(2) || c == e(4);
+        let ordered = order_views(&[e(1), e(2), e(3), e(4)], is_view, &views, &[]);
+        assert_eq!(ordered, Some(vec![e(1), e(4), e(5), e(2), e(3)]));
+    }
+
+    #[test]
+    fn no_reorder_is_asked_for_when_commands_alone_give_the_order() {
+        let is_view = |c: Entity| c != e(1);
+        // Stale view 3 despawned, new view 5 appended: 1, 2, 4, 5.
+        assert_eq!(
+            order_views(
+                &[e(1), e(2), e(3), e(4)],
+                is_view,
+                &[e(2), e(4), e(5)],
+                &[e(3)]
+            ),
+            None
+        );
+        // No views yet.
+        assert_eq!(order_views(&[e(1)], is_view, &[e(5)], &[]), None);
+    }
 
     #[derive(Resource, Default)]
     struct Affected(Vec<Entity>);

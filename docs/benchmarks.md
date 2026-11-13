@@ -68,6 +68,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `palette-combos-idle` | 50 | closed `ColorPaletteCombo`s over the 242 Tailwind colours, nothing changing (#680) |
 | `theme-editors-idle` | 1 | `ThemeEditor`s with every popup closed, nothing changing (#680) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
+| `filter-chips-editing`, `toolbar-editing`, `gallery-editing` | 200 items | one widget; every frame an item is removed or inserted in the middle (#690) |
 | `tab-bars-idle` | 500 `TabBar`s of 3 tabs | idle frames of independent tab bars (#670) |
 | `deep-trees-idle`, `deep-trees-display`, `deep-trees-reparenting` | chains of 40 nodes with a button | idle, `Display::None` flips and reparenting of deep trees (#684) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
@@ -498,3 +499,29 @@ scans were cheap next to layout and accessibility updates, so the differences
 are within run-to-run noise (the badge rows even read slightly higher after,
 the panel idle row lower); the change removes the per-frame walk, whose cost
 grows with the number of hosts, rather than a visible share of this frame.
+
+## Targeted view reconciliation (#690)
+
+`FilterChips::sync_chips`, `Toolbar::sync_buttons` and `Gallery::sync_cards`
+despawned and respawned every view on any structural change. They now plan
+against the views that exist (`select.rs`: `plan_views`, `order_views`): a view
+whose item stays keeps its entity (so focus, hover and app children survive),
+only missing views are spawned, stale ones despawned, and the children are
+reordered once, only when the order differs. The gallery rebuilds its cheap
+group scaffolding and re-parents the kept cards into it.
+
+Measured with `cargo run --release --example bench`, 300 frames, one run each
+(shared box, noisy), `main` against this change, mean / p95 frame time in
+microseconds. Allocation counts are not measurable here (see above).
+
+| workload | items | before mean / p95 | after mean / p95 | RSS MiB before -> after |
+| --- | --- | --- | --- | --- |
+| `filter-chips-editing` | 50 | 3364 / 4294 | 2139 / 2776 | 4.5 -> 4.3 |
+| `filter-chips-editing` | 200 | 9562 / 12449 | 2539 / 3326 | 10.0 -> 8.3 |
+| `toolbar-editing` | 50 | 3265 / 4405 | 1855 / 2316 | 4.9 -> 4.4 |
+| `toolbar-editing` | 200 | 8007 / 9871 | 2441 / 3109 | 10.5 -> 8.2 |
+| `gallery-editing` | 50 | 3342 / 4027 | 2150 / 3049 | 6.3 -> 5.4 |
+| `gallery-editing` | 200 | 8733 / 10763 | 3349 / 4666 | 12.8 -> 10.4 |
+
+Entity counts are unchanged. The cost now grows far more slowly with the item
+count, since one edit touches one view.

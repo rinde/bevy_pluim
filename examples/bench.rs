@@ -38,6 +38,7 @@ use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tailwind::COLORS;
 use bevy_pluim::theme_editor::ThemeEditor;
 use bevy_pluim::toast::Toast;
+use bevy_pluim::toolbar::{Tool, Toolbar, ToolbarStyle};
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
@@ -147,6 +148,12 @@ enum Workload {
     IndicatorsRemoved,
     /// Many independent `Gallery`s of three cards, idle.
     GalleriesIdle,
+    /// One `FilterChips` of `size` chips; every frame its first item goes and a new one is added.
+    FilterChipsEditing,
+    /// One `Toolbar` of `size` tools, edited like `FilterChipsEditing`.
+    ToolbarEditing,
+    /// One `Gallery` of `size` cards, edited like `FilterChipsEditing`.
+    GalleryEditing,
     /// Many independent `TabBar`s of three tabs, idle (#670).
     TabBarsIdle,
     /// Many deep chains of nodes with a button at the bottom, idle (#684).
@@ -184,7 +191,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 47] = [
+    const ALL: [Self; 50] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -217,6 +224,9 @@ impl Workload {
         Self::IndicatorsAnimating,
         Self::IndicatorsRemoved,
         Self::GalleriesIdle,
+        Self::FilterChipsEditing,
+        Self::ToolbarEditing,
+        Self::GalleryEditing,
         Self::TabBarsIdle,
         Self::DeepTreesIdle,
         Self::DeepTreesDisplay,
@@ -268,6 +278,9 @@ impl Workload {
             Self::IndicatorsAnimating => "indicators-animating",
             Self::IndicatorsRemoved => "indicators-removed",
             Self::GalleriesIdle => "galleries-idle",
+            Self::FilterChipsEditing => "filter-chips-editing",
+            Self::ToolbarEditing => "toolbar-editing",
+            Self::GalleryEditing => "gallery-editing",
             Self::TabBarsIdle => "tab-bars-idle",
             Self::DeepTreesIdle => "deep-trees-idle",
             Self::DeepTreesDisplay => "deep-trees-display",
@@ -299,7 +312,11 @@ impl Workload {
             | Self::SegmentItemsAdding
             | Self::ItemsSharedAdding => 5_000,
             Self::VirtualLists => 20,
-            Self::WheelDeep | Self::WheelDeepIdle => 200,
+            Self::FilterChipsEditing
+            | Self::ToolbarEditing
+            | Self::GalleryEditing
+            | Self::WheelDeep
+            | Self::WheelDeepIdle => 200,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
             | Self::ListNotesChanging
@@ -645,6 +662,23 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
                 ItemOf(palette),
             ));
         }
+    }
+    if workload == Workload::FilterChipsEditing {
+        edit_items::<FilterChips, _>(app, |index| Chip::new(format!("Added {index}")), index);
+    }
+    if workload == Workload::ToolbarEditing {
+        edit_items::<Toolbar, _>(
+            app,
+            |index| Tool::in_group(Handle::default(), format!("Added {index}"), 0),
+            index,
+        );
+    }
+    if workload == Workload::GalleryEditing {
+        edit_items::<Gallery, _>(
+            app,
+            |index| GalleryCard::new(Handle::default(), format!("Added {index}"), "Group"),
+            index,
+        );
     }
     if workload == Workload::TabItemsAdding {
         let world = app.world_mut();
@@ -1098,6 +1132,44 @@ fn spawn(world: &mut World, run: Run) {
                     ));
                 }
             }
+            Workload::FilterChipsEditing => {
+                root.spawn((
+                    FilterChips,
+                    Selection::builder()
+                        .one()
+                        .build_with_items((0..run.size).map(|chip| Item {
+                            data: Chip::new(format!("Chip {chip}")),
+                        })),
+                ));
+            }
+            Workload::ToolbarEditing => {
+                root.spawn((
+                    Toolbar::new(ToolbarStyle::Filled),
+                    Selection::builder()
+                        .one()
+                        .build_with_items((0..run.size).map(|tool| Item {
+                            data: Tool::in_group(
+                                Handle::default(),
+                                format!("Tool {tool}"),
+                                (tool / 4) as u32,
+                            ),
+                        })),
+                ));
+            }
+            Workload::GalleryEditing => {
+                root.spawn((
+                    Gallery,
+                    Selection::builder()
+                        .one()
+                        .build_with_items((0..run.size).map(|card| Item {
+                            data: GalleryCard::new(
+                                Handle::default(),
+                                format!("Card {card}"),
+                                format!("Group {}", card / 8),
+                            ),
+                        })),
+                ));
+            }
             Workload::GalleriesIdle => {
                 for row in 0..run.size {
                     root.spawn((
@@ -1159,6 +1231,25 @@ const fn palette_color(index: usize) -> Color {
 }
 
 /// A `One` selection over `size` items, for the list workloads.
+/// Despawns the first item of the one widget `W` and adds a new item last, so the item count
+/// stays `size` and one small structural change reaches the widget every frame.
+fn edit_items<W: Component, T: Send + Sync + 'static>(
+    app: &mut App,
+    new: impl FnOnce(usize) -> T,
+    index: usize,
+) {
+    let world = app.world_mut();
+    let mut query = world.query_filtered::<(Entity, &ItemValues), With<W>>();
+    let Some((widget, items)) = query.iter(world).next() else {
+        return;
+    };
+    let first = items.iter().next();
+    if let Some(first) = first {
+        world.entity_mut(first).despawn();
+    }
+    world.spawn((Item { data: new(index) }, ItemOf(widget)));
+}
+
 fn list_items(size: usize) -> impl Bundle {
     Selection::builder()
         .one()
