@@ -779,6 +779,22 @@ the dependencies again, and again when you drop the flag).
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
 
+### Bevy features
+
+The library depends on `bevy` with `default-features = false` and the features
+`ui_api`, `scene`, `picking`, `bevy_ui_widgets` and `bevy_render` (the icons it
+draws use `bevy::render::render_resource` image types), so it forces neither
+audio, 3D / PBR, glTF nor a windowing backend on a downstream app (#696). The
+application chooses the rest: the platform and renderer features (`bevy_winit`,
+`bevy_ui_render`, `default_font`, ..), most simply Bevy's `ui` profile or
+`default`. The examples and tests get Bevy's default features, `bevy_ui_debug`
+and `debug` from `[dev-dependencies]` only. Adding a `use bevy::..` of a module
+behind another feature means adding that feature to `[dependencies]`; check
+with `cargo check --lib --locked` (dev dependencies are not unified into it) and
+with a downstream fixture that sets `default-features = false`:
+`cargo tree -e normal` must show no `bevy_audio`, `bevy_pbr`, `bevy_gltf` or
+`bevy_winit` (541 packages with Bevy's defaults before, 427 after).
+
 ### The scenario tester dependency
 
 `bevy_stagecraft` (`github.com/rinde/bevy_stagecraft`) is a public
