@@ -291,9 +291,10 @@ impl VirtualList {
 
 /// The height of a separated row's vertical padding (top and bottom of `SEPARATED_ITEM_PADDING`)
 /// and ring (twice `SEPARATED_RING_WIDTH`): its height must exceed it.
-const SEPARATED_ROW_CHROME: f32 = px(SEPARATED_ITEM_PADDING.top)
-    + px(SEPARATED_ITEM_PADDING.bottom)
-    + 2.0 * px(SEPARATED_RING_WIDTH);
+const SEPARATED_ROW_CHROME: f32 = 2.0f32.mul_add(
+    px(SEPARATED_RING_WIDTH),
+    px(SEPARATED_ITEM_PADDING.top) + px(SEPARATED_ITEM_PADDING.bottom),
+);
 
 /// One row of a [`VirtualList`], showing the item at `index` of the list's items.
 ///

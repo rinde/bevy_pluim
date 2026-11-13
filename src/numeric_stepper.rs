@@ -320,7 +320,7 @@ impl NumericStepper {
         let old_parts: Vec<Entity> = world
             .entity(context.entity)
             .get::<Children>()
-            .map(|children| {
+            .map_or_default(|children| {
                 children
                     .iter()
                     .filter(|child| {
@@ -333,8 +333,7 @@ impl NumericStepper {
                                 .is_some_and(|editor| editor.stepper == context.entity)
                     })
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         for part in old_parts {
             world.commands().entity(part).despawn();
         }
