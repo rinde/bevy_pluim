@@ -34,6 +34,7 @@ use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionValue};
+use bevy_pluim::setting_row::{SettingRow, SettingRows};
 use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tailwind::COLORS;
 use bevy_pluim::theme_editor::ThemeEditor;
@@ -137,6 +138,11 @@ enum Workload {
     PanelsIdle,
     /// The same panels; `CHANGED_STEPPERS` are inserted again every frame (#685).
     PanelsChanging,
+    /// Many `SettingRows` columns of five rows, idle (#689).
+    SettingRowsIdle,
+    /// The same columns; in `CHANGED_STEPPERS` of them a row is removed at the end and a new one
+    /// inserted at the front every frame (#689).
+    SettingRowsChanging,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
     /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
@@ -184,7 +190,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 47] = [
+    const ALL: [Self; 49] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -213,6 +219,8 @@ impl Workload {
         Self::BadgesChanging,
         Self::PanelsIdle,
         Self::PanelsChanging,
+        Self::SettingRowsIdle,
+        Self::SettingRowsChanging,
         Self::SegmentedControlsIdle,
         Self::IndicatorsAnimating,
         Self::IndicatorsRemoved,
@@ -264,6 +272,8 @@ impl Workload {
             Self::BadgesChanging => "badges-changing",
             Self::PanelsIdle => "panels-idle",
             Self::PanelsChanging => "panels-changing",
+            Self::SettingRowsIdle => "setting-rows-idle",
+            Self::SettingRowsChanging => "setting-rows-changing",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::IndicatorsAnimating => "indicators-animating",
             Self::IndicatorsRemoved => "indicators-removed",
@@ -310,6 +320,8 @@ impl Workload {
             | Self::BadgesChanging
             | Self::PanelsIdle
             | Self::PanelsChanging
+            | Self::SettingRowsIdle
+            | Self::SettingRowsChanging
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
             | Self::IndicatorsAnimating
@@ -745,6 +757,31 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             }
         }
     }
+    if workload == Workload::SettingRowsChanging {
+        // Removes the last row of a column and inserts a new one at its front, so the dividers
+        // of that column are looked at again and no other column is.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<SettingRows>>();
+        let columns: Vec<Entity> = query.iter(world).collect();
+        for offset in 0..CHANGED_STEPPERS.min(columns.len()) {
+            let Some(column) = columns.get((index * 7 + offset * 13) % columns.len()) else {
+                continue;
+            };
+            let last = world
+                .get::<Children>(*column)
+                .and_then(|children| children.last().copied());
+            if let Some(last) = last {
+                world.entity_mut(last).despawn();
+            }
+            let row = world
+                .spawn(SettingRow::new(
+                    format!("Row {index}.{offset}"),
+                    "Description",
+                ))
+                .id();
+            world.entity_mut(*column).insert_children(0, &[row]);
+        }
+    }
     if workload == Workload::ToastsBursting {
         // A burst of short toasts under other parents: duplicates are rare (the text has the
         // frame number), and each toast goes after a few frames, so the stacks stay.
@@ -1054,6 +1091,18 @@ fn spawn(world: &mut World, run: Run) {
             Workload::PanelsIdle | Workload::PanelsChanging => {
                 for row in 0..run.size {
                     root.spawn(Panel::new(format!("Panel {row}")));
+                }
+            }
+            Workload::SettingRowsIdle | Workload::SettingRowsChanging => {
+                for column in 0..run.size {
+                    root.spawn(SettingRows).with_children(|rows| {
+                        for row in 0..5 {
+                            rows.spawn(SettingRow::new(
+                                format!("Row {column}.{row}"),
+                                "Description",
+                            ));
+                        }
+                    });
                 }
             }
             Workload::PaletteItemsAdding => {
