@@ -3428,6 +3428,77 @@ fn one_arrow_key_steps_a_reinserted_numeric_stepper_once() {
     assert_eq!(stepper_value(&app, stepper), 1);
 }
 
+/// Names of the children of `entity`, in order.
+fn child_names(app: &App, entity: Entity) -> Vec<String> {
+    app.world()
+        .entity(entity)
+        .get::<Children>()
+        .map(|children| {
+            children
+                .iter()
+                .map(|child| {
+                    app.world()
+                        .entity(child)
+                        .get::<Name>()
+                        .map(ToString::to_string)
+                        .unwrap_or_default()
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn inserting_a_numeric_stepper_keeps_app_children_at_first_and_every_later_insert() {
+    let mut app = headless_app();
+    let stepper = app
+        .world_mut()
+        .spawn(Value::new_u8(1, 0, 3, 1).unwrap())
+        .id();
+    let mine = app
+        .world_mut()
+        .spawn((Name::new("Mine"), ChildOf(stepper)))
+        .id();
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(NumericStepper::default());
+    app.update();
+    app.update();
+    let first = child_names(&app, stepper);
+    assert_eq!(first.len(), 5);
+    assert!(first.contains(&"Mine".to_owned()));
+
+    // Repeated inserts, also several before the commands run, never duplicate or drop.
+    for _ in 0..3 {
+        app.world_mut()
+            .entity_mut(stepper)
+            .insert(NumericStepper::default());
+    }
+    let late = app
+        .world_mut()
+        .spawn((Name::new("Late"), ChildOf(stepper)))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(NumericStepper::default());
+    app.update();
+    app.update();
+
+    let names = child_names(&app, stepper);
+    assert_eq!(names.len(), 6, "{names:?}");
+    for kept in ["Mine", "Late"] {
+        assert_eq!(names.iter().filter(|n| *n == kept).count(), 1);
+    }
+    for part in ["ScrubTrack", "Decrease", "Value", "Increase"] {
+        assert_eq!(names.iter().filter(|n| *n == part).count(), 1, "{part}");
+    }
+    assert!(app.world().get_entity(mine).is_ok());
+    assert!(app.world().get_entity(late).is_ok());
+    assert_eq!(app.world().get::<ChildOf>(mine).map(|c| c.0), Some(stepper));
+}
+
 #[test]
 fn a_numeric_stepper_button_at_its_bound_is_disabled_until_the_value_moves() {
     let mut app = headless_app();

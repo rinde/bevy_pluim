@@ -16,8 +16,6 @@ use bevy::a11y::AccessibilityNode;
 use bevy::asset::HandleTemplate;
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::lifecycle::HookContext;
-use bevy::ecs::relationship::RelatedSpawner;
-use bevy::ecs::spawn::SpawnWith;
 use bevy::ecs::template::{SpecializeFromTemplate, Template, TemplateContext};
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::ButtonState;
@@ -108,7 +106,7 @@ pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 ///
 /// `NumericStepper` is an immutable component: it is configuration, replaced by inserting a new
 /// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut NumericStepper>` becomes
-/// `commands.entity(e).insert(..)` of a prepared `NumericStepper`. The stepper owns its children: inserting again despawns them and builds new ones, so do not add children of your own. Its `Value` stays mutable and keeps its `ValueRef`.
+/// `commands.entity(e).insert(..)` of a prepared `NumericStepper`. The stepper owns the parts it builds and an open number editor, and inserting again replaces only those: children of your own are kept (the parts are added after them). Its `Value` stays mutable and keeps its `ValueRef`.
 ///
 /// A `&mut` query does not compile:
 ///
@@ -317,11 +315,25 @@ impl NumericStepper {
             EntityCursor::System(SystemCursorIcon::ColResize),
         ));
 
-        // Inserting again replaces the parts: the old ones would be left behind as orphans.
+        // Inserting again replaces the parts the widget made (and an open number editor); a
+        // child of the application is none of them and stays.
         let old_parts: Vec<Entity> = world
             .entity(context.entity)
             .get::<Children>()
-            .map(|children| children.iter().collect())
+            .map(|children| {
+                children
+                    .iter()
+                    .filter(|child| {
+                        let child = world.entity(*child);
+                        child
+                            .get::<StepperPart>()
+                            .is_some_and(|part| part.0 == context.entity)
+                            || child
+                                .get::<ScrubEditor>()
+                                .is_some_and(|editor| editor.stepper == context.entity)
+                    })
+                    .collect()
+            })
             .unwrap_or_default();
         for part in old_parts {
             world.commands().entity(part).despawn();
@@ -329,86 +341,88 @@ impl NumericStepper {
         world
             .commands()
             .entity(context.entity)
-            .insert(Children::spawn(SpawnWith(
-                move |spawner: &mut RelatedSpawner<ChildOf>| {
-                    // The track runs from the right edge of the decrease button to the left
-                    // edge of the increase button: the fill is empty at the minimum and
-                    // reaches the increase button at the maximum.
-                    spawner
-                        .spawn((
-                            Name::new("ScrubTrack"),
-                            Pickable::IGNORE,
-                            Node {
-                                position_type: PositionType::Absolute,
-                                left: Val::Px(BUTTON_WIDTH_PX),
-                                right: Val::Px(BUTTON_WIDTH_PX),
-                                top: Val::Px(0.0),
-                                bottom: Val::Px(0.0),
-                                ..default()
-                            },
-                        ))
-                        .with_child((
-                            Name::new("ScrubFill"),
-                            ScrubFill(stepper_entity),
-                            Pickable::IGNORE,
-                            Node {
-                                height: Val::Percent(100.0),
-                                width: Val::Percent(fraction_percent(&value)),
-                                ..default()
-                            },
-                            value_ref,
-                        ));
-                    let mut decrease = spawner.spawn((
-                        IconButton::new(
-                            decrease_icon,
-                            stepper.decrease_name.clone(),
-                            IconButtonSize::Small,
-                        ),
-                        Name::new(stepper.decrease_name.clone()),
-                        Decrease,
-                        // Not the stepper's resize cursor: only the drag scrubs there.
-                        EntityCursor::default(),
-                        value_ref,
-                    ));
-                    if !value.can_decrement() {
-                        decrease.insert(InteractionDisabled);
-                    }
-                    spawner.spawn((
-                        Name::new("Value"),
-                        Text((stepper.format)(&value)),
-                        // The text cursor: a click here opens the number editor. The label
-                        // blocks the stepper below it, so its cursor is the only one hovered.
-                        EntityCursor::System(SystemCursorIcon::Text),
-                        Pickable::default(),
+            .with_children(move |spawner| {
+                // The track runs from the right edge of the decrease button to the left
+                // edge of the increase button: the fill is empty at the minimum and
+                // reaches the increase button at the maximum.
+                spawner
+                    .spawn((
+                        Name::new("ScrubTrack"),
+                        StepperPart(stepper_entity),
+                        Pickable::IGNORE,
                         Node {
-                            min_width: Val::Px(stepper.label_min_width),
-                            // Takes the room a wider stepper leaves, so the buttons stay at
-                            // its ends.
-                            flex_grow: 1.0,
-                            justify_content: JustifyContent::Center,
-                            align_self: AlignSelf::Center,
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(BUTTON_WIDTH_PX),
+                            right: Val::Px(BUTTON_WIDTH_PX),
+                            top: Val::Px(0.0),
+                            bottom: Val::Px(0.0),
                             ..default()
                         },
-                        TextLayout::default().with_justify(Justify::Center),
-                        NumericStepperLabel(stepper_entity),
+                    ))
+                    .with_child((
+                        Name::new("ScrubFill"),
+                        ScrubFill(stepper_entity),
+                        Pickable::IGNORE,
+                        Node {
+                            height: Val::Percent(100.0),
+                            width: Val::Percent(fraction_percent(&value)),
+                            ..default()
+                        },
                         value_ref,
                     ));
-                    let mut increase = spawner.spawn((
-                        IconButton::new(
-                            increase_icon,
-                            stepper.increase_name.clone(),
-                            IconButtonSize::Small,
-                        ),
-                        Name::new(stepper.increase_name.clone()),
-                        Increase,
-                        EntityCursor::default(),
-                        value_ref,
-                    ));
-                    if !value.can_increment() {
-                        increase.insert(InteractionDisabled);
-                    }
-                },
-            )));
+                let mut decrease = spawner.spawn((
+                    IconButton::new(
+                        decrease_icon,
+                        stepper.decrease_name.clone(),
+                        IconButtonSize::Small,
+                    ),
+                    Name::new(stepper.decrease_name.clone()),
+                    StepperPart(stepper_entity),
+                    Decrease,
+                    // Not the stepper's resize cursor: only the drag scrubs there.
+                    EntityCursor::default(),
+                    value_ref,
+                ));
+                if !value.can_decrement() {
+                    decrease.insert(InteractionDisabled);
+                }
+                spawner.spawn((
+                    Name::new("Value"),
+                    StepperPart(stepper_entity),
+                    Text((stepper.format)(&value)),
+                    // The text cursor: a click here opens the number editor. The label
+                    // blocks the stepper below it, so its cursor is the only one hovered.
+                    EntityCursor::System(SystemCursorIcon::Text),
+                    Pickable::default(),
+                    Node {
+                        min_width: Val::Px(stepper.label_min_width),
+                        // Takes the room a wider stepper leaves, so the buttons stay at
+                        // its ends.
+                        flex_grow: 1.0,
+                        justify_content: JustifyContent::Center,
+                        align_self: AlignSelf::Center,
+                        ..default()
+                    },
+                    TextLayout::default().with_justify(Justify::Center),
+                    NumericStepperLabel(stepper_entity),
+                    value_ref,
+                ));
+                let mut increase = spawner.spawn((
+                    IconButton::new(
+                        increase_icon,
+                        stepper.increase_name.clone(),
+                        IconButtonSize::Small,
+                    ),
+                    Name::new(stepper.increase_name.clone()),
+                    StepperPart(stepper_entity),
+                    Increase,
+                    EntityCursor::default(),
+                    value_ref,
+                ));
+                if !value.can_increment() {
+                    increase.insert(InteractionDisabled);
+                }
+            });
 
         world
             .commands()
@@ -727,6 +741,10 @@ impl std::fmt::Display for Value {
 
 #[derive(Component, Clone, Copy, Debug)]
 struct Increase;
+
+/// Marks a part the stepper spawned itself, so a re-insert replaces those and no child of the app.
+#[derive(Component)]
+struct StepperPart(Entity);
 #[derive(Component, Clone, Copy, Debug)]
 struct Decrease;
 /// The background fill of the stepper it holds, as wide as the value is far between its bounds.
