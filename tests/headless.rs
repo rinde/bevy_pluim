@@ -14871,3 +14871,123 @@ fn many_icon_segmented_controls_keep_one_icon_and_hidden_label_per_segment() {
         }
     }
 }
+
+/// The labels shown by the views of `list`, in the order of the list.
+fn view_labels(app: &App, list: Entity) -> Vec<String> {
+    item_views(app, list)
+        .into_iter()
+        .map(|view| item_label(app, app.world().get::<ItemView>(view).unwrap().item_ref))
+        .collect()
+}
+
+#[test]
+fn a_list_keeps_its_views_and_their_children_when_items_are_added_and_removed() {
+    let mut app = headless_app();
+    let (list, items) = spawn_custom_list(&mut app, Selection::builder().one());
+    let before = item_views(&app, list);
+    assert_eq!(before.len(), 2);
+    let app_child = app.world_mut().spawn(Name::new("app child")).id();
+    app.world_mut().entity_mut(before[0]).add_child(app_child);
+    app.world_mut()
+        .get_resource_mut::<CreatedViews>()
+        .unwrap()
+        .0
+        .clear();
+
+    app.world_mut().spawn((Item::new("c"), ItemOf(items)));
+    app.update();
+    app.update();
+    let after = item_views(&app, list);
+    assert_eq!(view_labels(&app, list), ["a", "b", "c"]);
+    assert_eq!(
+        after[..2],
+        before[..],
+        "existing views are the same entities"
+    );
+    assert!(app.world().get::<ChildOf>(app_child).is_some());
+    let created = &app.world().get_resource::<CreatedViews>().unwrap().0;
+    assert_eq!(created.len(), 1, "the creator runs for the new item only");
+    assert_eq!(created[0].1, after[2]);
+
+    let b = app.world().get::<ItemView>(after[1]).unwrap().item_ref;
+    app.world_mut().entity_mut(b).despawn();
+    app.update();
+    app.update();
+    assert_eq!(view_labels(&app, list), ["a", "c"]);
+    assert!(app.world().get_entity(after[1]).is_err());
+    assert_eq!(item_views(&app, list), [after[0], after[2]]);
+    assert!(app.world().get::<ChildOf>(app_child).is_some());
+}
+
+#[test]
+fn a_list_despawns_a_second_view_of_the_same_item() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(["a", "b"].map(Item::new)),
+        )
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((List, Selection::reference(items), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let views = item_views(&app, list);
+    let item = app.world().get::<ItemView>(views[0]).unwrap().item_ref;
+    let twin = app
+        .world_mut()
+        .spawn((
+            ItemView {
+                item_ref: item,
+                list_ref: list,
+            },
+            ChildOf(list),
+        ))
+        .id();
+    app.world_mut().spawn((Item::new("c"), ItemOf(items)));
+    app.update();
+    app.update();
+    assert!(app.world().get_entity(twin).is_err());
+    assert_eq!(view_labels(&app, list), ["a", "b", "c"]);
+    assert_eq!(item_views(&app, list)[..2], views[..]);
+}
+
+#[test]
+fn a_list_of_thousands_of_items_gets_one_view_each_and_marks_the_selected_one() {
+    const COUNT: usize = 4_000;
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items((0..COUNT).map(|i| Item::new(format!("item {i}")))),
+        )
+        .id();
+    let list = app
+        .world_mut()
+        .spawn((List, Selection::reference(items), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let labels = view_labels(&app, list);
+    assert_eq!(labels.len(), COUNT);
+    assert_eq!(labels.first().map(String::as_str), Some("item 0"));
+    assert_eq!(labels.last().map(String::as_str), Some("item 3999"));
+    assert_eq!(selected_labels(&app, list), ["item 0"]);
+
+    let first_views = item_views(&app, list);
+    app.world_mut().spawn((Item::new("last"), ItemOf(items)));
+    app.update();
+    app.update();
+    let views = item_views(&app, list);
+    assert_eq!(views.len(), COUNT + 1);
+    assert_eq!(views[..COUNT], first_views[..]);
+    assert_eq!(selected_labels(&app, list), ["item 0"]);
+}

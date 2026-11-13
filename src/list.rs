@@ -9,6 +9,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::events::PointerClick;
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{
@@ -935,17 +936,19 @@ fn on_items_changed(
         .unwrap_or_default();
 
     let mut commands_run = Vec::new();
-    let mut items = items.clone();
+    // Linear reconciliation: one set of the wanted items, one of the items
+    // that already have a view. A view is kept when its item is wanted and no
+    // earlier view shows it; any other view is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::with_capacity(existing.len());
     for (view_ref, ItemView { item_ref, .. }) in existing {
-        let len_before = items.len();
-        items.retain(|x| x != item_ref);
-        if len_before == items.len() {
-            // a view was found without a corresponding item
+        if !wanted.contains(item_ref) || !shown.insert(*item_ref) {
+            // a view without a corresponding item, or a second view of one
             commands.entity(view_ref).despawn();
         }
     }
 
-    for item_ref in items {
+    for &item_ref in items.iter().filter(|item_ref| !shown.contains(*item_ref)) {
         let item = items_query.get(item_ref).ok();
         if item.is_none() && creator.is_none() {
             continue;
