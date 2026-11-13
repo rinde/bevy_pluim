@@ -1175,12 +1175,29 @@ pub(crate) fn watch_items(
     true
 }
 
-fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut commands: Commands) {
+/// Triggers [`ItemsChanged`] for every changed [`ItemValues`], and, with no items, for a live
+/// entity that has just lost its last item and so its `ItemValues`, so the widgets drawn from it
+/// clear their views.
+fn items_change(
+    q: Query<(Entity, &ItemValues), Changed<ItemValues>>,
+    mut removed: RemovedComponents<ItemValues>,
+    values: Query<(), With<ItemValues>>,
+    live: Query<Entity>,
+    mut commands: Commands,
+) {
     for (items_ref, items) in q {
         commands.trigger(ItemsChanged {
             entity: items_ref,
             items: items.iter().collect(),
         });
+    }
+    for entity in removed.read() {
+        if !values.contains(entity) && live.contains(entity) {
+            commands.trigger(ItemsChanged {
+                entity,
+                items: Arc::from([]),
+            });
+        }
     }
 }
 

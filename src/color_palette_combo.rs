@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use itertools::Either;
 
-use crate::color_palette::{ColorPalette, PaletteDormant, sleep, wake};
+use crate::color_palette::{ColorPalette, PaletteDormant, sleep, wake, watch_palette};
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
@@ -520,6 +520,10 @@ fn on_selection_change(
                 commands
                     .entity(sub_refs.palette)
                     .insert(Selection::reference(selection_ref));
+            } else {
+                // Same selection, but its items may have been replaced (`ItemsRef`): the
+                // palette follows the items of the selection it refers to.
+                commands.run_system_cached_with(watch_palette, sub_refs.palette);
             }
 
             let Ok(color_square_ref) = color_square_refs.get(sub_refs.button) else {
