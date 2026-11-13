@@ -21,12 +21,15 @@ use bevy::ecs::system::SystemChangeTick;
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::badge::Badge;
 use bevy_pluim::color_palette::ColorPalette;
 use bevy_pluim::color_palette_combo::ColorPaletteCombo;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
+use bevy_pluim::icon_button::{IconButton, IconButtonSize};
 use bevy_pluim::list::{ItemNote, List};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
+use bevy_pluim::panel::Panel;
 use bevy_pluim::push_button::PushButton;
 use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
@@ -126,6 +129,14 @@ enum Workload {
     ToastsIdle,
     /// The same parents; `TOAST_BURST` short toasts are spawned under other parents every frame.
     ToastsBursting,
+    /// Many `IconButton`s each with a `Badge`, idle (#685).
+    BadgesIdle,
+    /// The same buttons; `CHANGED_STEPPERS` badges get a new count every frame (#685).
+    BadgesChanging,
+    /// Many `Panel`s, idle (#685).
+    PanelsIdle,
+    /// The same panels; `CHANGED_STEPPERS` are inserted again every frame (#685).
+    PanelsChanging,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
     /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
@@ -173,7 +184,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 43] = [
+    const ALL: [Self; 47] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -198,6 +209,10 @@ impl Workload {
         Self::SteppersSharedChanging,
         Self::ToastsIdle,
         Self::ToastsBursting,
+        Self::BadgesIdle,
+        Self::BadgesChanging,
+        Self::PanelsIdle,
+        Self::PanelsChanging,
         Self::SegmentedControlsIdle,
         Self::IndicatorsAnimating,
         Self::IndicatorsRemoved,
@@ -245,6 +260,10 @@ impl Workload {
             Self::SteppersSharedChanging => "steppers-shared-changing",
             Self::ToastsIdle => "toasts-idle",
             Self::ToastsBursting => "toasts-bursting",
+            Self::BadgesIdle => "badges-idle",
+            Self::BadgesChanging => "badges-changing",
+            Self::PanelsIdle => "panels-idle",
+            Self::PanelsChanging => "panels-changing",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::IndicatorsAnimating => "indicators-animating",
             Self::IndicatorsRemoved => "indicators-removed",
@@ -287,6 +306,10 @@ impl Workload {
             | Self::ListNotesIdle
             | Self::ToastsIdle
             | Self::ToastsBursting
+            | Self::BadgesIdle
+            | Self::BadgesChanging
+            | Self::PanelsIdle
+            | Self::PanelsChanging
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
             | Self::IndicatorsAnimating
@@ -700,6 +723,28 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             }
         }
     }
+    if workload == Workload::BadgesChanging {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<Badge>>();
+        let hosts: Vec<Entity> = query.iter(world).collect();
+        for offset in 0..CHANGED_STEPPERS.min(hosts.len()) {
+            if let Some(host) = hosts.get((index * 7 + offset * 13) % hosts.len()) {
+                world.entity_mut(*host).insert(Badge::count(index + offset));
+            }
+        }
+    }
+    if workload == Workload::PanelsChanging {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<Panel>>();
+        let panels: Vec<Entity> = query.iter(world).collect();
+        for offset in 0..CHANGED_STEPPERS.min(panels.len()) {
+            if let Some(panel) = panels.get((index * 7 + offset * 13) % panels.len()) {
+                world
+                    .entity_mut(*panel)
+                    .insert(Panel::new(format!("Panel {index}.{offset}")));
+            }
+        }
+    }
     if workload == Workload::ToastsBursting {
         // A burst of short toasts under other parents: duplicates are rare (the text has the
         // frame number), and each toast goes after a few frames, so the stacks stay.
@@ -992,6 +1037,23 @@ fn spawn(world: &mut World, run: Run) {
                 for row in 0..run.size {
                     root.spawn((Node::default(), ToastParent))
                         .with_child(Toast::new(format!("Long {row}")).with_duration(86_400.0));
+                }
+            }
+            Workload::BadgesIdle | Workload::BadgesChanging => {
+                for row in 0..run.size {
+                    root.spawn((
+                        IconButton::new(
+                            Handle::default(),
+                            format!("Button {row}"),
+                            IconButtonSize::Regular,
+                        ),
+                        Badge::count(row),
+                    ));
+                }
+            }
+            Workload::PanelsIdle | Workload::PanelsChanging => {
+                for row in 0..run.size {
+                    root.spawn(Panel::new(format!("Panel {row}")));
                 }
             }
             Workload::PaletteItemsAdding => {
