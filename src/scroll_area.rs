@@ -611,11 +611,22 @@ pub(crate) fn update_scroll_position(
             } else {
                 dx
             };
-            if node.overflow.x == OverflowAxis::Scroll {
-                scroll_position.x = (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0));
-            }
-            if node.overflow.y == OverflowAxis::Scroll {
-                scroll_position.y = (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0));
+            // Write only a position that moves: a mutable dereference marks the
+            // `ScrollPosition` changed, which wakes its observers (a combo closing on an
+            // ancestor's scroll) although nothing scrolled.
+            let new_x = (node.overflow.x == OverflowAxis::Scroll)
+                .then(|| (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0)));
+            let new_y = (node.overflow.y == OverflowAxis::Scroll)
+                .then(|| (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0)));
+            if new_x.is_some_and(|x| x.to_bits() != scroll_position.x.to_bits())
+                || new_y.is_some_and(|y| y.to_bits() != scroll_position.y.to_bits())
+            {
+                if let Some(x) = new_x {
+                    scroll_position.x = x;
+                }
+                if let Some(y) = new_y {
+                    scroll_position.y = y;
+                }
             }
         }
     }
