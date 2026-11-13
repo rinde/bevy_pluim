@@ -49,6 +49,8 @@ use bevy_stagecraft::HeadlessPlugins;
 
 /// Frames played before timing starts, so the first layout and spawns settle.
 const WARMUP_FRAMES: usize = 60;
+/// Frames after the spawn that count towards the startup time (the widgets are built by then).
+const STARTUP_FRAMES: usize = 3;
 /// Frames timed unless `--frames` says otherwise.
 const DEFAULT_FRAMES: usize = 300;
 /// Values changed per frame by the stepper workloads.
@@ -527,11 +529,11 @@ fn suite(size: Option<usize>, frames: usize) -> ExitCode {
     let _ = writeln!(out, "{}", environment());
     let _ = writeln!(
         out,
-        "| workload | size | mean us | median us | p95 us | max us | entities | memory added MiB |"
+        "| workload | size | startup ms | mean us | median us | p95 us | max us | entities | memory added MiB |"
     );
     let _ = writeln!(
         out,
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
     );
     let Ok(exe) = std::env::current_exe() else {
         return usage();
@@ -549,7 +551,7 @@ fn suite(size: Option<usize>, frames: usize) -> ExitCode {
                 let _ = out.write_all(&output.stdout);
             }
             _ => {
-                let _ = writeln!(out, "| {} | failed | | | | | | |", workload.name());
+                let _ = writeln!(out, "| {} | failed | | | | | | | |", workload.name());
             }
         }
     }
@@ -708,8 +710,14 @@ fn measure(run: Run) -> String {
     app.update();
     let before = resident_bytes();
 
+    // Startup: spawning the workload and its first frames, which build the widgets.
+    let startup = Instant::now();
     spawn(app.world_mut(), run);
-    for _ in 0..WARMUP_FRAMES {
+    for _ in 0..STARTUP_FRAMES {
+        frame(&mut app, run.workload, run.size, 0);
+    }
+    let startup = startup.elapsed();
+    for _ in STARTUP_FRAMES..WARMUP_FRAMES {
         frame(&mut app, run.workload, run.size, 0);
     }
 
@@ -730,9 +738,10 @@ fn measure(run: Run) -> String {
         times.get(index).map_or(0.0, |time| micros(*time))
     };
     format!(
-        "| {} | {} | {:.0} | {:.0} | {:.0} | {:.0} | {} | {:.1} |",
+        "| {} | {} | {:.1} | {:.0} | {:.0} | {:.0} | {:.0} | {} | {:.1} |",
         run.workload.name(),
         run.size,
+        startup.as_secs_f64() * 1e3,
         mean,
         at(50),
         at(95),

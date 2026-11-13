@@ -202,17 +202,26 @@ fn apply_preference(
 
 /// Makes the primary window adopt the preference: light or dark when fixed, the system's own
 /// when following it.
+///
+/// A theme written here is ours, not the system's: a window that gets one before
+/// [`track_system_theme`] has read it (a replacement primary spawned after that system ran in the
+/// frame) is marked [`PresetWindowTheme`], so the fixed theme is never taken for the system's.
+/// The system theme of such a window is then known from its first [`WindowThemeChanged`] only.
 fn apply_window_theme(
     preference: Res<ThemePreference>,
-    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+    mut windows: Query<(Entity, &mut Window, Has<PresetWindowTheme>), With<PrimaryWindow>>,
+    mut commands: Commands,
 ) {
     let wanted = match *preference {
         ThemePreference::Light => Some(WindowTheme::Light),
         ThemePreference::Dark => Some(WindowTheme::Dark),
         ThemePreference::System => None,
     };
-    for mut window in &mut windows {
+    for (entity, mut window, preset) in &mut windows {
         if window.window_theme != wanted {
+            if wanted.is_some() && !preset {
+                commands.entity(entity).insert(PresetWindowTheme);
+            }
             window.window_theme = wanted;
         }
     }

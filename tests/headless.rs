@@ -9569,6 +9569,72 @@ fn theme_messages_are_ignored_without_a_primary_window_and_a_replacement_is_foll
 }
 
 #[test]
+fn a_replacement_primary_window_with_a_preset_theme_is_not_taken_for_the_system_theme() {
+    let mut app = headless_app();
+    let first = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    let second = app
+        .world_mut()
+        .spawn((
+            Window {
+                window_theme: Some(WindowTheme::Dark),
+                ..default()
+            },
+            PrimaryWindow,
+        ))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(system_theme_of(&app), None, "the preset theme is ours");
+    theme_message(&mut app, second, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Light));
+}
+
+#[test]
+fn a_replacement_primary_window_given_the_fixed_theme_before_it_is_read_is_not_taken_for_the_system_theme()
+ {
+    let mut app = headless_app();
+    let first = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    let dark = light_dark_option(&mut app, ThemePreference::Dark);
+    app.world_mut().trigger(Activate { entity: dark });
+    app.update();
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    // The replacement appears after `PreUpdate` of its frame, so `Update` writes the fixed theme
+    // before the system theme is first read from it.
+    app.world_mut().run_schedule(PreUpdate);
+    let second = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().run_schedule(Update);
+    assert_eq!(
+        app.world().get::<Window>(second).unwrap().window_theme,
+        Some(WindowTheme::Dark)
+    );
+    app.update();
+    app.update();
+    assert_eq!(
+        system_theme_of(&app),
+        None,
+        "our own write is not the system"
+    );
+    theme_message(&mut app, second, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Light));
+}
+
+#[test]
 fn a_window_created_with_a_fixed_theme_is_not_taken_for_the_system_theme() {
     let mut app = headless_app();
     app.world_mut().spawn((
@@ -16360,6 +16426,70 @@ fn despawning_color_palette_combos_open_or_dormant_leaves_no_swatches_behind() {
     assert_eq!(palettes.iter(app.world()).count(), 0);
 }
 
+/// Background, outer border and colour-square border of every swatch of `palette`.
+fn swatch_looks(app: &App, palette: Entity) -> Vec<(Color, Color, Color)> {
+    item_views(app, palette)
+        .into_iter()
+        .map(|view| {
+            let world = app.world();
+            let background = world.get::<BackgroundColor>(view).unwrap().0;
+            let border = world.get::<BorderColor>(view).unwrap().top;
+            let square = world.entity(view).get::<Children>().unwrap()[0];
+            let inner = world.get::<BorderColor>(square).unwrap().top;
+            (background, border, inner)
+        })
+        .collect()
+}
+
+#[test]
+fn swatches_built_after_a_theme_change_while_the_popup_was_closed_carry_the_new_theme() {
+    // The first colour is selected, so one swatch has the selection ring.
+    let selection = || {
+        Selection::builder()
+            .one()
+            .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data }))
+    };
+
+    // Reference: a popup opened under the dark theme from the start.
+    let mut reference = headless_app();
+    reference
+        .world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    let (_, reference_palette, _) = open_palette_combo_over(&mut reference, selection());
+    let wanted = swatch_looks(&reference, reference_palette);
+
+    let mut app = headless_app();
+    let (_, palette) = closed_palette_combo_over(&mut app, selection());
+    assert!(item_views(&app, palette).is_empty());
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    app.update();
+    assert!(item_views(&app, palette).is_empty());
+
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
+    app.update();
+    let looks = swatch_looks(&app, palette);
+    assert_eq!(looks.len(), 2);
+    assert_eq!(looks, wanted);
+
+    let dark = DEFAULT_DARK_THEME_COLORS.background_primary;
+    let light = DEFAULT_LIGHT_THEME_COLORS.background_primary;
+    assert_ne!(dark, light);
+    for (background, ..) in &looks {
+        assert_eq!(*background, dark);
+    }
+    // The unselected swatch's ring is the new background, the selected one's is not.
+    assert_eq!(looks[1].1, dark);
+    assert_ne!(looks[0].1, dark);
+    assert_ne!(looks[0].1, light);
+}
+
 /// Removes the items called `names` from `source` and adds one for each of `added`, in one frame.
 fn swap_items(app: &mut App, source: Entity, removed: &[&str], added: &[&str]) {
     let doomed: Vec<Entity> = {
@@ -17161,6 +17291,85 @@ fn renaming_an_item_updates_the_visible_and_accessible_text_of_every_list_that_s
     }
     assert_eq!(row_text(&app, beta_first), "Beta");
     assert_eq!(row_text(&app, alpha_other), "Alpha");
+}
+
+#[test]
+fn renaming_an_item_leaves_a_custom_view_alone_while_a_default_row_sharing_it_updates() {
+    let mut app = headless_app();
+    let (custom, items) = spawn_custom_list(&mut app, Selection::builder().one());
+    let default_list = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder().one().build_with_items_ref(items),
+        ))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    let custom_views = views_of_list(&mut app, custom);
+    let default_views = views_of_list(&mut app, default_list);
+    assert_eq!(custom_views.len(), 2);
+    assert_eq!(default_views.len(), 2);
+    let item = app
+        .world()
+        .get::<ItemView>(custom_views[0])
+        .unwrap()
+        .item_ref;
+    let default_view = *default_views
+        .iter()
+        .find(|view| app.world().get::<ItemView>(**view).unwrap().item_ref == item)
+        .unwrap();
+    let children_before: Vec<Vec<Entity>> = custom_views
+        .iter()
+        .map(|view| app.world().get::<Children>(*view).unwrap().to_vec())
+        .collect();
+    // `ItemLabel` is crate-private: copy it from the default row's label onto the creator's
+    // text, so that the text is one that `sync_item_label_text` would overwrite were it not for
+    // the `CustomView` filter.
+    let label_id = app
+        .world()
+        .components()
+        .iter_registered()
+        .find(|(_, info)| info.name().to_string().ends_with("ItemLabel"))
+        .map(|(id, _)| id)
+        .unwrap();
+    let default_label = app
+        .world()
+        .get::<Children>(default_view)
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains_id(label_id))
+        .unwrap();
+    for view in &custom_views {
+        let (text, _) = nested(&app, *view);
+        app.world_mut()
+            .entity_mut(default_label)
+            .clone_with_opt_in(text, move |builder| {
+                builder.allow_by_ids(label_id);
+            });
+        assert!(app.world().entity(text).contains_id(label_id));
+    }
+    let created_before = app.world().get_resource::<CreatedViews>().unwrap().0.len();
+
+    rename(&mut app, item, "renamed");
+
+    assert_eq!(row_text(&app, default_view), "renamed");
+    for (view, before) in custom_views.iter().zip(&children_before) {
+        assert_eq!(
+            &app.world().get::<Children>(*view).unwrap().to_vec(),
+            before,
+            "the creator's children were rebuilt"
+        );
+        let (text, _) = nested(&app, *view);
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "row");
+    }
+    assert_eq!(
+        app.world().get_resource::<CreatedViews>().unwrap().0.len(),
+        created_before,
+        "the creator ran again"
+    );
 }
 
 #[test]
@@ -18126,4 +18335,136 @@ fn restyling_segments_tabs_and_toggle_options_with_a_changed_font_still_writes_i
     });
     // Three segments, two tabs and three options.
     assert!(writes >= 8, "every label takes the new font: {writes}");
+}
+
+/// Plays the despawning of the source behind a widget's selection: the widget refers to a
+/// selection entity (`spawn` gets its entity) that holds the `ItemsRef`, so despawning the source
+/// takes that entity with it and the widget's `Selection::Ref` dangles. `shown` counts what the
+/// widget has built.
+fn despawns_the_source_of_a_widget<T: Send + Sync + 'static>(
+    name: &str,
+    spawn: impl FnOnce(&mut App, Entity) -> Entity,
+    items: [T; 3],
+    shown: impl Fn(&App, Entity) -> usize,
+) {
+    let mut app = headless_app();
+    let [a1, a2, b1] = items;
+    let a = typed_source(&mut app, [a1, a2]);
+    let selection = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items_ref(a))
+        .id();
+    let widget = spawn(&mut app, selection);
+    assert!(shown(&app, widget) > 0, "{name}: built over a");
+
+    app.world_mut().entity_mut(a).despawn();
+    settle_frames(&mut app);
+    assert!(app.world().get_entity(selection).is_err());
+    assert_eq!(shown(&app, widget), 0, "{name}: cleared by the despawn");
+
+    // Pointing the widget at a live source brings it back.
+    let b = typed_source(&mut app, [b1]);
+    let other = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items_ref(b))
+        .id();
+    app.world_mut()
+        .entity_mut(widget)
+        .insert(Selection::reference(other));
+    settle_frames(&mut app);
+    assert!(shown(&app, widget) > 0, "{name}: back over b");
+}
+
+#[test]
+fn a_list_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "list",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let list = app
+                .world_mut()
+                .spawn((List, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            list
+        },
+        ["p", "q", "r"].map(String::from),
+        |app, list| item_views(app, list).len(),
+    );
+}
+
+#[test]
+fn a_filter_chips_row_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "filter chips",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let chips = app
+                .world_mut()
+                .spawn((FilterChips, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            chips
+        },
+        ["p", "q", "r"].map(Chip::new),
+        |app, chips| chip_views(app, chips).len(),
+    );
+}
+
+#[test]
+fn a_toolbar_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "toolbar",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let toolbar = app
+                .world_mut()
+                .spawn((
+                    Toolbar::new(ToolbarStyle::Filled),
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            toolbar
+        },
+        ["p", "q", "r"].map(|label| Tool::in_group(Handle::default(), label, 0)),
+        |app, toolbar| toolbar_buttons(app, toolbar).len(),
+    );
+}
+
+#[test]
+fn a_gallery_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "gallery",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let gallery = app
+                .world_mut()
+                .spawn((Gallery, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            gallery
+        },
+        ["p", "q", "r"].map(|label| GalleryCard::new(Handle::default(), label, "Group")),
+        |app, gallery| children_of(app, gallery).len(),
+    );
+}
+
+#[test]
+fn a_color_palette_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "color palette",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let palette = app
+                .world_mut()
+                .spawn((ColorPalette, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            palette
+        },
+        [Color::WHITE, Color::BLACK, Color::srgb(1.0, 0.0, 0.0)],
+        |app, palette| item_views(app, palette).len(),
+    );
 }

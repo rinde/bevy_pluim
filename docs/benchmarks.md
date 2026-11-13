@@ -520,8 +520,25 @@ Release build, one run each, before / after:
 | `theme-editors-idle` 1 | 23171 / 2183 | 29192 / 2832 | 33701 / 1755 | 220.2 / 14.1 |
 | `theme-editors-idle` 5 | 124847 / 4147 | not recorded | 167117 / 7395 | 1026.1 / 44.1 |
 
-Startup time is not measured separately; the five-editor run took 47.9 s of wall
-time before.
+### Startup time (#735)
+
+The `bench` table has a `startup ms` column: the time to spawn the workload and
+run its first three frames, which is when the theme editors are built, measured
+before the warm-up. Release build, three runs each (`--frames 30`), `before` is
+the parent of the #734 commit with this bench copied in, `after` is `main`:
+
+| Workload | Startup before (ms) | Startup after (ms) |
+| --- | --- | --- |
+| `theme-editors-idle` 1 | 472 / 462 / 523 | 29.9 / 30.1 / 32.9 |
+| `theme-editors-idle` 5 | 2304 / 2341 / 2180 | 93.4 / 97.6 / 93.9 |
+
+Startup went from about 0.5 s to 30 ms for one editor and from about 2.3 s to
+95 ms for five, in step with the entity counts (33 701 to 1 755 and 167 117 to
+7 395): the swatches are no longer built until a popup opens.
+
+Swatches built when a popup opens take the theme in use at that moment, also when
+the `Theme` changed while the popup was closed
+(`swatches_built_after_a_theme_change_while_the_popup_was_closed_carry_the_new_theme`).
 
 ## Shared hidden-state change set (#684)
 

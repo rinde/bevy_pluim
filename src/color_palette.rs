@@ -10,9 +10,9 @@ use itertools::Either;
 
 use crate::list::{
     CornerStyle, ItemView, ItemsChangedInput, ItemsWatch, List, ListLayout, NoDefaultItems,
-    sync_multi_select, sync_selected, watch_items,
+    sync_multi_select, sync_selected, unwatch_dangling, watch_items,
 };
-use crate::select::{Item, Selection, SelectionParam, SelectionValue};
+use crate::select::{Item, ItemsRef, Selection, SelectionParam, SelectionValue};
 use crate::tailwind::color_name;
 use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind};
@@ -36,6 +36,7 @@ impl Plugin for ColorPalettePlugin {
                 on_selection_change,
                 sync_item_colors,
                 sync_accessible_names,
+                clear_dangling_palettes,
             ),
         )
         .add_observer(on_insert_selection)
@@ -104,6 +105,21 @@ pub(crate) fn sleep(
         .filter(|child| views.contains(*child))
     {
         commands.entity(child).despawn();
+    }
+}
+
+/// Clears the swatches of the palettes whose items no longer resolve (see `list.rs`'s
+/// `clear_dangling_lists`).
+fn clear_dangling_palettes(
+    mut removed_selections: RemovedComponents<Selection>,
+    mut removed_refs: RemovedComponents<ItemsRef>,
+    palettes: Query<(Entity, &ItemsWatch), With<ColorPalette>>,
+    selections: SelectionParam,
+    commands: Commands,
+) {
+    let removed = removed_selections.read().count() + removed_refs.read().count() > 0;
+    if removed {
+        unwatch_dangling(&palettes, &selections, commands, on_items_changed);
     }
 }
 
