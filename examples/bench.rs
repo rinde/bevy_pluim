@@ -149,6 +149,13 @@ enum Workload {
     GalleriesIdle,
     /// Many independent `TabBar`s of three tabs, idle (#670).
     TabBarsIdle,
+    /// Many deep chains of nodes with a button at the bottom, idle (#684).
+    DeepTreesIdle,
+    /// The same chains; two nested nodes of one chain flip `Display::None` every frame, so
+    /// their subtrees overlap (#684).
+    DeepTreesDisplay,
+    /// The same chains; one chain moves to another parent every frame (#684).
+    DeepTreesReparenting,
     /// Many independent `SegmentedControl`s (roving-focus groups); the focus moves to
     /// another control's segment every frame.
     RovingGroupsFocus,
@@ -177,7 +184,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 44] = [
+    const ALL: [Self; 47] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -211,6 +218,9 @@ impl Workload {
         Self::IndicatorsRemoved,
         Self::GalleriesIdle,
         Self::TabBarsIdle,
+        Self::DeepTreesIdle,
+        Self::DeepTreesDisplay,
+        Self::DeepTreesReparenting,
         Self::RovingGroupsFocus,
         Self::RovingGroupsSelection,
         Self::RovingGroupsIdle,
@@ -259,6 +269,9 @@ impl Workload {
             Self::IndicatorsRemoved => "indicators-removed",
             Self::GalleriesIdle => "galleries-idle",
             Self::TabBarsIdle => "tab-bars-idle",
+            Self::DeepTreesIdle => "deep-trees-idle",
+            Self::DeepTreesDisplay => "deep-trees-display",
+            Self::DeepTreesReparenting => "deep-trees-reparenting",
             Self::RovingGroupsFocus => "roving-groups-focus",
             Self::RovingGroupsSelection => "roving-groups-selection",
             Self::RovingGroupsIdle => "roving-groups-idle",
@@ -302,6 +315,9 @@ impl Workload {
             | Self::IndicatorsAnimating
             | Self::IndicatorsRemoved
             | Self::TabBarsIdle
+            | Self::DeepTreesIdle
+            | Self::DeepTreesDisplay
+            | Self::DeepTreesReparenting
             | Self::RovingGroupsFocus
             | Self::RovingGroupsSelection
             | Self::RovingGroupsIdle => 500,
@@ -785,6 +801,39 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
                 .insert(SelectionValue::One(item).into_component());
         }
     }
+    if workload == Workload::DeepTreesDisplay {
+        // Two nested nodes of one chain flip together, so two dirty roots overlap.
+        let world = app.world_mut();
+        let mut query = world.query::<(&DeepChain, &mut Node)>();
+        let chain = index * 7 % size.max(1);
+        let display = if index.is_multiple_of(2) {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        for (marker, mut node) in query.iter_mut(world) {
+            if marker.chain == chain && marker.flips {
+                node.display = display;
+            }
+        }
+    }
+    if workload == Workload::DeepTreesReparenting {
+        // One chain moves to the other of two parents.
+        let world = app.world_mut();
+        let mut query = world.query::<(Entity, &DeepChain, &ChildOf)>();
+        let moved: Vec<(Entity, Entity)> = query
+            .iter(world)
+            .filter(|(_, marker, _)| marker.chain == index * 7 % size.max(1) && marker.top)
+            .map(|(entity, _, parent)| (entity, parent.parent()))
+            .collect();
+        let mut spares = world.query_filtered::<Entity, With<DeepSpare>>();
+        let spares: Vec<Entity> = spares.iter(world).collect();
+        for (entity, parent) in moved {
+            if let Some(other) = spares.iter().copied().find(|spare| *spare != parent) {
+                world.entity_mut(entity).insert(ChildOf(other));
+            }
+        }
+    }
     if workload == Workload::IndicatorsRemoved {
         // Despawns the indicator of one control; the next frame makes it again.
         let world = app.world_mut();
@@ -796,6 +845,21 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
     }
     app.update();
 }
+
+/// Nodes in a chain of the deep-tree workloads, each with a button at the bottom.
+const DEEP_DEPTH: usize = 40;
+
+/// Marks the nodes of a chain that a deep-tree workload changes.
+#[derive(Component)]
+struct DeepChain {
+    chain: usize,
+    top: bool,
+    flips: bool,
+}
+
+/// Marks a parent a deep-tree workload moves chains between.
+#[derive(Component)]
+struct DeepSpare;
 
 /// Marks a parent node of the toast workloads.
 #[derive(Component)]
@@ -1021,6 +1085,9 @@ fn spawn(world: &mut World, run: Run) {
                     ));
                 }
             }
+            Workload::DeepTreesIdle
+            | Workload::DeepTreesDisplay
+            | Workload::DeepTreesReparenting => {}
             Workload::TabBarsIdle => {
                 for row in 0..run.size {
                     root.spawn((
@@ -1048,6 +1115,39 @@ fn spawn(world: &mut World, run: Run) {
                 }
             }
         });
+    if matches!(
+        run.workload,
+        Workload::DeepTreesIdle | Workload::DeepTreesDisplay | Workload::DeepTreesReparenting
+    ) {
+        deep_trees(world, root, run.size);
+    }
+}
+
+/// `chains` chains of `DEEP_DEPTH` nodes under one of two spare parents, each with a button at
+/// the bottom.
+fn deep_trees(world: &mut World, root: Entity, chains: usize) {
+    let spare = world
+        .spawn((Node::default(), DeepSpare, ChildOf(root)))
+        .id();
+    world.spawn((Node::default(), DeepSpare, ChildOf(root)));
+    for chain in 0..chains {
+        let mut parent = spare;
+        for depth in 0..DEEP_DEPTH {
+            let node = world.spawn((Node::default(), ChildOf(parent))).id();
+            if depth == 0 || depth == 2 || depth == DEEP_DEPTH / 2 {
+                world.entity_mut(node).insert(DeepChain {
+                    chain,
+                    top: depth == 0,
+                    flips: depth != 0,
+                });
+            }
+            parent = node;
+        }
+        world.spawn((
+            PushButton::from_label(format!("Deep {chain}")),
+            ChildOf(parent),
+        ));
+    }
 }
 
 /// How many lists share the source of `items-shared-adding`.

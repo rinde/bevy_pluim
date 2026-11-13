@@ -2136,6 +2136,78 @@ fn a_widget_under_a_display_none_grandparent_is_hidden_then_shown_again_and_foll
 }
 
 #[test]
+fn overlapping_display_flips_and_a_reparent_in_one_frame_reach_every_consumer_of_a_deep_tree() {
+    let mut app = headless_app();
+    let index = |app: &App, e: Entity| app.world().entity(e).get::<TabIndex>().unwrap().0;
+    let hidden = |app: &App, e: Entity| {
+        app.world()
+            .entity(e)
+            .get::<AccessibilityNode>()
+            .unwrap()
+            .is_hidden()
+    };
+    let display = |app: &mut App, e: Entity, display: Display| {
+        app.world_mut()
+            .entity_mut(e)
+            .get_mut::<Node>()
+            .unwrap()
+            .display = display;
+    };
+
+    // A chain of twenty nodes with a button at the bottom, and a spare parent.
+    let mut chain = Vec::new();
+    let mut parent = app.world_mut().spawn(Node::default()).id();
+    for _ in 0..20 {
+        chain.push(parent);
+        parent = app
+            .world_mut()
+            .spawn((Node::default(), ChildOf(parent)))
+            .id();
+    }
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("deep"), ChildOf(parent)))
+        .id();
+    let spare = app.world_mut().spawn(Node::default()).id();
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), 0);
+
+    // Two nested roots flip in one frame, so their subtrees overlap.
+    display(&mut app, chain[2], Display::None);
+    display(&mut app, chain[10], Display::None);
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), -1);
+    assert!(hidden(&app, button));
+
+    // The outer one is shown again: the inner one still hides the button.
+    display(&mut app, chain[2], Display::Flex);
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), -1);
+    assert!(hidden(&app, button));
+
+    // The inner flips back and the chain is moved under a spare parent in the same frame.
+    display(&mut app, chain[10], Display::Flex);
+    app.world_mut().entity_mut(chain[0]).insert(ChildOf(spare));
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), 0);
+    assert!(!hidden(&app, button));
+
+    // Hiding the spare parent and removing a middle node's `Node` in one frame.
+    display(&mut app, spare, Display::None);
+    app.update();
+    app.update();
+    assert_eq!(index(&app, button), -1);
+    app.world_mut().entity_mut(spare).despawn();
+    app.update();
+    app.update();
+    assert!(app.world().get_entity(button).is_err());
+}
+
+#[test]
 fn a_tab_stop_in_a_hidden_stack_panel_or_hidden_popup_is_not_reached_by_tab() {
     let mut app = headless_app();
     let index = |app: &App, e: Entity| app.world().entity(e).get::<TabIndex>().unwrap().0;
