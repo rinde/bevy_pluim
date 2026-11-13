@@ -9569,6 +9569,72 @@ fn theme_messages_are_ignored_without_a_primary_window_and_a_replacement_is_foll
 }
 
 #[test]
+fn a_replacement_primary_window_with_a_preset_theme_is_not_taken_for_the_system_theme() {
+    let mut app = headless_app();
+    let first = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    let second = app
+        .world_mut()
+        .spawn((
+            Window {
+                window_theme: Some(WindowTheme::Dark),
+                ..default()
+            },
+            PrimaryWindow,
+        ))
+        .id();
+    app.update();
+    app.update();
+    assert_eq!(system_theme_of(&app), None, "the preset theme is ours");
+    theme_message(&mut app, second, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Light));
+}
+
+#[test]
+fn a_replacement_primary_window_given_the_fixed_theme_before_it_is_read_is_not_taken_for_the_system_theme()
+ {
+    let mut app = headless_app();
+    let first = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(LightDarkToggle);
+    app.update();
+    let dark = light_dark_option(&mut app, ThemePreference::Dark);
+    app.world_mut().trigger(Activate { entity: dark });
+    app.update();
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    // The replacement appears after `PreUpdate` of its frame, so `Update` writes the fixed theme
+    // before the system theme is first read from it.
+    app.world_mut().run_schedule(PreUpdate);
+    let second = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().run_schedule(Update);
+    assert_eq!(
+        app.world().get::<Window>(second).unwrap().window_theme,
+        Some(WindowTheme::Dark)
+    );
+    app.update();
+    app.update();
+    assert_eq!(
+        system_theme_of(&app),
+        None,
+        "our own write is not the system"
+    );
+    theme_message(&mut app, second, WindowTheme::Light);
+    assert_eq!(system_theme_of(&app), Some(ThemeMode::Light));
+}
+
+#[test]
 fn a_window_created_with_a_fixed_theme_is_not_taken_for_the_system_theme() {
     let mut app = headless_app();
     app.world_mut().spawn((
