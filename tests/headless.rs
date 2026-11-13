@@ -16436,3 +16436,58 @@ fn renaming_an_item_updates_a_filter_combos_button_rows_and_matches() {
     assert_eq!(fa.shown(), ["Utrecht"]);
     assert_eq!(fa.button_text(), "Delft");
 }
+
+#[test]
+fn editing_an_item_colour_in_place_updates_its_swatch_highlight_combo_preview_and_name() {
+    use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500, YELLOW_300};
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            ColorPaletteCombo,
+            Selection::builder().one().build_with_items(three_colors()),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
+    app.update();
+    let palette = single_entity_with::<ColorPalette>(&mut app);
+    let swatches = item_views(&app, palette);
+    assert_eq!(swatches.len(), 3);
+    let items = items_of(&app, combo);
+    let border = |app: &App, swatch: Entity| app.world().get::<BorderColor>(swatch).unwrap().top;
+    let before_border = border(&app, swatches[0]);
+    let other_border = border(&app, swatches[1]);
+    assert_eq!(combo_square(&app, button), Color::from(RED_500));
+
+    let edited: Color = YELLOW_300.into();
+    app.world_mut()
+        .entity_mut(items[0])
+        .get_mut::<Item<Color>>()
+        .unwrap()
+        .data = edited;
+    app.update();
+    app.update();
+
+    assert_eq!(swatch_color(&app, swatches[0]), edited);
+    assert_eq!(swatch_color(&app, swatches[1]), Color::from(BLUE_500));
+    assert_eq!(swatch_color(&app, swatches[2]), Color::from(GREEN_500));
+    assert_ne!(border(&app, swatches[0]), before_border, "highlight");
+    assert_eq!(border(&app, swatches[1]), other_border, "unrelated row");
+    assert_eq!(combo_square(&app, button), edited, "combo preview");
+    assert_eq!(combo_value(&app, button), "yellow-300");
+    assert_eq!(
+        app.world()
+            .get::<AccessibilityNode>(swatches[0])
+            .unwrap()
+            .label(),
+        Some("yellow-300")
+    );
+    // The swatches were edited in place, not rebuilt.
+    assert_eq!(item_views(&app, palette), swatches);
+}
