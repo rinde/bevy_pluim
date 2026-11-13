@@ -31,6 +31,7 @@ use crate::focus::{
     AccessibilitySync, FOCUS_RING_OFFSET, FOCUS_RING_REACH, FOCUS_RING_WIDTH, Unreachable, node_id,
     sync_controls, sync_label, sync_role, sync_value,
 };
+use crate::glyph_images::{GlyphKey, shared};
 use crate::icon::Icon;
 use crate::list::{CornerStyle, ItemView, List};
 use crate::popup::{self, ButtonLook};
@@ -164,9 +165,7 @@ impl FilterCombo {
         let placeholder = world
             .get::<ComboPlaceholder>(root)
             .map_or_else(|| PLACEHOLDER_TEXT.to_string(), |p| p.0.clone());
-        let chevron = world
-            .get_resource_mut::<Assets<Image>>()
-            .map_or_else(Handle::default, |mut images| images.add(chevron()));
+        let chevron = shared(&mut world, GlyphKey::Chevron, chevron);
         let mut commands = world.commands();
 
         let button = commands

@@ -31,6 +31,7 @@ use bevy::ui_widgets::Activate;
 use bevy::window::SystemCursorIcon;
 use itertools::Either;
 
+use crate::glyph_images::{GlyphKey, shared};
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::text_field::{TextField, TextFieldCommit, TextFieldRefs};
 use crate::theme::Theme;
@@ -301,13 +302,11 @@ impl NumericStepper {
 
         let mut decrease_icon = stepper.decrease_icon.clone();
         let mut increase_icon = stepper.increase_icon.clone();
-        if let Some(mut images) = world.get_resource_mut::<Assets<Image>>() {
-            if decrease_icon == Handle::default() {
-                decrease_icon = images.add(glyph(false));
-            }
-            if increase_icon == Handle::default() {
-                increase_icon = images.add(glyph(true));
-            }
+        if decrease_icon == Handle::default() {
+            decrease_icon = shared(&mut world, GlyphKey::Minus, || glyph(false));
+        }
+        if increase_icon == Handle::default() {
+            increase_icon = shared(&mut world, GlyphKey::Plus, || glyph(true));
         }
         let stepper_entity = context.entity;
         let access_node = spin_button(&stepper, &value);

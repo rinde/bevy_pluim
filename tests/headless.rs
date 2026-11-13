@@ -15405,3 +15405,183 @@ fn a_palette_despawns_a_second_swatch_of_one_item_and_keeps_the_others() {
     assert_eq!(after.len(), 3);
     assert_eq!(after[..2], views[..]);
 }
+
+// Shared glyph images (#683).
+
+/// A headless app with an `Assets<Image>`.
+fn glyph_app() -> App {
+    headless_app_with(|app| {
+        app.init_resource::<Assets<Image>>();
+    })
+}
+
+fn images(app: &App) -> &Assets<Image> {
+    app.world().get_resource::<Assets<Image>>().unwrap()
+}
+
+fn images_mut(app: &mut App) -> Mut<'_, Assets<Image>> {
+    app.world_mut().get_resource_mut::<Assets<Image>>().unwrap()
+}
+
+fn image_count(app: &App) -> usize {
+    images(app).len()
+}
+
+/// The distinct image handles the `ImageNode`s of the app show, the default handle left out.
+fn shown_images(app: &mut App) -> Vec<AssetId<Image>> {
+    let mut ids: Vec<_> = app
+        .world_mut()
+        .query::<&ImageNode>()
+        .iter(app.world())
+        .filter(|node| node.image != Handle::default())
+        .map(|node| node.image.id())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn spawn_glyph_widgets(app: &mut App, count: usize) {
+    for _ in 0..count {
+        app.world_mut().spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a"].map(|s| Item::new(s.to_string()))),
+        ));
+        app.world_mut().spawn((
+            FilterCombo::default(),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a"].map(|s| Item::new(s.to_string()))),
+        ));
+        app.world_mut().spawn((
+            NumericStepper::default(),
+            Value::new_u8(1, 0, 3, 1).unwrap(),
+        ));
+        app.world_mut().spawn(LightDarkToggle);
+    }
+    app.update();
+    app.update();
+}
+
+#[test]
+fn many_widgets_share_one_image_per_generated_glyph() {
+    let mut app = glyph_app();
+    spawn_glyph_widgets(&mut app, 1);
+    let one = image_count(&app);
+    let shown_one = shown_images(&mut app);
+    spawn_glyph_widgets(&mut app, 25);
+    // Chevron, minus, plus, sun, computer and moon, whatever the number of widgets.
+    assert_eq!(one, 6);
+    assert_eq!(image_count(&app), 6);
+    assert_eq!(shown_images(&mut app), shown_one);
+}
+
+#[test]
+fn a_custom_stepper_icon_is_kept_and_only_the_default_one_is_shared() {
+    let mut app = glyph_app();
+    let custom = images_mut(&mut app).add(Image::default());
+    let stepper = NumericStepper {
+        decrease_icon: custom.clone(),
+        ..default()
+    };
+    app.world_mut()
+        .spawn((stepper, Value::new_u8(1, 0, 3, 1).unwrap()));
+    app.update();
+    app.update();
+    let shown = shown_images(&mut app);
+    assert!(shown.contains(&custom.id()));
+    // The custom image and the shared plus; no minus was made for this stepper.
+    assert_eq!(image_count(&app), 2);
+    assert_eq!(shown.len(), 2);
+}
+
+#[test]
+fn an_app_without_image_assets_gets_default_handles_and_the_images_once_assets_exist() {
+    let mut app = headless_app();
+    assert!(!app.world().contains_resource::<Assets<Image>>());
+    spawn_glyph_widgets(&mut app, 2);
+    assert!(shown_images(&mut app).is_empty());
+    app.world_mut().init_resource::<Assets<Image>>();
+    spawn_glyph_widgets(&mut app, 3);
+    assert_eq!(image_count(&app), 6);
+    assert_eq!(shown_images(&mut app).len(), 6);
+}
+
+#[test]
+fn separate_apps_do_not_share_glyph_images() {
+    let mut first = glyph_app();
+    let mut second = glyph_app();
+    spawn_glyph_widgets(&mut first, 2);
+    spawn_glyph_widgets(&mut second, 2);
+    assert_eq!(image_count(&first), 6);
+    assert_eq!(image_count(&second), 6);
+    assert_eq!(shown_images(&mut first), shown_images(&mut second));
+}
+
+#[test]
+fn reinserting_and_despawning_widgets_reuse_the_shared_images() {
+    let mut app = glyph_app();
+    let stepper = app
+        .world_mut()
+        .spawn((
+            NumericStepper::default(),
+            Value::new_u8(1, 0, 3, 1).unwrap(),
+        ))
+        .id();
+    app.update();
+    let before = shown_images(&mut app);
+    assert_eq!(image_count(&app), 2);
+    app.world_mut().entity_mut(stepper).insert(NumericStepper {
+        increase_name: "More".into(),
+        ..default()
+    });
+    app.update();
+    app.update();
+    assert_eq!(image_count(&app), 2);
+    assert_eq!(shown_images(&mut app), before);
+    // The images outlive the widget: a new one finds them where they were.
+    app.world_mut().entity_mut(stepper).despawn();
+    app.update();
+    spawn_glyph_widgets(&mut app, 1);
+    assert_eq!(image_count(&app), 6);
+    for id in before {
+        assert!(images(&app).get(id).is_some());
+    }
+}
+
+#[test]
+fn an_image_the_app_removed_is_generated_again() {
+    let mut app = glyph_app();
+    spawn_glyph_widgets(&mut app, 1);
+    let old = shown_images(&mut app);
+    let handles: Vec<_> = app
+        .world_mut()
+        .query::<&ImageNode>()
+        .iter(app.world())
+        .map(|node| node.image.clone())
+        .collect();
+    // Despawn the widgets so only the shared resource holds the handles, then remove one image.
+    let nodes: Vec<Entity> = app
+        .world_mut()
+        .query_filtered::<Entity, With<Node>>()
+        .iter(app.world())
+        .collect();
+    for node in nodes {
+        if let Ok(entity) = app.world_mut().get_entity_mut(node) {
+            entity.despawn();
+        }
+    }
+    app.update();
+    let removed = old[0];
+    images_mut(&mut app).remove(removed);
+    drop(handles);
+    spawn_glyph_widgets(&mut app, 1);
+    let now = shown_images(&mut app);
+    assert_eq!(now.len(), 6);
+    assert!(!now.contains(&removed));
+    for id in now {
+        assert!(images(&app).get(id).is_some());
+    }
+}
