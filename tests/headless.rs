@@ -11287,6 +11287,72 @@ fn a_segmented_control_follows_only_the_selection_it_draws_from() {
     assert_eq!(selected_segments(&app, second), ["Manual"]);
 }
 
+#[test]
+fn replacing_one_controls_selection_restyles_only_that_control() {
+    let mut app = headless_app();
+    let first = spawn_segmented_control(&mut app);
+    let second = spawn_segmented_control(&mut app);
+    settle(&mut app);
+
+    // Marks that a restyle of the second control would overwrite.
+    let red = Color::srgb(1.0, 0.0, 0.0);
+    let second_segment = segments_of(&app, second)[1];
+    let second_label = app
+        .world()
+        .entity(second_segment)
+        .get::<Children>()
+        .unwrap()[0];
+    let second_indicator = indicator_of(&app, second);
+    for entity in [second, second_segment, second_indicator] {
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(BackgroundColor(red));
+    }
+    app.world_mut()
+        .entity_mut(second_label)
+        .insert(TextColor(red));
+
+    let wanted = app
+        .world()
+        .get::<Segment>(segments_of(&app, first)[2])
+        .unwrap()
+        .item();
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    settle(&mut app);
+
+    assert_eq!(selected_segments(&app, first), ["Off"]);
+    assert_eq!(background(&app, second), red);
+    assert_eq!(background(&app, second_segment), red);
+    assert_eq!(background(&app, second_indicator), red);
+    assert_eq!(
+        app.world()
+            .entity(second_label)
+            .get::<TextColor>()
+            .unwrap()
+            .0,
+        red,
+        "the other control's label is not restyled"
+    );
+    // The control that changed is themed as usual.
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    assert_eq!(background(&app, first), colors.segmented_track);
+    let first_label = app
+        .world()
+        .entity(segments_of(&app, first)[2])
+        .get::<Children>()
+        .unwrap()[0];
+    assert_eq!(
+        app.world()
+            .entity(first_label)
+            .get::<TextColor>()
+            .unwrap()
+            .0,
+        colors.segmented_selected_text
+    );
+}
+
 /// The label text colour of a chip.
 fn chip_label_color(app: &App, view: Entity) -> Color {
     let label = app.world().get::<ChipRefs>(view).unwrap().label;
