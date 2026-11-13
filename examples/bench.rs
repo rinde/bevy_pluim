@@ -22,6 +22,7 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::color_palette::ColorPalette;
+use bevy_pluim::color_palette_combo::ColorPaletteCombo;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::list::{ItemNote, List};
@@ -31,6 +32,8 @@ use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionValue};
 use bevy_pluim::tab_bar::TabBar;
+use bevy_pluim::tailwind::COLORS;
+use bevy_pluim::theme_editor::ThemeEditor;
 use bevy_pluim::toast::Toast;
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
@@ -99,6 +102,10 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
+    /// Many closed `ColorPaletteCombo`s over one shared 242-colour source, idle.
+    PaletteCombosIdle,
+    /// Several `ThemeEditor`s, idle: each has a closed palette combo per colour slot.
+    ThemeEditorsIdle,
     /// One source of many items shared by `SHARED_LISTS` hidden `List`s; one item is added every
     /// frame, so one `ItemsChanged` reaches every watcher.
     ItemsSharedAdding,
@@ -159,7 +166,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 38] = [
+    const ALL: [Self; 40] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -172,6 +179,8 @@ impl Workload {
         Self::ListNotesChanging,
         Self::ListNotesIdle,
         Self::SteppersIdle,
+        Self::PaletteCombosIdle,
+        Self::ThemeEditorsIdle,
         Self::ListItemsInitial,
         Self::ListItemsAdding,
         Self::ItemsSharedAdding,
@@ -220,6 +229,8 @@ impl Workload {
             Self::TabItemsAdding => "tab-items-adding",
             Self::SegmentItemsAdding => "segment-items-adding",
             Self::SteppersIdle => "steppers-idle",
+            Self::PaletteCombosIdle => "palette-combos-idle",
+            Self::ThemeEditorsIdle => "theme-editors-idle",
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
             Self::ToastsIdle => "toasts-idle",
@@ -272,6 +283,8 @@ impl Workload {
             | Self::RovingGroupsSelection
             | Self::RovingGroupsIdle => 500,
             Self::SteppersIdle | Self::SteppersChanging | Self::SteppersSharedChanging => 2_000,
+            Self::PaletteCombosIdle => 50,
+            Self::ThemeEditorsIdle => 1,
             Self::VirtualList
             | Self::VirtualListScrolling
             | Self::TicksFilterIdle
@@ -872,6 +885,28 @@ fn spawn(world: &mut World, run: Run) {
             }
             Workload::ListItemsInitial | Workload::ListItemsAdding => {
                 root.spawn((List, list_items(run.size)));
+            }
+            Workload::PaletteCombosIdle => {
+                let colors = root
+                    .spawn(
+                        Selection::builder()
+                            .zero_or_one()
+                            .build_with_items(COLORS.iter().map(|c| Item { data: c.color })),
+                    )
+                    .id();
+                for _ in 0..run.size {
+                    root.spawn((
+                        ColorPaletteCombo,
+                        Selection::builder()
+                            .zero_or_one()
+                            .build_with_items_ref(colors),
+                    ));
+                }
+            }
+            Workload::ThemeEditorsIdle => {
+                for _ in 0..run.size {
+                    root.spawn(ThemeEditor);
+                }
             }
             Workload::ItemsSharedAdding => {
                 let source = root.spawn(list_items(run.size)).id();

@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use itertools::Either;
 
-use crate::color_palette::ColorPalette;
+use crate::color_palette::{ColorPalette, PaletteDormant, sleep, wake};
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
@@ -40,6 +40,11 @@ impl Plugin for ColorPaletteComboPlugin {
             ),
         )
         .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
+        .add_systems(Last, sleep_closed_popups)
+        .add_systems(
+            PostUpdate,
+            place_opened_popups.after(bevy::ui::UiSystems::PostLayout),
+        )
         .add_observer(on_insert_combo)
         .add_observer(on_remove_combo)
         .add_observer(on_insert_state)
@@ -167,6 +172,8 @@ fn on_insert_combo(
                                 ..default()
                             },
                             ColorPalette,
+                            // A closed popup builds no swatches, see `PaletteDormant`.
+                            PaletteDormant,
                             list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
                         ));
                         if let Some(selection_ref) = selection_ref {
@@ -367,7 +374,48 @@ fn on_insert_state(
         popup::set_expanded(&mut node, open);
     }
     if open {
+        // The swatches are built now, so the popup has its size after the next layout:
+        // hide it until `place_opened_popups` has placed it.
+        commands.run_system_cached_with(wake, sub_refs.palette);
+        commands
+            .entity(sub_refs.float_id)
+            .remove::<PendingSleep>()
+            .insert((Visibility::Hidden, PendingPlacement(sub_refs)));
+    } else {
+        // The swatches go at the end of the frame, not now: a pick in them that closed the
+        // popup is still being handled by their `ListBox`.
+        commands
+            .entity(sub_refs.float_id)
+            .remove::<PendingPlacement>()
+            .insert(PendingSleep(sub_refs.palette));
+    }
+}
+
+/// On the popup of a combo that closed and whose palette has not been made dormant yet.
+#[derive(Component, Debug, Copy, Clone)]
+struct PendingSleep(Entity);
+
+/// Despawns the swatches of the popups that closed, once the frame's input is handled.
+fn sleep_closed_popups(pending: Query<(Entity, &PendingSleep)>, mut commands: Commands) {
+    for (float, &PendingSleep(palette)) in &pending {
+        commands.run_system_cached_with(sleep, palette);
+        commands.entity(float).remove::<PendingSleep>();
+    }
+}
+
+/// On the popup of a combo that opened and has not been placed yet.
+#[derive(Component, Debug, Copy, Clone)]
+struct PendingPlacement(SubRefs);
+
+/// Places the popups that just opened once layout has given them the size of their swatches,
+/// then shows them.
+fn place_opened_popups(pending: Query<(Entity, &PendingPlacement)>, mut commands: Commands) {
+    for (float, &PendingPlacement(sub_refs)) in &pending {
         commands.run_system_cached_with(position_float, sub_refs);
+        commands
+            .entity(float)
+            .remove::<PendingPlacement>()
+            .insert(Visibility::Visible);
     }
 }
 

@@ -14,6 +14,7 @@
         // The left edge.
         MoveTo(Within(Name("left edge palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(1),
         Check(Component(target: Name("left edge palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         Check(Component(target: Name("left edge palette combo popup"), path: "ComputedNode.size.x", unit: Logical, is: Eq(436.0))),
         Check(Component(target: Name("left edge palette combo popup"), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(228.0))),
@@ -24,6 +25,7 @@
         // The right edge.
         MoveTo(Within(Name("right edge palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(1),
         Check(Component(target: Name("right edge palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         Check(Component(target: Name("right edge palette combo popup"), path: "ComputedNode.size.x", unit: Logical, is: Eq(436.0))),
         Check(Component(target: Name("right edge palette combo popup"), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Eq(1052.0))),
