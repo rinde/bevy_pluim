@@ -625,26 +625,41 @@ fn theme_sliders(
     }
 }
 
+/// The changes that restyle a slider: its hover, value or drag, or being pressed or disabled.
+type SliderStyleChange = Or<(
+    Changed<Hovered>,
+    Changed<SliderValue>,
+    Changed<SliderDragState>,
+    Added<Pressed>,
+    Added<InteractionDisabled>,
+)>;
+
 /// Restyles the sliders whose value, hover, press or disabled state changed.
+///
+/// Only the affected sliders are visited: those the change filter names, then
+/// those that lost `Pressed` or `InteractionDisabled` (read from the removal
+/// messages into a buffer kept in a `Local`). A slider in both sets is styled once.
 fn restyle_sliders(
+    changed: Query<SliderState, SliderStyleChange>,
     sliders: Query<SliderState>,
-    changed: Query<
-        (),
-        Or<(
-            Changed<Hovered>,
-            Changed<SliderValue>,
-            Changed<SliderDragState>,
-            Added<Pressed>,
-            Added<InteractionDisabled>,
-        )>,
-    >,
+    changed_ids: Query<(), SliderStyleChange>,
     mut released: RemovedComponents<Pressed>,
     mut enabled: RemovedComponents<InteractionDisabled>,
+    mut removed: Local<Vec<Entity>>,
     mut styler: SliderStyler,
 ) {
-    let removed: Vec<Entity> = released.read().chain(enabled.read()).collect();
-    for state in &sliders {
-        if changed.contains(state.0) || removed.contains(&state.0) {
+    for state in &changed {
+        styler.style(state);
+    }
+    removed.clear();
+    removed.extend(released.read().chain(enabled.read()));
+    removed.sort_unstable();
+    removed.dedup();
+    for &entity in &*removed {
+        if changed_ids.contains(entity) {
+            continue;
+        }
+        if let Ok(state) = sliders.get(entity) {
             styler.style(state);
         }
     }

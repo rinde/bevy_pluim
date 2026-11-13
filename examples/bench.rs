@@ -20,6 +20,7 @@ use bevy::camera::ClearColor;
 use bevy::ecs::system::SystemChangeTick;
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
+use bevy::ui::Pressed;
 use bevy_pluim::WidgetsPlugin;
 use bevy_pluim::badge::Badge;
 use bevy_pluim::color_palette::ColorPalette;
@@ -35,6 +36,7 @@ use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionValue};
 use bevy_pluim::setting_row::{SettingRow, SettingRows};
+use bevy_pluim::slider::Slider;
 use bevy_pluim::tab_bar::TabBar;
 use bevy_pluim::tailwind::COLORS;
 use bevy_pluim::theme_editor::ThemeEditor;
@@ -219,6 +221,10 @@ enum Workload {
     WheelDeep,
     /// The same tree and hover map with no wheel input: the floor `wheel-deep` is read against.
     WheelDeepIdle,
+    /// Many `Slider`s, idle.
+    SlidersIdle,
+    /// The same sliders; one is pressed and the one before it released every frame.
+    SlidersPressing,
     /// Change-detection microbenchmark (see `ticks`): a `Changed` filter reader
     /// over a component without a summary tick, nothing mutates.
     TicksFilterIdle,
@@ -235,7 +241,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 54] = [
+    const ALL: [Self; 56] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
@@ -284,6 +290,8 @@ impl Workload {
         Self::RovingGroupsIdle,
         Self::WheelDeep,
         Self::WheelDeepIdle,
+        Self::SlidersIdle,
+        Self::SlidersPressing,
         Self::TicksFilterIdle,
         Self::TicksSummaryIdle,
         Self::TicksFilterOne,
@@ -342,6 +350,8 @@ impl Workload {
             Self::RovingGroupsIdle => "roving-groups-idle",
             Self::WheelDeep => "wheel-deep",
             Self::WheelDeepIdle => "wheel-deep-idle",
+            Self::SlidersIdle => "sliders-idle",
+            Self::SlidersPressing => "sliders-pressing",
             Self::TicksFilterIdle => "ticks-filter-idle",
             Self::TicksSummaryIdle => "ticks-summary-idle",
             Self::TicksFilterOne => "ticks-filter-one",
@@ -393,7 +403,11 @@ impl Workload {
             | Self::RovingGroupsFocus
             | Self::RovingGroupsSelection
             | Self::RovingGroupsIdle => 500,
-            Self::SteppersIdle | Self::SteppersChanging | Self::SteppersSharedChanging => 2_000,
+            Self::SteppersIdle
+            | Self::SteppersChanging
+            | Self::SteppersSharedChanging
+            | Self::SlidersIdle
+            | Self::SlidersPressing => 2_000,
             Self::PaletteCombosIdle => 50,
             Self::ThemeEditorsIdle => 1,
             Self::VirtualList
@@ -979,6 +993,21 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.despawn(entity);
         }
     }
+    if workload == Workload::SlidersPressing {
+        // Presses one slider and releases the one pressed the frame before, so the
+        // frame shows what restyling costs next to the idle sliders.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<Slider>>();
+        let sliders: Vec<Entity> = query.iter(world).collect();
+        if !sliders.is_empty() {
+            if let Some(&last) = sliders.get(index.wrapping_sub(1) * 7 % sliders.len()) {
+                world.entity_mut(last).remove::<Pressed>();
+            }
+            if let Some(&next) = sliders.get(index * 7 % sliders.len()) {
+                world.entity_mut(next).insert(Pressed);
+            }
+        }
+    }
     app.update();
 }
 
@@ -1072,6 +1101,14 @@ fn spawn(world: &mut World, run: Run) {
                     for _ in 0..MIRRORS {
                         root.spawn((NumericStepper::default(), ValueRef(shared)));
                     }
+                }
+            }
+            Workload::SlidersIdle | Workload::SlidersPressing => {
+                for _ in 0..run.size {
+                    let Ok(slider) = Slider::new(0.5, 0.0, 1.0) else {
+                        return;
+                    };
+                    root.spawn(slider);
                 }
             }
             Workload::TicksFilterIdle | Workload::TicksFilterOne | Workload::TicksFilterAll => {

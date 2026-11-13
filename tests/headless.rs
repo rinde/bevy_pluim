@@ -8965,6 +8965,125 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
     assert_eq!(radius(&app), own_radius);
 }
 
+/// A slider of the headless app, settled, with its thumb and track fill.
+fn settled_slider() -> (App, Entity, Entity, Entity) {
+    let mut app = headless_app();
+    let world = app.world_mut();
+    world.spawn((Camera2d, UiRoot));
+    let slider = world.spawn(Slider::new(2.0, 0.0, 10.0).unwrap()).id();
+    app.update();
+    app.update();
+    let refs = *app.world().entity(slider).get::<SliderRefs>().unwrap();
+    (app, slider, refs.thumb, refs.fill)
+}
+
+#[test]
+fn a_slider_released_away_from_the_control_goes_back_to_rest() {
+    let (mut app, slider, thumb, _) = settled_slider();
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    assert_eq!(background(&app, thumb), colors.card_surface);
+
+    app.world_mut().entity_mut(slider).insert(Pressed);
+    app.update();
+    assert_eq!(background(&app, thumb), colors.accent);
+
+    // The pointer is not on the slider (`Hovered` is false) when the press ends.
+    app.world_mut().entity_mut(slider).remove::<Pressed>();
+    app.update();
+    assert_eq!(background(&app, thumb), colors.card_surface);
+}
+
+#[test]
+fn a_slider_follows_being_disabled_and_enabled_again() {
+    let (mut app, slider, thumb, fill) = settled_slider();
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    assert_eq!(background(&app, fill), colors.slider_fill);
+
+    app.world_mut()
+        .entity_mut(slider)
+        .insert(InteractionDisabled);
+    app.update();
+    assert_eq!(background(&app, fill), colors.text_disabled);
+    assert_eq!(background(&app, thumb), colors.card_surface);
+
+    app.world_mut()
+        .entity_mut(slider)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(background(&app, fill), colors.slider_fill);
+}
+
+#[test]
+fn a_slider_follows_a_drag_and_a_value_change() {
+    let (mut app, slider, thumb, fill) = settled_slider();
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+
+    app.world_mut()
+        .entity_mut(slider)
+        .get_mut::<bevy::ui_widgets::SliderDragState>()
+        .unwrap()
+        .dragging = true;
+    app.update();
+    assert_eq!(background(&app, thumb), colors.accent);
+
+    app.world_mut()
+        .entity_mut(slider)
+        .get_mut::<bevy::ui_widgets::SliderDragState>()
+        .unwrap()
+        .dragging = false;
+    app.world_mut().trigger(SetSliderValue {
+        entity: slider,
+        change: SliderValueChange::Absolute(5.0),
+    });
+    app.update();
+    assert_eq!(background(&app, thumb), colors.card_surface);
+    assert_eq!(
+        app.world().entity(fill).get::<Node>().unwrap().width,
+        Val::Percent(50.0)
+    );
+}
+
+#[test]
+fn a_slider_pressed_and_enabled_in_the_same_frame_ends_up_resting_and_enabled() {
+    let (mut app, slider, thumb, fill) = settled_slider();
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    app.world_mut()
+        .entity_mut(slider)
+        .insert((Pressed, InteractionDisabled));
+    app.update();
+    app.world_mut()
+        .entity_mut(slider)
+        .remove::<(Pressed, InteractionDisabled)>();
+    app.update();
+    assert_eq!(background(&app, thumb), colors.card_surface);
+    assert_eq!(background(&app, fill), colors.slider_fill);
+}
+
+#[test]
+fn a_theme_change_restyles_a_pressed_slider_and_idle_frames_leave_it_alone() {
+    let (mut app, slider, thumb, _) = settled_slider();
+    app.world_mut().entity_mut(slider).insert(Pressed);
+    app.update();
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    let dark = *app.world().get_resource::<Theme>().unwrap().colors();
+    assert_eq!(background(&app, thumb), dark.accent);
+
+    // An idle frame does not restyle: a colour set by hand stays.
+    let own = Color::srgb(0.1, 0.2, 0.3);
+    app.world_mut()
+        .entity_mut(thumb)
+        .get_mut::<BackgroundColor>()
+        .unwrap()
+        .0 = own;
+    app.update();
+    assert_eq!(background(&app, thumb), own);
+}
+
 #[test]
 fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
     let mut app = headless_app();
