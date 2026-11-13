@@ -37,20 +37,27 @@ pub struct ComboPlugin;
 
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (close_combos_on_outside_click, selection_change))
-            .add_systems(
-                Update,
-                close_on_ancestor_scroll.after(update_scroll_position),
-            )
-            .add_systems(
-                PostUpdate,
-                (
-                    sync_accessibility.in_set(AccessibilitySync),
-                    place_open_lists.before(UiSystems::Layout),
-                ),
-            )
-            .add_observer(on_insert_combo)
-            .add_observer(on_insert_placeholder);
+        app.add_systems(
+            Update,
+            (
+                close_combos_on_outside_click,
+                selection_change,
+                item_text_change,
+            ),
+        )
+        .add_systems(
+            Update,
+            close_on_ancestor_scroll.after(update_scroll_position),
+        )
+        .add_systems(
+            PostUpdate,
+            (
+                sync_accessibility.in_set(AccessibilitySync),
+                place_open_lists.before(UiSystems::Layout),
+            ),
+        )
+        .add_observer(on_insert_combo)
+        .add_observer(on_insert_placeholder);
     }
 }
 
@@ -435,6 +442,26 @@ fn selection_change(
                 commands
                     .run_system_cached_with(update_selection, (changed_selection_ref, combo_ref));
             }
+        }
+    }
+}
+
+/// Shows a renamed selected item on the button of the combos that have it selected.
+fn item_text_change(
+    renamed: Query<Entity, Changed<Item<String>>>,
+    combos: Query<Entity, (With<Combo>, Without<NoDefaultItems>)>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    if renamed.is_empty() {
+        return;
+    }
+    let renamed: Vec<Entity> = renamed.iter().collect();
+    for combo in &combos {
+        if let Some((selection_ref, selection)) = selections.get_with_ref(combo)
+            && selection.iter().any(|item| renamed.contains(&item))
+        {
+            commands.run_system_cached_with(update_selection, (selection_ref, combo));
         }
     }
 }

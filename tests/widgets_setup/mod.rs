@@ -2197,6 +2197,15 @@ fn filter_combos(world: &mut World) {
                 .one()
                 .build_with_items(Vec::<Item<String>>::new()),
         ));
+        // Renames the shared items' "Delft" in place, for `filter_combo_follows_a_rename.ron`.
+        root.spawn((PushButton::from_label("Rename Delft"), placed(300.0, 500.0)))
+            .observe(|_: On<Activate>, mut items: Query<&mut Item<String>>| {
+                for mut item in &mut items {
+                    if item.data == "Delft" {
+                        item.data = "Delfts blauw".to_string();
+                    }
+                }
+            });
     });
 }
 

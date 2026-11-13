@@ -57,6 +57,7 @@ impl Plugin for ListPlugin {
                     selection_change,
                     custom_view_hover,
                     sync_item_notes.run_if(item_notes_changed),
+                    sync_item_label_text,
                     note_ink_follows_row.after(selection_change),
                 ),
             )
@@ -463,6 +464,29 @@ fn sync_item_notes(
             }
             (None, Some(child)) => commands.entity(child).despawn(),
             (None, None) => {}
+        }
+    }
+}
+
+/// Shows the new text of a renamed `Item<String>` in the label of each default row of it,
+/// leaving every other row and custom views alone.
+fn sync_item_label_text(
+    renamed: Query<(&Item<String>, &NoteViews), Changed<Item<String>>>,
+    views: Query<&Children, (With<ItemView>, Without<CustomView>)>,
+    mut labels: Query<&mut Text, With<ItemLabel>>,
+) {
+    for (item, of_item) in &renamed {
+        for view in &of_item.0 {
+            let Ok(children) = views.get(*view) else {
+                continue;
+            };
+            for child in children {
+                if let Ok(mut text) = labels.get_mut(*child)
+                    && text.0 != item.data
+                {
+                    text.0.clone_from(&item.data);
+                }
+            }
         }
     }
 }
