@@ -49,6 +49,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
 | `list-notes-changing` | 500 `List`s of 3 noted items | many independent lists; one `ItemNote` is marked changed every frame (no relayout), so a note sync that visits every row shows (#666) |
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
+| `lists-selection-changing` | 2 000 `List`s | many independent lists; 50 selections are replaced in one frame (#671) |
+| `lists-selection-idle` | the same | the same lists with no change: the floor `lists-selection-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
 | `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
@@ -301,6 +303,25 @@ workload is unchanged, as expected. Test:
 `a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_them`
 (fails on the old code: the unrelated list was resynced).
 
+## Selection synchronisation of lists (#671)
+
+`list.rs`'s `selection_change` ran once per changed selection and scanned every
+`List` for each, so N simultaneous changes cost N x lists. It now collects the
+changed entities into a set and walks the lists once, restyling a list only
+when its own or its referenced selection is in the set. Workloads
+`lists-selection-changing` (50 selections replaced per frame) and
+`lists-selection-idle`, 2000 independent lists, release build, mean frame time
+in microseconds:
+
+| Workload | Before | After |
+| --- | --- | --- |
+| `lists-selection-changing` | 11188 | 10361 |
+| `lists-selection-idle` | 10452 | 9920 |
+
+Cost over idle fell from about 0.74 ms to about 0.44 ms per frame (single runs;
+the frame is dominated by the rest of the app). The remaining cost is one
+pass over the lists, linear in lists but not in changes x lists. Test:
+`simultaneous_selection_changes_update_only_the_lists_that_follow_them`.
 ## Sliding-indicator lifecycle (#677)
 
 `indicator.rs`'s `spawn` ran every `Update` for `SegmentedControl`, `TabBar` and `LightDarkToggle`

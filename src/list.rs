@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
 use bevy::ecs::world::DeferredWorld;
@@ -900,33 +901,34 @@ fn selection_change(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for changed_selection_ref in q {
-        for (list_ref, children, list_selection, style, is_multi) in lists {
-            let is_changed = match list_selection {
-                Selection::Ref(entity) => {
-                    changed_selection_ref == *entity || changed_selection_ref == list_ref
-                }
-                Selection::Value(_selection) => changed_selection_ref == list_ref,
+    // One pass over the lists however many selections changed, not one pass per change.
+    let changed: EntityHashSet = q.iter().collect();
+    if changed.is_empty() {
+        return;
+    }
+    for (list_ref, children, list_selection, style, is_multi) in lists {
+        // The selection of the list that changed: its own entity, or the one it refers to.
+        let changed_selection_ref = match list_selection {
+            Selection::Ref(entity) if changed.contains(entity) => *entity,
+            _ if changed.contains(&list_ref) => list_ref,
+            _ => continue,
+        };
+        let Some(selection) = selections.get(changed_selection_ref) else {
+            continue;
+        };
+        sync_multi_select(&mut commands, list_ref, is_multi, selection);
+
+        for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
+            let Ok((item_view, hovered, mut bg, mut border_color, was_selected)) =
+                item_views.get_mut(item_view_id)
+            else {
+                continue;
             };
-            if is_changed {
-                let Some(selection) = selections.get(changed_selection_ref) else {
-                    continue;
-                };
-                sync_multi_select(&mut commands, list_ref, is_multi, selection);
 
-                for item_view_id in children.map(RelationshipTarget::iter).unwrap_or_default() {
-                    let Ok((item_view, hovered, mut bg, mut border_color, was_selected)) =
-                        item_views.get_mut(item_view_id)
-                    else {
-                        continue;
-                    };
-
-                    let is_selected = selection.is_selected(item_view.item_ref);
-                    sync_selected(&mut commands, item_view_id, was_selected, is_selected);
-                    bg.0 = item_background(theme.colors(), *style, is_selected, hovered.get());
-                    border_color.set_all(item_border(theme.colors(), *style, is_selected));
-                }
-            }
+            let is_selected = selection.is_selected(item_view.item_ref);
+            sync_selected(&mut commands, item_view_id, was_selected, is_selected);
+            bg.0 = item_background(theme.colors(), *style, is_selected, hovered.get());
+            border_color.set_all(item_border(theme.colors(), *style, is_selected));
         }
     }
 }

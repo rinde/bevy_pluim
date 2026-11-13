@@ -52,6 +52,9 @@ const WARMUP_FRAMES: usize = 60;
 const DEFAULT_FRAMES: usize = 300;
 /// Values changed per frame by the stepper workloads.
 const CHANGED_STEPPERS: usize = 20;
+
+/// How many `List` selections the `lists-selection-changing` workload replaces every frame.
+const CHANGED_LISTS: usize = 50;
 /// Steppers mirroring each shared value in `steppers-shared-changing`.
 const MIRRORS: usize = 10;
 /// Wheel messages sent per frame by `wheel-deep`, as a trackpad sends at a high rate.
@@ -142,6 +145,11 @@ enum Workload {
     ListNotesChanging,
     /// The same lists, idle: the floor the changing workload is read against.
     ListNotesIdle,
+    /// Many independent `List`s of three items; `CHANGED_LISTS` selections are replaced every
+    /// frame, so the lists' selection sync shows (#671).
+    ListsSelectionChanging,
+    /// The same lists, idle: the floor the changing workload is read against.
+    ListsSelectionIdle,
     /// One `List` of many items, replaced by a new one with all its items every frame:
     /// the initial build of the views.
     ListItemsInitial,
@@ -241,7 +249,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 56] = [
+    const ALL: [Self; 58] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
@@ -255,6 +263,8 @@ impl Workload {
         Self::FilterChipsIdle,
         Self::ListNotesChanging,
         Self::ListNotesIdle,
+        Self::ListsSelectionChanging,
+        Self::ListsSelectionIdle,
         Self::SteppersIdle,
         Self::PaletteCombosIdle,
         Self::ThemeEditorsIdle,
@@ -315,6 +325,8 @@ impl Workload {
             Self::FilterChipsIdle => "filter-chips-idle",
             Self::ListNotesChanging => "list-notes-changing",
             Self::ListNotesIdle => "list-notes-idle",
+            Self::ListsSelectionChanging => "lists-selection-changing",
+            Self::ListsSelectionIdle => "lists-selection-idle",
             Self::ListItemsInitial => "list-items-initial",
             Self::ListItemsAdding => "list-items-adding",
             Self::ItemsSharedAdding => "items-shared-adding",
@@ -384,6 +396,8 @@ impl Workload {
             | Self::FilterChipsIdle
             | Self::ListNotesChanging
             | Self::ListNotesIdle
+            | Self::ListsSelectionChanging
+            | Self::ListsSelectionIdle
             | Self::ToastsIdle
             | Self::ToastsBursting
             | Self::BadgesIdle
@@ -833,6 +847,24 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             note.set_changed();
         }
     }
+    if workload == Workload::ListsSelectionChanging {
+        // Replaces the selection of `CHANGED_LISTS` lists (an immutable component) with a
+        // clone, so `Changed<Selection>` fires for those lists alone.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<(Entity, &Selection), With<List>>();
+        let count = query.iter(world).count();
+        let picked: Vec<_> = (0..CHANGED_LISTS.min(count))
+            .filter_map(|offset| {
+                query
+                    .iter(world)
+                    .nth((index * 7 + offset * 13) % count)
+                    .map(|(entity, selection)| (entity, selection.clone()))
+            })
+            .collect();
+        for (entity, selection) in picked {
+            world.entity_mut(entity).insert(selection);
+        }
+    }
     if matches!(
         workload,
         Workload::SteppersChanging | Workload::SteppersSharedChanging
@@ -1153,6 +1185,16 @@ fn spawn(world: &mut World, run: Run) {
                             .build_with_items((0..3).map(move |chip| Item {
                                 data: Chip::new(format!("Chip {row}.{chip}")),
                             })),
+                    ));
+                }
+            }
+            Workload::ListsSelectionChanging | Workload::ListsSelectionIdle => {
+                for row in 0..run.size {
+                    root.spawn((
+                        List,
+                        Selection::builder().one().build_with_items(
+                            (0..3).map(move |item| Item::new(format!("Item {row}.{item}"))),
+                        ),
                     ));
                 }
             }
