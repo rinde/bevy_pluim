@@ -15745,3 +15745,166 @@ fn an_area_two_pointers_are_on_scrolls_once_for_each_pointer_and_message() {
     app.update();
     assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 40.0));
 }
+
+/// The text of the label of the row `view` (its first child with a `Text`).
+fn row_text(app: &App, view: Entity) -> String {
+    app.world()
+        .get::<Children>(view)
+        .unwrap()
+        .iter()
+        .find_map(|child| app.world().get::<Text>(child).map(|text| text.0.clone()))
+        .unwrap()
+}
+
+/// The views of `list`, in order, with their entities.
+fn views_of_list(app: &mut App, list: Entity) -> Vec<Entity> {
+    let world = app.world_mut();
+    let mut query = world.query::<(Entity, &ItemView)>();
+    query
+        .iter(world)
+        .filter(|(_, view)| view.list_ref == list)
+        .map(|(entity, _)| entity)
+        .collect()
+}
+
+fn rename(app: &mut App, item: Entity, text: &str) {
+    app.world_mut().get_mut::<Item<String>>(item).unwrap().data = text.to_string();
+    for _ in 0..4 {
+        app.update();
+    }
+}
+
+#[test]
+fn renaming_an_item_updates_the_visible_and_accessible_text_of_every_list_that_shows_it() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Camera2d, UiRoot));
+    let first = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder()
+                .one()
+                .build_with_items(["Alpha", "Beta"].map(|s| Item::new(s.to_string()))),
+        ))
+        .id();
+    let sharing = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder().one().build_with_items_ref(first),
+        ))
+        .id();
+    let other = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder()
+                .one()
+                .build_with_items(["Alpha", "Gamma"].map(|s| Item::new(s.to_string()))),
+        ))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    let before_first = views_of_list(&mut app, first);
+    let before_sharing = views_of_list(&mut app, sharing);
+    let before_other = views_of_list(&mut app, other);
+    let by_text = |app: &App, views: &[Entity], text: &str| {
+        *views
+            .iter()
+            .find(|view| row_text(app, **view) == text)
+            .unwrap()
+    };
+    let alpha_first = by_text(&app, &before_first, "Alpha");
+    let alpha_sharing = by_text(&app, &before_sharing, "Alpha");
+    let beta_first = by_text(&app, &before_first, "Beta");
+    let alpha_other = by_text(&app, &before_other, "Alpha");
+    let item = app.world().get::<ItemView>(alpha_first).unwrap().item_ref;
+
+    rename(&mut app, item, "Alfa");
+
+    for (list, before) in [
+        (first, &before_first),
+        (sharing, &before_sharing),
+        (other, &before_other),
+    ] {
+        let mut now = views_of_list(&mut app, list);
+        let mut was = before.clone();
+        now.sort();
+        was.sort();
+        assert_eq!(now, was, "rows were rebuilt");
+    }
+    for view in [alpha_first, alpha_sharing] {
+        assert_eq!(row_text(&app, view), "Alfa");
+        assert_eq!(accessible_label(&app, view).as_deref(), Some("Alfa"));
+    }
+    assert_eq!(row_text(&app, beta_first), "Beta");
+    assert_eq!(row_text(&app, alpha_other), "Alpha");
+}
+
+#[test]
+fn renaming_the_selected_item_updates_a_combos_button_and_popup_but_not_its_placeholder() {
+    let mut app = headless_app();
+    let (combo, button) = spawn_combo(&mut app);
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
+    assert_eq!(combo_label(&app, button), "Select..");
+    let views = views_of_list(&mut app, list);
+    let a = app.world().get::<ItemView>(views[0]).unwrap().item_ref;
+    let b = app.world().get::<ItemView>(views[1]).unwrap().item_ref;
+
+    // Nothing selected: a rename shows in the popup and leaves the placeholder.
+    rename(&mut app, a, "first");
+    assert_eq!(combo_label(&app, button), "Select..");
+    assert_eq!(row_text(&app, views[0]), "first");
+
+    app.world_mut()
+        .entity_mut(combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(a))));
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_eq!(combo_label(&app, button), "first");
+
+    rename(&mut app, a, "renamed");
+    assert_eq!(combo_label(&app, button), "renamed");
+    assert_eq!(accessible_value(&app, button).as_deref(), Some("renamed"));
+    assert_eq!(row_text(&app, views[0]), "renamed");
+
+    // An item that is not selected leaves the button alone.
+    rename(&mut app, b, "other");
+    assert_eq!(combo_label(&app, button), "renamed");
+    assert_eq!(row_text(&app, views[1]), "other");
+}
+
+#[test]
+fn renaming_an_item_updates_a_filter_combos_button_rows_and_matches() {
+    let mut fa = filter_app();
+    let delft = fa.item_of("Delft");
+    fa.app
+        .world_mut()
+        .entity_mut(fa.combo)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(delft))));
+    fa.settle();
+    assert_eq!(fa.button_text(), "Delft");
+    fa.open();
+    fa.type_text("utr");
+    assert_eq!(fa.shown(), ["Utrecht"]);
+    let delft_row = fa.row_of("Delft");
+    let amsterdam_row = fa.row_of("Amsterdam");
+
+    // The selected item is renamed to match: button and row text follow, and it is shown.
+    rename(&mut fa.app, delft, "Utrecht Zuid");
+    assert_eq!(fa.button_text(), "Utrecht Zuid");
+    assert_eq!(row_text(&fa.app, delft_row), "Utrecht Zuid");
+    assert_eq!(fa.shown(), ["Utrecht Zuid", "Utrecht"]);
+    assert_eq!(fa.row_of("Utrecht Zuid"), delft_row, "the row was rebuilt");
+    assert_eq!(fa.row_of("Amsterdam"), amsterdam_row);
+
+    // And renamed away again, it is filtered out.
+    rename(&mut fa.app, delft, "Delft");
+    assert_eq!(fa.shown(), ["Utrecht"]);
+    assert_eq!(fa.button_text(), "Delft");
+}

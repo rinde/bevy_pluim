@@ -1078,20 +1078,31 @@ fn sync_name(node: &mut Mut<AccessibilityNode>, name: Option<&str>) {
 }
 
 /// Updates the button label and the list's selection when the selection of a combo (own or
-/// shared) or its placeholder changes.
+/// shared), a selected item's text or its placeholder changes.
 fn selection_change(
     changed: Query<Entity, Changed<Selection>>,
     fresh: Query<Entity, Added<FilterComboRefs>>,
     placeholders: Query<Entity, Changed<ComboPlaceholder>>,
+    renamed: Query<Entity, Changed<Item<String>>>,
     combos: Query<(Entity, &Selection), With<FilterCombo>>,
+    selections: SelectionParam,
     mut commands: Commands,
 ) {
     for (combo, selection) in &combos {
+        // A renamed selected item changes the button's text.
+        let renamed_selected = !renamed.is_empty()
+            && selections
+                .get(combo)
+                .is_some_and(|value| value.iter().any(|item| renamed.contains(item)));
         let selection_changed = changed.iter().any(|changed| match selection {
             Selection::Ref(entity) => changed == *entity || changed == combo,
             Selection::Value(_) => changed == combo,
         });
-        if selection_changed || fresh.contains(combo) || placeholders.contains(combo) {
+        if selection_changed
+            || renamed_selected
+            || fresh.contains(combo)
+            || placeholders.contains(combo)
+        {
             commands.run_system_cached_with(update_selection, combo);
         }
     }
