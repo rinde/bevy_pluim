@@ -75,6 +75,9 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
+    /// One source of many items shared by `SHARED_LISTS` hidden `List`s; one item is added every
+    /// frame, so one `ItemsChanged` reaches every watcher.
+    ItemsSharedAdding,
     /// One `ColorPalette` of many swatches; one item is added every frame (#679).
     PaletteItemsAdding,
     /// One `TabBar` of many tabs; one item is added every frame (#679).
@@ -127,7 +130,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 35] = [
+    const ALL: [Self; 36] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -142,6 +145,7 @@ impl Workload {
         Self::SteppersIdle,
         Self::ListItemsInitial,
         Self::ListItemsAdding,
+        Self::ItemsSharedAdding,
         Self::PaletteItemsAdding,
         Self::TabItemsAdding,
         Self::SegmentItemsAdding,
@@ -180,6 +184,7 @@ impl Workload {
             Self::ListNotesIdle => "list-notes-idle",
             Self::ListItemsInitial => "list-items-initial",
             Self::ListItemsAdding => "list-items-adding",
+            Self::ItemsSharedAdding => "items-shared-adding",
             Self::PaletteItemsAdding => "palette-items-adding",
             Self::TabItemsAdding => "tab-items-adding",
             Self::SegmentItemsAdding => "segment-items-adding",
@@ -215,7 +220,8 @@ impl Workload {
             | Self::ListItemsAdding
             | Self::PaletteItemsAdding
             | Self::TabItemsAdding
-            | Self::SegmentItemsAdding => 5_000,
+            | Self::SegmentItemsAdding
+            | Self::ItemsSharedAdding => 5_000,
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
@@ -529,6 +535,13 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.spawn((Item::new(format!("Added {index}")), ItemOf(list)));
         }
     }
+    if workload == Workload::ItemsSharedAdding {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, (With<ItemValues>, Without<List>)>();
+        if let Some(source) = query.iter(world).next() {
+            world.spawn((Item::new(format!("Added {index}")), ItemOf(source)));
+        }
+    }
     if workload == Workload::PaletteItemsAdding {
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<ColorPalette>>();
@@ -800,6 +813,22 @@ fn spawn(world: &mut World, run: Run) {
             Workload::ListItemsInitial | Workload::ListItemsAdding => {
                 root.spawn((List, list_items(run.size)));
             }
+            Workload::ItemsSharedAdding => {
+                let source = root.spawn(list_items(run.size)).id();
+                // Hidden, so layout does not drown the cost of the item events.
+                root.spawn(Node {
+                    display: Display::None,
+                    ..default()
+                })
+                .with_children(|hidden| {
+                    for _ in 0..SHARED_LISTS {
+                        hidden.spawn((
+                            List,
+                            Selection::builder().one().build_with_items_ref(source),
+                        ));
+                    }
+                });
+            }
             Workload::ToastsIdle | Workload::ToastsBursting => {
                 for row in 0..run.size {
                     root.spawn((Node::default(), ToastParent))
@@ -864,6 +893,8 @@ fn spawn(world: &mut World, run: Run) {
         });
 }
 
+/// How many lists share the source of `items-shared-adding`.
+const SHARED_LISTS: usize = 8;
 /// A colour that differs by index, for the palette workload.
 #[expect(clippy::cast_precision_loss, reason = "a bench colour")]
 const fn palette_color(index: usize) -> Color {

@@ -1,5 +1,7 @@
 //! `TabBar`: a row of tabs, one per item of a [`Selection`], on `bevy_ui_widgets`' tab list.
 
+use std::sync::Arc;
+
 use bevy::a11y::AccessibilityNode;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::entity::EntityHashSet;
@@ -491,7 +493,7 @@ fn selection_change(
 
 struct ItemsChangedInput {
     bar_ref: Entity,
-    items: Vec<Entity>,
+    items: Arc<[Entity]>,
 }
 
 fn on_items_changed(
@@ -540,7 +542,7 @@ fn on_items_changed(
         order_tabs,
         ItemsChangedInput {
             bar_ref: *bar_ref,
-            items: items.clone(),
+            items: Arc::clone(items),
         },
     );
     commands.run_system_cached_with(sync_selected_tab, *bar_ref);
@@ -605,7 +607,7 @@ fn on_insert_selection(
     let Some((values_ref, all_items)) = selections.get_item_values(bar_ref) else {
         return;
     };
-    let on_changed: fn(&mut Commands, Entity, Vec<Entity>) = |commands, bar_ref, items| {
+    let on_changed: fn(&mut Commands, Entity, Arc<[Entity]>) = |commands, bar_ref, items| {
         commands.run_system_cached_with(on_items_changed, ItemsChangedInput { bar_ref, items });
     };
     if !watch_items(

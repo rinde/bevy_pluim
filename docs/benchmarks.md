@@ -49,6 +49,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
+| `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
 | `palette-items-adding` | 5 000 | one `ColorPalette`; one item is added every frame (#679) |
 | `tab-items-adding` | 5 000 | one `TabBar`; one item is added every frame (#679) |
 | `segment-items-adding` | 5 000 | one `SegmentedControl`; one item is added every frame (#679) |
@@ -367,3 +368,18 @@ swatch styling, not by the reconciliation, so the change there removes the
 clones and the quadratic `retain` but is not measurable in frame time. The
 temporary memory is two sets (and one map when ordering) of N entries, in
 place of the cloned `Vec`s, and does not show in the resident set.
+
+## Shared item snapshot (#681)
+
+`ItemsChanged::items` is an `Arc<[Entity]>`: `items_change` copies the source's
+items once and every observer (`watch_items`, `List`, `SegmentedControl`,
+`TabBar`, palettes) clones the `Arc`, instead of one copy for the event plus
+one per watcher. The snapshot is taken when the change is detected, so
+ordering and intermediate state are as before. `items-shared-adding` at 5 000
+items, mean `App::update` over 300 frames, optimised build, main against this
+change (two runs of main): 113.1 / 109.4 ms before, 115.0 ms after, memory
+added 1056 MiB both. The difference is within noise: with real `List`s the
+per-frame cost is the views each list reconciles (8 x 5 000), not the copy
+of 5 000 `Entity` ids (40 KB per copy). The change removes the copies
+(`1 + N` down to 1 per change, and the `Vec` per watcher) but this workload
+cannot show a gain; there is no allocation counter (see above).
