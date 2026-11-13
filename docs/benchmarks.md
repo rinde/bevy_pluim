@@ -62,6 +62,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `badges-changing` | 500 buttons | the same buttons; 20 get a new `Badge::count` every frame (#685) |
 | `panels-idle` | 500 panels | `Panel`s, no change: the floor for `sync_optional_sections` (#685) |
 | `panels-changing` | 500 panels | the same panels; 20 are inserted again with a new title every frame (#685) |
+| `setting-rows-idle` | 500 columns | `SettingRows` of five rows each, no change: the floor for `sync_dividers` (#689) |
+| `setting-rows-changing` | 500 columns | the same columns; in 20 of them the last row is despawned and a new one inserted at the front every frame (#689) |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
@@ -525,3 +527,24 @@ microseconds. Allocation counts are not measurable here (see above).
 
 Entity counts are unchanged. The cost now grows far more slowly with the item
 count, since one edit touches one view.
+
+## Setting row dividers (#689)
+
+`sync_dividers` (setting_row.rs) collected a `Vec` of the rows of every `SettingRows`
+column on each `Update`, 500 allocations a frame at 500 columns. It now looks only at columns
+whose `Children` changed (or that are new) and at the parents of rows whose `SettingRowRefs`
+arrived, and finds the last row with a reverse scan, so nothing is collected at all.
+
+Measured with `cargo run --release --example bench --workload ..`, 500 columns of five rows,
+mean / median frame time in microseconds, `main` against this change:
+
+| workload | before mean / median | after mean / median |
+| --- | --- | --- |
+| `setting-rows-idle` | 11379 / 10779 (second run 10894 / 10327) | 10690 / 10207 |
+| `setting-rows-changing` | 108384 / 104276 | 103022 / 100481 |
+
+Entities (18 324) and memory (135 to 149 MiB) are unchanged. Honest reading: the saving is
+inside run-to-run noise next to layout and accessibility work; the change removes the per-frame
+allocation and the walk, which grow with the number of columns. There is no allocation counter
+(it needs `unsafe`), so the allocation count is by construction: one `Vec` per non-empty column
+per frame before, none after.

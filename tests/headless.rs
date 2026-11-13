@@ -6197,6 +6197,147 @@ fn of_three_setting_rows_only_the_first_two_show_a_divider() {
     assert_eq!(display(&app, fourth), Display::None);
 }
 
+fn setting_row_divider_displays(app: &App, column: Entity) -> Vec<Display> {
+    app.world()
+        .get::<Children>(column)
+        .map(|children| {
+            children
+                .iter()
+                .filter_map(|child| app.world().get::<SettingRowRefs>(child).copied())
+                .map(|refs| app.world().get::<Node>(refs.divider_id).unwrap().display)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn spawn_setting_rows(app: &mut App, titles: &[&str]) -> (Entity, Vec<Entity>) {
+    let column = app.world_mut().spawn(SettingRows).id();
+    let rows = titles
+        .iter()
+        .map(|title| {
+            app.world_mut()
+                .spawn((SettingRow::new(*title, "description"), ChildOf(column)))
+                .id()
+        })
+        .collect();
+    app.update();
+    app.update();
+    (column, rows)
+}
+
+#[test]
+fn removing_the_last_setting_row_hides_the_divider_of_the_new_last_one() {
+    let mut app = headless_app();
+    let (column, rows) = spawn_setting_rows(&mut app, &["A", "B", "C"]);
+    app.world_mut().entity_mut(rows[2]).despawn();
+    app.update();
+    assert_eq!(
+        setting_row_divider_displays(&app, column),
+        [Display::Flex, Display::None]
+    );
+}
+
+#[test]
+fn reordering_setting_rows_moves_the_missing_divider_to_the_new_last_row() {
+    let mut app = headless_app();
+    let (column, rows) = spawn_setting_rows(&mut app, &["A", "B", "C"]);
+    app.world_mut()
+        .entity_mut(column)
+        .insert_children(0, &[rows[2]]);
+    app.update();
+    assert_eq!(
+        setting_row_divider_displays(&app, column),
+        [Display::Flex, Display::Flex, Display::None]
+    );
+    let last = *app.world().get::<Children>(column).unwrap().last().unwrap();
+    assert_eq!(last, rows[1]);
+    let refs = *app.world().get::<SettingRowRefs>(rows[1]).unwrap();
+    assert_eq!(
+        app.world().get::<Node>(refs.divider_id).unwrap().display,
+        Display::None
+    );
+}
+
+#[test]
+fn non_row_children_of_setting_rows_do_not_count_as_the_last_row() {
+    let mut app = headless_app();
+    let (column, rows) = spawn_setting_rows(&mut app, &["A", "B"]);
+    app.world_mut().spawn((Node::default(), ChildOf(column)));
+    app.update();
+    assert_eq!(
+        setting_row_divider_displays(&app, column),
+        [Display::Flex, Display::None]
+    );
+    let extra = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(column)))
+        .id();
+    app.update();
+    app.world_mut().entity_mut(extra).despawn();
+    app.world_mut().entity_mut(rows[1]).despawn();
+    app.update();
+    assert_eq!(setting_row_divider_displays(&app, column), [Display::None]);
+}
+
+#[test]
+fn empty_setting_rows_and_a_column_with_only_other_children_are_left_alone() {
+    let mut app = headless_app();
+    let empty = app.world_mut().spawn(SettingRows).id();
+    let other = app.world_mut().spawn(SettingRows).id();
+    app.world_mut().spawn((Node::default(), ChildOf(other)));
+    app.update();
+    app.update();
+    assert!(app.world().get::<Children>(empty).is_none());
+    assert!(setting_row_divider_displays(&app, other).is_empty());
+}
+
+#[test]
+fn a_column_gets_its_dividers_when_the_marker_is_added_to_an_existing_parent() {
+    let mut app = headless_app();
+    let parent = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .spawn((SettingRow::new("A", "d"), ChildOf(parent)));
+    app.world_mut()
+        .spawn((SettingRow::new("B", "d"), ChildOf(parent)));
+    app.update();
+    app.update();
+    app.world_mut().entity_mut(parent).insert(SettingRows);
+    app.update();
+    assert_eq!(
+        setting_row_divider_displays(&app, parent),
+        [Display::Flex, Display::None]
+    );
+}
+
+#[test]
+fn a_quiet_frame_leaves_setting_row_dividers_alone_and_a_change_touches_only_its_column() {
+    let mut app = headless_app();
+    let (first, first_rows) = spawn_setting_rows(&mut app, &["A", "B"]);
+    let (second, second_rows) = spawn_setting_rows(&mut app, &["C", "D"]);
+    let divider =
+        |app: &App, row: Entity| app.world().get::<SettingRowRefs>(row).unwrap().divider_id;
+    // Someone else's change to a divider is not undone by a quiet frame.
+    let first_divider = divider(&app, first_rows[0]);
+    app.world_mut()
+        .get_mut::<Node>(first_divider)
+        .unwrap()
+        .display = Display::None;
+    app.update();
+    assert_eq!(
+        app.world().get::<Node>(first_divider).unwrap().display,
+        Display::None
+    );
+    // A change in the second column does not look at the first.
+    app.world_mut().entity_mut(second_rows[1]).despawn();
+    app.update();
+    assert_eq!(
+        app.world().get::<Node>(first_divider).unwrap().display,
+        Display::None
+    );
+    assert_eq!(setting_row_divider_displays(&app, second), [Display::None]);
+    assert_eq!(setting_row_divider_displays(&app, first)[1], Display::None);
+}
+
 fn tools() -> [Tool; 4] {
     [
         Tool::in_group(Handle::default(), "Select", 0),
