@@ -37,7 +37,7 @@ bevy = { version = "0.20.1", default-features = true, features = ["bevy_ui_debug
 # Private test driver for scenario tests. Pinned to a revision so the build is
 # reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
 # `gallery` is for `examples/gallery.rs`: real windows and the renderer.
-bevy_stagecraft = { git = "https://github.com/rinde/bevy_stagecraft", rev = "06591fede6c323f392d8cc0d04d54c1bb1246e55", features = ["gallery"] }
+bevy_stagecraft = { git = "https://github.com/rinde/bevy_stagecraft", rev = "82cfebdde262a144e086f010b4ea6724c92c13b7", features = ["gallery"] }
 
 # Plays every `.ron` file and variant in tests/ron as an individual libtest
 # case. `build.rs` generates the cases so libtest can schedule them in parallel.

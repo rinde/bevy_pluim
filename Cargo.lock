@@ -1707,7 +1707,7 @@ dependencies = [
 [[package]]
 name = "bevy_stagecraft"
 version = "0.1.0"
-source = "git+https://github.com/rinde/bevy_stagecraft?rev=06591fede6c323f392d8cc0d04d54c1bb1246e55#06591fede6c323f392d8cc0d04d54c1bb1246e55"
+source = "git+https://github.com/rinde/bevy_stagecraft?rev=82cfebdde262a144e086f010b4ea6724c92c13b7#82cfebdde262a144e086f010b4ea6724c92c13b7"
 dependencies = [
  "bevy",
  "image",
