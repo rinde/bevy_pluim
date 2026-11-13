@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use bevy::a11y::AccessibilityNode;
-use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -16,7 +15,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 
-use crate::focus::{AccessibilitySync, HiddenChanges, is_hidden, sync_label};
+use crate::focus::{AccessibilitySync, HiddenDirty, collect_hidden_changes, is_hidden, sync_label};
 use crate::indicator::{self, Indicator};
 use crate::segmented_control::segment_colors;
 use crate::select::{Item, ItemsObserver, Selection, SelectionParam, items_in_order, watch_items};
@@ -66,7 +65,7 @@ impl Plugin for TabBarPlugin {
                 // After the tab list's own roving `TabIndex`, which it writes through commands
                 // before `FocusChangeEvents`, so the hidden bar's -1 is the last word.
                 sync_tab_index
-                    .after(VisibilitySystems::VisibilityPropagate)
+                    .after(collect_hidden_changes)
                     .after(InputFocusSystems::FocusChangeEvents),
             ),
         )
@@ -361,7 +360,7 @@ fn sync_accessibility(
 /// tab that had it and the one that has it), and a bar whose visibility, `Display::None` (on
 /// it or an ancestor) or parent changed. A quiet frame does no work.
 fn sync_tab_index(
-    mut hidden: HiddenChanges,
+    hidden: Res<HiddenDirty>,
     bars: Query<(&SelectedTab, &Children), With<TabBar>>,
     mut tabs: ParamSet<(
         Query<
@@ -383,7 +382,7 @@ fn sync_tab_index(
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    let mut dirty = hidden.dirty();
+    let mut dirty = EntityHashSet::default();
     dirty.extend(new_bars.iter());
     dirty.extend(changed_bars.iter());
     dirty.extend(tabs.p0().iter().map(TabBarTab::owner));
@@ -401,7 +400,7 @@ fn sync_tab_index(
         );
         *previous_focus = focus.get();
     }
-    for bar in dirty {
+    for bar in hidden.iter_with(&dirty) {
         let Ok((selected_tab, children)) = bars.get(bar) else {
             continue;
         };
