@@ -16164,6 +16164,101 @@ fn only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit() {
     assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
 }
 
+/// Counts the frames in which a `ScrollPosition` was marked changed.
+#[derive(Resource, Default)]
+struct ScrollChanges(usize);
+
+fn count_scroll_changes(
+    changed: Query<(), Changed<ScrollPosition>>,
+    mut count: ResMut<ScrollChanges>,
+) {
+    count.0 += changed.iter().count();
+}
+
+fn scroll_changes_in(app: &mut App, wheels: &[(f32, f32)]) -> usize {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    app.update();
+    app.world_mut()
+        .get_resource_mut::<ScrollChanges>()
+        .unwrap()
+        .0 = 0;
+    for &(x, y) in wheels {
+        wheel(app, Pixel, x, y);
+    }
+    app.update();
+    app.world().get_resource::<ScrollChanges>().unwrap().0
+}
+
+#[test]
+fn a_wheel_that_cannot_move_a_scroll_area_does_not_mark_its_position_changed() {
+    let mut app = wheel_app();
+    app.init_resource::<ScrollChanges>();
+    app.add_systems(Last, count_scroll_changes);
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    // Up and left at the top left corner: clamped to where it is.
+    assert_eq!(scroll_changes_in(&mut app, &[(30.0, 30.0)]), 0);
+    // No delta at all.
+    assert_eq!(scroll_changes_in(&mut app, &[(0.0, 0.0)]), 0);
+    // A real scroll still marks it, once, however many messages.
+    assert_eq!(
+        scroll_changes_in(&mut app, &[(0.0, -50.0), (0.0, -50.0)]),
+        1
+    );
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 100.0));
+    // At the far limit, further turns change nothing.
+    assert_eq!(scroll_changes_in(&mut app, &[(0.0, -1000.0)]), 1);
+    assert_eq!(scroll_changes_in(&mut app, &[(0.0, -1000.0)]), 0);
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 300.0));
+}
+
+#[test]
+fn a_wheel_at_the_limit_leaves_an_open_combo_in_the_scroll_area_open() {
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+            ChildOf(area),
+        ))
+        .id();
+    app.update();
+    app.update();
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    app.world_mut().entity_mut(combo).insert(ComboState::Open);
+    app.update();
+    app.update();
+    // Already at the top: scrolling up moves nothing, so the combo stays open.
+    wheel(
+        &mut app,
+        bevy::input::mouse::MouseScrollUnit::Pixel,
+        0.0,
+        40.0,
+    );
+    app.update();
+    assert_eq!(
+        app.world().get::<ComboState>(combo),
+        Some(&ComboState::Open)
+    );
+    // A scroll that moves closes it.
+    wheel(
+        &mut app,
+        bevy::input::mouse::MouseScrollUnit::Pixel,
+        0.0,
+        -40.0,
+    );
+    app.update();
+    app.update();
+    assert_eq!(
+        app.world().get::<ComboState>(combo),
+        Some(&ComboState::Closed)
+    );
+}
+
 #[test]
 fn a_fixed_node_stops_the_search_for_a_scroll_area_above_it() {
     use bevy::input::mouse::MouseScrollUnit::Pixel;
