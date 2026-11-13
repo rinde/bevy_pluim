@@ -2,6 +2,7 @@
 
 use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::ListBoxMultiSelect;
@@ -33,6 +34,7 @@ impl Plugin for ColorPalettePlugin {
                     .pipe(theme_items)
                     .run_if(resource_changed::<Theme>),
                 on_selection_change,
+                sync_item_colors,
                 sync_accessible_names,
             ),
         )
@@ -60,18 +62,66 @@ impl Plugin for ColorPalettePlugin {
 )]
 pub struct ColorPalette;
 
+/// Marks a palette that builds no swatches: it keeps its [`Selection`] and its watch of the
+/// items, but [`on_items_changed`] leaves it empty until [`wake`] builds them.
+///
+/// A [`ColorPaletteCombo`](crate::color_palette_combo::ColorPaletteCombo) keeps the palette of
+/// its closed popup dormant, since a hidden popup of 242 swatches still costs entities, layout
+/// and memory; it wakes the palette when the popup opens and puts it to sleep when it closes.
+#[derive(Component, Debug, Clone, Copy)]
+pub(crate) struct PaletteDormant;
+
+/// Builds the swatches of a dormant palette from all the items it draws from and lets
+/// [`on_items_changed`] keep them in step again.
+pub(crate) fn wake(palette: In<Entity>, selections: SelectionParam, mut commands: Commands) {
+    let Some((_, values)) = selections.get_items(palette.0) else {
+        commands.entity(palette.0).remove::<PaletteDormant>();
+        return;
+    };
+    let items = values.iter().copied().collect();
+    commands.entity(palette.0).remove::<PaletteDormant>();
+    commands.run_system_cached_with(
+        on_items_changed,
+        ItemsChangedInput {
+            list_ref: palette.0,
+            items,
+        },
+    );
+}
+
+/// Despawns the swatches of a palette and makes it dormant.
+pub(crate) fn sleep(
+    palette: In<Entity>,
+    children: Query<&Children>,
+    views: Query<(), With<ItemView>>,
+    mut commands: Commands,
+) {
+    commands.entity(palette.0).insert(PaletteDormant);
+    for child in children
+        .get(palette.0)
+        .into_iter()
+        .flat_map(RelationshipTarget::iter)
+        .filter(|child| views.contains(*child))
+    {
+        commands.entity(child).despawn();
+    }
+}
+
 fn on_items_changed(
     input: In<ItemsChangedInput>,
     items_query: Query<&Item<Color>>,
     mut commands: Commands,
-    lists: Query<Option<&Children>, With<ColorPalette>>,
+    lists: Query<(Option<&Children>, Has<PaletteDormant>), With<ColorPalette>>,
     item_views: Query<(Entity, &ItemView)>,
     selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
-    let Ok(children) = lists.get(*list_ref) else {
+    let Ok((children, dormant)) = lists.get(*list_ref) else {
         return;
     };
+    if dormant {
+        return;
+    }
     let selection = selections.get(*list_ref);
 
     let existing = children
@@ -82,23 +132,17 @@ fn on_items_changed(
         })
         .unwrap_or_default();
 
-    let mut items = items.clone();
-    for (
-        view_ref,
-        ItemView {
-            item_ref: item_id, ..
-        },
-    ) in existing
-    {
-        let len_before = items.len();
-        items.retain(|x| x != item_id);
-        if len_before == items.len() {
-            // a view was found without a corresponding item
+    // Linear reconciliation (see `List`): a view stays when its item is wanted and no
+    // earlier view shows it; any other is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::with_capacity(existing.len());
+    for (view_ref, ItemView { item_ref, .. }) in existing {
+        if !wanted.contains(item_ref) || !shown.insert(*item_ref) {
             commands.entity(view_ref).despawn();
         }
     }
 
-    for item_id in items {
+    for &item_id in items.iter().filter(|item_id| !shown.contains(*item_id)) {
         let Ok(item) = items_query.get(item_id) else {
             continue;
         };
@@ -147,6 +191,46 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
+/// Puts the edited colour of an [`Item<Color>`] on its swatches and redraws their highlight.
+///
+/// Only the swatches of the items that changed are touched; a quiet frame looks at nothing.
+fn sync_item_colors(
+    changed: Query<Entity, Changed<Item<Color>>>,
+    items: Query<&Item<Color>>,
+    palettes: Query<(), With<ColorPalette>>,
+    selections: SelectionParam,
+    views: Query<(Entity, &ItemView, &Children, &Hovered)>,
+    mut squares: Query<&mut BackgroundColor, Without<ItemView>>,
+    mut commands: Commands,
+) {
+    let changed: HashSet<Entity> = changed.iter().collect();
+    if changed.is_empty() {
+        return;
+    }
+    for (view_id, view, children, hovered) in &views {
+        if !changed.contains(&view.item_ref) || !palettes.contains(view.list_ref) {
+            continue;
+        }
+        let Ok(Item { data }) = items.get(view.item_ref) else {
+            continue;
+        };
+        if let Some(mut square) = children
+            .first()
+            .and_then(|child| squares.get_mut(*child).ok())
+            && square.0 != *data
+        {
+            square.0 = *data;
+        }
+        let selected = selections
+            .get(view.list_ref)
+            .is_some_and(|selection| selection.is_selected(view.item_ref));
+        commands.run_system_cached_with(
+            set_highlight,
+            (view_id, *data, HoverState::of(selected, hovered.get())),
+        );
+    }
+}
+
 /// Keeps the label of each swatch's [`AccessibilityNode`] at the name of its colour.
 fn sync_accessible_names(
     swatches: Query<(Entity, &ItemView)>,
@@ -180,7 +264,7 @@ fn on_insert_palette(t: On<Insert<ColorPalette>>, mut commands: Commands) {
 
 /// Starts watching the items of the palette. Run as a deferred system by both observers, so the
 /// second of two in one frame sees the `ItemsWatch` the first inserted.
-fn watch_palette(
+pub(crate) fn watch_palette(
     palette: In<Entity>,
     color_palettes: Query<Option<&ItemsWatch>, (With<ColorPalette>, With<Selection>)>,
     selections: SelectionParam,

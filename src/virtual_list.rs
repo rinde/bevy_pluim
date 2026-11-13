@@ -12,9 +12,9 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Selected, UiSystems};
 use bevy::ui_widgets::{ActiveDescendant, Button, ListItem};
-use bevy::window::PrimaryWindow;
 use itertools::Either;
 
+use crate::float::UiViewport;
 use crate::focus::{AccessibilitySync, DrawFocusRing, FOCUS_RING_REACH, TabStop};
 use crate::list::{
     CornerStyle, ItemLabel, ItemViewCreator, ItemViewSpawner, SEPARATED_ITEM_PADDING,
@@ -135,7 +135,7 @@ impl std::error::Error for RowHeightError {}
 /// that size, whatever the number of items.
 ///
 /// Put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) that scrolls vertically: the
-/// view is the nearest ancestor whose [`Node::overflow`] scrolls along y, or the window when
+/// view is the nearest ancestor whose [`Node::overflow`] scrolls along y, or the UI target (the window, image or camera viewport it is drawn to) when
 /// there is none. It is as wide as its parent.
 ///
 /// A row shows the text of an `Item<String>`. With an [`ItemViewCreator`] (added with the
@@ -400,7 +400,7 @@ struct Views<'w, 's> {
         ),
         (Without<VirtualList>, Without<VirtualListRow>),
     >,
-    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    viewport: UiViewport<'w, 's>,
 }
 
 impl Views<'_, '_> {
@@ -421,7 +421,7 @@ impl Views<'_, '_> {
         let Some((area, (_, area_computed, area_transform, scroll))) =
             area.and_then(|area| Some((area, self.areas.get(area).ok()?)))
         else {
-            let height = self.windows.iter().next().map_or(0.0, Window::height);
+            let height = self.viewport.size_of(list).map_or(0.0, |size| size.y);
             return Some(View {
                 area: None,
                 offset: list_top,
@@ -513,7 +513,7 @@ fn show_rows(
     mut lists: Query<(
         Entity,
         &VirtualList,
-        &VirtualListState,
+        &mut VirtualListState,
         &ActiveDescendant,
         &mut Node,
         Option<&ItemViewCreator>,
@@ -537,10 +537,14 @@ fn show_rows(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (list, virtual_list, state, active, mut list_node, creator) in &mut lists {
-        let Some((_, items)) = selections.get_item_values(list) else {
+    for (list, virtual_list, mut state, active, mut list_node, creator) in &mut lists {
+        // A source without `ItemValues` has no items: the rows empty out and the height drops.
+        let Some((_, items)) = selections.get_items(list) else {
             continue;
         };
+        if items.is_empty() && state.active.is_some() {
+            state.active = None;
+        }
         let Some(view) = views.of(list) else {
             continue;
         };
@@ -627,8 +631,10 @@ fn show_rows(
     }
 }
 
-/// Picks the item of a clicked row, as far as the selection allows, and makes it the active
-/// row. A click inside a [`Button`] in a row is the button's.
+/// Picks the item of a row clicked with the primary button (a touch counts), as far as the
+/// selection allows, and makes it the active row, like a [`List`](crate::list::List). A click
+/// inside a [`Button`] in a row is the button's; other pointer buttons are left alone and the
+/// event goes on to bubble, so an app can open a context menu.
 fn pick_on_click(
     t: On<MouseEvent>,
     parents: Query<&ChildOf>,
@@ -637,7 +643,7 @@ fn pick_on_click(
     mut states: Query<&mut VirtualListState>,
     mut selections: SelectionParam,
 ) {
-    if !matches!(t.event().kind, MouseKind::Click(_)) {
+    if !matches!(t.event().kind, MouseKind::Click(PointerButton::Primary)) {
         return;
     }
     let mut current = t.event().event_target();

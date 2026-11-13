@@ -10,6 +10,7 @@
         Wait(2),
         MoveTo(Within(Name("scrolled palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(1),
         Check(Component(target: Name("scrolled palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         Wait(1),
         Check(Visible(Name("scrolled palette combo popup"))),

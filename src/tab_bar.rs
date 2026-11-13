@@ -1,7 +1,8 @@
 //! `TabBar`: a row of tabs, one per item of a [`Selection`], on `bevy_ui_widgets`' tab list.
 
+use std::sync::Arc;
+
 use bevy::a11y::AccessibilityNode;
-use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -9,14 +10,15 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusedInput, InputFocus, InputFocusSystems};
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 
-use crate::focus::{AccessibilitySync, is_hidden, sync_label};
+use crate::focus::{AccessibilitySync, HiddenDirty, collect_hidden_changes, is_hidden, sync_label};
 use crate::indicator::{self, Indicator};
 use crate::segmented_control::segment_colors;
-use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
+use crate::select::{Item, ItemsObserver, Selection, SelectionParam, items_in_order, watch_items};
 use crate::theme::Theme;
 
 /// The height of a tab, in logical pixels.
@@ -63,7 +65,7 @@ impl Plugin for TabBarPlugin {
                 // After the tab list's own roving `TabIndex`, which it writes through commands
                 // before `FocusChangeEvents`, so the hidden bar's -1 is the last word.
                 sync_tab_index
-                    .after(VisibilitySystems::VisibilityPropagate)
+                    .after(collect_hidden_changes)
                     .after(InputFocusSystems::FocusChangeEvents),
             ),
         )
@@ -352,16 +354,57 @@ fn sync_accessibility(
 /// skips a hidden bar and reaches it again once it shows.
 ///
 /// The tab list writes its roving index only when the selection, the tabs or the focus change,
-/// so it would neither hide a bar nor bring one back; this writes it every frame, and only
-/// when it differs.
+/// so it would neither hide a bar nor bring one back. This looks only at the bars that may
+/// need a different answer: a new bar or tab, a changed `SelectedTab` or `Children`, a tab
+/// whose `InteractionDisabled` or `TabIndex` changed, a move of the focus (the bars of the
+/// tab that had it and the one that has it), and a bar whose visibility, `Display::None` (on
+/// it or an ancestor) or parent changed. A quiet frame does no work.
 fn sync_tab_index(
-    bars: Query<(Entity, &SelectedTab, &Children), With<TabBar>>,
-    mut tabs: Query<(&mut TabIndex, Has<InteractionDisabled>), With<TabBarTab>>,
+    hidden: Res<HiddenDirty>,
+    bars: Query<(&SelectedTab, &Children), With<TabBar>>,
+    mut tabs: ParamSet<(
+        Query<
+            &TabBarTab,
+            Or<(
+                Added<TabBarTab>,
+                Changed<TabIndex>,
+                Added<InteractionDisabled>,
+            )>,
+        >,
+        Query<(&mut TabIndex, Has<InteractionDisabled>), With<TabBarTab>>,
+    )>,
     focus: Res<InputFocus>,
+    mut previous_focus: Local<Option<Entity>>,
+    new_bars: Query<Entity, Added<TabBar>>,
+    changed_bars: Query<Entity, (With<TabBar>, Or<(Changed<SelectedTab>, Changed<Children>)>)>,
+    tab_owners: Query<&TabBarTab>,
+    mut disabled_removed: RemovedComponents<InteractionDisabled>,
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    for (bar, selected_tab, children) in &bars {
+    let mut dirty = EntityHashSet::default();
+    dirty.extend(new_bars.iter());
+    dirty.extend(changed_bars.iter());
+    dirty.extend(tabs.p0().iter().map(TabBarTab::owner));
+    dirty.extend(
+        disabled_removed
+            .read()
+            .filter_map(|tab| tab_owners.get(tab).ok().map(TabBarTab::owner)),
+    );
+    if focus.is_changed() || *previous_focus != focus.get() {
+        dirty.extend(
+            [*previous_focus, focus.get()]
+                .into_iter()
+                .flatten()
+                .filter_map(|tab| tab_owners.get(tab).ok().map(TabBarTab::owner)),
+        );
+        *previous_focus = focus.get();
+    }
+    for bar in hidden.iter_with(&dirty) {
+        let Ok((selected_tab, children)) = bars.get(bar) else {
+            continue;
+        };
+        let mut tabs = tabs.p1();
         let enabled = |tab: &Entity| tabs.get(*tab).is_ok_and(|(_, disabled)| !disabled);
         let roving = if is_hidden(bar, &shown, &parents) {
             None
@@ -449,7 +492,7 @@ fn selection_change(
 
 struct ItemsChangedInput {
     bar_ref: Entity,
-    items: Vec<Entity>,
+    items: Arc<[Entity]>,
 }
 
 fn on_items_changed(
@@ -464,21 +507,21 @@ fn on_items_changed(
         return;
     };
 
-    let mut missing = items.clone();
+    // Linear reconciliation (see `List`): a tab stays when its item is wanted and no
+    // earlier tab shows it; any other is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::new();
     for (tab_id, tab) in children
         .into_iter()
         .flat_map(RelationshipTarget::iter)
         .filter_map(|c| tabs.get(c).ok())
     {
-        let before = missing.len();
-        missing.retain(|item| *item != tab.item());
-        if before == missing.len() {
-            // a tab without a corresponding item
+        if !wanted.contains(&tab.item()) || !shown.insert(tab.item()) {
             commands.entity(tab_id).despawn();
         }
     }
 
-    for item_ref in missing {
+    for &item_ref in items.iter().filter(|item_ref| !shown.contains(*item_ref)) {
         let Ok(item) = items_query.get(item_ref) else {
             continue;
         };
@@ -498,7 +541,7 @@ fn on_items_changed(
         order_tabs,
         ItemsChangedInput {
             bar_ref: *bar_ref,
-            items: items.clone(),
+            items: Arc::clone(items),
         },
     );
     commands.run_system_cached_with(sync_selected_tab, *bar_ref);
@@ -517,16 +560,9 @@ fn order_tabs(
     let Ok(children) = bars.get(*bar_ref) else {
         return;
     };
-    let mut wanted: Vec<Entity> = items
-        .iter()
-        .filter_map(|item| {
-            children
-                .iter()
-                .find(|c| tabs.get(*c).is_ok_and(|t| t.item() == *item))
-        })
-        .collect();
-    let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();
-    wanted.extend(rest);
+    let wanted = items_in_order(children.iter(), items, |child| {
+        tabs.get(child).ok().map(TabBarTab::item)
+    });
     if !wanted.iter().copied().eq(children.iter()) {
         commands.entity(*bar_ref).replace_children(&wanted);
     }
@@ -567,10 +603,10 @@ fn on_insert_selection(
     if bars.get(bar_ref).is_err() {
         return;
     }
-    let Some((values_ref, all_items)) = selections.get_item_values(bar_ref) else {
+    let Some((values_ref, all_items)) = selections.get_items(bar_ref) else {
         return;
     };
-    let on_changed: fn(&mut Commands, Entity, Vec<Entity>) = |commands, bar_ref, items| {
+    let on_changed: fn(&mut Commands, Entity, Arc<[Entity]>) = |commands, bar_ref, items| {
         commands.run_system_cached_with(on_items_changed, ItemsChangedInput { bar_ref, items });
     };
     if !watch_items(
@@ -588,7 +624,7 @@ fn on_insert_selection(
         on_items_changed,
         ItemsChangedInput {
             bar_ref,
-            items: all_items.iter().collect(),
+            items: all_items.iter().copied().collect(),
         },
     );
 }

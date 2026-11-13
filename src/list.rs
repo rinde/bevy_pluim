@@ -1,5 +1,7 @@
 //! `List`: renders the items of a [`Selection`] as views and keeps them in sync.
 
+use std::sync::Arc;
+
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
@@ -10,6 +12,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::events::PointerClick;
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{
@@ -55,6 +58,7 @@ impl Plugin for ListPlugin {
                     selection_change,
                     custom_view_hover,
                     sync_item_notes.run_if(item_notes_changed),
+                    sync_item_label_text,
                     note_ink_follows_row.after(selection_change),
                 ),
             )
@@ -461,6 +465,29 @@ fn sync_item_notes(
             }
             (None, Some(child)) => commands.entity(child).despawn(),
             (None, None) => {}
+        }
+    }
+}
+
+/// Shows the new text of a renamed `Item<String>` in the label of each default row of it,
+/// leaving every other row and custom views alone.
+fn sync_item_label_text(
+    renamed: Query<(&Item<String>, &NoteViews), Changed<Item<String>>>,
+    views: Query<&Children, (With<ItemView>, Without<CustomView>)>,
+    mut labels: Query<&mut Text, With<ItemLabel>>,
+) {
+    for (item, of_item) in &renamed {
+        for view in &of_item.0 {
+            let Ok(children) = views.get(*view) else {
+                continue;
+            };
+            for child in children {
+                if let Ok(mut text) = labels.get_mut(*child)
+                    && text.0 != item.data
+                {
+                    text.0.clone_from(&item.data);
+                }
+            }
         }
     }
 }
@@ -908,7 +935,7 @@ fn selection_change(
 
 pub(crate) struct ItemsChangedInput {
     pub(crate) list_ref: Entity,
-    pub(crate) items: Vec<Entity>,
+    pub(crate) items: Arc<[Entity]>,
 }
 
 fn on_items_changed(
@@ -937,17 +964,19 @@ fn on_items_changed(
         .unwrap_or_default();
 
     let mut commands_run = Vec::new();
-    let mut items = items.clone();
+    // Linear reconciliation: one set of the wanted items, one of the items
+    // that already have a view. A view is kept when its item is wanted and no
+    // earlier view shows it; any other view is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::with_capacity(existing.len());
     for (view_ref, ItemView { item_ref, .. }) in existing {
-        let len_before = items.len();
-        items.retain(|x| x != item_ref);
-        if len_before == items.len() {
-            // a view was found without a corresponding item
+        if !wanted.contains(item_ref) || !shown.insert(*item_ref) {
+            // a view without a corresponding item, or a second view of one
             commands.entity(view_ref).despawn();
         }
     }
 
-    for item_ref in items {
+    for &item_ref in items.iter().filter(|item_ref| !shown.contains(*item_ref)) {
         let item = items_query.get(item_ref).ok();
         if item.is_none() && creator.is_none() {
             continue;
@@ -1051,7 +1080,7 @@ pub(crate) fn watch_items<M: 'static>(
     mut commands: Commands,
     on_items_changed: impl IntoSystem<In<ItemsChangedInput>, (), M> + Copy + Send + Sync + 'static,
 ) {
-    let Some((values_ref, all_items)) = selections.get_item_values(list_ref) else {
+    let Some((values_ref, all_items)) = selections.get_items(list_ref) else {
         return;
     };
     if watch.is_some_and(|watch| watch.values == values_ref) {
@@ -1070,7 +1099,7 @@ pub(crate) fn watch_items<M: 'static>(
                     on_items_changed,
                     ItemsChangedInput {
                         list_ref,
-                        items: t.event().items.iter().collect(),
+                        items: Arc::clone(&t.event().items),
                     },
                 );
             })
@@ -1087,7 +1116,7 @@ pub(crate) fn watch_items<M: 'static>(
         on_items_changed,
         ItemsChangedInput {
             list_ref,
-            items: all_items.iter().collect(),
+            items: all_items.iter().copied().collect(),
         },
     );
 }

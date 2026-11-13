@@ -1,0 +1,29 @@
+// Renaming an item in place shows the new text at once everywhere the item is shown: in the filter
+// combo's button, in the rows of its popup and of the `ordinary combo`, and in the `city list`
+// that shares the items, and the new text is what the open popup filters by.
+(
+    format_version: 3,
+    name: "renaming an item in place updates the filter combo's button, rows and matches",
+    setup: App(FilterCombos),
+    steps: [
+        MoveTo(Within(Name("filter combo"), Component("ComboButton"))),
+        Click(Left),
+        Wait(3),
+        MoveTo(Within(Name("filter combo"), Role(role: ListItem, label: "Delft"))),
+        Click(Left),
+        Wait(2),
+        Check(App(Selected(of: Name("filter combo"), items: ["Delft"]))),
+        Check(TextOf(Within(Name("filter combo"), Component("ComboButton")), Exact("Delft"))),
+        MoveTo(Role(role: Button, label: "Rename Delft")),
+        Click(Left),
+        Wait(3),
+        Check(App(Selected(of: Name("filter combo"), items: ["Delfts blauw"]))),
+        Check(TextOf(Within(Name("filter combo"), Component("ComboButton")), Exact("Delfts blauw"))),
+        Check(Exists(Within(Name("city list"), Text("Delfts blauw")))),
+        Check(Not(Exists(Within(Name("city list"), Text("Delft"))))),
+        Check(Exists(Nth(0, Within(Name("filter combo"), Text("Delfts blauw"))))),
+        Check(Exists(Nth(1, Within(Name("filter combo"), Text("Delfts blauw"))))),
+        Check(Not(Exists(Within(Name("filter combo"), Text("Delft"))))),
+    ],
+    expect: [],
+)

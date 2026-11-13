@@ -14,7 +14,7 @@ use crate::focus::{
 };
 use crate::icon::Icon;
 use crate::label::Label;
-use crate::select::{Item, SelectionParam, StructureChanges};
+use crate::select::{Item, SelectionParam, StructureChanges, plan_views};
 use crate::theme::{Theme, ThemeColors};
 
 /// The width of a card, in logical pixels.
@@ -197,12 +197,14 @@ fn label_font(theme: &Theme) -> TextFont {
     }
 }
 
-/// Spawns the groups, dividers and cards of every [`Gallery`] again when its items or their
-/// groups no longer match what was built.
+/// Builds the groups and dividers of every [`Gallery`] again when its items or their groups no
+/// longer match what was built, moving the cards of items that stay into them.
 fn sync_cards(
     mut changes: StructureChanges<Gallery, GalleryCard>,
     galleries: Query<(Option<&Children>, Option<&BuiltGroups>), With<Gallery>>,
     owned: Query<(), With<GalleryOwned>>,
+    nodes: Query<&Children>,
+    cards: Query<&GalleryCardView>,
     items: Query<&Item<GalleryCard>>,
     selections: SelectionParam,
     theme: Res<Theme>,
@@ -212,11 +214,11 @@ fn sync_cards(
         let Ok((children, built)) = galleries.get(gallery) else {
             continue;
         };
-        let Some((_, values)) = selections.get_item_values(gallery) else {
+        let Some((_, values)) = selections.get_items(gallery) else {
             continue;
         };
         let mut wanted: Vec<(String, Vec<Entity>)> = Vec::new();
-        for item in values.iter() {
+        for item in values.iter().copied() {
             let Ok(card) = items.get(item) else {
                 continue;
             };
@@ -229,12 +231,26 @@ fn sync_cards(
         if built == Some(&wanted) {
             continue;
         }
-        for child in children.into_iter().flat_map(RelationshipTarget::iter) {
-            if owned.contains(child) {
-                commands.entity(child).despawn();
-            }
-        }
-        for (index, (title, cards)) in wanted.0.iter().enumerate() {
+        // The groups, headings and dividers are cheap and are made again, but a card of an item
+        // that stays is moved into its new row as the same entity, so its focus, hover and
+        // children survive a change elsewhere in the gallery.
+        let old = children
+            .into_iter()
+            .flat_map(RelationshipTarget::iter)
+            .filter(|child| owned.contains(*child))
+            .collect::<Vec<_>>();
+        let plan = plan_views(
+            old.iter()
+                .flat_map(|group| nodes.iter_descendants(*group))
+                .filter_map(|card| Some((card, Some(cards.get(card).ok()?.item())))),
+            &wanted
+                .0
+                .iter()
+                .flat_map(|(_, items)| items.iter().copied())
+                .collect::<Vec<_>>(),
+        );
+        let mut kept = plan.slots.into_iter();
+        for (index, (title, group_cards)) in wanted.0.iter().enumerate() {
             if index > 0 {
                 commands.spawn((Divider::vertical(), GalleryOwned, ChildOf(gallery)));
             }
@@ -262,9 +278,18 @@ fn sync_cards(
                     ChildOf(group),
                 ))
                 .id();
-            for item in cards {
-                spawn_card(&mut commands, &theme, gallery, row, *item);
+            for item in group_cards {
+                match kept.next().flatten() {
+                    Some(card) => {
+                        commands.entity(card).insert(ChildOf(row));
+                    }
+                    None => spawn_card(&mut commands, &theme, gallery, row, *item),
+                }
             }
+        }
+        // After the kept cards left, which takes the stale ones along with their old groups.
+        for child in old {
+            commands.entity(child).despawn();
         }
         commands.entity(gallery).insert(wanted);
     }

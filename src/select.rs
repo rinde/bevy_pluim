@@ -6,6 +6,8 @@
 //! through [`ItemsRef`]. Widgets read and change selections through
 //! [`SelectionParam`].
 
+use std::sync::Arc;
+
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::query::{QueryData, QueryFilter, QuerySingleError, ROQueryItem};
@@ -350,7 +352,7 @@ fn repair_pending_selections(
     mut commands: Commands,
 ) {
     let event = changed.event();
-    let Some(first_item) = event.items.iter().next() else {
+    let Some(first_item) = event.items.first().copied() else {
         return;
     };
     r.pending.retain(|pending| {
@@ -823,6 +825,19 @@ where
         self.item_values.get(items_ref).ok()
     }
 
+    /// The items that the selection on `selection_ref` chooses from, with the entity they are
+    /// on. A source without [`ItemValues`] (no item added yet, or the last one removed) has
+    /// no items, so the slice is empty then where [`Self::get_item_values`] is `None`; `None`
+    /// only when the selection does not resolve.
+    pub(crate) fn get_items(&self, selection_ref: Entity) -> Option<(Entity, &[Entity])> {
+        let (_, items_entity) = self.sources_of(selection_ref)?;
+        let items = self
+            .item_values
+            .get(items_entity)
+            .map_or(&[][..], |(_, values)| values.as_slice());
+        Some((items_entity, items))
+    }
+
     /// The entity holding the value of the selection on `widget` and the entity its items are
     /// on, whether or not that one has any [`ItemValues`] yet.
     pub(crate) fn sources_of(&self, widget: Entity) -> Option<(Entity, Entity)> {
@@ -1002,8 +1017,9 @@ impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
 pub struct ItemsChanged {
     /// The [`ItemValues`] entity whose items changed.
     pub entity: Entity,
-    /// The new items.
-    pub items: ItemValues,
+    /// The new items, one snapshot shared by every observer of the event: cloning the
+    /// `Arc` copies no entities.
+    pub items: Arc<[Entity]>,
 }
 
 /// Records the observer a widget put on its [`ItemValues`] entity to hear [`ItemsChanged`], on
@@ -1025,6 +1041,109 @@ fn despawn_items_observer(mut world: DeferredWorld, context: HookContext) {
     world.commands().entity(observer).try_despawn();
 }
 
+/// The `children` that show `items`, in the order of `items` (the first child of an item), then
+/// every other child in its place order. `item_of` says which item a child shows, `None` for a
+/// child that is not a view. Linear: one map of the first child per item, one set of the
+/// children placed.
+pub(crate) fn items_in_order(
+    children: impl IntoIterator<Item = Entity> + Clone,
+    items: &[Entity],
+    item_of: impl Fn(Entity) -> Option<Entity>,
+) -> Vec<Entity> {
+    let mut first_of = bevy::platform::collections::HashMap::new();
+    for child in children.clone() {
+        if let Some(item) = item_of(child) {
+            first_of.entry(item).or_insert(child);
+        }
+    }
+    let mut placed = bevy::platform::collections::HashSet::new();
+    let mut wanted: Vec<Entity> = items
+        .iter()
+        .filter_map(|item| first_of.get(item).copied())
+        .filter(|child| placed.insert(*child))
+        .collect();
+    wanted.extend(children.into_iter().filter(|c| !placed.contains(c)));
+    wanted
+}
+
+/// What to do with the views a widget owns when its wanted views change: `slots` has one entry
+/// per wanted view, the existing view to keep for it or `None` for one to spawn, and `stale` the
+/// existing views to despawn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ViewPlan {
+    pub(crate) slots: Vec<Option<Entity>>,
+    pub(crate) stale: Vec<Entity>,
+}
+
+/// Matches the `existing` views, in child order, with the `wanted` keys: a wanted key takes the
+/// first unused existing view of that key, so views of unchanged items keep their entity.
+/// An existing view with a `None` key is never kept (it is of the wrong kind), and so is a second
+/// view of one key when only one is wanted. Linear: one map of the views per key.
+pub(crate) fn plan_views<K: Eq + std::hash::Hash>(
+    existing: impl IntoIterator<Item = (Entity, Option<K>)>,
+    wanted: &[K],
+) -> ViewPlan {
+    let mut pool: bevy::platform::collections::HashMap<K, std::collections::VecDeque<Entity>> =
+        bevy::platform::collections::HashMap::new();
+    let mut stale = Vec::new();
+    for (view, key) in existing {
+        match key {
+            Some(key) => pool.entry(key).or_default().push_back(view),
+            None => stale.push(view),
+        }
+    }
+    let slots = wanted
+        .iter()
+        .map(|key| {
+            pool.get_mut(key)
+                .and_then(std::collections::VecDeque::pop_front)
+        })
+        .collect();
+    stale.extend(pool.into_values().flatten());
+    ViewPlan { slots, stale }
+}
+
+/// The children a widget must be given so that its `views` (the kept ones and the entities just
+/// spawned, in the order wanted) are in that order as one run, at the place of its first current
+/// view and after the children that are not views, which keep their order. `None` when
+/// despawning the `stale` views and appending the new ones, which is what the commands do alone,
+/// already gives that order.
+pub(crate) fn order_views(
+    children: &[Entity],
+    is_view: impl Fn(Entity) -> bool,
+    views: &[Entity],
+    stale: &[Entity],
+) -> Option<Vec<Entity>> {
+    let current: bevy::platform::collections::HashSet<Entity> = children.iter().copied().collect();
+    let mut ordered = Vec::with_capacity(children.len() + views.len());
+    let mut placed = false;
+    for child in children {
+        if is_view(*child) {
+            if !placed {
+                ordered.extend_from_slice(views);
+                placed = true;
+            }
+        } else {
+            ordered.push(*child);
+        }
+    }
+    if !placed {
+        ordered.extend_from_slice(views);
+    }
+    let stale: bevy::platform::collections::HashSet<Entity> = stale.iter().copied().collect();
+    let without_stale = children
+        .iter()
+        .filter(|child| !stale.contains(*child))
+        .copied()
+        .chain(
+            views
+                .iter()
+                .filter(|view| !current.contains(*view))
+                .copied(),
+        );
+    (!ordered.iter().copied().eq(without_stale)).then_some(ordered)
+}
+
 /// Has `on_changed(commands, widget, items)` called when the items of `values` change, once
 /// per widget and values entity: returns `false`, doing nothing, when `widget` already
 /// watches `values`. Watching other values replaces the earlier observer.
@@ -1034,7 +1153,7 @@ pub(crate) fn watch_items(
     observers: &Query<(), With<Observer>>,
     widget: Entity,
     values: Entity,
-    on_changed: fn(&mut Commands, Entity, Vec<Entity>),
+    on_changed: fn(&mut Commands, Entity, Arc<[Entity]>),
 ) -> bool {
     if let Ok(old) = watches.get(widget) {
         if old.values == values && observers.contains(old.observer) {
@@ -1045,7 +1164,7 @@ pub(crate) fn watch_items(
     let observer = commands
         .spawn(
             Observer::new(move |t: On<ItemsChanged>, mut commands: Commands| {
-                on_changed(&mut commands, widget, t.event().items.iter().collect());
+                on_changed(&mut commands, widget, Arc::clone(&t.event().items));
             })
             .with_entity(values),
         )
@@ -1056,12 +1175,29 @@ pub(crate) fn watch_items(
     true
 }
 
-fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut commands: Commands) {
+/// Triggers [`ItemsChanged`] for every changed [`ItemValues`], and, with no items, for a live
+/// entity that has just lost its last item and so its `ItemValues`, so the widgets drawn from it
+/// clear their views.
+fn items_change(
+    q: Query<(Entity, &ItemValues), Changed<ItemValues>>,
+    mut removed: RemovedComponents<ItemValues>,
+    values: Query<(), With<ItemValues>>,
+    live: Query<Entity>,
+    mut commands: Commands,
+) {
     for (items_ref, items) in q {
         commands.trigger(ItemsChanged {
             entity: items_ref,
-            items: items.clone(),
+            items: items.iter().collect(),
         });
+    }
+    for entity in removed.read() {
+        if !values.contains(entity) && live.contains(entity) {
+            commands.trigger(ItemsChanged {
+                entity,
+                items: Arc::from([]),
+            });
+        }
     }
 }
 
@@ -1137,6 +1273,53 @@ mod tests {
 
     #[derive(Component)]
     struct Widget;
+
+    fn e(n: u32) -> Entity {
+        Entity::from_raw_u32(n).unwrap_or(Entity::PLACEHOLDER)
+    }
+
+    #[test]
+    fn a_view_plan_keeps_the_view_of_each_wanted_key_and_drops_the_rest() {
+        let plan = plan_views(
+            [(e(1), Some('a')), (e(2), Some('b')), (e(3), Some('a'))],
+            &['b', 'c', 'a'],
+        );
+        assert_eq!(plan.slots, vec![Some(e(2)), None, Some(e(1))]);
+        assert_eq!(plan.stale, vec![e(3)]);
+    }
+
+    #[test]
+    fn a_view_plan_never_keeps_a_view_without_a_key_and_reuses_equal_keys_in_order() {
+        let plan = plan_views([(e(1), None), (e(2), Some(0)), (e(3), Some(0))], &[0, 0, 0]);
+        assert_eq!(plan.slots, vec![Some(e(2)), Some(e(3)), None]);
+        assert_eq!(plan.stale, vec![e(1)]);
+    }
+
+    #[test]
+    fn views_are_ordered_as_one_run_at_the_first_view_around_the_apps_children() {
+        // children: app(1), view(2), app(3), view(4); wanted views 4, 5 (new), 2.
+        let views = [e(4), e(5), e(2)];
+        let is_view = |c: Entity| c == e(2) || c == e(4);
+        let ordered = order_views(&[e(1), e(2), e(3), e(4)], is_view, &views, &[]);
+        assert_eq!(ordered, Some(vec![e(1), e(4), e(5), e(2), e(3)]));
+    }
+
+    #[test]
+    fn no_reorder_is_asked_for_when_commands_alone_give_the_order() {
+        let is_view = |c: Entity| c != e(1);
+        // Stale view 3 despawned, new view 5 appended: 1, 2, 4, 5.
+        assert_eq!(
+            order_views(
+                &[e(1), e(2), e(3), e(4)],
+                is_view,
+                &[e(2), e(4), e(5)],
+                &[e(3)]
+            ),
+            None
+        );
+        // No views yet.
+        assert_eq!(order_views(&[e(1)], is_view, &[e(5)], &[]), None);
+    }
 
     #[derive(Resource, Default)]
     struct Affected(Vec<Entity>);
@@ -2205,6 +2388,82 @@ mod tests {
 
         app.update();
         assert_eq!(seen(&app).len(), 2);
+    }
+
+    #[test]
+    fn every_observer_of_one_change_shares_one_snapshot_of_the_items() {
+        #[derive(Resource, Default)]
+        struct Snapshots(Vec<Arc<[Entity]>>);
+
+        let mut app = items_app();
+        app.init_resource::<Snapshots>();
+        for _ in 0..3 {
+            app.add_observer(|changed: On<ItemsChanged>, mut seen: ResMut<Snapshots>| {
+                seen.0.push(Arc::clone(&changed.items));
+            });
+        }
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        if let Some(mut seen) = app.world_mut().get_resource_mut::<Snapshots>() {
+            seen.0.clear();
+        }
+
+        // Two additions in one frame reach the observers as one change holding both.
+        let first = app.world_mut().spawn((Item::new("c"), ItemOf(id))).id();
+        let second = app.world_mut().spawn((Item::new("d"), ItemOf(id))).id();
+        app.update();
+        let snapshots = app
+            .world()
+            .get_resource::<Snapshots>()
+            .map(|seen| seen.0.clone())
+            .unwrap_or_default();
+        assert_eq!(snapshots.len(), 3);
+        for snapshot in &snapshots {
+            assert!(snapshots.iter().all(|other| Arc::ptr_eq(snapshot, other)));
+            assert_eq!(snapshot.len(), 4);
+            assert_eq!(snapshot.last_chunk::<2>(), Some(&[first, second]));
+        }
+    }
+
+    #[test]
+    fn a_snapshot_is_not_changed_by_a_later_mutation_of_the_items() {
+        #[derive(Resource, Default)]
+        struct Kept(Vec<Arc<[Entity]>>);
+
+        let mut app = items_app();
+        app.init_resource::<Kept>();
+        app.add_observer(|changed: On<ItemsChanged>, mut kept: ResMut<Kept>| {
+            kept.0.push(Arc::clone(&changed.items));
+        });
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        let added = app.world_mut().spawn((Item::new("c"), ItemOf(id))).id();
+        app.update();
+        app.world_mut().despawn(added);
+        app.update();
+        let kept = app
+            .world()
+            .get_resource::<Kept>()
+            .map(|kept| kept.0.clone())
+            .unwrap_or_default();
+        assert_eq!(
+            kept.iter().map(|items| items.len()).collect::<Vec<_>>(),
+            vec![2, 3, 2]
+        );
     }
 
     #[test]

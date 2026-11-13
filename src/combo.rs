@@ -14,11 +14,10 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiSystems};
 use bevy::ui_widgets::Activate;
-use bevy::window::PrimaryWindow;
 use itertools::Itertools;
 
 use crate::MouseEvent;
-use crate::float::{Float, fit_vertically, keep_in_window_x};
+use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
@@ -38,20 +37,27 @@ pub struct ComboPlugin;
 
 impl Plugin for ComboPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (close_combos_on_outside_click, selection_change))
-            .add_systems(
-                Update,
-                close_on_ancestor_scroll.after(update_scroll_position),
-            )
-            .add_systems(
-                PostUpdate,
-                (
-                    sync_accessibility.in_set(AccessibilitySync),
-                    place_open_lists.before(UiSystems::Layout),
-                ),
-            )
-            .add_observer(on_insert_combo)
-            .add_observer(on_insert_placeholder);
+        app.add_systems(
+            Update,
+            (
+                close_combos_on_outside_click,
+                selection_change,
+                item_text_change,
+            ),
+        )
+        .add_systems(
+            Update,
+            close_on_ancestor_scroll.after(update_scroll_position),
+        )
+        .add_systems(
+            PostUpdate,
+            (
+                sync_accessibility.in_set(AccessibilitySync),
+                place_open_lists.before(UiSystems::Layout),
+            ),
+        )
+        .add_observer(on_insert_combo)
+        .add_observer(on_insert_placeholder);
     }
 }
 
@@ -350,7 +356,7 @@ fn close_on_ancestor_scroll(
 }
 
 fn place_open_lists(
-    window: Single<&Window, With<PrimaryWindow>>,
+    viewport: UiViewport,
     combos: Query<(&ComboState, &ComboRefs)>,
     buttons: Query<(&ComputedNode, &UiGlobalTransform), With<ComboButton>>,
     mut lists: Query<(&mut Node, &ComputedNode), With<ComboList>>,
@@ -365,6 +371,9 @@ fn place_open_lists(
         ) else {
             continue;
         };
+        let Some(target) = viewport.size_of(sub_refs.button_id) else {
+            continue;
+        };
         let scale = button_computed.inverse_scale_factor();
         let button_size = button_computed.size() * scale;
         // `UiGlobalTransform` holds the centre of the node.
@@ -373,14 +382,14 @@ fn place_open_lists(
         let left = Val::Px(keep_in_window_x(
             button_center.x - button_size.x / 2.0,
             list_size.x,
-            window.width(),
+            target.x,
         ));
         let fit = fit_vertically(
             button_center.y - button_size.y / 2.0,
             button_center.y + button_size.y / 2.0,
             0.0,
             list_size.y,
-            window.height(),
+            target.y,
         );
         let top = Val::Px(fit.top);
         let max_height = Val::Px(fit.max_height);
@@ -433,6 +442,26 @@ fn selection_change(
                 commands
                     .run_system_cached_with(update_selection, (changed_selection_ref, combo_ref));
             }
+        }
+    }
+}
+
+/// Shows a renamed selected item on the button of the combos that have it selected.
+fn item_text_change(
+    renamed: Query<Entity, Changed<Item<String>>>,
+    combos: Query<Entity, (With<Combo>, Without<NoDefaultItems>)>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    if renamed.is_empty() {
+        return;
+    }
+    let renamed: Vec<Entity> = renamed.iter().collect();
+    for combo in &combos {
+        if let Some((selection_ref, selection)) = selections.get_with_ref(combo)
+            && selection.iter().any(|item| renamed.contains(&item))
+        {
+            commands.run_system_cached_with(update_selection, (selection_ref, combo));
         }
     }
 }

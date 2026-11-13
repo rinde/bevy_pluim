@@ -1,6 +1,7 @@
 //! `Badge`: a count on the top-right corner of a button.
 
 use bevy::a11y::AccessibilityNode;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::text::{DEFAULT_REM_SIZE_PX, LineBreak, TextLayout};
 
@@ -110,20 +111,53 @@ struct BadgeLabel;
 
 /// Gives the button of a tool the [`Badge`] of its item, and takes it off when the item has
 /// none.
+///
+/// Looks only at what a change concerns: a button that is new or whose [`ToolbarButton`] was
+/// inserted again (a replaced item), and the buttons of an item whose [`Badge`] changed or was
+/// removed or that is new. A quiet frame reads no button.
 fn mirror_item_badges(
+    changed_items: Query<Entity, (With<Item<Tool>>, Or<(Changed<Badge>, Added<Item<Tool>>)>)>,
+    new_buttons: Query<Entity, Changed<ToolbarButton>>,
+    mut removed: RemovedComponents<Badge>,
     buttons: Query<(Entity, &ToolbarButton, Option<&Badge>)>,
     items: Query<Option<&Badge>, With<Item<Tool>>>,
+    mut touched: Local<HashSet<Entity>>,
     mut commands: Commands,
 ) {
-    for (entity, button, current) in &buttons {
+    touched.clear();
+    touched.extend(changed_items.iter().chain(removed.read()));
+    let new_buttons: Vec<Entity> = new_buttons.iter().collect();
+    if touched.is_empty() && new_buttons.is_empty() {
+        return;
+    }
+    let mut mirror = |entity: Entity, button: &ToolbarButton, current: Option<&Badge>| {
         let wanted = items.get(button.item()).ok().flatten();
         if wanted == current {
-            continue;
+            return;
         }
         match wanted {
             Some(badge) => commands.entity(entity).insert(badge.clone()),
             None => commands.entity(entity).remove::<Badge>(),
         };
+    };
+    for entity in new_buttons {
+        if let Ok((entity, button, current)) = buttons.get(entity) {
+            mirror(entity, button, current);
+        }
+    }
+    if touched.is_empty() {
+        return;
+    }
+    // A button whose own badge was taken off is looked at again too.
+    for entity in &*touched {
+        if let Ok((entity, button, current)) = buttons.get(*entity) {
+            mirror(entity, button, current);
+        }
+    }
+    for (entity, button, current) in &buttons {
+        if touched.contains(&button.item()) {
+            mirror(entity, button, current);
+        }
     }
 }
 
@@ -153,17 +187,33 @@ fn badge_node() -> Node {
 
 /// Spawns, updates and despawns the badge node of every button to match its [`Badge`] and the
 /// theme.
+///
+/// Looks only at the hosts whose [`Badge`] changed or was removed, that are new, or whose
+/// accessibility node changed (Bevy rewrites it, which would drop the description), and at all
+/// of them when the [`Theme`] changes.
 fn sync_badges(
     theme: Res<Theme>,
-    mut hosts: Query<
-        (
+    mut removed: RemovedComponents<Badge>,
+    mut touched: Local<HashSet<Entity>>,
+    mut hosts: ParamSet<(
+        Query<
             Entity,
-            Option<&Badge>,
-            Option<&BadgeRef>,
-            Option<&mut AccessibilityNode>,
-        ),
-        (With<Node>, Or<(With<Badge>, With<BadgeRef>)>),
-    >,
+            (
+                With<Node>,
+                Or<(With<Badge>, With<BadgeRef>)>,
+                Or<(Changed<Badge>, Added<Node>, Changed<AccessibilityNode>)>,
+            ),
+        >,
+        Query<
+            (
+                Entity,
+                Option<&Badge>,
+                Option<&BadgeRef>,
+                Option<&mut AccessibilityNode>,
+            ),
+            (With<Node>, Or<(With<Badge>, With<BadgeRef>)>),
+        >,
+    )>,
     mut labels: Query<
         (
             &mut Text,
@@ -175,8 +225,23 @@ fn sync_badges(
     >,
     mut commands: Commands,
 ) {
+    touched.clear();
+    touched.extend(hosts.p0().iter().chain(removed.read()));
+    let all = theme.is_changed();
+    if !all && touched.is_empty() {
+        return;
+    }
     let colors = theme.colors();
-    for (host, badge, badge_ref, mut access) in &mut hosts {
+    let wanted: Vec<Entity> = if all {
+        hosts.p1().iter().map(|host| host.0).collect()
+    } else {
+        touched.iter().copied().collect()
+    };
+    let mut hosts = hosts.p1();
+    for host in wanted {
+        let Ok((host, badge, badge_ref, mut access)) = hosts.get_mut(host) else {
+            continue;
+        };
         let badge = badge.filter(|b| !b.text.is_empty());
         // The badge node stays out of the accessibility tree; its text describes the host.
         if let Some(access) = access.as_mut() {

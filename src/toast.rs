@@ -4,6 +4,7 @@ use accesskit::{Live, Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use itertools::Either;
 
@@ -34,7 +35,12 @@ impl Plugin for ToastPlugin {
                 (|| None::<Entity>)
                     .pipe(theme_toasts)
                     .run_if(resource_changed::<Theme>),
-                (place_toasts, place_stack, tick_toasts).chain(),
+                (
+                    place_toasts.run_if(any_fresh_toast),
+                    place_stack.run_if(placement_needs_applying),
+                    tick_toasts,
+                )
+                    .chain(),
             ),
         );
     }
@@ -189,6 +195,22 @@ impl ToastTimer {
 #[reflect(Component)]
 struct ToastShown;
 
+/// Whether a toast has not moved into its stack yet: `place_toasts` runs only then, so a frame
+/// without a fresh toast builds nothing and looks at no stack.
+fn any_fresh_toast(fresh: Query<(), (With<Toast>, Without<ToastShown>)>) -> bool {
+    !fresh.is_empty()
+}
+
+/// Whether [`ToastPlacement`] changed or a stack was added since the last look: a new stack gets
+/// the placement even when it did not change (a stack made late, under a root spawned after the
+/// first toast).
+fn placement_needs_applying(
+    placement: Res<ToastPlacement>,
+    added: Query<(), Added<ToastStack>>,
+) -> bool {
+    placement.is_changed() || !added.is_empty()
+}
+
 /// Moves new toasts into the stack of their own parent, creating it when the
 /// parent has none, and drops one whose text is already showing in that stack,
 /// restarting the timer of that one instead. A toast with no parent is logged
@@ -199,8 +221,8 @@ fn place_toasts(
     mut fresh: Query<(Entity, &Toast, &mut ToastTimer, Option<&ChildOf>), Without<ToastShown>>,
     mut shown: Query<(&ChildOf, &Toast, &mut ToastTimer), With<ToastShown>>,
 ) {
-    // (parent, stack) pairs: the existing stacks and those made this run.
-    let mut known: Vec<(Entity, Entity)> = stacks
+    // parent -> stack: the existing stacks and those made this run.
+    let mut known: HashMap<Entity, Entity> = stacks
         .iter()
         .map(|(stack, parent)| (parent.parent(), stack))
         .collect();
@@ -215,13 +237,9 @@ fn place_toasts(
             commands.entity(entity).despawn();
             continue;
         };
-        let target = if let Some((_, stack)) = known.iter().find(|(p, _)| *p == parent) {
-            *stack
-        } else {
-            let stack = commands.spawn((ToastStack, ChildOf(parent))).id();
-            known.push((parent, stack));
-            stack
-        };
+        let target = *known
+            .entry(parent)
+            .or_insert_with(|| commands.spawn((ToastStack, ChildOf(parent))).id());
         let existing = shown
             .iter_mut()
             .find(|(of, other, _)| of.parent() == target && other.text == toast.text);

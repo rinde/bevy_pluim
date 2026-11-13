@@ -6,10 +6,11 @@
 //! A [`Stack`] is immutable: replace it to point it at another selection.
 
 use bevy::ecs::system::SystemId;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::scene::Ready;
 
-use crate::select::{Item, Selection, SelectionParam};
+use crate::select::{Selection, SelectionParam};
 
 /// Registers the systems and observers of [`Stack`].
 ///
@@ -45,11 +46,19 @@ impl Plugin for StackPlugin {
 #[derive(Component, FromTemplate, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
-#[require(Name::new("Stack"), Node::default())]
+#[require(Name::new("Stack"), Node::default(), StackChildren)]
 pub struct Stack {
     /// The entity holding the selection that picks the visible child.
     pub selection_ref: Entity,
 }
+
+/// The children one [`Stack`] has made, by the item whose creator made each.
+///
+/// Every stack has its own, so stacks sharing a selection and its items each get a child of
+/// their own, and despawning a stack takes its children and this record with it. An entry whose
+/// child is no longer a child of the stack is ignored and made again.
+#[derive(Component, Debug, Default)]
+struct StackChildren(HashMap<Entity, Entity>);
 
 /// The `display` a hidden stack child had before the stack hid it.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
@@ -92,7 +101,8 @@ fn on_selection_insert(
 fn switch_view(
     stack_and_ref: In<(Entity, Stack)>,
     selections: SelectionParam,
-    mut items: Query<(&mut StackItem, Option<&Item<String>>)>,
+    items: Query<&StackItem>,
+    caches: Query<&StackChildren>,
     children: Query<&Children>,
     mut nodes: Query<&mut Node>,
     prev_displays: Query<&PrevDisplay>,
@@ -102,7 +112,6 @@ fn switch_view(
         HideAll,
         CreateNew(Entity, StackChildCreator),
         SelectDifferent(Entity),
-        SelectDifferentRef(Entity, Entity),
         SelectSame,
     }
     let (stack_ref, stack) = *stack_and_ref;
@@ -140,76 +149,69 @@ fn switch_view(
         return;
     };
 
+    // The child this stack made for `creator_item`, if it is still one of its children.
+    let cached_child = |creator_item: Entity| {
+        let child = caches.get(stack_ref).ok()?.0.get(&creator_item).copied()?;
+        children
+            .get(stack_ref)
+            .ok()?
+            .iter()
+            .any(|c| c == child)
+            .then_some(child)
+    };
+
     let action = (|| -> Option<Action> {
         let Some(selected_item_ref) = selection.last() else {
             return Some(Action::HideAll);
         };
-        let selected_stack_item = items.get(selected_item_ref).ok()?.0;
-        if let Some(existing_node_ref) = selected_stack_item.entity {
-            return Some(if currently_visible_entity == Some(existing_node_ref) {
-                Action::SelectSame
-            } else {
-                Action::SelectDifferent(existing_node_ref)
-            });
-        }
-        let id = match selected_stack_item.source {
-            StackSource::Creator { create, .. } => {
-                return Some(Action::CreateNew(selected_item_ref, create));
+        let selected_stack_item = items.get(selected_item_ref).ok()?;
+        // The item whose creator makes the child, and the child this stack already has for it.
+        let (creator_item, create) = match selected_stack_item.source {
+            StackSource::Creator { create, .. } => (selected_item_ref, create),
+            StackSource::Reference { id } => {
+                let referenced =
+                    selections
+                        .get_item_values(stack.selection_ref)
+                        .and_then(|(_, item_values)| {
+                            item_values.iter().find_map(|item_ref| {
+                                match items.get(item_ref).ok()?.source {
+                                    StackSource::Creator {
+                                        create,
+                                        id: Some(creator_id),
+                                    } if creator_id == id => Some((item_ref, create)),
+                                    _ => None,
+                                }
+                            })
+                        });
+                let Some(referenced) = referenced else {
+                    error!(
+                        "StackItem {selected_item_ref} refers to id {id}, which no StackItem::new_with_reference of the stack's items has"
+                    );
+                    return Some(Action::HideAll);
+                };
+                referenced
             }
-            StackSource::Reference { id } => id,
         };
-        let referenced =
-            selections
-                .get_item_values(stack.selection_ref)
-                .and_then(|(_, item_values)| {
-                    item_values.iter().find_map(|item_ref| {
-                        let (stack_item, _) = items.get(item_ref).ok()?;
-                        match stack_item.source {
-                            StackSource::Creator {
-                                create,
-                                id: Some(creator_id),
-                            } if creator_id == id => Some((item_ref, stack_item.entity, create)),
-                            _ => None,
-                        }
-                    })
-                });
-        let Some((referenced_ref, referenced_entity, create)) = referenced else {
-            error!(
-                "StackItem {selected_item_ref} refers to id {id}, which no StackItem::new_with_reference of the stack's items has"
-            );
-            return Some(Action::HideAll);
-        };
-
-        Some(
-            referenced_entity.map_or(Action::CreateNew(referenced_ref, create), |existing| {
-                if currently_visible_entity == Some(existing) {
-                    Action::SelectSame
-                } else {
-                    Action::SelectDifferentRef(selected_item_ref, existing)
-                }
-            }),
-        )
+        Some(match cached_child(creator_item) {
+            Some(existing) if currently_visible_entity == Some(existing) => Action::SelectSame,
+            Some(existing) => Action::SelectDifferent(existing),
+            None => Action::CreateNew(creator_item, create),
+        })
     })();
     let Some(action) = action else {
         return;
     };
     match action {
         Action::HideAll => show(None),
-        Action::CreateNew(selected_item_ref, creator) => {
+        Action::CreateNew(creator_item, creator) => {
             show(None);
             let spawner = StackChildSpawner {
                 parent: stack_ref,
-                stack_item_ref: selected_item_ref,
+                creator_item,
             };
             commands.run_system_with(creator, spawner);
         }
         Action::SelectDifferent(new_selected) => show(Some(new_selected)),
-        Action::SelectDifferentRef(selected_item_ref, new_selected) => {
-            show(Some(new_selected));
-            if let Ok((mut mutable_selected_stack_item, _)) = items.get_mut(selected_item_ref) {
-                mutable_selected_stack_item.entity = Some(new_selected);
-            }
-        }
         Action::SelectSame => (),
     }
 }
@@ -246,7 +248,6 @@ impl StackSource {
 #[derive(Component, Copy, Clone, Debug, Reflect)]
 #[reflect(Component)]
 pub struct StackItem {
-    entity: Option<Entity>,
     #[reflect(ignore, default = "StackSource::unreflected")]
     source: StackSource,
 }
@@ -256,7 +257,6 @@ impl StackItem {
     #[must_use]
     pub const fn new(create: StackChildCreator) -> Self {
         Self {
-            entity: None,
             source: StackSource::Creator { create, id: None },
         }
     }
@@ -267,7 +267,6 @@ impl StackItem {
     #[must_use]
     pub const fn new_with_reference(id: usize, create: StackChildCreator) -> Self {
         Self {
-            entity: None,
             source: StackSource::Creator {
                 create,
                 id: Some(id),
@@ -279,7 +278,6 @@ impl StackItem {
     #[must_use]
     pub const fn new_reference(id: usize) -> Self {
         Self {
-            entity: None,
             source: StackSource::Reference { id },
         }
     }
@@ -310,7 +308,7 @@ impl StackItem {
 #[derive(Copy, Clone, Debug)]
 pub struct StackChildSpawner {
     parent: Entity,
-    stack_item_ref: Entity,
+    creator_item: Entity,
 }
 
 impl StackChildSpawner {
@@ -320,7 +318,7 @@ impl StackChildSpawner {
             .spawn((Name::new("StackItem"), child, ChildOf(self.parent)))
             .id();
         add_node_if_absent(commands, id);
-        commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
+        commands.run_system_cached_with(update_stack_item, (self.parent, self.creator_item, id));
     }
 
     /// Spawns `scene` as the child of the stack: the scene's root is the child.
@@ -334,14 +332,22 @@ impl StackChildSpawner {
         let id = child.id();
         child.queue_apply_scene(scene);
         child.observe(add_node_when_scene_is_ready);
-        commands.run_system_cached_with(update_stack_item, (self.stack_item_ref, id));
+        commands.run_system_cached_with(update_stack_item, (self.parent, self.creator_item, id));
     }
 }
 
-fn update_stack_item(input: In<(Entity, Entity)>, mut stack_items: Query<&mut StackItem>) {
-    let (stack_item_ref, new_child_ref) = *input;
-    if let Ok(mut stack_item) = stack_items.get_mut(stack_item_ref) {
-        stack_item.entity = Some(new_child_ref);
+fn update_stack_item(
+    input: In<(Entity, Entity, Entity)>,
+    mut caches: Query<&mut StackChildren>,
+    parents: Query<&ChildOf>,
+) {
+    let (stack, creator_item, child) = *input;
+    if let Ok(mut cache) = caches.get_mut(stack) {
+        // Forget children that were despawned or moved out of this stack.
+        cache
+            .0
+            .retain(|_, c| parents.get(*c).is_ok_and(|p| p.parent() == stack));
+        cache.0.insert(creator_item, child);
     }
 }
 

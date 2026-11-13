@@ -3,10 +3,9 @@
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, Pressed, UiGlobalTransform};
-use bevy::window::PrimaryWindow;
 
 use crate::HoverLock;
-use crate::float::Float;
+use crate::float::{Float, UiViewport};
 use crate::theme::Theme;
 
 /// How long the pointer must rest on a [`Tooltip`] node before the popup shows, in seconds.
@@ -264,11 +263,10 @@ fn despawn_popup_with_owner(
 /// run off the bottom, and shows it. Needs the popup's laid-out size, so it shows one frame
 /// after it is spawned.
 fn place_popups(
-    window: Query<&Window, With<PrimaryWindow>>,
+    viewport: UiViewport,
     mut popups: Query<(&TooltipPopup, &ComputedNode, &mut Node, &mut Visibility)>,
     owners: Query<(&ComputedNode, &UiGlobalTransform), Without<TooltipPopup>>,
 ) {
-    let window = window.iter().next();
     for (popup, popup_computed, mut node, mut visibility) in &mut popups {
         let Ok((owner_computed, owner_transform)) = owners.get(popup.owner()) else {
             continue;
@@ -284,9 +282,9 @@ fn place_popups(
         let mut left = center.x - popup_size.x / 2.0;
         let below = center.y + owner_size.y / 2.0 + GAP;
         let mut top = below;
-        if let Some(window) = window {
-            left = left.min(window.width() - MARGIN - popup_size.x).max(MARGIN);
-            if below + popup_size.y + MARGIN > window.height() {
+        if let Some(target) = viewport.size_of(popup.owner()) {
+            left = left.min(target.x - MARGIN - popup_size.x).max(MARGIN);
+            if below + popup_size.y + MARGIN > target.y {
                 // Not above the window's margin, whatever room there is.
                 top = (center.y - owner_size.y / 2.0 - GAP - popup_size.y).max(MARGIN);
             }

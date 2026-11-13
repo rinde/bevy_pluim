@@ -214,11 +214,10 @@ fn handle_hover(
     };
     *link_bg = BackgroundColor(bg_color);
 
-    let Some(mut text_color) = children
-        .iter()
-        .next()
-        .and_then(|text_ref| link_texts.get_mut(text_ref).ok())
-    else {
+    let Some(text_id) = children.iter().find(|child| link_texts.contains(*child)) else {
+        return;
+    };
+    let Ok(mut text_color) = link_texts.get_mut(text_id) else {
         return;
     };
     text_color.0 = link_color;
@@ -254,11 +253,10 @@ fn theme_link(
             },
         );
         link_bg.0 = bg_color;
-        let Some((mut text_color, mut text_font)) = children
-            .iter()
-            .next()
-            .and_then(|text_ref| link_texts.get_mut(text_ref).ok())
-        else {
+        let Some(text_id) = children.iter().find(|child| link_texts.contains(*child)) else {
+            continue;
+        };
+        let Ok((mut text_color, mut text_font)) = link_texts.get_mut(text_id) else {
             continue;
         };
         text_font.font = theme.body_font.clone().into();

@@ -110,102 +110,100 @@ impl SettingRow {
             node.set_description(description.as_str());
         }
 
-        // A row that already has its parts only gets the new text: the children, the refs and
-        // whatever the app put into the control slot stay.
-        if let Some(refs) = world
-            .entity(context.entity)
-            .get::<SettingRowRefs>()
-            .copied()
-        {
-            world
-                .commands()
-                .entity(refs.title_id)
-                .insert(Text::new(title));
-            world
-                .commands()
-                .entity(refs.description_id)
-                .insert(Label::secondary(description));
-            return;
-        }
+        // Whether the row has its parts is decided when the command runs, so two inserts before
+        // a flush build them once and the last text wins.
+        let mut commands = world.commands();
+        commands
+            .run_system_cached_with(build_or_update_parts, (context.entity, title, description));
+        commands.run_system_cached_with(theme_setting_rows, Some(context.entity));
+    }
+}
 
+/// Builds the parts of a row that has none, else gives the existing ones the new text: the
+/// children, the refs and whatever the app put into the control slot stay.
+fn build_or_update_parts(
+    input: In<(Entity, String, String)>,
+    refs: Query<&SettingRowRefs>,
+    mut commands: Commands,
+) {
+    let (entity, title, description) = input.0;
+    if let Ok(refs) = refs.get(entity) {
+        commands.entity(refs.title_id).insert(Text::new(title));
+        commands
+            .entity(refs.description_id)
+            .insert(Label::secondary(description));
+        return;
+    }
+    {
         let mut title_id = Entity::PLACEHOLDER;
         let mut description_id = Entity::PLACEHOLDER;
         let mut control_slot = Entity::PLACEHOLDER;
         let mut divider_id = Entity::PLACEHOLDER;
-        world
-            .commands()
-            .entity(context.entity)
-            .with_children(|spawner| {
-                spawner
-                    .spawn((
-                        Name::new("SettingRowContent"),
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: Val::Px(12.0),
-                            padding: UiRect::vertical(Val::Px(12.0)),
-                            ..default()
-                        },
-                    ))
-                    .with_children(|content| {
-                        content
-                            .spawn((
-                                Name::new("SettingRowText"),
-                                Node {
-                                    flex_direction: FlexDirection::Column,
-                                    flex_grow: 1.0,
-                                    flex_basis: Val::Px(0.0),
-                                    row_gap: Val::Px(2.0),
-                                    ..default()
-                                },
-                            ))
-                            .with_children(|text| {
-                                title_id = text
-                                    .spawn((
-                                        Text::new(title),
-                                        SettingRowTitle,
-                                        Node {
-                                            align_self: AlignSelf::FlexStart,
-                                            ..default()
-                                        },
-                                        Pickable::IGNORE,
-                                    ))
-                                    .id();
-                                description_id = text
-                                    .spawn((
-                                        Label::secondary(description),
-                                        Node {
-                                            align_self: AlignSelf::FlexStart,
-                                            ..default()
-                                        },
-                                    ))
-                                    .id();
-                            });
-                        control_slot = content
-                            .spawn((
-                                Name::new("SettingRowControlSlot"),
-                                Node {
-                                    align_items: AlignItems::Center,
-                                    flex_shrink: 0.0,
-                                    ..default()
-                                },
-                            ))
-                            .id();
-                    });
-                divider_id = spawner.spawn(Divider::horizontal()).id();
-            });
-        world
-            .commands()
-            .entity(context.entity)
-            .insert(SettingRowRefs {
-                title_id,
-                description_id,
-                control_slot,
-                divider_id,
-            });
-        world
-            .commands()
-            .run_system_cached_with(theme_setting_rows, Some(context.entity));
+        commands.entity(entity).with_children(|spawner| {
+            spawner
+                .spawn((
+                    Name::new("SettingRowContent"),
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        padding: UiRect::vertical(Val::Px(12.0)),
+                        ..default()
+                    },
+                ))
+                .with_children(|content| {
+                    content
+                        .spawn((
+                            Name::new("SettingRowText"),
+                            Node {
+                                flex_direction: FlexDirection::Column,
+                                flex_grow: 1.0,
+                                flex_basis: Val::Px(0.0),
+                                row_gap: Val::Px(2.0),
+                                ..default()
+                            },
+                        ))
+                        .with_children(|text| {
+                            title_id = text
+                                .spawn((
+                                    Text::new(title),
+                                    SettingRowTitle,
+                                    Node {
+                                        align_self: AlignSelf::FlexStart,
+                                        ..default()
+                                    },
+                                    Pickable::IGNORE,
+                                ))
+                                .id();
+                            description_id = text
+                                .spawn((
+                                    Label::secondary(description),
+                                    Node {
+                                        align_self: AlignSelf::FlexStart,
+                                        ..default()
+                                    },
+                                ))
+                                .id();
+                        });
+                    control_slot = content
+                        .spawn((
+                            Name::new("SettingRowControlSlot"),
+                            Node {
+                                align_items: AlignItems::Center,
+                                flex_shrink: 0.0,
+                                ..default()
+                            },
+                        ))
+                        .id();
+                });
+            divider_id = spawner.spawn(Divider::horizontal()).id();
+        });
+        commands.entity(entity).insert(SettingRowRefs {
+            title_id,
+            description_id,
+            control_slot,
+            divider_id,
+        });
     }
 }
 
@@ -234,27 +232,61 @@ fn theme_setting_rows(
 }
 
 /// Hides the divider of the last row of each [`SettingRows`] and shows it on the others.
+///
+/// Looks only at the columns whose structure changed: their `Children` changed (or the column is
+/// new), or one of their rows got its [`SettingRowRefs`] (a row's refs arrive a frame after the
+/// row is spawned). A quiet frame visits nothing and nothing is collected.
 fn sync_dividers(
-    containers: Query<&Children, With<SettingRows>>,
+    changed_columns: Query<
+        Entity,
+        (
+            With<SettingRows>,
+            Or<(Added<SettingRows>, Changed<Children>)>,
+        ),
+    >,
+    new_rows: Query<&ChildOf, Changed<SettingRowRefs>>,
+    columns: Query<&Children, With<SettingRows>>,
     rows: Query<&SettingRowRefs>,
     mut nodes: Query<&mut Node>,
 ) {
-    for children in &containers {
-        let rows_here: Vec<&SettingRowRefs> =
-            children.iter().filter_map(|c| rows.get(c).ok()).collect();
-        let last = rows_here.len().saturating_sub(1);
-        for (i, refs) in rows_here.into_iter().enumerate() {
-            let Ok(mut node) = nodes.get_mut(refs.divider_id) else {
-                continue;
-            };
-            let display = if i == last {
-                Display::None
-            } else {
-                Display::Flex
-            };
-            if node.display != display {
-                node.display = display;
-            }
+    for column in &changed_columns {
+        sync_column(column, &columns, &rows, &mut nodes);
+    }
+    for child_of in &new_rows {
+        let column = child_of.parent();
+        // A column that also changed its children was done above; doing it again changes nothing.
+        if !changed_columns.contains(column) {
+            sync_column(column, &columns, &rows, &mut nodes);
+        }
+    }
+}
+
+fn sync_column(
+    column: Entity,
+    columns: &Query<&Children, With<SettingRows>>,
+    rows: &Query<&SettingRowRefs>,
+    nodes: &mut Query<&mut Node>,
+) {
+    let Ok(children) = columns.get(column) else {
+        return;
+    };
+    let Some(last) = children.iter().rev().find(|child| rows.contains(*child)) else {
+        return;
+    };
+    for child in children.iter() {
+        let Ok(refs) = rows.get(child) else {
+            continue;
+        };
+        let Ok(mut node) = nodes.get_mut(refs.divider_id) else {
+            continue;
+        };
+        let display = if child == last {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        if node.display != display {
+            node.display = display;
         }
     }
 }

@@ -20,14 +20,13 @@ use bevy::prelude::*;
 use bevy::text::{EditableText, TextEdit};
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiSystems};
 use bevy::ui_widgets::{Activate, ActiveDescendant};
-use bevy::window::PrimaryWindow;
 
 use crate::MouseEvent;
 use crate::combo::{
     CHEVRON_SIZE, ComboButton, ComboList, ComboPlaceholder, ComboState, PLACEHOLDER_TEXT, chevron,
     selected_text,
 };
-use crate::float::{Float, fit_vertically, keep_in_window_x};
+use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{
     AccessibilitySync, FOCUS_RING_OFFSET, FOCUS_RING_REACH, FOCUS_RING_WIDTH, Unreachable, node_id,
     sync_controls, sync_label, sync_role, sync_value,
@@ -915,7 +914,7 @@ fn handle_button_mouse_events(
 /// Puts the popup of each open combo under its button, as wide as the button at least, kept
 /// inside the window and above the button when it would run off the bottom.
 fn place_open_popups(
-    window: Single<&Window, With<PrimaryWindow>>,
+    viewport: UiViewport,
     combos: Query<(&ComboState, &FilterComboRefs)>,
     buttons: Query<(&ComputedNode, &UiGlobalTransform), With<ComboButton>>,
     mut popups: Query<(&mut Node, &ComputedNode), With<Float>>,
@@ -929,6 +928,9 @@ fn place_open_popups(
         else {
             continue;
         };
+        let Some(target) = viewport.size_of(refs.button) else {
+            continue;
+        };
         let scale = button_computed.inverse_scale_factor();
         let button_size = button_computed.size() * scale;
         let button_center = button_transform.translation * scale;
@@ -936,14 +938,14 @@ fn place_open_popups(
         let left = Val::Px(keep_in_window_x(
             button_center.x - button_size.x / 2.0,
             popup_size.x,
-            window.width(),
+            target.x,
         ));
         let fit = fit_vertically(
             button_center.y - button_size.y / 2.0,
             button_center.y + button_size.y / 2.0,
             0.0,
             popup_size.y,
-            window.height(),
+            target.y,
         );
         let (top, max_height, min_width) = (
             Val::Px(fit.top),
@@ -1076,20 +1078,31 @@ fn sync_name(node: &mut Mut<AccessibilityNode>, name: Option<&str>) {
 }
 
 /// Updates the button label and the list's selection when the selection of a combo (own or
-/// shared) or its placeholder changes.
+/// shared), a selected item's text or its placeholder changes.
 fn selection_change(
     changed: Query<Entity, Changed<Selection>>,
     fresh: Query<Entity, Added<FilterComboRefs>>,
     placeholders: Query<Entity, Changed<ComboPlaceholder>>,
+    renamed: Query<Entity, Changed<Item<String>>>,
     combos: Query<(Entity, &Selection), With<FilterCombo>>,
+    selections: SelectionParam,
     mut commands: Commands,
 ) {
     for (combo, selection) in &combos {
+        // A renamed selected item changes the button's text.
+        let renamed_selected = !renamed.is_empty()
+            && selections
+                .get(combo)
+                .is_some_and(|value| value.iter().any(|item| renamed.contains(item)));
         let selection_changed = changed.iter().any(|changed| match selection {
             Selection::Ref(entity) => changed == *entity || changed == combo,
             Selection::Value(_) => changed == combo,
         });
-        if selection_changed || fresh.contains(combo) || placeholders.contains(combo) {
+        if selection_changed
+            || renamed_selected
+            || fresh.contains(combo)
+            || placeholders.contains(combo)
+        {
             commands.run_system_cached_with(update_selection, combo);
         }
     }

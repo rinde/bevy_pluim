@@ -6,12 +6,11 @@ use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use bevy::window::PrimaryWindow;
 use itertools::Either;
 
-use crate::color_palette::ColorPalette;
+use crate::color_palette::{ColorPalette, PaletteDormant, sleep, wake, watch_palette};
 use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
-use crate::float::{Float, fit_vertically, keep_in_window_x};
+use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::list::{ItemView, ListLayout};
 use crate::popup::{self, ButtonLook};
@@ -38,9 +37,15 @@ impl Plugin for ColorPaletteComboPlugin {
                     .run_if(resource_changed::<Theme>),
                 close_combos_on_outside_click,
                 on_selection_change,
+                sync_edited_item_colors,
             ),
         )
         .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
+        .add_systems(Last, sleep_closed_popups)
+        .add_systems(
+            PostUpdate,
+            place_opened_popups.after(bevy::ui::UiSystems::PostLayout),
+        )
         .add_observer(on_insert_combo)
         .add_observer(on_remove_combo)
         .add_observer(on_insert_state)
@@ -168,6 +173,8 @@ fn on_insert_combo(
                                 ..default()
                             },
                             ColorPalette,
+                            // A closed popup builds no swatches, see `PaletteDormant`.
+                            PaletteDormant,
                             list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
                         ));
                         if let Some(selection_ref) = selection_ref {
@@ -368,7 +375,48 @@ fn on_insert_state(
         popup::set_expanded(&mut node, open);
     }
     if open {
+        // The swatches are built now, so the popup has its size after the next layout:
+        // hide it until `place_opened_popups` has placed it.
+        commands.run_system_cached_with(wake, sub_refs.palette);
+        commands
+            .entity(sub_refs.float_id)
+            .remove::<PendingSleep>()
+            .insert((Visibility::Hidden, PendingPlacement(sub_refs)));
+    } else {
+        // The swatches go at the end of the frame, not now: a pick in them that closed the
+        // popup is still being handled by their `ListBox`.
+        commands
+            .entity(sub_refs.float_id)
+            .remove::<PendingPlacement>()
+            .insert(PendingSleep(sub_refs.palette));
+    }
+}
+
+/// On the popup of a combo that closed and whose palette has not been made dormant yet.
+#[derive(Component, Debug, Copy, Clone)]
+struct PendingSleep(Entity);
+
+/// Despawns the swatches of the popups that closed, once the frame's input is handled.
+fn sleep_closed_popups(pending: Query<(Entity, &PendingSleep)>, mut commands: Commands) {
+    for (float, &PendingSleep(palette)) in &pending {
+        commands.run_system_cached_with(sleep, palette);
+        commands.entity(float).remove::<PendingSleep>();
+    }
+}
+
+/// On the popup of a combo that opened and has not been placed yet.
+#[derive(Component, Debug, Copy, Clone)]
+struct PendingPlacement(SubRefs);
+
+/// Places the popups that just opened once layout has given them the size of their swatches,
+/// then shows them.
+fn place_opened_popups(pending: Query<(Entity, &PendingPlacement)>, mut commands: Commands) {
+    for (float, &PendingPlacement(sub_refs)) in &pending {
         commands.run_system_cached_with(position_float, sub_refs);
+        commands
+            .entity(float)
+            .remove::<PendingPlacement>()
+            .insert(Visibility::Visible);
     }
 }
 
@@ -380,7 +428,7 @@ fn on_insert_state(
 /// like any other.
 fn position_float(
     sub_refs: In<SubRefs>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    viewport: UiViewport,
     mut dims: Query<(&mut Node, &ComputedNode), With<ColorPaletteComboFloat>>,
     parent_dims: Query<
         (&ComputedNode, &UiGlobalTransform),
@@ -399,20 +447,23 @@ fn position_float(
         return;
     };
 
+    let Some(target) = viewport.size_of(sub_refs.button) else {
+        return;
+    };
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let float_size = float_computed_node.size() * float_computed_node.inverse_scale_factor();
     // `UiGlobalTransform` holds the centre of the node.
     let button_center = button_transform.translation * button_computed_node.inverse_scale_factor();
 
-    // Centred under the button, then pushed back inside the window.
+    // Centred under the button, then pushed back inside the UI target.
     let centered_x = button_center.x - float_size.x / 2.0;
-    node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, window.width()));
+    node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, target.x));
     let fit = fit_vertically(
         button_center.y - button_size.y / 2.0,
         button_center.y + button_size.y / 2.0,
         BUTTON_FLOAT_DIST,
         float_size.y,
-        window.height(),
+        target.y,
     );
     node.top = Val::Px(fit.top);
     // A popup taller than the window scrolls with the wheel instead of running off it.
@@ -469,6 +520,10 @@ fn on_selection_change(
                 commands
                     .entity(sub_refs.palette)
                     .insert(Selection::reference(selection_ref));
+            } else {
+                // Same selection, but its items may have been replaced (`ItemsRef`): the
+                // palette follows the items of the selection it refers to.
+                commands.run_system_cached_with(watch_palette, sub_refs.palette);
             }
 
             let Ok(color_square_ref) = color_square_refs.get(sub_refs.button) else {
@@ -483,6 +538,41 @@ fn on_selection_change(
                 .next()
                 .unwrap_or(Color::Srgba(Srgba::NONE));
             color_square_background.0 = color;
+            commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
+        }
+    }
+}
+
+/// Shows the edited colour of a selected [`Item<Color>`] in the button's square.
+///
+/// Looks at the combos only when an item colour changed, and writes only on a difference.
+fn sync_edited_item_colors(
+    changed: Query<(), Changed<Item<Color>>>,
+    combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
+    color_square_refs: Query<&ColorSquareRef>,
+    mut color_squares: Query<&mut BackgroundColor, With<ColorSquare>>,
+    selections: SelectionParam,
+    items: Query<&Item<Color>>,
+    mut commands: Commands,
+) {
+    if changed.is_empty() {
+        return;
+    }
+    for (combo, sub_refs) in &combos {
+        let Some(selection) = selections.get(combo) else {
+            continue;
+        };
+        let Ok(color_square_ref) = color_square_refs.get(sub_refs.button) else {
+            continue;
+        };
+        let Ok(mut square) = color_squares.get_mut(color_square_ref.entity()) else {
+            continue;
+        };
+        let color = selected_colors(selection, &items)
+            .next()
+            .unwrap_or(Color::Srgba(Srgba::NONE));
+        if square.0 != color {
+            square.0 = color;
             commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
         }
     }
