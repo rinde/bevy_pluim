@@ -16491,3 +16491,140 @@ fn editing_an_item_colour_in_place_updates_its_swatch_highlight_combo_preview_an
     // The swatches were edited in place, not rebuilt.
     assert_eq!(item_views(&app, palette), swatches);
 }
+
+#[test]
+fn a_structural_change_to_chips_keeps_the_views_and_the_focus_of_the_items_that_stay() {
+    let mut app = headless_app();
+    let (_, chips) = spawn_chips(&mut app, three_chips());
+    let before = chip_views(&app, chips);
+    let item_of =
+        |app: &App, view: Entity| app.world().entity(view).get::<ChipView>().unwrap().item();
+    let removed = item_of(&app, before[1]);
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(before[2]));
+
+    app.world_mut().entity_mut(removed).despawn();
+    app.world_mut().spawn((
+        Item {
+            data: Chip::new("New"),
+        },
+        ItemOf(chips),
+    ));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let after = chip_views(&app, chips);
+    assert_eq!(after.len(), 3);
+    assert_eq!(after[0], before[0]);
+    assert_eq!(after[1], before[2]);
+    assert!(!after.contains(&before[1]));
+    assert_eq!(chip_texts(&app, after[2]).0, "New");
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(before[2])
+    );
+}
+
+#[test]
+fn a_structural_change_to_a_toolbar_keeps_its_buttons_and_regroups_the_dividers() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
+    let before = toolbar_buttons(&app, toolbar);
+    let item_of = |app: &App, button: Entity| {
+        app.world()
+            .entity(button)
+            .get::<ToolbarButton>()
+            .unwrap()
+            .item()
+    };
+    let dividers = |app: &App| {
+        toolbar_children(app, toolbar)
+            .into_iter()
+            .filter(|child| app.world().entity(*child).contains::<Divider>())
+            .count()
+    };
+    assert_eq!(dividers(&app), 2);
+    let mine = app
+        .world_mut()
+        .spawn((AppOwnedChild, Node::default(), ChildOf(toolbar)))
+        .id();
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(before[3]));
+
+    // Dropping "Rail" leaves "Signal" alone in its group: both dividers stay, order holds.
+    let rail = item_of(&app, before[1]);
+    app.world_mut().entity_mut(rail).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    let after = toolbar_buttons(&app, toolbar);
+    assert_eq!(after, [before[0], before[2], before[3]]);
+    assert_eq!(dividers(&app), 2);
+    assert!(toolbar_children(&app, toolbar).contains(&mine));
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(before[3])
+    );
+
+    // Dropping "Signal" merges nothing but removes one divider.
+    let signal = item_of(&app, before[2]);
+    app.world_mut().entity_mut(signal).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toolbar_buttons(&app, toolbar), [before[0], before[3]]);
+    assert_eq!(dividers(&app), 1);
+    assert!(toolbar_children(&app, toolbar).contains(&mine));
+}
+
+#[test]
+fn a_structural_change_to_a_gallery_keeps_the_cards_of_the_items_that_stay() {
+    let mut app = headless_app();
+    let gallery = spawn_gallery(&mut app);
+    let cards_before = gallery_groups(&app, gallery);
+    let flat = |groups: &[(String, Vec<Entity>)]| {
+        groups
+            .iter()
+            .flat_map(|(_, cards)| cards.clone())
+            .collect::<Vec<_>>()
+    };
+    let before = flat(&cards_before);
+    assert_eq!(before.len(), 5);
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(before[4]));
+    let removed = app
+        .world()
+        .entity(before[1])
+        .get::<GalleryCardView>()
+        .unwrap()
+        .item();
+
+    app.world_mut().entity_mut(removed).despawn();
+    app.world_mut().spawn((
+        Item {
+            data: GalleryCard::new(Handle::default(), "Tram", "Light rail"),
+        },
+        ItemOf(gallery),
+    ));
+    for _ in 0..3 {
+        app.update();
+    }
+
+    let groups = gallery_groups(&app, gallery);
+    assert_eq!(
+        groups
+            .iter()
+            .map(|(title, _)| title.as_str())
+            .collect::<Vec<_>>(),
+        ["LOCOMOTIVES", "WAGONS", "LIGHT RAIL"]
+    );
+    let after = flat(&groups);
+    assert_eq!(after.len(), 5);
+    assert_eq!(after[..4], [before[0], before[2], before[3], before[4]]);
+    assert!(!after.contains(&before[1]));
+    assert_eq!(
+        app.world().get_resource::<InputFocus>().unwrap().get(),
+        Some(before[4])
+    );
+}

@@ -13,7 +13,7 @@ use crate::focus::{
 };
 use crate::icon::{Icon, IconColor};
 use crate::icon_button::{IconButtonSize, Tone};
-use crate::select::{Item, SelectionParam, StructureChanges};
+use crate::select::{Item, SelectionParam, StructureChanges, order_views, plan_views};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
@@ -311,14 +311,15 @@ impl ToolbarButtonRefs {
 struct GroupDivider;
 
 /// What a child of a toolbar is, to tell whether the children match the items.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Slot {
     Button { item: Entity, hint: bool },
     Divider,
 }
 
-/// Spawns the buttons and group dividers of every [`Toolbar`] again when its items, their
-/// groups or its style no longer match the children.
+/// Brings the buttons and group dividers of every [`Toolbar`] in line with its items, their
+/// groups and its style: the ones that still match keep their entity, the others are spawned
+/// or despawned, and all are put in order.
 fn sync_buttons(
     mut changes: StructureChanges<Toolbar, Tool>,
     toolbars: Query<(&Toolbar, Option<&Children>)>,
@@ -352,49 +353,67 @@ fn sync_buttons(
             });
         }
 
-        let mut existing = Vec::new();
-        let mut current_style = true;
-        for child in children.into_iter().flat_map(RelationshipTarget::iter) {
-            if let Ok((button, refs)) = buttons.get(child) {
-                existing.push((
-                    child,
-                    Slot::Button {
+        // A button of the toolbar's style that shows the same item, with or without its hint, and
+        // a divider are kept; a button of another style never is (`None`).
+        let children = children
+            .into_iter()
+            .flat_map(RelationshipTarget::iter)
+            .collect::<Vec<_>>();
+        let plan = plan_views(
+            children.iter().filter_map(|child| {
+                if let Ok((button, refs)) = buttons.get(*child) {
+                    let slot = Slot::Button {
                         item: button.item(),
                         hint: refs.hint().is_some(),
-                    },
-                ));
-                current_style &= refs.style() == toolbar.style;
-            } else if dividers.contains(child) {
-                existing.push((child, Slot::Divider));
-            }
-        }
-        if current_style
-            && existing
+                    };
+                    Some((*child, (refs.style() == toolbar.style).then_some(slot)))
+                } else if dividers.contains(*child) {
+                    Some((*child, Some(Slot::Divider)))
+                } else {
+                    None
+                }
+            }),
+            &wanted,
+        );
+        let is_view = |child: Entity| buttons.contains(child) || dividers.contains(child);
+        if plan.stale.is_empty()
+            && plan.slots.iter().all(Option::is_some)
+            && plan
+                .slots
                 .iter()
-                .map(|(_, slot)| *slot)
-                .eq(wanted.iter().copied())
+                .flatten()
+                .copied()
+                .eq(children.iter().copied().filter(|child| is_view(*child)))
         {
             continue;
         }
-        for (child, _) in existing {
-            commands.entity(child).despawn();
+        for child in &plan.stale {
+            commands.entity(*child).despawn();
         }
-        for slot in wanted {
-            match slot {
-                Slot::Button { item, hint } => {
-                    spawn_button(
+        // Buttons and dividers that still match keep their entity (and the focus on them); the
+        // missing ones are spawned and the run is put in order.
+        let views = plan
+            .slots
+            .iter()
+            .zip(&wanted)
+            .map(|(kept, slot)| {
+                kept.unwrap_or_else(|| match *slot {
+                    Slot::Button { item, hint } => spawn_button(
                         &mut commands,
                         &theme,
                         toolbar_ref,
                         toolbar.style,
                         item,
                         hint,
-                    );
-                }
-                Slot::Divider => {
-                    commands.spawn((Divider::vertical(), GroupDivider, ChildOf(toolbar_ref)));
-                }
-            }
+                    ),
+                    Slot::Divider => commands
+                        .spawn((Divider::vertical(), GroupDivider, ChildOf(toolbar_ref)))
+                        .id(),
+                })
+            })
+            .collect::<Vec<_>>();
+        if let Some(ordered) = order_views(&children, is_view, &views, &plan.stale) {
+            commands.entity(toolbar_ref).replace_children(&ordered);
         }
     }
 }
@@ -415,7 +434,7 @@ fn spawn_button(
     style: ToolbarStyle,
     item: Entity,
     hint: bool,
-) {
+) -> Entity {
     let (width, height, icon_px) = match style {
         ToolbarStyle::Filled => (FILLED_WIDTH, FILLED_HEIGHT, FILLED_ICON),
         ToolbarStyle::Underlined => (
@@ -515,6 +534,7 @@ fn spawn_button(
         BackgroundColor(Color::NONE),
         ChildOf(toolbar),
     ));
+    button
 }
 
 /// How a button looks.
