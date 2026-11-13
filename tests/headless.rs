@@ -3512,19 +3512,17 @@ fn child_names(app: &App, entity: Entity) -> Vec<String> {
     app.world()
         .entity(entity)
         .get::<Children>()
-        .map(|children| {
+        .map_or_default(|children| {
             children
                 .iter()
                 .map(|child| {
                     app.world()
                         .entity(child)
                         .get::<Name>()
-                        .map(ToString::to_string)
-                        .unwrap_or_default()
+                        .map_or_default(ToString::to_string)
                 })
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 #[test]
@@ -3848,13 +3846,12 @@ fn item_views(app: &App, list: Entity) -> Vec<Entity> {
     app.world()
         .entity(list)
         .get::<Children>()
-        .map(|children| {
+        .map_or_default(|children| {
             children
                 .iter()
                 .filter(|child| app.world().entity(*child).contains::<ItemView>())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 #[test]
@@ -5476,13 +5473,12 @@ fn chip_views(app: &App, chips: Entity) -> Vec<Entity> {
     app.world()
         .entity(chips)
         .get::<Children>()
-        .map(|children| {
+        .map_or_default(|children| {
             children
                 .iter()
                 .filter(|c| app.world().entity(*c).contains::<ChipView>())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// The label and the count text of a chip.
@@ -6219,14 +6215,13 @@ fn of_three_setting_rows_only_the_first_two_show_a_divider() {
 fn setting_row_divider_displays(app: &App, column: Entity) -> Vec<Display> {
     app.world()
         .get::<Children>(column)
-        .map(|children| {
+        .map_or_default(|children| {
             children
                 .iter()
                 .filter_map(|child| app.world().get::<SettingRowRefs>(child).copied())
                 .map(|refs| app.world().get::<Node>(refs.divider_id).unwrap().display)
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn spawn_setting_rows(app: &mut App, titles: &[&str]) -> (Entity, Vec<Entity>) {
@@ -6370,8 +6365,7 @@ fn toolbar_children(app: &App, toolbar: Entity) -> Vec<Entity> {
     app.world()
         .entity(toolbar)
         .get::<Children>()
-        .map(|c| c.iter().collect())
-        .unwrap_or_default()
+        .map_or_default(|c| c.iter().collect())
 }
 
 fn toolbar_buttons(app: &App, toolbar: Entity) -> Vec<Entity> {
@@ -6693,8 +6687,7 @@ fn children_of(app: &App, entity: Entity) -> Vec<Entity> {
     app.world()
         .entity(entity)
         .get::<Children>()
-        .map(|children| children.iter().collect())
-        .unwrap_or_default()
+        .map_or_default(|children| children.iter().collect())
 }
 
 /// The heading and the cards of each group of a gallery.
@@ -7449,7 +7442,7 @@ fn badge_under(app: &App, host: Entity) -> Option<(Entity, String)> {
     children.iter().find_map(|c| {
         let e = app.world().entity(c);
         (e.get::<Name>().is_some_and(|n| n.as_str() == "Badge"))
-            .then(|| (c, e.get::<Text>().map(|t| t.0.clone()).unwrap_or_default()))
+            .then(|| (c, e.get::<Text>().map_or_default(|t| t.0.clone())))
     })
 }
 
@@ -8477,8 +8470,7 @@ fn scroll_areas_of(world: &mut World) -> Vec<(Entity, Vec<Entity>, Vec<Entity>)>
                 .unwrap();
             let children = world
                 .get::<Children>(contents)
-                .map(|children| children.iter().collect())
-                .unwrap_or_default();
+                .map_or_default(|children| children.iter().collect());
             let targets = world
                 .query::<(&ChildOf, &Scrollbar)>()
                 .iter(world)
@@ -9148,8 +9140,7 @@ fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
         let world = app.world_mut();
         let children: Vec<Entity> = world
             .get::<Children>(view)
-            .map(|c| c.iter().collect())
-            .unwrap_or_default();
+            .map_or_default(|c| c.iter().collect());
         children
             .into_iter()
             .filter_map(|c| world.get::<Text>(c).map(|t| t.0.clone()))
@@ -9231,8 +9222,7 @@ fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_the
             .flat_map(|view| {
                 world
                     .get::<Children>(view)
-                    .map(|c| c.iter().collect::<Vec<_>>())
-                    .unwrap_or_default()
+                    .map_or_default(|c| c.iter().collect::<Vec<_>>())
             })
             .filter(|child| {
                 world
@@ -9739,8 +9729,7 @@ fn thumbs_of(app: &mut App, bar: Entity) -> usize {
     let world = app.world_mut();
     world
         .get::<Children>(bar)
-        .map(|children| children.iter().collect::<Vec<_>>())
-        .unwrap_or_default()
+        .map_or_default(|children| children.iter().collect::<Vec<_>>())
         .into_iter()
         .filter(|child| world.get::<ScrollbarThumb>(*child).is_some())
         .count()
@@ -11498,8 +11487,7 @@ fn spawn_item_source(app: &mut App, texts: &[&'static str]) -> Entity {
 fn source_texts(app: &App, source: Entity) -> Vec<String> {
     app.world()
         .get::<ItemValues>(source)
-        .map(|values| values.iter().map(|item| item_label(app, item)).collect())
-        .unwrap_or_default()
+        .map_or_default(|values| values.iter().map(|item| item_label(app, item)).collect())
 }
 
 #[test]
@@ -11700,8 +11688,7 @@ fn children_with<C: Component>(app: &mut App, stack: Entity) -> Vec<Entity> {
     let world = app.world_mut();
     let children = world
         .get::<Children>(stack)
-        .map(|c| c.iter().collect::<Vec<_>>())
-        .unwrap_or_default();
+        .map_or_default(|c| c.iter().collect::<Vec<_>>());
     children
         .into_iter()
         .filter(|c| world.entity(*c).contains::<C>())
@@ -15905,7 +15892,7 @@ fn indicators_named(app: &App, track: Entity, name: &str) -> Vec<Entity> {
     app.world()
         .entity(track)
         .get::<Children>()
-        .map(|children| {
+        .map_or_default(|children| {
             children
                 .iter()
                 .filter(|c| {
@@ -15915,7 +15902,6 @@ fn indicators_named(app: &App, track: Entity, name: &str) -> Vec<Entity> {
                 })
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// One of each track widget that has a sliding indicator, with the indicator's name.

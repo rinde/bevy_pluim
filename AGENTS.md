@@ -706,7 +706,9 @@ of them (`just example gallery -- --run-all stack link`).
   `Cargo.toml`: `too_many_arguments`, `needless_pass_by_value` and
   `type_complexity` (systems take many params, `In<_>` / `Res<_>` / `Trigger<_>`
   by value, and nested `Query` types), plus `too_many_lines` and the numeric
-  cast lints. `unused_crate_dependencies` stays off because it misfires per
+  cast lints, and one style allow for tests that is not Bevy-shaped,
+  `assert_is_empty` (`assert!(x.is_empty())` reads better in tests than
+  `assert_eq!(x, [] as [T; 0])`). `unused_crate_dependencies` stays off because it misfires per
   example / test target; `cargo machete` (in `just ci`) checks dependencies
   instead. Public functions returning `Result` need a `# Errors` section.
 - **No panics in library code.** `unwrap_used`, `expect_used`, `panic`,
