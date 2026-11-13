@@ -7,7 +7,7 @@
 )]
 
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, Selected, UiGlobalTransform};
+use bevy::ui::{ComputedNode, Selected, UiGlobalTransform, UiTransform, Val2};
 use itertools::Either;
 use std::collections::HashMap;
 
@@ -18,6 +18,9 @@ use crate::theme::Theme;
 const INDICATOR_RATE: f32 = 18.0;
 /// The distance in logical pixels under which an indicator snaps to its target.
 const INDICATOR_SNAP: f32 = 0.5;
+/// How far in logical pixels the item's box may move before the indicator's `Node` follows it, so
+/// float noise from layout does not dirty layout again.
+const GOAL_EPSILON: f32 = 0.01;
 
 /// The component of an indicator: it belongs to one track.
 pub(crate) trait Indicator: Component + Sized {
@@ -88,14 +91,20 @@ pub(crate) fn spawn<I: Indicator, T: Component>(
 
 /// Moves each indicator `I` towards the selected item `S` of its track `T`, snapping the first
 /// time it is placed. With no selected item the indicator is hidden.
+///
+/// The `Node` always holds the laid-out box of the selected item (the goal), so layout only runs
+/// when the goal moves. The slide is drawn by the indicator's `UiTransform`: its translation is the
+/// offset of the visible box's centre from the goal's, its scale the visible size over the goal's,
+/// both easing to rest (zero and one). A frame of sliding changes no `Node`, so it dirties no
+/// layout.
 pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
     time: Res<Time>,
     tracks: Query<(&ComputedNode, &UiGlobalTransform, &Children), With<T>>,
     selected: Query<(&ComputedNode, &UiGlobalTransform), (With<S>, With<Selected>)>,
-    mut indicators: Query<(&I, &mut Node)>,
+    mut indicators: Query<(&I, &mut Node, &mut UiTransform)>,
 ) {
     let blend = 1.0 - (-time.delta_secs() * INDICATOR_RATE).exp();
-    for (indicator, mut node) in &mut indicators {
+    for (indicator, mut node, mut transform) in &mut indicators {
         let Ok((track, track_at, children)) = tracks.get(indicator.owner()) else {
             continue;
         };
@@ -110,41 +119,56 @@ pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
         let size = item.size() * scale;
         let origin =
             (item_at.translation - item.size() / 2.0) - (track_at.translation - track.size() / 2.0);
-        let goal = [origin.x * scale, origin.y * scale, size.x, size.y];
+        let goal = Rect::from_corners(origin * scale, origin * scale + size);
 
         let placed = node.display != Display::None;
-        let now = [node.left, node.top, node.width, node.height].map(|v| match v {
+        let px = |v: Val| match v {
             Val::Px(px) => px,
             _ => 0.0,
-        });
-        let next: [f32; 4] = if placed {
-            std::array::from_fn(|i| {
-                let (from, to) = (
-                    now.get(i).copied().unwrap_or(0.0),
-                    goal.get(i).copied().unwrap_or(0.0),
-                );
-                if (to - from).abs() < INDICATOR_SNAP {
-                    to
-                } else {
-                    (to - from).mul_add(blend, from)
-                }
-            })
+        };
+        let resting = Rect::new(
+            px(node.left),
+            px(node.top),
+            px(node.left) + px(node.width),
+            px(node.top) + px(node.height),
+        );
+        // The visible box now: the node's, moved and scaled by the transform.
+        let shown = if placed {
+            let offset = Vec2::new(px(transform.translation.x), px(transform.translation.y));
+            Rect::from_center_size(resting.center() + offset, resting.size() * transform.scale)
         } else {
             goal
         };
-        if placed
-            && next
-                .iter()
-                .zip(&now)
-                .all(|(a, b)| a.to_bits() == b.to_bits())
-        {
-            continue;
+
+        // The goal moved: the node takes it at once and the transform keeps what is seen where it
+        // was.
+        let moved = !placed
+            || (goal.min - resting.min).abs().max_element() >= GOAL_EPSILON
+            || (goal.size() - resting.size()).abs().max_element() >= GOAL_EPSILON;
+        if moved {
+            node.display = Display::Flex;
+            node.left = Val::Px(goal.min.x);
+            node.top = Val::Px(goal.min.y);
+            node.width = Val::Px(goal.width());
+            node.height = Val::Px(goal.height());
         }
-        let [left, top, width, height] = next.map(Val::Px);
-        node.display = Display::Flex;
-        node.left = left;
-        node.top = top;
-        node.width = width;
-        node.height = height;
+        let goal_size = goal.size().max(Vec2::splat(f32::EPSILON));
+        let (mut offset, mut ratio) = (shown.center() - goal.center(), shown.size() / goal_size);
+        // Ease both towards rest, snapping when near.
+        if offset.abs().max_element() < INDICATOR_SNAP
+            && (shown.size() - goal.size()).abs().max_element() < INDICATOR_SNAP
+        {
+            (offset, ratio) = (Vec2::ZERO, Vec2::ONE);
+        } else {
+            offset *= 1.0 - blend;
+            ratio = (ratio - Vec2::ONE).mul_add(Vec2::splat(1.0 - blend), Vec2::ONE);
+        }
+        let translation = Val2::px(offset.x, offset.y);
+        if transform.translation != translation {
+            transform.translation = translation;
+        }
+        if transform.scale != ratio {
+            transform.scale = ratio;
+        }
     }
 }

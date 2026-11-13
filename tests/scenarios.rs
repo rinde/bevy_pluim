@@ -3618,7 +3618,20 @@ fn a_separated_virtual_list_with_a_row_height_just_above_its_padding_and_ring_sh
     assert!(rows_and_entities(&mut app).0 > 0);
 }
 
-/// The `left` of the segment indicator of `control`, in logical pixels, and the left edge of
+/// The left edge of an indicator as drawn, in logical pixels: its `Node` holds the laid-out goal
+/// and its `UiTransform` moves and scales that box about its centre.
+fn indicator_visual_left(world: &World, indicator: Entity) -> f32 {
+    let node = world.get::<Node>(indicator).unwrap();
+    let transform = world.get::<UiTransform>(indicator).unwrap();
+    let (Val::Px(left), Val::Px(width), Val::Px(shift)) =
+        (node.left, node.width, transform.translation.x)
+    else {
+        return f32::NAN;
+    };
+    left + width / 2.0 + shift - width * transform.scale.x / 2.0
+}
+
+/// The drawn left of the segment indicator of `control`, in logical pixels, and the left edge of
 /// `segment` relative to `control`, as the layout has it.
 fn indicator_left_and_goal(app: &App, control: Entity, segment: Entity) -> (f32, f32) {
     use bevy_pluim::segmented_control::SegmentIndicator;
@@ -3630,9 +3643,7 @@ fn indicator_left_and_goal(app: &App, control: Entity, segment: Entity) -> (f32,
         .iter()
         .find(|c| world.entity(*c).contains::<SegmentIndicator>())
         .unwrap();
-    let Val::Px(left) = world.get::<Node>(indicator).unwrap().left else {
-        return (f32::NAN, f32::NAN);
-    };
+    let left = indicator_visual_left(world, indicator);
     let edge = |e: Entity| {
         let node = world.get::<ComputedNode>(e).unwrap();
         (world.get::<UiGlobalTransform>(e).unwrap().translation.x - node.size().x / 2.0)
@@ -3707,7 +3718,77 @@ fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
     assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
 }
 
-/// The `left` of the child of `track` named `indicator`, in logical pixels, and the left edge of
+#[test]
+fn a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone() {
+    use bevy_pluim::segmented_control::{SegmentIndicator, SegmentedControl};
+    use bevy_pluim::select::{Item, Selection, SelectionParam};
+
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    let control = world
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Auto", "Manual", "Off"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..5 {
+        app.update();
+    }
+    let indicator = app
+        .world()
+        .entity(control)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains::<SegmentIndicator>())
+        .unwrap();
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            let item = selections
+                .get_item_values(control)
+                .unwrap()
+                .1
+                .iter()
+                .nth(2)
+                .unwrap();
+            selections.update_selection(control, |s| s.set_selection([item]));
+        })
+        .unwrap();
+    // The node takes the goal in the first frames, then stays while the transform eases.
+    for _ in 0..3 {
+        app.update();
+    }
+    let node = |app: &App| app.world().get::<Node>(indicator).unwrap().clone();
+    let shift = |app: &App| {
+        let Val::Px(x) = app
+            .world()
+            .get::<UiTransform>(indicator)
+            .unwrap()
+            .translation
+            .x
+        else {
+            return f32::NAN;
+        };
+        x
+    };
+    let (before, shift_before) = (node(&app), shift(&app));
+    assert!(shift_before < -1.0, "{shift_before}");
+    for _ in 0..3 {
+        app.update();
+        assert_eq!(node(&app), before);
+    }
+    assert!(shift(&app) > shift_before);
+    for _ in 0..60 {
+        app.update();
+    }
+    assert_eq!(shift(&app), 0.0);
+}
+
+/// The drawn left of the child of `track` named `indicator`, in logical pixels, and the left edge of
 /// `item` relative to `track`, as the layout has it.
 fn named_indicator_left_and_goal(
     app: &App,
@@ -3727,9 +3808,7 @@ fn named_indicator_left_and_goal(
                 .is_some_and(|n| n.as_str() == indicator)
         })
         .unwrap();
-    let Val::Px(left) = world.get::<Node>(indicator).unwrap().left else {
-        return (f32::NAN, f32::NAN);
-    };
+    let left = indicator_visual_left(world, indicator);
     let edge = |e: Entity| {
         let node = world.get::<ComputedNode>(e).unwrap();
         (world.get::<UiGlobalTransform>(e).unwrap().translation.x - node.size().x / 2.0)
