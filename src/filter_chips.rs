@@ -207,9 +207,10 @@ fn sync_chips(
         let Ok(children) = chips.get(chips_ref) else {
             continue;
         };
-        let Some((_, values)) = selections.get_items(chips_ref) else {
-            continue;
-        };
+        // A selection that no longer resolves has no items: the views are cleared.
+        let values = selections
+            .get_items(chips_ref)
+            .map_or(&[][..], |(_, values)| values);
         let wanted = values
             .iter()
             .copied()

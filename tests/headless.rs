@@ -18184,3 +18184,135 @@ fn simultaneous_selection_changes_update_only_the_lists_that_follow_them() {
     assert_eq!(selected_labels(&app, first), ["s2"]);
     assert_eq!(selected_labels(&app, second), ["s2"]);
 }
+
+/// Plays the despawning of the source behind a widget's selection: the widget refers to a
+/// selection entity (`spawn` gets its entity) that holds the `ItemsRef`, so despawning the source
+/// takes that entity with it and the widget's `Selection::Ref` dangles. `shown` counts what the
+/// widget has built.
+fn despawns_the_source_of_a_widget<T: Send + Sync + 'static>(
+    name: &str,
+    spawn: impl FnOnce(&mut App, Entity) -> Entity,
+    items: [T; 3],
+    shown: impl Fn(&App, Entity) -> usize,
+) {
+    let mut app = headless_app();
+    let [a1, a2, b1] = items;
+    let a = typed_source(&mut app, [a1, a2]);
+    let selection = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items_ref(a))
+        .id();
+    let widget = spawn(&mut app, selection);
+    assert!(shown(&app, widget) > 0, "{name}: built over a");
+
+    app.world_mut().entity_mut(a).despawn();
+    settle_frames(&mut app);
+    assert!(app.world().get_entity(selection).is_err());
+    assert_eq!(shown(&app, widget), 0, "{name}: cleared by the despawn");
+
+    // Pointing the widget at a live source brings it back.
+    let b = typed_source(&mut app, [b1]);
+    let other = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items_ref(b))
+        .id();
+    app.world_mut()
+        .entity_mut(widget)
+        .insert(Selection::reference(other));
+    settle_frames(&mut app);
+    assert!(shown(&app, widget) > 0, "{name}: back over b");
+}
+
+#[test]
+fn a_list_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "list",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let list = app
+                .world_mut()
+                .spawn((List, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            list
+        },
+        ["p", "q", "r"].map(String::from),
+        |app, list| item_views(app, list).len(),
+    );
+}
+
+#[test]
+fn a_filter_chips_row_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "filter chips",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let chips = app
+                .world_mut()
+                .spawn((FilterChips, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            chips
+        },
+        ["p", "q", "r"].map(Chip::new),
+        |app, chips| chip_views(app, chips).len(),
+    );
+}
+
+#[test]
+fn a_toolbar_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "toolbar",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let toolbar = app
+                .world_mut()
+                .spawn((
+                    Toolbar::new(ToolbarStyle::Filled),
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            toolbar
+        },
+        ["p", "q", "r"].map(|label| Tool::in_group(Handle::default(), label, 0)),
+        |app, toolbar| toolbar_buttons(app, toolbar).len(),
+    );
+}
+
+#[test]
+fn a_gallery_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "gallery",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let gallery = app
+                .world_mut()
+                .spawn((Gallery, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            gallery
+        },
+        ["p", "q", "r"].map(|label| GalleryCard::new(Handle::default(), label, "Group")),
+        |app, gallery| children_of(app, gallery).len(),
+    );
+}
+
+#[test]
+fn a_color_palette_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "color palette",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let palette = app
+                .world_mut()
+                .spawn((ColorPalette, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            palette
+        },
+        [Color::WHITE, Color::BLACK, Color::srgb(1.0, 0.0, 0.0)],
+        |app, palette| item_views(app, palette).len(),
+    );
+}

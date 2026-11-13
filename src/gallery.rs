@@ -214,9 +214,10 @@ fn sync_cards(
         let Ok((children, built)) = galleries.get(gallery) else {
             continue;
         };
-        let Some((_, values)) = selections.get_items(gallery) else {
-            continue;
-        };
+        // A selection that no longer resolves has no items: the views are cleared.
+        let values = selections
+            .get_items(gallery)
+            .map_or(&[][..], |(_, values)| values);
         let mut wanted: Vec<(String, Vec<Entity>)> = Vec::new();
         for item in values.iter().copied() {
             let Ok(card) = items.get(item) else {

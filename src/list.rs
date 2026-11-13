@@ -24,7 +24,7 @@ use itertools::Either;
 use crate::combo::Combo;
 use crate::filter_combo::FilterCombo;
 use crate::focus::{AccessibilitySync, TabStop, sync_label};
-use crate::select::{Item, ItemsChanged, Selection, SelectionParam, SelectionValue};
+use crate::select::{Item, ItemsChanged, ItemsRef, Selection, SelectionParam, SelectionValue};
 use crate::theme::{Theme, ThemeColors, contrast_ratio};
 use crate::{MouseEvent, MouseKind};
 
@@ -60,6 +60,7 @@ impl Plugin for ListPlugin {
                     sync_item_notes.run_if(item_notes_changed),
                     sync_item_label_text,
                     note_ink_follows_row.after(selection_change),
+                    clear_dangling_lists,
                 ),
             )
             .add_systems(PostUpdate, sync_item_labels.in_set(AccessibilitySync))
@@ -1074,6 +1075,49 @@ fn watch_list(
         return;
     };
     watch_items(list.0, watch, &selections, commands, on_items_changed);
+}
+
+/// Clears the views of the lists whose items no longer resolve, as if their source had none.
+///
+/// Despawning the source entity is not reported by `ItemsChanged`: the observers sit on it and
+/// go with it, so a list whose `Selection::Ref` now dangles would keep its stale views and a
+/// dead `ItemsWatch`. Looks only in a frame where a `Selection` or `ItemsRef` was removed.
+fn clear_dangling_lists(
+    mut removed_selections: RemovedComponents<Selection>,
+    mut removed_refs: RemovedComponents<ItemsRef>,
+    lists: Query<(Entity, &ItemsWatch), (With<List>, Without<NoDefaultItems>)>,
+    selections: SelectionParam,
+    commands: Commands,
+) {
+    let removed = removed_selections.read().count() + removed_refs.read().count() > 0;
+    if removed {
+        unwatch_dangling(&lists, &selections, commands, on_items_changed);
+    }
+}
+
+/// For each watching list in `lists` whose items no longer resolve: despawns its observer,
+/// drops its [`ItemsWatch`] (pointing it at a live source watches again) and runs
+/// `on_items_changed` with no items. Shared by [`List`] and the colour palette.
+pub(crate) fn unwatch_dangling<M: 'static, F: bevy::ecs::query::QueryFilter>(
+    lists: &Query<(Entity, &ItemsWatch), F>,
+    selections: &SelectionParam,
+    mut commands: Commands,
+    on_items_changed: impl IntoSystem<In<ItemsChangedInput>, (), M> + Copy + Send + Sync + 'static,
+) {
+    for (list, watch) in lists {
+        if selections.get_items(list).is_some() {
+            continue;
+        }
+        commands.entity(watch.observer).despawn();
+        commands.entity(list).remove::<ItemsWatch>();
+        commands.run_system_cached_with(
+            on_items_changed,
+            ItemsChangedInput {
+                list_ref: list,
+                items: Arc::from(Vec::<Entity>::new()),
+            },
+        );
+    }
 }
 
 /// Makes `on_items_changed` run for `list_ref` whenever the items of its
