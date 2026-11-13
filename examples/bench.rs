@@ -43,7 +43,7 @@ use bevy_pluim::theme::Theme;
 use bevy_pluim::theme_editor::ThemeEditor;
 use bevy_pluim::toast::Toast;
 use bevy_pluim::toolbar::{Tool, Toolbar, ToolbarStyle};
-use bevy_pluim::tooltip::Tooltip;
+use bevy_pluim::tooltip::{Tooltip, TooltipPopup};
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
 
@@ -780,10 +780,23 @@ fn measure(run: Run) -> String {
     }
 
     let mut times = Vec::with_capacity(run.frames);
+    let mut popups_seen = 0_usize;
     for index in 0..run.frames {
         let start = Instant::now();
         frame(&mut app, run.workload, run.size, index);
         times.push(start.elapsed());
+        if run.workload == Workload::TooltipsScrubbing {
+            // Outside the timing: `HoverLock` is crate-private, but while it is on no popup shows.
+            let world = app.world_mut();
+            popups_seen += world.query::<&TooltipPopup>().iter(world).count();
+        }
+    }
+    if popups_seen > 0 {
+        return format!(
+            "| {} | {} | error: {popups_seen} tooltip popups showed during the scrub drag, so the HoverLock was not on |",
+            run.workload.name(),
+            run.size
+        );
     }
     let after = resident_bytes();
     let entities = app.world().entities().count_spawned();
