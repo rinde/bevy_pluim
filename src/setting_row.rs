@@ -234,27 +234,61 @@ fn theme_setting_rows(
 }
 
 /// Hides the divider of the last row of each [`SettingRows`] and shows it on the others.
+///
+/// Looks only at the columns whose structure changed: their `Children` changed (or the column is
+/// new), or one of their rows got its [`SettingRowRefs`] (a row's refs arrive a frame after the
+/// row is spawned). A quiet frame visits nothing and nothing is collected.
 fn sync_dividers(
-    containers: Query<&Children, With<SettingRows>>,
+    changed_columns: Query<
+        Entity,
+        (
+            With<SettingRows>,
+            Or<(Added<SettingRows>, Changed<Children>)>,
+        ),
+    >,
+    new_rows: Query<&ChildOf, Changed<SettingRowRefs>>,
+    columns: Query<&Children, With<SettingRows>>,
     rows: Query<&SettingRowRefs>,
     mut nodes: Query<&mut Node>,
 ) {
-    for children in &containers {
-        let rows_here: Vec<&SettingRowRefs> =
-            children.iter().filter_map(|c| rows.get(c).ok()).collect();
-        let last = rows_here.len().saturating_sub(1);
-        for (i, refs) in rows_here.into_iter().enumerate() {
-            let Ok(mut node) = nodes.get_mut(refs.divider_id) else {
-                continue;
-            };
-            let display = if i == last {
-                Display::None
-            } else {
-                Display::Flex
-            };
-            if node.display != display {
-                node.display = display;
-            }
+    for column in &changed_columns {
+        sync_column(column, &columns, &rows, &mut nodes);
+    }
+    for child_of in &new_rows {
+        let column = child_of.parent();
+        // A column that also changed its children was done above; doing it again changes nothing.
+        if !changed_columns.contains(column) {
+            sync_column(column, &columns, &rows, &mut nodes);
+        }
+    }
+}
+
+fn sync_column(
+    column: Entity,
+    columns: &Query<&Children, With<SettingRows>>,
+    rows: &Query<&SettingRowRefs>,
+    nodes: &mut Query<&mut Node>,
+) {
+    let Ok(children) = columns.get(column) else {
+        return;
+    };
+    let Some(last) = children.iter().rev().find(|child| rows.contains(*child)) else {
+        return;
+    };
+    for child in children.iter() {
+        let Ok(refs) = rows.get(child) else {
+            continue;
+        };
+        let Ok(mut node) = nodes.get_mut(refs.divider_id) else {
+            continue;
+        };
+        let display = if child == last {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        if node.display != display {
+            node.display = display;
         }
     }
 }
