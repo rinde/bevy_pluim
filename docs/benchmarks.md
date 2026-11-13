@@ -55,6 +55,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `lists-selection-idle` | the same | the same lists with no change: the floor `lists-selection-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
+| `list-items-horizontal-adding` | 5 000 | the same with `ListLayout::Horizontal` (#766) |
+| `list-items-grid-adding` | 5 000 | the same with `ListLayout::VerticalGrid { columns: 4 }` (#766) |
 | `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
 | `palette-items-adding` | 5 000 | one `ColorPalette`; one item is added every frame (#679) |
 | `tab-items-adding` | 5 000 | one `TabBar`; one item is added every frame (#679) |
@@ -689,3 +691,34 @@ roughly linearly with the number of controls. The acceptance of #768 (time stops
 count) is **not met** by this change alone. Entities are unchanged. The sliding frames themselves no
 longer write a `Node`, but what dominates the workload is not shown to be the per-frame selection
 re-insert of the workload (that attribution is unverified); finding the residual cost is tracked in #782.
+
+## Cost of a list row and of the non-vertical layouts (#766)
+
+Two changes, measured with `--frames 15` (release build; columns: mean frame time in
+microseconds, entities at the end, memory in MiB).
+
+- **One entity fewer per row.** A default row had a view, a label and an observer entity (from
+  `view.observe(handle_mouse_events)`). The hover and press colours are now handled by one
+  global observer, which acts only on views carrying the private `DefaultRow` marker, so a
+  palette swatch (its own observer) and a custom view (`handle_custom_view_mouse_events`) are
+  untouched. A row is a view and a label (a note child exists only with an `ItemNote`). Dropping
+  the label child too was considered and not done: the label is where an `ItemNote` and the
+  rename sync (`ItemLabel`) hang, and a view with its own `Text` would mix with app children
+  of a custom view.
+- **`ListLayout::Horizontal` is a flex row**, not a one-row grid, as `Vertical` became a flex
+  column in #729 (a grid with `ColumnDense` and no explicit tracks was the expensive part in
+  Taffy). `VerticalGrid` needs the grid and stays one. There is no cheaper layout for it
+  (columns of equal-height rows share tracks), so it is only measured.
+
+| Workload | Items | Before | After | Entities before / after |
+| --- | --- | --- | --- | --- |
+| `list-items-initial` | 1 000 | 76 800 | 60 500 | 4 333 / 3 334 |
+| `list-items-initial` | 4 000 | 299 600 | 231 700 | 16 333 / 12 334 |
+| `list-items-adding` | 1 000 | 37 100 | 31 000 | 4 633 / 3 559 |
+| `list-items-adding` | 4 000 | 120 600 | 115 000 | 16 633 / 12 559 |
+| `list-items-horizontal-adding` | 1 000 | 63 400 | 21 600 | 4 633 / 3 559 |
+| `list-items-horizontal-adding` | 4 000 | 693 300 | 86 000 | 16 633 / 12 559 |
+| `list-items-grid-adding` | 1 000 | 35 900 | not changed | 4 633 / 3 559 |
+| `list-items-grid-adding` | 4 000 | 315 100 | not changed | 16 633 / 12 559 |
+
+The numbers of the #676 section above were measured before #729 and are not comparable.
