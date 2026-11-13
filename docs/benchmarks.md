@@ -78,6 +78,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `roving-groups-selection` | the same | one control's `Selection` is replaced every frame, so `Changed<Selection>` fires for that control alone (the control's own redraw is part of the cost) |
 | `wheel-deep` | a 200-deep chain in a vertical `ScrollArea`, with a nested horizontal area in the middle | 16 `MouseWheel` messages per frame, over two pointers whose hover map holds the nested area's 8 ancestors and a leaf (the headless app has no picking backend, so the example writes the hover map); the cost of `update_scroll_position` (#682) |
 | `wheel-deep-idle` | the same | the same tree and hover map, no wheel messages: the floor `wheel-deep` is read against |
+| `sliders-idle` | 2000 sliders | no change: the floor `sliders-pressing` is read against (#698) |
+| `sliders-pressing` | 2000 sliders | one slider released and another pressed every frame, so `restyle_sliders` visits only those (#698) |
 | `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
