@@ -522,88 +522,111 @@ pub(crate) fn update_scroll_position(
     mut scrolled_node_query: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
+    mut scratch: Local<WheelScratch>,
 ) {
+    if mouse_wheel_events.is_empty() {
+        return;
+    }
+    // The hover map and the hierarchy do not change while this system runs, so the
+    // scroll targets are the same for every wheel message of the frame: find them once.
+    let WheelScratch {
+        targets,
+        outer_targets,
+        resolved,
+    } = &mut *scratch;
+    resolved.clear();
+    for pointer_map in hover_map.values() {
+        targets.clear();
+        for entity in pointer_map.keys() {
+            let mut current = Some(*entity);
+            while let Some(entity) = current {
+                if let Ok((_, _, node)) = scrolled_node_query.get(entity)
+                    && (node.overflow.x == OverflowAxis::Scroll
+                        || node.overflow.y == OverflowAxis::Scroll)
+                {
+                    targets.insert(entity);
+                    break;
+                }
+                let Ok((parent, fixed)) = hierarchy.get(entity) else {
+                    break;
+                };
+                if fixed {
+                    break;
+                }
+                current = parent.map(ChildOf::parent);
+            }
+        }
+        // A nested scroll area gets the wheel alone, even if picking also reports
+        // its outer area. Do not pass the wheel on when the inner area is at its limit.
+        outer_targets.clear();
+        for &target in targets.iter() {
+            let mut current = hierarchy.get(target).ok().and_then(|(parent, fixed)| {
+                if fixed {
+                    None
+                } else {
+                    parent.map(ChildOf::parent)
+                }
+            });
+            while let Some(entity) = current {
+                if targets.contains(&entity) {
+                    outer_targets.insert(entity);
+                }
+                let Ok((parent, fixed)) = hierarchy.get(entity) else {
+                    break;
+                };
+                if fixed {
+                    break;
+                }
+                current = parent.map(ChildOf::parent);
+            }
+        }
+        // One entry per pointer, so an area two pointers hover scrolls once for each.
+        resolved.extend(targets.difference(outer_targets).copied());
+    }
+
+    let ctrl = keyboard_input.pressed(KeyCode::ControlLeft)
+        || keyboard_input.pressed(KeyCode::ControlRight);
     for mouse_wheel_event in mouse_wheel_events.read() {
         let (mut dx, mut dy) = match mouse_wheel_event.unit {
             MouseScrollUnit::Line => (mouse_wheel_event.x * 21., mouse_wheel_event.y * 21.),
             MouseScrollUnit::Pixel => (mouse_wheel_event.x, mouse_wheel_event.y),
         };
 
-        if keyboard_input.pressed(KeyCode::ControlLeft)
-            || keyboard_input.pressed(KeyCode::ControlRight)
-        {
+        if ctrl {
             std::mem::swap(&mut dx, &mut dy);
         }
 
-        for (_pointer, pointer_map) in hover_map.iter() {
-            let mut targets = HashSet::new();
-            for entity in pointer_map.keys() {
-                let mut current = Some(*entity);
-                while let Some(entity) = current {
-                    if let Ok((_, _, node)) = scrolled_node_query.get(entity)
-                        && (node.overflow.x == OverflowAxis::Scroll
-                            || node.overflow.y == OverflowAxis::Scroll)
-                    {
-                        targets.insert(entity);
-                        break;
-                    }
-                    let Ok((parent, fixed)) = hierarchy.get(entity) else {
-                        break;
-                    };
-                    if fixed {
-                        break;
-                    }
-                    current = parent.map(ChildOf::parent);
-                }
+        // Each message is applied in turn (and clamped in turn), as before.
+        for entity in resolved.iter() {
+            let Ok((mut scroll_position, computed, node)) = scrolled_node_query.get_mut(*entity)
+            else {
+                continue;
+            };
+            let overflow =
+                (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
+            // A mouse wheel only turns vertically, so an area that scrolls sideways
+            // alone takes the vertical turn for a horizontal one.
+            let dx = if dx == 0.0 && node.overflow.y != OverflowAxis::Scroll {
+                dy
+            } else {
+                dx
+            };
+            if node.overflow.x == OverflowAxis::Scroll {
+                scroll_position.x = (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0));
             }
-            // A nested scroll area gets the wheel alone, even if picking also reports
-            // its outer area. Do not pass the wheel on when the inner area is at its limit.
-            let mut outer_targets = HashSet::new();
-            for &target in &targets {
-                let mut current = hierarchy.get(target).ok().and_then(|(parent, fixed)| {
-                    if fixed {
-                        None
-                    } else {
-                        parent.map(ChildOf::parent)
-                    }
-                });
-                while let Some(entity) = current {
-                    if targets.contains(&entity) {
-                        outer_targets.insert(entity);
-                    }
-                    let Ok((parent, fixed)) = hierarchy.get(entity) else {
-                        break;
-                    };
-                    if fixed {
-                        break;
-                    }
-                    current = parent.map(ChildOf::parent);
-                }
-            }
-            for entity in targets.difference(&outer_targets) {
-                let Ok((mut scroll_position, computed, node)) =
-                    scrolled_node_query.get_mut(*entity)
-                else {
-                    continue;
-                };
-                let overflow =
-                    (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
-                // A mouse wheel only turns vertically, so an area that scrolls sideways
-                // alone takes the vertical turn for a horizontal one.
-                let dx = if dx == 0.0 && node.overflow.y != OverflowAxis::Scroll {
-                    dy
-                } else {
-                    dx
-                };
-                if node.overflow.x == OverflowAxis::Scroll {
-                    scroll_position.x = (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0));
-                }
-                if node.overflow.y == OverflowAxis::Scroll {
-                    scroll_position.y = (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0));
-                }
+            if node.overflow.y == OverflowAxis::Scroll {
+                scroll_position.y = (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0));
             }
         }
     }
+}
+
+/// Buffers [`update_scroll_position`] keeps between frames, so a wheel message allocates nothing.
+#[derive(Default)]
+pub(crate) struct WheelScratch {
+    targets: HashSet<Entity>,
+    outer_targets: HashSet<Entity>,
+    resolved: Vec<Entity>,
 }
 
 /// Hides a scroll bar while the contents fit along its axis, and shows it again when

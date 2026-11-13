@@ -15532,3 +15532,144 @@ fn a_palette_despawns_a_second_swatch_of_one_item_and_keeps_the_others() {
     assert_eq!(after.len(), 3);
     assert_eq!(after[..2], views[..]);
 }
+
+/// Entities the pointers are on, for [`wheel_app`]: the headless app has no picking backend, so
+/// the hover map is written by hand after picking has rebuilt it.
+#[derive(Resource, Default)]
+struct FakeHover(Vec<(PointerId, Entity)>);
+
+fn write_fake_hover(fake: Res<FakeHover>, mut hover_map: ResMut<bevy::picking::hover::HoverMap>) {
+    for (pointer, entity) in &fake.0 {
+        hover_map
+            .entry(*pointer)
+            .or_default()
+            .insert(*entity, HitData::new(Entity::PLACEHOLDER, 0.0, None, None));
+    }
+}
+
+fn wheel_app() -> App {
+    let mut app = headless_app_with(|app| {
+        app.init_resource::<FakeHover>();
+        app.add_systems(
+            PreUpdate,
+            write_fake_hover.after(bevy::picking::PickingSystems::Hover),
+        );
+    });
+    app.update();
+    app
+}
+
+fn hover(app: &mut App, pointers: &[(PointerId, Entity)]) {
+    app.world_mut().get_resource_mut::<FakeHover>().unwrap().0 = pointers.to_vec();
+}
+
+fn wheel(app: &mut App, unit: bevy::input::mouse::MouseScrollUnit, x: f32, y: f32) {
+    app.world_mut()
+        .write_message(bevy::input::mouse::MouseWheel {
+            unit,
+            x,
+            y,
+            window: Entity::PLACEHOLDER,
+            phase: bevy::input::touch::TouchPhase::Moved,
+        });
+}
+
+#[test]
+fn many_wheel_messages_in_one_frame_are_applied_and_clamped_one_after_another() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    // The area scrolls 300 px at most. Down 250, down 250 (clamped to 300), up 100: 200. A sum
+    // (400 down) would give 300, so the order and the clamp in between show.
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    wheel(&mut app, Pixel, 0.0, -250.0);
+    wheel(&mut app, Pixel, 0.0, -250.0);
+    wheel(&mut app, Pixel, 0.0, 100.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 200.0));
+}
+
+#[test]
+fn a_wheel_line_is_21_pixels_and_control_swaps_the_axes() {
+    use bevy::input::mouse::MouseScrollUnit::Line;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    wheel(&mut app, Line, 0.0, -2.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 42.0));
+    app.world_mut()
+        .get_resource_mut::<ButtonInput<KeyCode>>()
+        .unwrap()
+        .press(KeyCode::ControlLeft);
+    wheel(&mut app, Line, 0.0, -1.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(21.0, 42.0));
+}
+
+#[test]
+fn an_area_that_scrolls_sideways_alone_takes_a_vertical_turn_for_a_horizontal_one() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    wheel(&mut app, Pixel, 0.0, -30.0);
+    wheel(&mut app, Pixel, 0.0, -30.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(60.0, 0.0));
+}
+
+#[test]
+fn only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let leaf = target_at(&mut app, Some(inner), Vec2::ZERO, 1.0);
+    // Picking reports the leaf, the inner and the outer area, as it does for a blocking area.
+    hover(
+        &mut app,
+        &[
+            (PointerId::Mouse, leaf),
+            (PointerId::Mouse, inner),
+            (PointerId::Mouse, outer),
+        ],
+    );
+    // 400 down: the inner area stops at 300, nothing is passed on to the outer one.
+    wheel(&mut app, Pixel, 0.0, -200.0);
+    wheel(&mut app, Pixel, 0.0, -200.0);
+    app.update();
+    assert_eq!(scroll_of(&app, inner), Vec2::new(0.0, 300.0));
+    assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
+}
+
+#[test]
+fn a_fixed_node_stops_the_search_for_a_scroll_area_above_it() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let popup = app
+        .world_mut()
+        .spawn((Node::default(), FixedNode, ChildOf(area)))
+        .id();
+    let item = target_at(&mut app, Some(popup), Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, item)]);
+    wheel(&mut app, Pixel, 0.0, -50.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+}
+
+#[test]
+fn an_area_two_pointers_are_on_scrolls_once_for_each_pointer_and_message() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    hover(
+        &mut app,
+        &[(PointerId::Mouse, area), (PointerId::Touch(0), area)],
+    );
+    wheel(&mut app, Pixel, 0.0, -10.0);
+    wheel(&mut app, Pixel, 0.0, -10.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 40.0));
+}

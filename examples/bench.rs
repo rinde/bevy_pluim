@@ -47,6 +47,30 @@ const DEFAULT_FRAMES: usize = 300;
 const CHANGED_STEPPERS: usize = 20;
 /// Steppers mirroring each shared value in `steppers-shared-changing`.
 const MIRRORS: usize = 10;
+/// Wheel messages sent per frame by `wheel-deep`, as a trackpad sends at a high rate.
+const WHEEL_EVENTS: usize = 16;
+/// Entities of the deep tree the fake pointers hover (the leaf and its nearest ancestors).
+const HOVERED_ANCESTORS: usize = 8;
+
+/// Marks an entity of the wheel tree that the fake pointers hover.
+#[derive(Component)]
+struct WheelHovered;
+
+/// Puts the marked entities in the hover map of two pointers, after picking has
+/// rebuilt it (there is no real pointer in a headless run).
+fn fake_hover(
+    hovered: Query<Entity, With<WheelHovered>>,
+    mut hover_map: ResMut<bevy::picking::hover::HoverMap>,
+) {
+    use bevy::picking::backend::HitData;
+    use bevy::picking::pointer::PointerId;
+    for pointer in [PointerId::Mouse, PointerId::Touch(0)] {
+        let map = hover_map.entry(pointer).or_default();
+        for entity in &hovered {
+            map.insert(entity, HitData::new(Entity::PLACEHOLDER, 0.0, None, None));
+        }
+    }
+}
 
 /// What is spawned and what happens each frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,6 +145,11 @@ enum Workload {
     RovingGroupsSelection,
     /// The same controls, idle: the floor the two roving workloads are read against.
     RovingGroupsIdle,
+    /// Wheel input over a deep, nested scroll tree: `WHEEL_EVENTS` trackpad messages a frame for
+    /// two pointers (#682).
+    WheelDeep,
+    /// The same tree and hover map with no wheel input: the floor `wheel-deep` is read against.
+    WheelDeepIdle,
     /// Change-detection microbenchmark (see `ticks`): a `Changed` filter reader
     /// over a component without a summary tick, nothing mutates.
     TicksFilterIdle,
@@ -137,7 +166,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 38] = [
+    const ALL: [Self; 40] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -170,6 +199,8 @@ impl Workload {
         Self::RovingGroupsFocus,
         Self::RovingGroupsSelection,
         Self::RovingGroupsIdle,
+        Self::WheelDeep,
+        Self::WheelDeepIdle,
         Self::TicksFilterIdle,
         Self::TicksSummaryIdle,
         Self::TicksFilterOne,
@@ -212,6 +243,8 @@ impl Workload {
             Self::RovingGroupsFocus => "roving-groups-focus",
             Self::RovingGroupsSelection => "roving-groups-selection",
             Self::RovingGroupsIdle => "roving-groups-idle",
+            Self::WheelDeep => "wheel-deep",
+            Self::WheelDeepIdle => "wheel-deep-idle",
             Self::TicksFilterIdle => "ticks-filter-idle",
             Self::TicksSummaryIdle => "ticks-summary-idle",
             Self::TicksFilterOne => "ticks-filter-one",
@@ -234,6 +267,7 @@ impl Workload {
             | Self::SegmentItemsAdding
             | Self::ItemsSharedAdding => 5_000,
             Self::VirtualLists => 20,
+            Self::WheelDeep | Self::WheelDeepIdle => 200,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
             | Self::ListNotesChanging
@@ -455,6 +489,12 @@ fn measure(run: Run) -> String {
     app.init_resource::<ClearColor>();
     app.add_plugins(WidgetsPlugin);
     app.init_resource::<Sink>();
+    if matches!(run.workload, Workload::WheelDeep | Workload::WheelDeepIdle) {
+        app.add_systems(
+            PreUpdate,
+            fake_hover.after(bevy::picking::PickingSystems::Hover),
+        );
+    }
     match run.workload {
         Workload::TicksFilterIdle => {
             app.add_systems(Update, read_with_filter);
@@ -579,6 +619,23 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         let mut query = world.query_filtered::<Entity, With<SegmentedControl>>();
         if let Some(control) = query.iter(world).next() {
             world.spawn((Item::new(format!("Added {index}")), ItemOf(control)));
+        }
+    }
+    if workload == Workload::WheelDeep {
+        for event in 0..WHEEL_EVENTS {
+            let sign = if (index + event).is_multiple_of(2) {
+                1.0
+            } else {
+                -1.0
+            };
+            app.world_mut()
+                .write_message(bevy::input::mouse::MouseWheel {
+                    unit: bevy::input::mouse::MouseScrollUnit::Pixel,
+                    x: 0.0,
+                    y: sign,
+                    window: Entity::PLACEHOLDER,
+                    phase: bevy::input::touch::TouchPhase::Moved,
+                });
         }
     }
     if workload == Workload::VirtualListScrolling {
@@ -779,6 +836,9 @@ fn spawn(world: &mut World, run: Run) {
             Workload::VirtualList | Workload::VirtualListScrolling => {
                 virtual_list(root, run.size);
             }
+            Workload::WheelDeep | Workload::WheelDeepIdle => {
+                wheel_tree(root, run.size);
+            }
             Workload::VirtualLists => {
                 for _ in 0..run.size {
                     virtual_list(root, 1_000);
@@ -941,6 +1001,63 @@ fn list_items(size: usize) -> impl Bundle {
     Selection::builder()
         .one()
         .build_with_items((0..size).map(|item| Item::new(format!("Item {item}"))))
+}
+
+/// A vertical scroll area whose contents are a chain of `depth` nested nodes; halfway down is
+/// a nested horizontal scroll area holding the rest, ending in a leaf larger than both areas.
+/// The leaf, its nearest ancestors and one node of the outer area are `WheelHovered`.
+fn wheel_tree(parent: &mut ChildSpawner, depth: usize) {
+    parent.spawn((
+        Node {
+            width: px(400),
+            height: px(400),
+            ..default()
+        },
+        ScrollArea::bundle(
+            move |area: &mut ChildSpawner| wheel_chain(area, depth / 2, depth, true),
+            true,
+            false,
+        ),
+    ));
+}
+
+fn wheel_chain(parent: &mut ChildSpawner, left: usize, depth: usize, outer: bool) {
+    let mut node = parent.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        ..default()
+    });
+    if left == 0 && outer {
+        // Hover one node of the outer area, so both areas are wheel targets.
+        node.insert(WheelHovered);
+        node.with_children(|child| {
+            child.spawn((
+                Node {
+                    width: px(300),
+                    height: px(300),
+                    ..default()
+                },
+                ScrollArea::bundle(
+                    move |area: &mut ChildSpawner| wheel_chain(area, depth / 2, depth, false),
+                    false,
+                    true,
+                ),
+            ));
+        });
+    } else if left == 0 {
+        node.insert(WheelHovered);
+        node.with_children(|child| {
+            child.spawn(Node {
+                width: px(2_000),
+                height: px(2_000),
+                ..default()
+            });
+        });
+    } else {
+        if !outer && left <= HOVERED_ANCESTORS {
+            node.insert(WheelHovered);
+        }
+        node.with_children(|child| wheel_chain(child, left - 1, depth, outer));
+    }
 }
 
 fn virtual_list(parent: &mut ChildSpawner, items: usize) {
