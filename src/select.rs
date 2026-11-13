@@ -1025,6 +1025,31 @@ fn despawn_items_observer(mut world: DeferredWorld, context: HookContext) {
     world.commands().entity(observer).try_despawn();
 }
 
+/// The `children` that show `items`, in the order of `items` (the first child of an item), then
+/// every other child in its place order. `item_of` says which item a child shows, `None` for a
+/// child that is not a view. Linear: one map of the first child per item, one set of the
+/// children placed.
+pub(crate) fn items_in_order(
+    children: impl IntoIterator<Item = Entity> + Clone,
+    items: &[Entity],
+    item_of: impl Fn(Entity) -> Option<Entity>,
+) -> Vec<Entity> {
+    let mut first_of = bevy::platform::collections::HashMap::new();
+    for child in children.clone() {
+        if let Some(item) = item_of(child) {
+            first_of.entry(item).or_insert(child);
+        }
+    }
+    let mut placed = bevy::platform::collections::HashSet::new();
+    let mut wanted: Vec<Entity> = items
+        .iter()
+        .filter_map(|item| first_of.get(item).copied())
+        .filter(|child| placed.insert(*child))
+        .collect();
+    wanted.extend(children.into_iter().filter(|c| !placed.contains(c)));
+    wanted
+}
+
 /// Has `on_changed(commands, widget, items)` called when the items of `values` change, once
 /// per widget and values entity: returns `false`, doing nothing, when `widget` already
 /// watches `values`. Watching other values replaces the earlier observer.
