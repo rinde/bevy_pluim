@@ -259,8 +259,14 @@ fn theme_link(
         let Ok((mut text_color, mut text_font)) = link_texts.get_mut(text_id) else {
             continue;
         };
-        text_font.font = theme.body_font.clone().into();
-        text_font.font_size = Theme::font_size(theme.font_size_body);
+        let face = theme.body_font.clone().into();
+        if text_font.font != face {
+            text_font.font = face;
+        }
+        let size = Theme::font_size(theme.font_size_body);
+        if text_font.font_size != size {
+            text_font.font_size = size;
+        }
         text_color.0 = link_color;
     }
 }

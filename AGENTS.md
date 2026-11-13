@@ -653,6 +653,7 @@ of them (`just example gallery -- --run-all stack link`).
   pointer keeps the hover colour. The state is read from `Hovered` and `Pressed`,
   not tracked by hand; a `PushButton` with `NoDefaultHover` rests at
   `background_primary` for its owner to colour.
+- **A theme restyle writes `TextFont` only when it differs (#762).** A write marks the font changed and makes Bevy lay the whole tree out again, so the `theme_*` systems of `Tooltip` (`restyle_popups`), `Slider`, `NumericStepper`, `TextField`, `Kbd`, `PushButton` (label and icon), `Link`, `Toast`, `Label`, `Pill`, `SettingRow`, `List` (`theme_item_labels`) and `FilterCombo` (its empty line) use `set_if_neq` on a whole `TextFont`, or compare field by field before assigning where they only own some fields (`font`, `font_size`), so a colour-only theme change or an unchanged font writes none and a changed font field still reaches the text (`restyling_text_widgets_with_an_unchanged_font_writes_no_text_font`, `restyling_text_widgets_with_a_colour_only_change_writes_no_text_font`, `restyling_text_widgets_with_a_changed_font_still_writes_it`; the tooltip popup is not in that test, it needs a showing popup). `TextColor` writes are not covered. A new widget with text follows the same rule.
 - **Corner radius is a `Node` field.** Since Bevy 0.18 `BorderRadius` is
   `Node::border_radius`, not a component; set it on the node. Since Bevy 0.20
   its corners are `CornerRadius`es and its constructors (`BorderRadius::all`,

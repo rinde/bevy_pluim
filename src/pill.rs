@@ -148,11 +148,11 @@ fn theme_pills(
         };
         background.0 = bg;
         text_color.0 = text;
-        *text_font = TextFont {
+        text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(PILL_FONT_SIZE),
             weight: FontWeight::SEMIBOLD,
             ..default()
-        };
+        });
     }
 }

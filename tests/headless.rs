@@ -18337,6 +18337,75 @@ fn restyling_segments_tabs_and_toggle_options_with_a_changed_font_still_writes_i
     assert!(writes >= 8, "every label takes the new font: {writes}");
 }
 
+/// One of each widget whose theme restyle sets a `TextFont` (#762).
+fn spawn_text_widgets(app: &mut App) {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = || ["a", "b"].map(Item::new);
+    let world = app.world_mut();
+    let list_source = world
+        .spawn(Selection::builder().one().build_with_items(items()))
+        .id();
+    let combo_source = world
+        .spawn(Selection::builder().one().build_with_items(items()))
+        .id();
+    world.spawn((List, Selection::reference(list_source), ChildOf(root)));
+    world.spawn((
+        FilterCombo::default(),
+        Selection::reference(combo_source),
+        ChildOf(root),
+    ));
+    world.spawn((
+        Slider::new(2.0, 0.0, 10.0)
+            .unwrap()
+            .with_format(|v| format!("{v}")),
+        ChildOf(root),
+    ));
+    world.spawn((
+        NumericStepper::default(),
+        Value::new_u8(1, 0, 3, 1).unwrap(),
+        ChildOf(root),
+    ));
+    world.spawn((TextField::new("x"), ChildOf(root)));
+    world.spawn((Kbd::new("Esc"), ChildOf(root)));
+    world.spawn((PushButton::from_label("Go"), ChildOf(root)));
+    world.spawn((Link::new("link"), ChildOf(root)));
+    world.spawn((Toast::new("Saved"), ChildOf(root)));
+    world.spawn((Label::regular("Label"), ChildOf(root)));
+    world.spawn((Pill::new("running"), ChildOf(root)));
+    world.spawn((SettingRow::new("Theme", "Light or dark"), ChildOf(root)));
+    settle(app);
+}
+
+#[test]
+fn restyling_text_widgets_with_an_unchanged_font_writes_no_text_font() {
+    let mut app = app_counting_font_writes();
+    spawn_text_widgets(&mut app);
+    assert_eq!(font_writes_of_a_restyle(&mut app, |_| ()), 0);
+}
+
+#[test]
+fn restyling_text_widgets_with_a_colour_only_change_writes_no_text_font() {
+    let mut app = app_counting_font_writes();
+    spawn_text_widgets(&mut app);
+    let writes = font_writes_of_a_restyle(&mut app, |theme| {
+        theme.set_mode(ThemeMode::Dark);
+    });
+    assert_eq!(writes, 0);
+}
+
+#[test]
+fn restyling_text_widgets_with_a_changed_font_still_writes_it() {
+    let mut app = app_counting_font_writes();
+    spawn_text_widgets(&mut app);
+    let writes = font_writes_of_a_restyle(&mut app, |theme| {
+        theme.body_font = bevy::asset::uuid_handle!("7a10b3c4-5d6e-4f70-8a91-b2c3d4e5f607");
+    });
+    assert!(
+        writes >= 10,
+        "every kind of text takes the new font: {writes}"
+    );
+}
+
 /// Plays the despawning of the source behind a widget's selection: the widget refers to a
 /// selection entity (`spawn` gets its entity) that holds the `ItemsRef`, so despawning the source
 /// takes that entity with it and the widget's `Selection::Ref` dangles. `shown` counts what the

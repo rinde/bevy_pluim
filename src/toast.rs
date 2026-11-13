@@ -302,10 +302,10 @@ fn theme_toasts(
 
     for (mut color, mut font) in iter {
         color.0 = theme.colors().text_primary;
-        *font = TextFont {
+        font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_body),
             ..default()
-        };
+        });
     }
 }

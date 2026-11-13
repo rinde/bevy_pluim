@@ -542,12 +542,12 @@ fn theme_push_button(
             } else {
                 theme.colors().text_primary
             });
-            *text_font = TextFont {
+            text_font.set_if_neq(TextFont {
                 font: theme.body_font.clone().into(),
                 font_size: Theme::font_size(font_size),
                 weight,
                 ..default()
-            };
+            });
         }
 
         // icon
@@ -561,12 +561,12 @@ fn theme_push_button(
             } else {
                 theme.colors().text_primary
             });
-            *text_font = TextFont {
+            text_font.set_if_neq(TextFont {
                 font: theme.body_font.clone().into(),
                 font_size: Theme::font_size(font_size),
                 weight,
                 ..default()
-            };
+            });
         }
     }
 }
