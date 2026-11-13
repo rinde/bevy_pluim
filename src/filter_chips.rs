@@ -13,7 +13,7 @@ use bevy::ui_widgets::{Activate, Button};
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
 };
-use crate::select::{Item, Selection, SelectionParam, StructureChanges};
+use crate::select::{Item, Selection, SelectionParam, StructureChanges, order_views, plan_views};
 use crate::theme::{Theme, ThemeColors};
 
 /// The height of a chip.
@@ -190,8 +190,9 @@ pub struct ChipLabel;
 #[reflect(Component)]
 pub struct ChipCount;
 
-/// Spawns a chip for every item of a [`FilterChips`] that has none, and drops the chips of
-/// items that are gone, keeping the order of the items.
+/// Spawns a chip for every item of a [`FilterChips`] that has none, drops the chips of items
+/// that are gone and puts the chips in the order of the items. A chip of an item that stays is
+/// the same entity before and after.
 fn sync_chips(
     mut changes: StructureChanges<FilterChips, Chip>,
     chips: Query<Option<&Children>, With<FilterChips>>,
@@ -212,23 +213,46 @@ fn sync_chips(
             .iter()
             .filter(|item| items.contains(*item))
             .collect::<Vec<_>>();
-        let existing = children
+        let children = children
             .into_iter()
             .flat_map(RelationshipTarget::iter)
-            .filter_map(|child| Some((child, views.get(child).ok()?.item)))
             .collect::<Vec<_>>();
-        if existing
+        let plan = plan_views(
+            children
+                .iter()
+                .filter_map(|child| Some((*child, Some(views.get(*child).ok()?.item)))),
+            &wanted,
+        );
+        if plan.stale.is_empty() && plan.slots.iter().all(Option::is_some) {
+            let kept = plan.slots.iter().flatten().copied();
+            if kept.clone().eq(children
+                .iter()
+                .copied()
+                .filter(|child| views.contains(*child)))
+            {
+                continue;
+            }
+        }
+        for view in &plan.stale {
+            commands.entity(*view).despawn();
+        }
+        // Chips of items that are still there keep their entity, and with it their focus and
+        // hover; only the missing ones are spawned.
+        let chips_in_order = plan
+            .slots
             .iter()
-            .map(|(_, item)| *item)
-            .eq(wanted.iter().copied())
-        {
-            continue;
-        }
-        for (view, _) in existing {
-            commands.entity(view).despawn();
-        }
-        for item in wanted {
-            spawn_chip(&mut commands, &theme, chips_ref, item);
+            .zip(&wanted)
+            .map(|(kept, item)| {
+                kept.unwrap_or_else(|| spawn_chip(&mut commands, &theme, chips_ref, *item))
+            })
+            .collect::<Vec<_>>();
+        if let Some(ordered) = order_views(
+            &children,
+            |child| views.contains(child),
+            &chips_in_order,
+            &plan.stale,
+        ) {
+            commands.entity(chips_ref).replace_children(&ordered);
         }
     }
 }
@@ -242,7 +266,7 @@ fn chip_font(theme: &Theme) -> TextFont {
     }
 }
 
-fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entity) {
+fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entity) -> Entity {
     // The children are spawned under the chip's reserved entity, so no node is ever parentless.
     let chip = commands.spawn_empty().id();
     let label = commands
@@ -285,6 +309,7 @@ fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entit
         BorderColor::all(theme.colors().chip_border),
         ChildOf(chips),
     ));
+    chip
 }
 
 /// How a chip looks.
