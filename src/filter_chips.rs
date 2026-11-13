@@ -10,6 +10,7 @@ use bevy::picking::hover::Hovered;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
+use itertools::Either;
 
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
@@ -354,7 +355,6 @@ fn theme_chips(
     selections: SelectionParam,
     items: Query<&Item<Chip>>,
     mut views: Query<(
-        Entity,
         &ChipView,
         &ChipRefs,
         &Hovered,
@@ -363,10 +363,12 @@ fn theme_chips(
     )>,
     mut texts: Query<(&mut Text, &mut TextColor, &mut TextFont, &mut Node)>,
 ) {
-    for (entity, view, refs, hovered, mut background, mut border) in &mut views {
-        if chip.0.is_some_and(|id| id != entity) {
-            continue;
-        }
+    // One chip is looked up directly, so restyling k chips costs k lookups, not k walks of all.
+    let chips = match chip.0 {
+        Some(id) => Either::Left(views.get_mut(id).into_iter()),
+        None => Either::Right(views.iter_mut()),
+    };
+    for (view, refs, hovered, mut background, mut border) in chips {
         let Ok(item) = items.get(view.item) else {
             continue;
         };
