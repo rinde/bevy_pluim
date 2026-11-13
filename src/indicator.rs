@@ -8,6 +8,7 @@
 
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, Selected, UiGlobalTransform};
+use itertools::Either;
 
 use crate::theme::Theme;
 
@@ -30,14 +31,32 @@ pub(crate) trait Indicator: Component + Sized {
 }
 
 /// Gives every track `T` without one its indicator `I`, drawn behind the items.
+///
+/// Only tracks that may lack an indicator are looked at, and each by its own children: a track
+/// that is new or inserted again (`Changed<T>`), and, when an indicator was removed or despawned
+/// (also with its track), every track once, because a removed component no longer says whose it
+/// was. A quiet frame does nothing, so the cost no longer grows with tracks times indicators.
 pub(crate) fn spawn<I: Indicator, T: Component>(
+    changed: Query<Entity, Changed<T>>,
     tracks: Query<Entity, With<T>>,
+    children: Query<&Children>,
     indicators: Query<&I>,
+    mut removed: RemovedComponents<I>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for track in &tracks {
-        if indicators.iter().any(|i| i.owner() == track) {
+    let any_removed = removed.read().count() > 0;
+    let candidates = if any_removed {
+        Either::Left(tracks.iter())
+    } else {
+        Either::Right(changed.iter())
+    };
+    for track in candidates {
+        let has_indicator = children.get(track).is_ok_and(|kids| {
+            kids.iter()
+                .any(|kid| indicators.get(kid).is_ok_and(|i| i.owner() == track))
+        });
+        if has_indicator {
             continue;
         }
         commands.entity(track).with_child((

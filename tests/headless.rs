@@ -14982,6 +14982,144 @@ fn many_icon_segmented_controls_keep_one_icon_and_hidden_label_per_segment() {
     }
 }
 
+/// How many children of `track` are named `name`: the sliding indicators of a track.
+fn indicators_named(app: &App, track: Entity, name: &str) -> Vec<Entity> {
+    app.world()
+        .entity(track)
+        .get::<Children>()
+        .map(|children| {
+            children
+                .iter()
+                .filter(|c| {
+                    app.world()
+                        .get::<Name>(*c)
+                        .is_some_and(|n| n.as_str() == name)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// One of each track widget that has a sliding indicator, with the indicator's name.
+fn spawn_indicator_tracks(app: &mut App) -> [(Entity, &'static str); 3] {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = || {
+        Selection::builder()
+            .one()
+            .build_with_items(["A", "B"].map(Item::new))
+    };
+    let control = app
+        .world_mut()
+        .spawn((SegmentedControl, items(), ChildOf(root)))
+        .id();
+    let bar = app.world_mut().spawn((TabBar, items(), ChildOf(root))).id();
+    let toggle = app.world_mut().spawn((LightDarkToggle, ChildOf(root))).id();
+    for _ in 0..3 {
+        app.update();
+    }
+    [
+        (control, "SegmentIndicator"),
+        (bar, "TabIndicator"),
+        (toggle, "OptionIndicator"),
+    ]
+}
+
+#[test]
+fn every_track_has_exactly_one_indicator_after_reinsertions() {
+    let mut app = headless_app();
+    let tracks = spawn_indicator_tracks(&mut app);
+    let first = tracks.map(|(t, n)| indicators_named(&app, t, n));
+    for indicators in &first {
+        assert_eq!(indicators.len(), 1);
+    }
+    for _ in 0..3 {
+        app.world_mut()
+            .entity_mut(tracks[0].0)
+            .insert(SegmentedControl);
+        app.world_mut().entity_mut(tracks[1].0).insert(TabBar);
+        app.world_mut()
+            .entity_mut(tracks[2].0)
+            .insert(LightDarkToggle);
+        app.update();
+        app.update();
+    }
+    for ((track, name), before) in tracks.into_iter().zip(first) {
+        assert_eq!(indicators_named(&app, track, name), before);
+    }
+}
+
+#[test]
+fn a_removed_indicator_is_made_again_once_and_other_tracks_keep_theirs() {
+    let mut app = headless_app();
+    let tracks = spawn_indicator_tracks(&mut app);
+    let before = tracks.map(|(t, n)| indicators_named(&app, t, n)[0]);
+    for (i, (track, name)) in tracks.into_iter().enumerate() {
+        app.world_mut().despawn(before[i]);
+        app.update();
+        app.update();
+        app.update();
+        let now = indicators_named(&app, track, name);
+        assert_eq!(now.len(), 1, "{name} made again exactly once");
+        assert_ne!(now[0], before[i]);
+        for (j, (other, other_name)) in tracks.into_iter().enumerate() {
+            if j > i {
+                assert_eq!(indicators_named(&app, other, other_name), vec![before[j]]);
+            }
+        }
+    }
+}
+
+#[test]
+fn despawning_a_track_leaves_the_indicators_of_the_others_alone() {
+    let mut app = headless_app();
+    let tracks = spawn_indicator_tracks(&mut app);
+    let before = tracks.map(|(t, n)| indicators_named(&app, t, n)[0]);
+    app.world_mut().entity_mut(tracks[0].0).despawn();
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(app.world().get_entity(before[0]).is_err());
+    assert_eq!(
+        indicators_named(&app, tracks[1].0, "TabIndicator"),
+        vec![before[1]]
+    );
+    assert_eq!(
+        indicators_named(&app, tracks[2].0, "OptionIndicator"),
+        vec![before[2]]
+    );
+}
+
+#[test]
+fn a_track_that_gains_its_widget_later_gets_one_indicator() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let control = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            Selection::builder()
+                .one()
+                .build_with_items(["A"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    app.update();
+    app.update();
+    app.world_mut().entity_mut(control).insert(SegmentedControl);
+    for _ in 0..3 {
+        app.update();
+    }
+    let indicators = indicators_named(&app, control, "SegmentIndicator");
+    assert_eq!(indicators.len(), 1);
+    assert_eq!(
+        app.world()
+            .get::<SegmentIndicator>(indicators[0])
+            .unwrap()
+            .owner(),
+        control
+    );
+}
+
 /// The labels shown by the views of `list`, in the order of the list.
 fn view_labels(app: &App, list: Entity) -> Vec<String> {
     item_views(app, list)
