@@ -6,6 +6,8 @@
 //! through [`ItemsRef`]. Widgets read and change selections through
 //! [`SelectionParam`].
 
+use std::sync::Arc;
+
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::query::{QueryData, QueryFilter, QuerySingleError, ROQueryItem};
@@ -350,7 +352,7 @@ fn repair_pending_selections(
     mut commands: Commands,
 ) {
     let event = changed.event();
-    let Some(first_item) = event.items.iter().next() else {
+    let Some(first_item) = event.items.first().copied() else {
         return;
     };
     r.pending.retain(|pending| {
@@ -1002,8 +1004,9 @@ impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
 pub struct ItemsChanged {
     /// The [`ItemValues`] entity whose items changed.
     pub entity: Entity,
-    /// The new items.
-    pub items: ItemValues,
+    /// The new items, one snapshot shared by every observer of the event: cloning the
+    /// `Arc` copies no entities.
+    pub items: Arc<[Entity]>,
 }
 
 /// Records the observer a widget put on its [`ItemValues`] entity to hear [`ItemsChanged`], on
@@ -1059,7 +1062,7 @@ pub(crate) fn watch_items(
     observers: &Query<(), With<Observer>>,
     widget: Entity,
     values: Entity,
-    on_changed: fn(&mut Commands, Entity, Vec<Entity>),
+    on_changed: fn(&mut Commands, Entity, Arc<[Entity]>),
 ) -> bool {
     if let Ok(old) = watches.get(widget) {
         if old.values == values && observers.contains(old.observer) {
@@ -1070,7 +1073,7 @@ pub(crate) fn watch_items(
     let observer = commands
         .spawn(
             Observer::new(move |t: On<ItemsChanged>, mut commands: Commands| {
-                on_changed(&mut commands, widget, t.event().items.iter().collect());
+                on_changed(&mut commands, widget, Arc::clone(&t.event().items));
             })
             .with_entity(values),
         )
@@ -1085,7 +1088,7 @@ fn items_change(q: Query<(Entity, &ItemValues), Changed<ItemValues>>, mut comman
     for (items_ref, items) in q {
         commands.trigger(ItemsChanged {
             entity: items_ref,
-            items: items.clone(),
+            items: items.iter().collect(),
         });
     }
 }
@@ -2230,6 +2233,82 @@ mod tests {
 
         app.update();
         assert_eq!(seen(&app).len(), 2);
+    }
+
+    #[test]
+    fn every_observer_of_one_change_shares_one_snapshot_of_the_items() {
+        #[derive(Resource, Default)]
+        struct Snapshots(Vec<Arc<[Entity]>>);
+
+        let mut app = items_app();
+        app.init_resource::<Snapshots>();
+        for _ in 0..3 {
+            app.add_observer(|changed: On<ItemsChanged>, mut seen: ResMut<Snapshots>| {
+                seen.0.push(Arc::clone(&changed.items));
+            });
+        }
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        if let Some(mut seen) = app.world_mut().get_resource_mut::<Snapshots>() {
+            seen.0.clear();
+        }
+
+        // Two additions in one frame reach the observers as one change holding both.
+        let first = app.world_mut().spawn((Item::new("c"), ItemOf(id))).id();
+        let second = app.world_mut().spawn((Item::new("d"), ItemOf(id))).id();
+        app.update();
+        let snapshots = app
+            .world()
+            .get_resource::<Snapshots>()
+            .map(|seen| seen.0.clone())
+            .unwrap_or_default();
+        assert_eq!(snapshots.len(), 3);
+        for snapshot in &snapshots {
+            assert!(snapshots.iter().all(|other| Arc::ptr_eq(snapshot, other)));
+            assert_eq!(snapshot.len(), 4);
+            assert_eq!(snapshot.last_chunk::<2>(), Some(&[first, second]));
+        }
+    }
+
+    #[test]
+    fn a_snapshot_is_not_changed_by_a_later_mutation_of_the_items() {
+        #[derive(Resource, Default)]
+        struct Kept(Vec<Arc<[Entity]>>);
+
+        let mut app = items_app();
+        app.init_resource::<Kept>();
+        app.add_observer(|changed: On<ItemsChanged>, mut kept: ResMut<Kept>| {
+            kept.0.push(Arc::clone(&changed.items));
+        });
+        let id = app
+            .world_mut()
+            .spawn(
+                Selection::builder()
+                    .zero_or_more()
+                    .build_with_items(["a", "b"].map(Item::new)),
+            )
+            .id();
+        app.update();
+        let added = app.world_mut().spawn((Item::new("c"), ItemOf(id))).id();
+        app.update();
+        app.world_mut().despawn(added);
+        app.update();
+        let kept = app
+            .world()
+            .get_resource::<Kept>()
+            .map(|kept| kept.0.clone())
+            .unwrap_or_default();
+        assert_eq!(
+            kept.iter().map(|items| items.len()).collect::<Vec<_>>(),
+            vec![2, 3, 2]
+        );
     }
 
     #[test]

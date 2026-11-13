@@ -2820,6 +2820,9 @@ fn the_popup_swatches_of_a_color_palette_combo_show_the_selection_the_combo_refe
     app.update();
 
     let palette = single_entity_with::<ColorPalette>(&mut app);
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    click(&mut app, button);
     assert_eq!(selected_colors(&app, palette), [GREEN]);
 }
 
@@ -2905,6 +2908,9 @@ fn a_click_on_the_selected_swatch_closes_the_popup_of_a_one_palette_combo_and_ke
     click_row(&mut app, swatches[0]);
 
     assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Closed);
+    // The closed popup holds no swatches, so reopen it to read the kept selection.
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
     assert_eq!(selected_colors(&app, palette), [Color::WHITE]);
 }
 
@@ -15240,6 +15246,127 @@ fn a_list_of_thousands_of_items_gets_one_view_each_and_marks_the_selected_one() 
     assert_eq!(selected_labels(&app, list), ["item 0"]);
 }
 
+/// A closed palette combo over `selection` (two colours): the combo and its palette.
+fn closed_palette_combo_over(app: &mut App, selection: impl Bundle) -> (Entity, Entity) {
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, selection, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let palette = single_entity_with::<ColorPalette>(app);
+    (combo, palette)
+}
+
+#[test]
+fn a_closed_color_palette_combo_builds_no_swatches_until_it_opens() {
+    let mut app = headless_app();
+    let (combo, palette) = closed_palette_combo_over(&mut app, two_color_selection());
+    assert!(item_views(&app, palette).is_empty());
+
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);
+    assert_eq!(item_views(&app, palette).len(), 2);
+
+    click(&mut app, button);
+    app.update();
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Closed);
+    assert!(item_views(&app, palette).is_empty());
+
+    click(&mut app, button);
+    assert_eq!(item_views(&app, palette).len(), 2);
+}
+
+#[test]
+fn a_reopened_color_palette_combo_shows_the_selection_changed_while_it_was_closed() {
+    let mut app = headless_app();
+    let (_, palette) = closed_palette_combo_over(&mut app, two_color_selection());
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    // Pick black while closed, through the palette's own selection.
+    let black = {
+        let world = app.world_mut();
+        let mut items = world.query::<(Entity, &Item<Color>)>();
+        items
+            .iter(world)
+            .find(|(_, item)| item.data == Color::BLACK)
+            .map(|(entity, _)| entity)
+            .unwrap()
+    };
+    let owner = single_entity_with::<ColorPaletteCombo>(&mut app);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(black))));
+    app.update();
+    assert!(item_views(&app, palette).is_empty());
+
+    click(&mut app, button);
+    assert_eq!(selected_colors(&app, palette), [Color::BLACK]);
+}
+
+#[test]
+fn items_added_while_a_color_palette_combo_is_closed_have_swatches_once_it_opens() {
+    let mut app = headless_app();
+    let (_, palette) = closed_palette_combo_over(&mut app, two_color_selection());
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    let items = app.world().get::<ItemsRef>(palette).map(|r| r.0);
+    let owner = items.unwrap_or_else(|| single_entity_with::<ColorPaletteCombo>(&mut app));
+    app.world_mut().spawn((Item { data: RED }, ItemOf(owner)));
+    app.update();
+    assert!(item_views(&app, palette).is_empty());
+
+    click(&mut app, button);
+    assert_eq!(item_views(&app, palette).len(), 3);
+
+    // And while open the palette follows further changes.
+    app.world_mut().spawn((Item { data: BLUE }, ItemOf(owner)));
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, palette).len(), 4);
+}
+
+#[test]
+fn an_open_color_palette_combo_popup_is_visible_and_takes_the_focus() {
+    let mut app = headless_app();
+    let (combo, palette, _) = open_palette_combo_over(&mut app, two_color_selection());
+    app.update();
+    let float = app
+        .world()
+        .get::<ColorPaletteComboRefs>(combo)
+        .map(ColorPaletteComboRefs::popup)
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Visibility>(float),
+        Some(&Visibility::Visible)
+    );
+    assert_eq!(
+        app.world()
+            .get_resource::<InputFocus>()
+            .and_then(InputFocus::get),
+        Some(palette)
+    );
+}
+
+#[test]
+fn despawning_color_palette_combos_open_or_dormant_leaves_no_swatches_behind() {
+    let mut app = headless_app();
+    let (open, _, _) = open_palette_combo_over(&mut app, two_color_selection());
+    app.world_mut().entity_mut(open).despawn();
+    app.update();
+    app.update();
+    let mut views = app.world_mut().query::<&ItemView>();
+    assert_eq!(views.iter(app.world()).count(), 0);
+
+    let mut app = headless_app();
+    let (closed, _) = closed_palette_combo_over(&mut app, two_color_selection());
+    app.world_mut().entity_mut(closed).despawn();
+    app.update();
+    let mut palettes = app.world_mut().query::<&ColorPalette>();
+    assert_eq!(palettes.iter(app.world()).count(), 0);
+}
+
 /// Removes the items called `names` from `source` and adds one for each of `added`, in one frame.
 fn swap_items(app: &mut App, source: Entity, removed: &[&str], added: &[&str]) {
     let doomed: Vec<Entity> = {
@@ -15584,4 +15711,145 @@ fn an_image_the_app_removed_is_generated_again() {
     for id in now {
         assert!(images(&app).get(id).is_some());
     }
+}
+
+/// Entities the pointers are on, for [`wheel_app`]: the headless app has no picking backend, so
+/// the hover map is written by hand after picking has rebuilt it.
+#[derive(Resource, Default)]
+struct FakeHover(Vec<(PointerId, Entity)>);
+
+fn write_fake_hover(fake: Res<FakeHover>, mut hover_map: ResMut<bevy::picking::hover::HoverMap>) {
+    for (pointer, entity) in &fake.0 {
+        hover_map
+            .entry(*pointer)
+            .or_default()
+            .insert(*entity, HitData::new(Entity::PLACEHOLDER, 0.0, None, None));
+    }
+}
+
+fn wheel_app() -> App {
+    let mut app = headless_app_with(|app| {
+        app.init_resource::<FakeHover>();
+        app.add_systems(
+            PreUpdate,
+            write_fake_hover.after(bevy::picking::PickingSystems::Hover),
+        );
+    });
+    app.update();
+    app
+}
+
+fn hover(app: &mut App, pointers: &[(PointerId, Entity)]) {
+    app.world_mut().get_resource_mut::<FakeHover>().unwrap().0 = pointers.to_vec();
+}
+
+fn wheel(app: &mut App, unit: bevy::input::mouse::MouseScrollUnit, x: f32, y: f32) {
+    app.world_mut()
+        .write_message(bevy::input::mouse::MouseWheel {
+            unit,
+            x,
+            y,
+            window: Entity::PLACEHOLDER,
+            phase: bevy::input::touch::TouchPhase::Moved,
+        });
+}
+
+#[test]
+fn many_wheel_messages_in_one_frame_are_applied_and_clamped_one_after_another() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    // The area scrolls 300 px at most. Down 250, down 250 (clamped to 300), up 100: 200. A sum
+    // (400 down) would give 300, so the order and the clamp in between show.
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    wheel(&mut app, Pixel, 0.0, -250.0);
+    wheel(&mut app, Pixel, 0.0, -250.0);
+    wheel(&mut app, Pixel, 0.0, 100.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 200.0));
+}
+
+#[test]
+fn a_wheel_line_is_21_pixels_and_control_swaps_the_axes() {
+    use bevy::input::mouse::MouseScrollUnit::Line;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    wheel(&mut app, Line, 0.0, -2.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 42.0));
+    app.world_mut()
+        .get_resource_mut::<ButtonInput<KeyCode>>()
+        .unwrap()
+        .press(KeyCode::ControlLeft);
+    wheel(&mut app, Line, 0.0, -1.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(21.0, 42.0));
+}
+
+#[test]
+fn an_area_that_scrolls_sideways_alone_takes_a_vertical_turn_for_a_horizontal_one() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    wheel(&mut app, Pixel, 0.0, -30.0);
+    wheel(&mut app, Pixel, 0.0, -30.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(60.0, 0.0));
+}
+
+#[test]
+fn only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
+    let leaf = target_at(&mut app, Some(inner), Vec2::ZERO, 1.0);
+    // Picking reports the leaf, the inner and the outer area, as it does for a blocking area.
+    hover(
+        &mut app,
+        &[
+            (PointerId::Mouse, leaf),
+            (PointerId::Mouse, inner),
+            (PointerId::Mouse, outer),
+        ],
+    );
+    // 400 down: the inner area stops at 300, nothing is passed on to the outer one.
+    wheel(&mut app, Pixel, 0.0, -200.0);
+    wheel(&mut app, Pixel, 0.0, -200.0);
+    app.update();
+    assert_eq!(scroll_of(&app, inner), Vec2::new(0.0, 300.0));
+    assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
+}
+
+#[test]
+fn a_fixed_node_stops_the_search_for_a_scroll_area_above_it() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let popup = app
+        .world_mut()
+        .spawn((Node::default(), FixedNode, ChildOf(area)))
+        .id();
+    let item = target_at(&mut app, Some(popup), Vec2::ZERO, 1.0);
+    hover(&mut app, &[(PointerId::Mouse, item)]);
+    wheel(&mut app, Pixel, 0.0, -50.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+}
+
+#[test]
+fn an_area_two_pointers_are_on_scrolls_once_for_each_pointer_and_message() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    hover(
+        &mut app,
+        &[(PointerId::Mouse, area), (PointerId::Touch(0), area)],
+    );
+    wheel(&mut app, Pixel, 0.0, -10.0);
+    wheel(&mut app, Pixel, 0.0, -10.0);
+    app.update();
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 40.0));
 }

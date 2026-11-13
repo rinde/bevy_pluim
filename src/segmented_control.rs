@@ -1,6 +1,8 @@
 //! `SegmentedControl`: a track of segments, one per item of a [`Selection`], that picks one.
 //! A segment shows the item's text, an icon, or both.
 
+use std::sync::Arc;
+
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::entity::EntityHashSet;
@@ -632,7 +634,7 @@ fn selection_change(
 
 struct ItemsChangedInput {
     control_ref: Entity,
-    items: Vec<Entity>,
+    items: Arc<[Entity]>,
 }
 
 fn on_items_changed(
@@ -686,7 +688,7 @@ fn on_items_changed(
         order_segments,
         ItemsChangedInput {
             control_ref: *control_ref,
-            items: items.clone(),
+            items: Arc::clone(items),
         },
     );
     commands.run_system_cached_with(theme_segmented_controls, Some(*control_ref));
@@ -727,7 +729,7 @@ fn on_insert_selection(
     let Some((values_ref, all_items)) = selections.get_item_values(control_ref) else {
         return;
     };
-    let on_changed: fn(&mut Commands, Entity, Vec<Entity>) = |commands, control_ref, items| {
+    let on_changed: fn(&mut Commands, Entity, Arc<[Entity]>) = |commands, control_ref, items| {
         commands.run_system_cached_with(on_items_changed, ItemsChangedInput { control_ref, items });
     };
     if !watch_items(

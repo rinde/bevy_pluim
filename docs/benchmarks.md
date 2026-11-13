@@ -49,6 +49,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
+| `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
 | `palette-items-adding` | 5 000 | one `ColorPalette`; one item is added every frame (#679) |
 | `tab-items-adding` | 5 000 | one `TabBar`; one item is added every frame (#679) |
 | `segment-items-adding` | 5 000 | one `SegmentedControl`; one item is added every frame (#679) |
@@ -60,11 +61,15 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
+| `palette-combos-idle` | 50 | closed `ColorPaletteCombo`s over the 242 Tailwind colours, nothing changing (#680) |
+| `theme-editors-idle` | 1 | `ThemeEditor`s with every popup closed, nothing changing (#680) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `tab-bars-idle` | 500 `TabBar`s of 3 tabs | idle frames of independent tab bars (#670) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
 | `roving-groups-focus` | the same | the `InputFocus` moves to a segment of another control every frame |
 | `roving-groups-selection` | the same | one control's `Selection` is replaced every frame, so `Changed<Selection>` fires for that control alone (the control's own redraw is part of the cost) |
+| `wheel-deep` | a 200-deep chain in a vertical `ScrollArea`, with a nested horizontal area in the middle | 16 `MouseWheel` messages per frame, over two pointers whose hover map holds the nested area's 8 ancestors and a leaf (the headless app has no picking backend, so the example writes the hover map); the cost of `update_scroll_position` (#682) |
+| `wheel-deep-idle` | the same | the same tree and hover map, no wheel messages: the floor `wheel-deep` is read against |
 | `ticks-{filter,summary}-{idle,one,all}` | 100 000 | change detection of one table component: a `Changed<T>` filter reader against a `#[component(summary_tick)]` reader (`contiguous_iter`, skipping a table whose summary tick is old); nothing, one entity or every entity mutated per frame (#656) |
 
 **Library overhead is the difference between a widget workload and its Bevy
@@ -367,3 +372,73 @@ swatch styling, not by the reconciliation, so the change there removes the
 clones and the quadratic `retain` but is not measurable in frame time. The
 temporary memory is two sets (and one map when ordering) of N entries, in
 place of the cloned `Vec`s, and does not show in the resident set.
+
+## Wheel-event hierarchy traversal (#682)
+
+`update_scroll_position` built two hash sets per pointer for every wheel message and
+walked the ancestors of every hovered entity, then of every scroll target, again for each
+message. The hover map and the hierarchy do not change while the system runs, so it now
+finds the targets once per frame (one entry per pointer, so an area two pointers are on
+still scrolls once per pointer), keeps its sets and the resolved list in a `Local`, returns
+at once in a frame with no wheel message, and applies each message to the resolved
+targets in turn. Messages are not summed: clamping is not associative, so a message
+that scrolls to the limit and one that scrolls back give a different result from their
+sum. Delta units, the Ctrl swap, the horizontal fallback, the innermost-area rule and the
+`FixedNode` boundary are unchanged.
+
+Measured with `wheel-deep` and `wheel-deep-idle` (release build, size 200, 16 messages
+per frame, median frame time in us over three runs, 4 vCPU Intel Xeon @ 2.10 GHz,
+`cargo run --release --example bench -- --workload wheel-deep`):
+
+| workload | before | after |
+| --- | --- | --- |
+| `wheel-deep` | 2829 / 2594 / 2568 (2594) | 1893 / 1816 / 1726 (1816) |
+| `wheel-deep-idle` | 2022 / 1799 / 1656 (1799) | 1796 / 1463 / 1548 (1548) |
+
+Over the idle floor the wheel handling went from about 0.8 ms to about 0.3 ms per frame
+for 16 messages (the idle runs themselves vary by 0.2 ms, so read the difference loosely).
+Allocations are not counted (no counter, see above); by the code, the two sets per pointer
+per message became buffers that live as long as the system. Event coalescing and an
+ancestor cache were not tried: the traversal now runs once per frame, a cache would
+have to be invalidated by every hierarchy and hover change, and no workload showed a
+remaining cost worth it. Tests: `many_wheel_messages_in_one_frame_are_applied_and_clamped_one_after_another`,
+`a_wheel_line_is_21_pixels_and_control_swaps_the_axes`,
+`an_area_that_scrolls_sideways_alone_takes_a_vertical_turn_for_a_horizontal_one`,
+`only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit`,
+`a_fixed_node_stops_the_search_for_a_scroll_area_above_it` and
+`an_area_two_pointers_are_on_scrolls_once_for_each_pointer_and_message` in `tests/headless.rs`.
+
+## Shared item snapshot (#681)
+
+`ItemsChanged::items` is an `Arc<[Entity]>`: `items_change` copies the source's
+items once and every observer (`watch_items`, `List`, `SegmentedControl`,
+`TabBar`, palettes) clones the `Arc`, instead of one copy for the event plus
+one per watcher. The snapshot is taken when the change is detected, so
+ordering and intermediate state are as before. `items-shared-adding` at 5 000
+items, mean `App::update` over 300 frames, optimised build, main against this
+change (two runs of main): 113.1 / 109.4 ms before, 115.0 ms after, memory
+added 1056 MiB both. The difference is within noise: with real `List`s the
+per-frame cost is the views each list reconciles (8 x 5 000), not the copy
+of 5 000 `Entity` ids (40 KB per copy). The change removes the copies
+(`1 + N` down to 1 per change, and the `Vec` per watcher) but this workload
+cannot show a gain; there is no allocation counter (see above).
+
+## Closed palette popups (#680)
+
+A `ColorPaletteCombo` built a swatch per item (242 in the theme editor) even
+while its popup was hidden. The palette is now dormant while the popup is
+closed (no `ItemView` children, `PaletteDormant`); opening wakes it and builds
+the swatches before layout, closing despawns them (deferred to `Last`, so a pick
+that closes the popup is still seen by the `ListBox`). The popup is shown after
+it has been placed, one frame after the click. Selection stays on the combo.
+
+Release build, one run each, before / after:
+
+| Workload | Mean frame (us) | p95 (us) | Entities | RSS (MB) |
+| --- | --- | --- | --- | --- |
+| `palette-combos-idle` 50 | 27348 / 1644 | 35424 / 1936 | 37580 / 1278 | 232.9 / 3.9 |
+| `theme-editors-idle` 1 | 23171 / 2183 | 29192 / 2832 | 33701 / 1755 | 220.2 / 14.1 |
+| `theme-editors-idle` 5 | 124847 / 4147 | not recorded | 167117 / 7395 | 1026.1 / 44.1 |
+
+Startup time is not measured separately; the five-editor run took 47.9 s of wall
+time before.

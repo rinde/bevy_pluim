@@ -10,13 +10,13 @@
     steps: [
         MoveTo(Within(Name("own palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(1),
         Check(Component(target: Name("own palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         Check(Visible(Name("own palette combo popup"))),
         MoveTo(Nth(60, Within(Name("own palette combo popup"), Component("ItemView")))),
         Click(Left),
         Check(App(Selected(of: Name("own palette combo"), items: ["red-500"]))),
         Check(Component(target: Name("own palette combo"), path: "ColorPaletteComboState", is: Eq(Closed))),
-        Check(Selected(Nth(60, Within(Name("own palette combo popup"), Component("ItemView"))))),
     ],
     expect: [App(Selected(of: Name("own palette combo"), items: ["red-500"]))],
 )
