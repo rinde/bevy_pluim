@@ -110,102 +110,100 @@ impl SettingRow {
             node.set_description(description.as_str());
         }
 
-        // A row that already has its parts only gets the new text: the children, the refs and
-        // whatever the app put into the control slot stay.
-        if let Some(refs) = world
-            .entity(context.entity)
-            .get::<SettingRowRefs>()
-            .copied()
-        {
-            world
-                .commands()
-                .entity(refs.title_id)
-                .insert(Text::new(title));
-            world
-                .commands()
-                .entity(refs.description_id)
-                .insert(Label::secondary(description));
-            return;
-        }
+        // Whether the row has its parts is decided when the command runs, so two inserts before
+        // a flush build them once and the last text wins.
+        let mut commands = world.commands();
+        commands
+            .run_system_cached_with(build_or_update_parts, (context.entity, title, description));
+        commands.run_system_cached_with(theme_setting_rows, Some(context.entity));
+    }
+}
 
+/// Builds the parts of a row that has none, else gives the existing ones the new text: the
+/// children, the refs and whatever the app put into the control slot stay.
+fn build_or_update_parts(
+    input: In<(Entity, String, String)>,
+    refs: Query<&SettingRowRefs>,
+    mut commands: Commands,
+) {
+    let (entity, title, description) = input.0;
+    if let Ok(refs) = refs.get(entity) {
+        commands.entity(refs.title_id).insert(Text::new(title));
+        commands
+            .entity(refs.description_id)
+            .insert(Label::secondary(description));
+        return;
+    }
+    {
         let mut title_id = Entity::PLACEHOLDER;
         let mut description_id = Entity::PLACEHOLDER;
         let mut control_slot = Entity::PLACEHOLDER;
         let mut divider_id = Entity::PLACEHOLDER;
-        world
-            .commands()
-            .entity(context.entity)
-            .with_children(|spawner| {
-                spawner
-                    .spawn((
-                        Name::new("SettingRowContent"),
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: Val::Px(12.0),
-                            padding: UiRect::vertical(Val::Px(12.0)),
-                            ..default()
-                        },
-                    ))
-                    .with_children(|content| {
-                        content
-                            .spawn((
-                                Name::new("SettingRowText"),
-                                Node {
-                                    flex_direction: FlexDirection::Column,
-                                    flex_grow: 1.0,
-                                    flex_basis: Val::Px(0.0),
-                                    row_gap: Val::Px(2.0),
-                                    ..default()
-                                },
-                            ))
-                            .with_children(|text| {
-                                title_id = text
-                                    .spawn((
-                                        Text::new(title),
-                                        SettingRowTitle,
-                                        Node {
-                                            align_self: AlignSelf::FlexStart,
-                                            ..default()
-                                        },
-                                        Pickable::IGNORE,
-                                    ))
-                                    .id();
-                                description_id = text
-                                    .spawn((
-                                        Label::secondary(description),
-                                        Node {
-                                            align_self: AlignSelf::FlexStart,
-                                            ..default()
-                                        },
-                                    ))
-                                    .id();
-                            });
-                        control_slot = content
-                            .spawn((
-                                Name::new("SettingRowControlSlot"),
-                                Node {
-                                    align_items: AlignItems::Center,
-                                    flex_shrink: 0.0,
-                                    ..default()
-                                },
-                            ))
-                            .id();
-                    });
-                divider_id = spawner.spawn(Divider::horizontal()).id();
-            });
-        world
-            .commands()
-            .entity(context.entity)
-            .insert(SettingRowRefs {
-                title_id,
-                description_id,
-                control_slot,
-                divider_id,
-            });
-        world
-            .commands()
-            .run_system_cached_with(theme_setting_rows, Some(context.entity));
+        commands.entity(entity).with_children(|spawner| {
+            spawner
+                .spawn((
+                    Name::new("SettingRowContent"),
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        padding: UiRect::vertical(Val::Px(12.0)),
+                        ..default()
+                    },
+                ))
+                .with_children(|content| {
+                    content
+                        .spawn((
+                            Name::new("SettingRowText"),
+                            Node {
+                                flex_direction: FlexDirection::Column,
+                                flex_grow: 1.0,
+                                flex_basis: Val::Px(0.0),
+                                row_gap: Val::Px(2.0),
+                                ..default()
+                            },
+                        ))
+                        .with_children(|text| {
+                            title_id = text
+                                .spawn((
+                                    Text::new(title),
+                                    SettingRowTitle,
+                                    Node {
+                                        align_self: AlignSelf::FlexStart,
+                                        ..default()
+                                    },
+                                    Pickable::IGNORE,
+                                ))
+                                .id();
+                            description_id = text
+                                .spawn((
+                                    Label::secondary(description),
+                                    Node {
+                                        align_self: AlignSelf::FlexStart,
+                                        ..default()
+                                    },
+                                ))
+                                .id();
+                        });
+                    control_slot = content
+                        .spawn((
+                            Name::new("SettingRowControlSlot"),
+                            Node {
+                                align_items: AlignItems::Center,
+                                flex_shrink: 0.0,
+                                ..default()
+                            },
+                        ))
+                        .id();
+                });
+            divider_id = spawner.spawn(Divider::horizontal()).id();
+        });
+        commands.entity(entity).insert(SettingRowRefs {
+            title_id,
+            description_id,
+            control_slot,
+            divider_id,
+        });
     }
 }
 

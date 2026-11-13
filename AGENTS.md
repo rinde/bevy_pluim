@@ -625,6 +625,13 @@ of them (`just example gallery -- --run-all stack link`).
   index in `ItemValues`. Work over all items belongs to a change (`ItemsChanged`, a new
   `Selection`) or a key press, not to the frame. A `List` spawns a view per item, so use a
   `VirtualList` for long lists.
+- **Deferred construction decides at run time.** A hook that builds parts on first insert
+  (`PushButton`, `Link`, `IconButton`, `Panel`, `SettingRow`) never tests the world for its refs
+  while it queues the work: two inserts applied in one flush (`World::insert_batch`) both run
+  their hooks before either hook's commands, so both would build. The test for existing parts
+  sits inside the queued command or system, so one set of parts and observers is built and the
+  last insert's configuration wins (`two_inserts_of_a_panel_in_one_command_batch_*`, and the
+  same for `SettingRow` and `IconButton`, in `tests/headless.rs`).
 - **One `Plugin` per widget**, registered in `WidgetsPlugin::build` in
   `lib.rs`. Downstream apps add only `WidgetsPlugin`.
 - **Widgets observe `MouseEvent`, not raw pointer events (`PointerPress` and
