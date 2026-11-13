@@ -43,7 +43,7 @@ use bevy_pluim::theme::Theme;
 use bevy_pluim::theme_editor::ThemeEditor;
 use bevy_pluim::toast::Toast;
 use bevy_pluim::toolbar::{Tool, Toolbar, ToolbarStyle};
-use bevy_pluim::tooltip::Tooltip;
+use bevy_pluim::tooltip::{Tooltip, TooltipPopup};
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
 
@@ -117,6 +117,54 @@ fn hover_tooltip_hosts(
     }
 }
 
+/// Holds a primary-button scrub drag on the one `NumericStepper`, as a person
+/// dragging it would: Left is pressed in `ButtonInput<MouseButton>` (so
+/// `end_scrub` keeps the drag on) and the first frame sends a `PointerPress`,
+/// then every frame a `PointerDrag` moving further than the drag threshold. The
+/// stepper's own observer then switches the crate-private `HoverLock` on.
+fn hold_scrub_drag(app: &mut App, index: usize) {
+    use bevy::camera::NormalizedRenderTarget;
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::{PointerDrag, PointerPress};
+    use bevy::picking::pointer::{Location, PointerButton, PointerId};
+    let world = app.world_mut();
+    let mut query = world.query_filtered::<Entity, With<NumericStepper>>();
+    let Some(stepper) = query.iter(world).next() else {
+        return;
+    };
+    let pointer = Pointer::new(
+        PointerId::Mouse,
+        Location {
+            target: NormalizedRenderTarget::None {
+                width: 1,
+                height: 1,
+            },
+            position: Vec2::ZERO,
+        },
+    );
+    let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    if index == 0 {
+        if let Some(mut buttons) = world.get_resource_mut::<ButtonInput<MouseButton>>() {
+            buttons.press(MouseButton::Left);
+        }
+        world.trigger(PointerPress {
+            entity: stepper,
+            pointer: pointer.clone(),
+            button: PointerButton::Primary,
+            hit,
+            count: 1,
+        });
+    }
+    let distance = Vec2::new(10.0 + (index % 40) as f32, 0.0);
+    world.trigger(PointerDrag {
+        entity: stepper,
+        pointer,
+        button: PointerButton::Primary,
+        distance,
+        delta: Vec2::X,
+    });
+}
+
 /// What is spawned and what happens each frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Workload {
@@ -134,6 +182,10 @@ enum Workload {
     /// Nodes with a `Tooltip`, the pointer moving over them one at a time and
     /// resting long enough for each popup to show: hover and popup cost.
     TooltipsHovering,
+    /// The `tooltips-hovering` hosts and one `NumericStepper` held in a scrub
+    /// drag, so the crate-private `HoverLock` is on: what the lock costs while
+    /// the fake pointer keeps moving over the hosts (#756).
+    TooltipsScrubbing,
     /// A `VirtualList` of many items, idle.
     VirtualList,
     /// The same `VirtualList`, its scroll position moved every frame.
@@ -261,13 +313,14 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 61] = [
+    const ALL: [Self; 62] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
         Self::BevyNodes,
         Self::Tooltips,
         Self::TooltipsHovering,
+        Self::TooltipsScrubbing,
         Self::VirtualList,
         Self::VirtualListScrolling,
         Self::VirtualLists,
@@ -333,6 +386,7 @@ impl Workload {
             Self::PushButtons => "push-buttons",
             Self::Tooltips => "tooltips",
             Self::TooltipsHovering => "tooltips-hovering",
+            Self::TooltipsScrubbing => "tooltips-scrubbing",
             Self::VirtualList => "virtual-list",
             Self::VirtualListScrolling => "virtual-list-scrolling",
             Self::VirtualLists => "virtual-lists",
@@ -398,6 +452,7 @@ impl Workload {
             Self::BevyNodes
             | Self::Tooltips
             | Self::TooltipsHovering
+            | Self::TooltipsScrubbing
             | Self::ListItemsInitial
             | Self::ListItemsAdding
             | Self::PaletteItemsAdding
@@ -663,7 +718,10 @@ fn measure(run: Run) -> String {
     app.init_resource::<ClearColor>();
     app.add_plugins(WidgetsPlugin);
     app.init_resource::<Sink>();
-    if run.workload == Workload::TooltipsHovering {
+    if matches!(
+        run.workload,
+        Workload::TooltipsHovering | Workload::TooltipsScrubbing
+    ) {
         app.add_systems(
             PreUpdate,
             hover_tooltip_hosts
@@ -722,10 +780,23 @@ fn measure(run: Run) -> String {
     }
 
     let mut times = Vec::with_capacity(run.frames);
+    let mut popups_seen = 0_usize;
     for index in 0..run.frames {
         let start = Instant::now();
         frame(&mut app, run.workload, run.size, index);
         times.push(start.elapsed());
+        if run.workload == Workload::TooltipsScrubbing {
+            // Outside the timing: `HoverLock` is crate-private, but while it is on no popup shows.
+            let world = app.world_mut();
+            popups_seen += world.query::<&TooltipPopup>().iter(world).count();
+        }
+    }
+    if popups_seen > 0 {
+        return format!(
+            "| {} | {} | error: {popups_seen} tooltip popups showed during the scrub drag, so the HoverLock was not on |",
+            run.workload.name(),
+            run.size
+        );
     }
     let after = resident_bytes();
     let entities = app.world().entities().count_spawned();
@@ -753,6 +824,9 @@ fn measure(run: Run) -> String {
 
 /// One frame; the scrolling workload first moves the scroll position.
 fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
+    if workload == Workload::TooltipsScrubbing {
+        hold_scrub_drag(app, index);
+    }
     if workload == Workload::ListItemsInitial {
         // A new list with all its items each frame, so every frame builds `size` views.
         let world = app.world_mut();
@@ -1157,7 +1231,7 @@ fn spawn(world: &mut World, run: Run) {
                     root.spawn(PushButton::from_label(format!("Button {index}")));
                 }
             }
-            Workload::Tooltips | Workload::TooltipsHovering => {
+            Workload::Tooltips | Workload::TooltipsHovering | Workload::TooltipsScrubbing => {
                 for index in 0..run.size {
                     root.spawn((
                         Node {
@@ -1167,6 +1241,11 @@ fn spawn(world: &mut World, run: Run) {
                         },
                         Tooltip::new(format!("Tip {index}")),
                     ));
+                }
+                if run.workload == Workload::TooltipsScrubbing
+                    && let Ok(value) = Value::new_u32(0, 0, u32::MAX, 1)
+                {
+                    root.spawn((NumericStepper::default(), value));
                 }
             }
             Workload::SteppersIdle | Workload::SteppersChanging => {
