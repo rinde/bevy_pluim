@@ -10821,6 +10821,143 @@ fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the
     assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
 }
 
+fn children_with<C: Component>(app: &mut App, stack: Entity) -> Vec<Entity> {
+    let world = app.world_mut();
+    let children = world
+        .get::<Children>(stack)
+        .map(|c| c.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    children
+        .into_iter()
+        .filter(|c| world.entity(*c).contains::<C>())
+        .collect()
+}
+
+#[test]
+fn two_stacks_sharing_a_selection_each_get_a_child_of_their_own() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new_with_reference(0, create_a)),
+            (Item::new("a again"), StackItem::new_reference(0)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let first = stack_over(&mut app, selection_ref);
+    let second = stack_over(&mut app, selection_ref);
+
+    // Both stacks show the selected item, each with a child parented to itself.
+    let a_first = children_with::<PanelA>(&mut app, first);
+    let a_second = children_with::<PanelA>(&mut app, second);
+    assert_eq!((a_first.len(), a_second.len()), (1, 1));
+    assert_ne!(a_first[0], a_second[0]);
+    assert_eq!(node_display(&app, a_first[0]), Display::Flex);
+    assert_eq!(node_display(&app, a_second[0]), Display::Flex);
+
+    // Switching shows the matching child in both; nothing is created lazily before it is picked.
+    select_one(&mut app, selection_ref, items[2]);
+    assert_eq!(count_entities_with::<PanelB>(&mut app), 2);
+    assert_eq!(node_display(&app, a_first[0]), Display::None);
+    assert_eq!(node_display(&app, a_second[0]), Display::None);
+
+    // A reference reuses the creator's child of each stack, not the other stack's.
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(children_with::<PanelA>(&mut app, first), a_first);
+    assert_eq!(children_with::<PanelA>(&mut app, second), a_second);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+    assert_eq!(node_display(&app, a_first[0]), Display::Flex);
+    assert_eq!(node_display(&app, a_second[0]), Display::Flex);
+}
+
+#[test]
+fn two_stacks_sharing_a_selection_each_build_their_own_scene_child() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(WindowPlugin {
+        primary_window: None,
+        ..default()
+    });
+    app.add_plugins(InputPlugin);
+    app.add_plugins(DefaultPickingPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
+    app.init_resource::<ClearColor>();
+    app.add_plugins(WidgetsPlugin);
+    app.finish();
+    app.cleanup();
+    let create = app.world_mut().register_system(spawn_panel_scene);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("scene"), StackItem::new(create)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stacks = [(); 2].map(|()| {
+        app.world_mut()
+            .spawn((Node::default(), Stack { selection_ref }, ChildOf(root)))
+            .id()
+    });
+    for _ in 0..4 {
+        app.update();
+    }
+    for stack in stacks {
+        assert_eq!(children_with::<PanelA>(&mut app, stack).len(), 1);
+    }
+    // Switching away and back reuses each stack's scene root.
+    select_one(&mut app, selection_ref, items[1]);
+    select_one(&mut app, selection_ref, items[0]);
+    for stack in stacks {
+        let roots = children_with::<PanelA>(&mut app, stack);
+        assert_eq!(roots.len(), 1);
+        assert_eq!(node_display(&app, roots[0]), Display::Flex);
+    }
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+}
+
+#[test]
+fn despawning_a_stack_leaves_the_other_one_and_a_recreated_stack_gets_new_children() {
+    let mut app = headless_app();
+    let create_a = app.world_mut().register_system(spawn_panel_a);
+    let create_b = app.world_mut().register_system(spawn_panel_b);
+    let selection_ref = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items([
+            (Item::new("a"), StackItem::new(create_a)),
+            (Item::new("b"), StackItem::new(create_b)),
+        ]))
+        .id();
+    let items = item_entities_of(&app, selection_ref);
+    let first = stack_over(&mut app, selection_ref);
+    let second = stack_over(&mut app, selection_ref);
+    let kept = children_with::<PanelA>(&mut app, second)[0];
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+
+    app.world_mut().entity_mut(first).despawn();
+    app.update();
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
+    select_one(&mut app, selection_ref, items[1]);
+    select_one(&mut app, selection_ref, items[0]);
+    assert_eq!(children_with::<PanelA>(&mut app, second), [kept]);
+    assert_eq!(node_display(&app, kept), Display::Flex);
+
+    // A new stack over the same items makes its own children; the old stack's are not reused.
+    let third = stack_over(&mut app, selection_ref);
+    let fresh = children_with::<PanelA>(&mut app, third);
+    assert_eq!(fresh.len(), 1);
+    assert_ne!(fresh[0], kept);
+    assert_eq!(count_entities_with::<PanelA>(&mut app), 2);
+    select_one(&mut app, selection_ref, items[1]);
+    assert_eq!(children_with::<PanelB>(&mut app, third).len(), 1);
+    assert_eq!(children_with::<PanelB>(&mut app, second).len(), 1);
+}
+
 #[test]
 fn a_stack_over_a_selection_ref_follows_the_selection_it_refers_to() {
     let mut app = headless_app();
