@@ -49,9 +49,15 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
+| `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
+| `palette-items-adding` | 5 000 | one `ColorPalette`; one item is added every frame (#679) |
+| `tab-items-adding` | 5 000 | one `TabBar`; one item is added every frame (#679) |
+| `segment-items-adding` | 5 000 | one `SegmentedControl`; one item is added every frame (#679) |
 | `steppers-idle` | 2 000 | independent `NumericStepper`s with no change: the floor the next two are read against (#663) |
 | `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
+| `toasts-idle` | 500 parents | one long-lived `Toast` under each of many parents, no new toast: the floor `toasts-bursting` is read against (#678) |
+| `toasts-bursting` | 500 parents | the same parents; 20 short `Toast`s (0.05 s) are raised under pseudo-random parents every frame, so stacks are looked up, reused and emptied (#678) |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
@@ -167,6 +173,33 @@ rewritten text and node triggering text and UI layout, which the equality
 guards remove. A step that really changes the displayed number still pays for
 that layout, as it must. The idle floor (about 11 ms for 2 000 steppers) is
 other per-frame systems, not `on_change`.
+
+## Idle toast placement (#678)
+
+`place_toasts` used to build a vector of every `ToastStack` each `Update`, and
+`place_stack` visited every stack, even with no new toast and an unchanged
+`ToastPlacement`. `place_toasts` now runs only while a toast has not moved into
+a stack (`any_fresh_toast`) and looks parents up in a `HashMap`; `place_stack`
+runs only when `ToastPlacement` changed or a `ToastStack` was added, so a stack
+made late still gets an unchanged placement. Empty stacks stay (one small node
+per parent, reused by the next toast there).
+
+Measured with `cargo build --release --example bench`, three runs each, mean
+frame time in microseconds (shared 4 vCPU box, noisy), `main` against this change:
+
+| workload | size | before | after |
+| --- | --- | --- | --- |
+| `toasts-idle` | 500 | 2460 / 2612 / 2736 | 2931 / 2617 / 2400 |
+| `toasts-idle` | 2000 | 6879 (one run) | 5916 / 5451 / 5771 |
+| `toasts-bursting` | 500 | 5550 / 5196 / 7222 | 5569 / 5501 / 5447 |
+| `toasts-bursting` | 2000 | 16824 (one run) | 16390 / 20263 / 19708 |
+
+Entities and memory are unchanged (500: 1 821 / 1 881 entities, about 12.5 / 16 MiB;
+2 000: 6 321 / 6 381 entities, about 45 / 49 MiB). The difference is within the noise:
+the frame cost of these workloads is the cards' own text and UI layout, not the stack
+scan, which is a few microseconds for 500 parents. The change removes the per-frame
+allocation and the per-stack visits (guarded by the run conditions and the lifecycle
+tests), not a measurable share of the frame, so no speed-up is claimed.
 
 ## Idle accessibility synchronization (#661)
 
@@ -305,6 +338,53 @@ frame (about 600 ms for 4 000 rows, by sampling). Timing the observer alone
 Temporary memory is two `HashSet`s of N entities (about 16 bytes an entry),
 replacing the cloned `Vec` and its per-row clone, so it is the same order and
 does not show in the resident set. For long lists use `VirtualList`.
+
+## Large item changes in palettes, tabs and segments (#679)
+
+`ColorPalette`, `TabBar` and `SegmentedControl` had the same quadratic
+reconciliation as `List` had: `on_items_changed` cloned the items and ran
+`retain` once per existing view, and `order_tabs` / `order_segments` searched
+all children for every item. `on_items_changed` now uses the `List` approach
+(one `HashSet` of wanted items, one of those already shown), and the two
+ordering systems share `select.rs`'s `items_in_order`, which maps each item to
+its first child with one `HashMap` and appends children that show no item
+(the app's own) in their original order. Source order, selection state and
+children of the app are unchanged.
+
+Measured with `--frames 15` (same machine and build as above), mean frame time
+in microseconds and memory added in MiB (before / after both listed as
+before -> after, memory the same either way):
+
+| Workload | Items | Mean frame before -> after | Memory added |
+| --- | --- | --- | --- |
+| `palette-items-adding` | 1 000 | 24 056 -> 26 673 | 20.7 / 20.9 |
+| `palette-items-adding` | 4 000 | 185 100 -> 194 620 | 73.1 / 70.8 |
+| `tab-items-adding` | 1 000 | 18 446 -> 17 152 | 21.5 / 21.6 |
+| `tab-items-adding` | 4 000 | 96 738 -> 58 358 | 70.5 / 71.2 |
+| `segment-items-adding` | 1 000 | 19 308 -> 14 093 | 26.4 / 26.6 |
+| `segment-items-adding` | 4 000 | 100 015 -> 67 956 | 89.2 / 90.6 |
+
+Tabs and segments get about 40 % faster at 4 000 items. The palette does not
+move beyond noise: as for the `List`, its frame is dominated by layout and
+swatch styling, not by the reconciliation, so the change there removes the
+clones and the quadratic `retain` but is not measurable in frame time. The
+temporary memory is two sets (and one map when ordering) of N entries, in
+place of the cloned `Vec`s, and does not show in the resident set.
+
+## Shared item snapshot (#681)
+
+`ItemsChanged::items` is an `Arc<[Entity]>`: `items_change` copies the source's
+items once and every observer (`watch_items`, `List`, `SegmentedControl`,
+`TabBar`, palettes) clones the `Arc`, instead of one copy for the event plus
+one per watcher. The snapshot is taken when the change is detected, so
+ordering and intermediate state are as before. `items-shared-adding` at 5 000
+items, mean `App::update` over 300 frames, optimised build, main against this
+change (two runs of main): 113.1 / 109.4 ms before, 115.0 ms after, memory
+added 1056 MiB both. The difference is within noise: with real `List`s the
+per-frame cost is the views each list reconciles (8 x 5 000), not the copy
+of 5 000 `Entity` ids (40 KB per copy). The change removes the copies
+(`1 + N` down to 1 per change, and the `Vec` per watcher) but this workload
+cannot show a gain; there is no allocation counter (see above).
 
 ## Closed palette popups (#680)
 

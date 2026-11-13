@@ -12544,6 +12544,116 @@ fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
 }
 
 #[test]
+fn a_stack_made_after_idle_frames_gets_a_placement_set_before_it_and_left_unchanged() {
+    use bevy_pluim::toast::{Toast, ToastPlacement};
+
+    let (mut app, root) = toast_app();
+    app.world_mut()
+        .get_resource_mut::<ToastPlacement>()
+        .unwrap()
+        .bottom = Val::Px(70.0);
+    // Idle frames: no toast, no stack, placement unchanged.
+    for _ in 0..5 {
+        app.update();
+    }
+    assert!(
+        toast_stacks(&mut app).is_empty(),
+        "idle frames made a stack"
+    );
+    app.world_mut().spawn((Toast::new("Late"), ChildOf(root)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 1);
+    assert_eq!(
+        app.world().get::<Node>(stacks[0]).unwrap().bottom,
+        Val::Px(70.0),
+        "a late stack missed the placement that did not change after it"
+    );
+}
+
+#[test]
+fn bursts_of_toasts_under_many_parents_keep_one_stack_each_across_idle_frames() {
+    use bevy_pluim::toast::Toast;
+
+    let (mut app, _) = toast_app();
+    let parents: Vec<Entity> = (0..20)
+        .map(|_| app.world_mut().spawn(Node::default()).id())
+        .collect();
+    let burst = |app: &mut App, text: &str| -> Vec<Entity> {
+        parents
+            .iter()
+            .flat_map(|parent| {
+                // Two same-text toasts per parent: the second is a duplicate.
+                [0, 1].map(|_| {
+                    app.world_mut()
+                        .spawn((Toast::new(text).with_duration(1000.0), ChildOf(*parent)))
+                        .id()
+                })
+            })
+            .collect()
+    };
+    let first = burst(&mut app, "A");
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toast_stacks(&mut app).len(), 20, "one stack per parent");
+    let alive = |app: &App, toasts: &[Entity]| {
+        toasts
+            .iter()
+            .filter(|toast| app.world().get_entity(**toast).is_ok())
+            .count()
+    };
+    assert_eq!(alive(&app, &first), 20, "duplicates are dropped per parent");
+    // Idle frames, then a second burst with the same and with a new text.
+    for _ in 0..10 {
+        app.update();
+    }
+    let again = burst(&mut app, "A");
+    let other = burst(&mut app, "B");
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(
+        alive(&app, &again),
+        0,
+        "text still showing restarts, not stacks"
+    );
+    assert_eq!(alive(&app, &other), 20);
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 20, "the stacks were reused, none made again");
+    for stack in stacks {
+        let toasts = app.world().get::<Children>(stack).unwrap().len();
+        assert_eq!(toasts, 2, "A and B in every stack");
+    }
+}
+
+#[test]
+fn reinserting_a_shown_toast_after_idle_frames_updates_it_in_its_stack() {
+    use bevy_pluim::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let toast = app
+        .world_mut()
+        .spawn((Toast::new("Before").with_duration(1000.0), ChildOf(root)))
+        .id();
+    for _ in 0..10 {
+        app.update();
+    }
+    let stack = app.world().get::<ChildOf>(toast).unwrap().parent();
+    app.world_mut()
+        .entity_mut(toast)
+        .insert(Toast::new("After").with_duration(1000.0));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(app.world().get::<Text>(toast).unwrap().0, "After");
+    assert_eq!(app.world().get::<ChildOf>(toast).unwrap().parent(), stack);
+    assert_eq!(toast_stacks(&mut app), vec![stack], "no second stack");
+}
+
+#[test]
 fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
     use bevy_pluim::toast::Toast;
 
@@ -15255,4 +15365,170 @@ fn despawning_color_palette_combos_open_or_dormant_leaves_no_swatches_behind() {
     app.update();
     let mut palettes = app.world_mut().query::<&ColorPalette>();
     assert_eq!(palettes.iter(app.world()).count(), 0);
+}
+
+/// Removes the items called `names` from `source` and adds one for each of `added`, in one frame.
+fn swap_items(app: &mut App, source: Entity, removed: &[&str], added: &[&str]) {
+    let doomed: Vec<Entity> = {
+        let world = app.world_mut();
+        let mut query = world.query::<(Entity, &Item<String>, &ItemOf)>();
+        query
+            .iter(world)
+            .filter(|(_, item, of)| of.0 == source && removed.contains(&item.data.as_str()))
+            .map(|(entity, ..)| entity)
+            .collect()
+    };
+    for entity in doomed {
+        app.world_mut().entity_mut(entity).despawn();
+    }
+    for name in added {
+        app.world_mut().spawn((Item::new(*name), ItemOf(source)));
+    }
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
+fn a_segmented_control_keeps_the_segments_of_kept_items_and_a_child_of_the_app_through_a_swap() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let before = segments_of(&app, control);
+    let own = app.world_mut().spawn(ChildOf(control)).id();
+    app.update();
+    swap_items(&mut app, control, &["Manual"], &["New"]);
+    let after = segments_of(&app, control);
+    assert_eq!(segment_texts(&app, control), ["Auto", "Off", "New"]);
+    assert_eq!(after[..2], [before[0], before[2]]);
+    assert!(app.world().get_entity(before[1]).is_err());
+    assert!(app.world().get_entity(own).is_ok());
+    assert_eq!(selected_segments(&app, control), ["Auto"]);
+}
+
+#[test]
+fn a_tab_bar_keeps_the_tabs_of_kept_items_and_a_child_of_the_app_through_a_swap() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let before = tabs_of(&app, bar);
+    let own = app.world_mut().spawn(ChildOf(bar)).id();
+    app.update();
+    swap_items(&mut app, bar, &["Audio"], &["New"]);
+    let after = tabs_of(&app, bar);
+    let texts: Vec<_> = after.iter().map(|t| segment_text(&app, *t)).collect();
+    assert_eq!(texts, ["General", "Input", "New"]);
+    assert_eq!(after[..2], [before[0], before[2]]);
+    assert!(app.world().get_entity(before[1]).is_err());
+    assert!(app.world().get_entity(own).is_ok());
+    assert_eq!(selected_tabs(&app, bar), ["General"]);
+}
+
+#[test]
+fn thousands_of_tabs_and_segments_are_built_and_reordered_in_item_order() {
+    const COUNT: usize = 3_000;
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let names: Vec<String> = (0..COUNT).map(|i| format!("Item {i}")).collect();
+    let bar = app
+        .world_mut()
+        .spawn((
+            TabBar,
+            Selection::builder()
+                .one()
+                .build_with_items(names.clone().into_iter().map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(names.clone().into_iter().map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let texts: Vec<_> = tabs_of(&app, bar)
+        .iter()
+        .map(|t| segment_text(&app, *t))
+        .collect();
+    assert_eq!(texts, names);
+    assert_eq!(segment_texts(&app, control), names);
+    // one more item at the front: every existing child stays, in place after it
+    let before = tabs_of(&app, bar);
+    let first = app
+        .world()
+        .entity(before[0])
+        .get::<TabBarTab>()
+        .unwrap()
+        .item();
+    let new = app.world_mut().spawn(Item::new("Front")).id();
+    app.world_mut()
+        .entity_mut(bar)
+        .insert_related::<ItemOf>(0, &[new]);
+    for _ in 0..3 {
+        app.update();
+    }
+    let after = tabs_of(&app, bar);
+    assert_eq!(after.len(), COUNT + 1);
+    assert_eq!(segment_text(&app, after[0]), "Front");
+    assert_eq!(after[1..], before[..]);
+    assert_eq!(
+        app.world()
+            .entity(after[1])
+            .get::<TabBarTab>()
+            .unwrap()
+            .item(),
+        first
+    );
+}
+
+#[test]
+fn a_palette_despawns_a_second_swatch_of_one_item_and_keeps_the_others() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let colors = [Color::WHITE, Color::BLACK];
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(colors.map(|data| Item { data })),
+        )
+        .id();
+    let palette = app
+        .world_mut()
+        .spawn((ColorPalette, Selection::reference(items), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let views = item_views(&app, palette);
+    assert_eq!(views.len(), 2);
+    let item = app.world().get::<ItemView>(views[0]).unwrap().item_ref;
+    let twin = app
+        .world_mut()
+        .spawn((
+            ItemView {
+                item_ref: item,
+                list_ref: palette,
+            },
+            ChildOf(palette),
+        ))
+        .id();
+    app.world_mut()
+        .spawn((Item { data: Color::BLACK }, ItemOf(items)));
+    app.update();
+    app.update();
+    assert!(app.world().get_entity(twin).is_err());
+    let after = item_views(&app, palette);
+    assert_eq!(after.len(), 3);
+    assert_eq!(after[..2], views[..]);
 }
