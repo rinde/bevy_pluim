@@ -11,6 +11,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusedInput, InputFocus, InputFocusSystems};
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
@@ -18,7 +19,7 @@ use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 use crate::focus::{AccessibilitySync, HiddenChanges, is_hidden, sync_label};
 use crate::indicator::{self, Indicator};
 use crate::segmented_control::segment_colors;
-use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
+use crate::select::{Item, ItemsObserver, Selection, SelectionParam, items_in_order, watch_items};
 use crate::theme::Theme;
 
 /// The height of a tab, in logical pixels.
@@ -507,21 +508,21 @@ fn on_items_changed(
         return;
     };
 
-    let mut missing = items.to_vec();
+    // Linear reconciliation (see `List`): a tab stays when its item is wanted and no
+    // earlier tab shows it; any other is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::new();
     for (tab_id, tab) in children
         .into_iter()
         .flat_map(RelationshipTarget::iter)
         .filter_map(|c| tabs.get(c).ok())
     {
-        let before = missing.len();
-        missing.retain(|item| *item != tab.item());
-        if before == missing.len() {
-            // a tab without a corresponding item
+        if !wanted.contains(&tab.item()) || !shown.insert(tab.item()) {
             commands.entity(tab_id).despawn();
         }
     }
 
-    for item_ref in missing {
+    for &item_ref in items.iter().filter(|item_ref| !shown.contains(*item_ref)) {
         let Ok(item) = items_query.get(item_ref) else {
             continue;
         };
@@ -560,16 +561,9 @@ fn order_tabs(
     let Ok(children) = bars.get(*bar_ref) else {
         return;
     };
-    let mut wanted: Vec<Entity> = items
-        .iter()
-        .filter_map(|item| {
-            children
-                .iter()
-                .find(|c| tabs.get(*c).is_ok_and(|t| t.item() == *item))
-        })
-        .collect();
-    let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();
-    wanted.extend(rest);
+    let wanted = items_in_order(children.iter(), items, |child| {
+        tabs.get(child).ok().map(TabBarTab::item)
+    });
     if !wanted.iter().copied().eq(children.iter()) {
         commands.entity(*bar_ref).replace_children(&wanted);
     }

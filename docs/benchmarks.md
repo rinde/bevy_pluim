@@ -50,6 +50,9 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
 | `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
+| `palette-items-adding` | 5 000 | one `ColorPalette`; one item is added every frame (#679) |
+| `tab-items-adding` | 5 000 | one `TabBar`; one item is added every frame (#679) |
+| `segment-items-adding` | 5 000 | one `SegmentedControl`; one item is added every frame (#679) |
 | `steppers-idle` | 2 000 | independent `NumericStepper`s with no change: the floor the next two are read against (#663) |
 | `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
@@ -304,6 +307,38 @@ frame (about 600 ms for 4 000 rows, by sampling). Timing the observer alone
 Temporary memory is two `HashSet`s of N entities (about 16 bytes an entry),
 replacing the cloned `Vec` and its per-row clone, so it is the same order and
 does not show in the resident set. For long lists use `VirtualList`.
+
+## Large item changes in palettes, tabs and segments (#679)
+
+`ColorPalette`, `TabBar` and `SegmentedControl` had the same quadratic
+reconciliation as `List` had: `on_items_changed` cloned the items and ran
+`retain` once per existing view, and `order_tabs` / `order_segments` searched
+all children for every item. `on_items_changed` now uses the `List` approach
+(one `HashSet` of wanted items, one of those already shown), and the two
+ordering systems share `select.rs`'s `items_in_order`, which maps each item to
+its first child with one `HashMap` and appends children that show no item
+(the app's own) in their original order. Source order, selection state and
+children of the app are unchanged.
+
+Measured with `--frames 15` (same machine and build as above), mean frame time
+in microseconds and memory added in MiB (before / after both listed as
+before -> after, memory the same either way):
+
+| Workload | Items | Mean frame before -> after | Memory added |
+| --- | --- | --- | --- |
+| `palette-items-adding` | 1 000 | 24 056 -> 26 673 | 20.7 / 20.9 |
+| `palette-items-adding` | 4 000 | 185 100 -> 194 620 | 73.1 / 70.8 |
+| `tab-items-adding` | 1 000 | 18 446 -> 17 152 | 21.5 / 21.6 |
+| `tab-items-adding` | 4 000 | 96 738 -> 58 358 | 70.5 / 71.2 |
+| `segment-items-adding` | 1 000 | 19 308 -> 14 093 | 26.4 / 26.6 |
+| `segment-items-adding` | 4 000 | 100 015 -> 67 956 | 89.2 / 90.6 |
+
+Tabs and segments get about 40 % faster at 4 000 items. The palette does not
+move beyond noise: as for the `List`, its frame is dominated by layout and
+swatch styling, not by the reconciliation, so the change there removes the
+clones and the quadratic `retain` but is not measurable in frame time. The
+temporary memory is two sets (and one map when ordering) of N entries, in
+place of the cloned `Vec`s, and does not show in the resident set.
 
 ## Shared item snapshot (#681)
 

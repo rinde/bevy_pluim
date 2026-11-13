@@ -9,6 +9,7 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::{Activate, Button};
@@ -18,7 +19,7 @@ use crate::focus::{
 };
 use crate::indicator::{self, Indicator};
 use crate::list::sync_selected;
-use crate::select::{Item, ItemsObserver, Selection, SelectionParam, watch_items};
+use crate::select::{Item, ItemsObserver, Selection, SelectionParam, items_in_order, watch_items};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
@@ -650,21 +651,21 @@ fn on_items_changed(
     };
     let selection = selections.get(*control_ref);
 
-    let mut missing = items.to_vec();
+    // Linear reconciliation (see `List`): a segment stays when its item is wanted and no
+    // earlier segment shows it; any other is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::new();
     for (segment_id, segment) in children
         .into_iter()
         .flat_map(RelationshipTarget::iter)
         .filter_map(|c| segments.get(c).ok())
     {
-        let before = missing.len();
-        missing.retain(|item| *item != segment.item());
-        if before == missing.len() {
-            // a segment without a corresponding item
+        if !wanted.contains(&segment.item()) || !shown.insert(segment.item()) {
             commands.entity(segment_id).despawn();
         }
     }
 
-    for item_ref in missing {
+    for &item_ref in items.iter().filter(|item_ref| !shown.contains(*item_ref)) {
         let Ok(item) = items_query.get(item_ref) else {
             continue;
         };
@@ -705,16 +706,9 @@ fn order_segments(
     let Ok(children) = controls.get(*control_ref) else {
         return;
     };
-    let mut wanted: Vec<Entity> = items
-        .iter()
-        .filter_map(|item| {
-            children
-                .iter()
-                .find(|c| segments.get(*c).is_ok_and(|s| s.item() == *item))
-        })
-        .collect();
-    let rest: Vec<Entity> = children.iter().filter(|c| !wanted.contains(c)).collect();
-    wanted.extend(rest);
+    let wanted = items_in_order(children.iter(), items, |child| {
+        segments.get(child).ok().map(Segment::item)
+    });
     if !wanted.iter().copied().eq(children.iter()) {
         commands.entity(*control_ref).replace_children(&wanted);
     }

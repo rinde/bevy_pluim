@@ -2,6 +2,7 @@
 
 use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::Selected;
 use bevy::ui_widgets::ListBoxMultiSelect;
@@ -82,23 +83,17 @@ fn on_items_changed(
         })
         .unwrap_or_default();
 
-    let mut items = items.to_vec();
-    for (
-        view_ref,
-        ItemView {
-            item_ref: item_id, ..
-        },
-    ) in existing
-    {
-        let len_before = items.len();
-        items.retain(|x| x != item_id);
-        if len_before == items.len() {
-            // a view was found without a corresponding item
+    // Linear reconciliation (see `List`): a view stays when its item is wanted and no
+    // earlier view shows it; any other is despawned.
+    let wanted: HashSet<Entity> = items.iter().copied().collect();
+    let mut shown = HashSet::with_capacity(existing.len());
+    for (view_ref, ItemView { item_ref, .. }) in existing {
+        if !wanted.contains(item_ref) || !shown.insert(*item_ref) {
             commands.entity(view_ref).despawn();
         }
     }
 
-    for item_id in items {
+    for &item_id in items.iter().filter(|item_id| !shown.contains(*item_id)) {
         let Ok(item) = items_query.get(item_id) else {
             continue;
         };
