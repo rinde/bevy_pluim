@@ -16360,6 +16360,70 @@ fn despawning_color_palette_combos_open_or_dormant_leaves_no_swatches_behind() {
     assert_eq!(palettes.iter(app.world()).count(), 0);
 }
 
+/// Background, outer border and colour-square border of every swatch of `palette`.
+fn swatch_looks(app: &App, palette: Entity) -> Vec<(Color, Color, Color)> {
+    item_views(app, palette)
+        .into_iter()
+        .map(|view| {
+            let world = app.world();
+            let background = world.get::<BackgroundColor>(view).unwrap().0;
+            let border = world.get::<BorderColor>(view).unwrap().top;
+            let square = world.entity(view).get::<Children>().unwrap()[0];
+            let inner = world.get::<BorderColor>(square).unwrap().top;
+            (background, border, inner)
+        })
+        .collect()
+}
+
+#[test]
+fn swatches_built_after_a_theme_change_while_the_popup_was_closed_carry_the_new_theme() {
+    // The first colour is selected, so one swatch has the selection ring.
+    let selection = || {
+        Selection::builder()
+            .one()
+            .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data }))
+    };
+
+    // Reference: a popup opened under the dark theme from the start.
+    let mut reference = headless_app();
+    reference
+        .world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    let (_, reference_palette, _) = open_palette_combo_over(&mut reference, selection());
+    let wanted = swatch_looks(&reference, reference_palette);
+
+    let mut app = headless_app();
+    let (_, palette) = closed_palette_combo_over(&mut app, selection());
+    assert!(item_views(&app, palette).is_empty());
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    app.update();
+    assert!(item_views(&app, palette).is_empty());
+
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
+    app.update();
+    let looks = swatch_looks(&app, palette);
+    assert_eq!(looks.len(), 2);
+    assert_eq!(looks, wanted);
+
+    let dark = DEFAULT_DARK_THEME_COLORS.background_primary;
+    let light = DEFAULT_LIGHT_THEME_COLORS.background_primary;
+    assert_ne!(dark, light);
+    for (background, ..) in &looks {
+        assert_eq!(*background, dark);
+    }
+    // The unselected swatch's ring is the new background, the selected one's is not.
+    assert_eq!(looks[1].1, dark);
+    assert_ne!(looks[0].1, dark);
+    assert_ne!(looks[0].1, light);
+}
+
 /// Removes the items called `names` from `source` and adds one for each of `added`, in one frame.
 fn swap_items(app: &mut App, source: Entity, removed: &[&str], added: &[&str]) {
     let doomed: Vec<Entity> = {
