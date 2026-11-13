@@ -12538,6 +12538,116 @@ fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
 }
 
 #[test]
+fn a_stack_made_after_idle_frames_gets_a_placement_set_before_it_and_left_unchanged() {
+    use bevy_pluim::toast::{Toast, ToastPlacement};
+
+    let (mut app, root) = toast_app();
+    app.world_mut()
+        .get_resource_mut::<ToastPlacement>()
+        .unwrap()
+        .bottom = Val::Px(70.0);
+    // Idle frames: no toast, no stack, placement unchanged.
+    for _ in 0..5 {
+        app.update();
+    }
+    assert!(
+        toast_stacks(&mut app).is_empty(),
+        "idle frames made a stack"
+    );
+    app.world_mut().spawn((Toast::new("Late"), ChildOf(root)));
+    for _ in 0..3 {
+        app.update();
+    }
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 1);
+    assert_eq!(
+        app.world().get::<Node>(stacks[0]).unwrap().bottom,
+        Val::Px(70.0),
+        "a late stack missed the placement that did not change after it"
+    );
+}
+
+#[test]
+fn bursts_of_toasts_under_many_parents_keep_one_stack_each_across_idle_frames() {
+    use bevy_pluim::toast::Toast;
+
+    let (mut app, _) = toast_app();
+    let parents: Vec<Entity> = (0..20)
+        .map(|_| app.world_mut().spawn(Node::default()).id())
+        .collect();
+    let burst = |app: &mut App, text: &str| -> Vec<Entity> {
+        parents
+            .iter()
+            .flat_map(|parent| {
+                // Two same-text toasts per parent: the second is a duplicate.
+                [0, 1].map(|_| {
+                    app.world_mut()
+                        .spawn((Toast::new(text).with_duration(1000.0), ChildOf(*parent)))
+                        .id()
+                })
+            })
+            .collect()
+    };
+    let first = burst(&mut app, "A");
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(toast_stacks(&mut app).len(), 20, "one stack per parent");
+    let alive = |app: &App, toasts: &[Entity]| {
+        toasts
+            .iter()
+            .filter(|toast| app.world().get_entity(**toast).is_ok())
+            .count()
+    };
+    assert_eq!(alive(&app, &first), 20, "duplicates are dropped per parent");
+    // Idle frames, then a second burst with the same and with a new text.
+    for _ in 0..10 {
+        app.update();
+    }
+    let again = burst(&mut app, "A");
+    let other = burst(&mut app, "B");
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(
+        alive(&app, &again),
+        0,
+        "text still showing restarts, not stacks"
+    );
+    assert_eq!(alive(&app, &other), 20);
+    let stacks = toast_stacks(&mut app);
+    assert_eq!(stacks.len(), 20, "the stacks were reused, none made again");
+    for stack in stacks {
+        let toasts = app.world().get::<Children>(stack).unwrap().len();
+        assert_eq!(toasts, 2, "A and B in every stack");
+    }
+}
+
+#[test]
+fn reinserting_a_shown_toast_after_idle_frames_updates_it_in_its_stack() {
+    use bevy_pluim::toast::Toast;
+
+    let (mut app, root) = toast_app();
+    let toast = app
+        .world_mut()
+        .spawn((Toast::new("Before").with_duration(1000.0), ChildOf(root)))
+        .id();
+    for _ in 0..10 {
+        app.update();
+    }
+    let stack = app.world().get::<ChildOf>(toast).unwrap().parent();
+    app.world_mut()
+        .entity_mut(toast)
+        .insert(Toast::new("After").with_duration(1000.0));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(app.world().get::<Text>(toast).unwrap().0, "After");
+    assert_eq!(app.world().get::<ChildOf>(toast).unwrap().parent(), stack);
+    assert_eq!(toast_stacks(&mut app), vec![stack], "no second stack");
+}
+
+#[test]
 fn a_toast_after_the_first_has_gone_reuses_the_stack_that_stayed_when_empty() {
     use bevy_pluim::toast::Toast;
 
