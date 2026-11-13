@@ -9,6 +9,7 @@
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, Selected, UiGlobalTransform};
 use itertools::Either;
+use std::collections::HashMap;
 
 use crate::theme::Theme;
 
@@ -36,16 +37,21 @@ pub(crate) trait Indicator: Component + Sized {
 /// that is new or inserted again (`Changed<T>`), and, when an indicator was removed or despawned
 /// (also with its track), every track once, because a removed component no longer says whose it
 /// was. A quiet frame does nothing, so the cost no longer grows with tracks times indicators.
+///
+/// An indicator that was reparented away from its track without being removed is a stray: the
+/// track is put back as its parent instead of getting a second indicator. The strays are looked up
+/// by owner once per pass, and only when a candidate has no indicator among its children.
 pub(crate) fn spawn<I: Indicator, T: Component>(
     changed: Query<Entity, Changed<T>>,
     tracks: Query<Entity, With<T>>,
     children: Query<&Children>,
-    indicators: Query<&I>,
+    indicators: Query<(Entity, &I)>,
     mut removed: RemovedComponents<I>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
     let any_removed = removed.read().count() > 0;
+    let mut strays: Option<HashMap<Entity, Entity>> = None;
     let candidates = if any_removed {
         Either::Left(tracks.iter())
     } else {
@@ -54,9 +60,15 @@ pub(crate) fn spawn<I: Indicator, T: Component>(
     for track in candidates {
         let has_indicator = children.get(track).is_ok_and(|kids| {
             kids.iter()
-                .any(|kid| indicators.get(kid).is_ok_and(|i| i.owner() == track))
+                .any(|kid| indicators.get(kid).is_ok_and(|(_, i)| i.owner() == track))
         });
         if has_indicator {
+            continue;
+        }
+        let strays = strays
+            .get_or_insert_with(|| indicators.iter().map(|(kid, i)| (i.owner(), kid)).collect());
+        if let Some(&stray) = strays.get(&track) {
+            commands.entity(track).add_child(stray);
             continue;
         }
         commands.entity(track).with_child((

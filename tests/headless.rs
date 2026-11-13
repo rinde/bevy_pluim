@@ -3769,7 +3769,12 @@ fn a_list_keeps_the_node_fields_the_app_gave_it() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.width, Val::Px(120.0));
     assert_eq!(node.margin, UiRect::all(Val::Px(7.0)));
-    assert_eq!(node.display, Display::Grid);
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "a one-column list is a flex column"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Column);
     assert_eq!(node.position_type, PositionType::Relative);
 }
 
@@ -3814,6 +3819,7 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     assert_eq!(node.grid_auto_flow, expected.grid_auto_flow);
     assert_eq!(node.grid_template_columns, expected.grid_template_columns);
     assert_eq!(node.grid_template_columns.len(), 1);
+    assert_eq!(node.display, Display::Grid, "several columns need the grid");
     assert_eq!(node.width, Val::Px(120.0), "the app's width survives");
 
     app.world_mut()
@@ -3823,6 +3829,19 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
     assert!(node.grid_template_columns.is_empty());
+    assert_eq!(node.display, Display::Grid);
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::Vertical);
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "back to one column is a flex column"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Column);
 }
 
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
@@ -15965,6 +15984,35 @@ fn a_removed_indicator_is_made_again_once_and_other_tracks_keep_theirs() {
                 assert_eq!(indicators_named(&app, other, other_name), vec![before[j]]);
             }
         }
+    }
+}
+
+#[test]
+fn an_indicator_reparented_away_from_its_track_is_taken_back_not_doubled() {
+    let mut app = headless_app();
+    let tracks = spawn_indicator_tracks(&mut app);
+    let before = tracks.map(|(t, n)| indicators_named(&app, t, n)[0]);
+    let elsewhere = app.world_mut().spawn(Node::default()).id();
+    for indicator in before {
+        app.world_mut()
+            .entity_mut(indicator)
+            .insert(ChildOf(elsewhere));
+    }
+    for (track, name) in tracks {
+        assert!(indicators_named(&app, track, name).is_empty());
+    }
+    app.world_mut()
+        .entity_mut(tracks[0].0)
+        .insert(SegmentedControl);
+    app.world_mut().entity_mut(tracks[1].0).insert(TabBar);
+    app.world_mut()
+        .entity_mut(tracks[2].0)
+        .insert(LightDarkToggle);
+    for _ in 0..3 {
+        app.update();
+    }
+    for (i, (track, name)) in tracks.into_iter().enumerate() {
+        assert_eq!(indicators_named(&app, track, name), vec![before[i]]);
     }
 }
 
