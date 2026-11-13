@@ -15931,3 +15931,125 @@ fn an_area_two_pointers_are_on_scrolls_once_for_each_pointer_and_message() {
     app.update();
     assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 40.0));
 }
+
+#[test]
+fn reinserting_a_numeric_stepper_while_its_number_editor_is_open_keeps_app_children_and_leaves_no_stale_editor()
+ {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyboardInput};
+
+    let mut app = headless_app_with(|app| {
+        app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
+    });
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    app.world_mut().spawn(Camera2d);
+    let root = app.world_mut().spawn(Node::default()).id();
+    let stepper = app
+        .world_mut()
+        .spawn((
+            NumericStepper::default(),
+            Value::new_u8(1, 0, 3, 1).unwrap(),
+            ChildOf(root),
+        ))
+        .id();
+    let mine = app
+        .world_mut()
+        .spawn((Name::new("Mine"), ChildOf(stepper)))
+        .id();
+    app.update();
+    app.update();
+    let key = |app: &mut App, code: KeyCode, logical: Key| {
+        app.world_mut().write_message(KeyboardInput {
+            key_code: code,
+            logical_key: logical,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+        app.update();
+        app.update();
+    };
+
+    // F2 opens the number editor, which takes the focus.
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(stepper));
+    key(&mut app, KeyCode::F2, Key::F2);
+    let editors = |app: &mut App| -> Vec<Entity> {
+        let mut query = app.world_mut().query::<(Entity, &TextFieldRefs)>();
+        query.iter(app.world()).map(|(entity, _)| entity).collect()
+    };
+    let opened = editors(&mut app);
+    assert_eq!(opened.len(), 1, "F2 opens one editor");
+    let input = app
+        .world()
+        .entity(opened[0])
+        .get::<TextFieldRefs>()
+        .unwrap()
+        .input;
+    assert_eq!(
+        app.world()
+            .get_resource::<InputFocus>()
+            .and_then(InputFocus::get),
+        Some(input)
+    );
+
+    // Replace the stepper while the editor is open and focused.
+    app.world_mut()
+        .entity_mut(stepper)
+        .insert(NumericStepper::default());
+    app.update();
+    app.update();
+    app.update();
+
+    assert!(app.world().get_entity(mine).is_ok(), "the app child stays");
+    assert!(
+        editors(&mut app).is_empty(),
+        "no editor of the stepper is left"
+    );
+    assert!(
+        app.world().get_entity(opened[0]).is_err(),
+        "the old editor is despawned"
+    );
+    let labels: Vec<Entity> = app
+        .world()
+        .entity(stepper)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .filter(|child| {
+            app.world()
+                .entity(*child)
+                .get::<Name>()
+                .is_some_and(|name| name.as_str() == "Value")
+        })
+        .collect();
+    assert_eq!(labels.len(), 1, "exactly one value label");
+    assert_eq!(
+        app.world().entity(labels[0]).get::<Node>().unwrap().display,
+        Display::Flex,
+        "the label shows"
+    );
+    if let Some(focused) = app
+        .world()
+        .get_resource::<InputFocus>()
+        .and_then(InputFocus::get)
+    {
+        assert!(
+            app.world().get_entity(focused).is_ok(),
+            "focus is not on a despawned entity"
+        );
+    }
+
+    // The stepper is not stuck as "editor open": the arrow keys step it again.
+    app.world_mut()
+        .insert_resource(InputFocus::from_entity(stepper));
+    key(&mut app, KeyCode::ArrowUp, Key::ArrowUp);
+    assert_eq!(stepper_value(&app, stepper), 2);
+    // And F2 opens a fresh editor.
+    key(&mut app, KeyCode::F2, Key::F2);
+    assert_eq!(editors(&mut app).len(), 1);
+}
