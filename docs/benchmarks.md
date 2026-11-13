@@ -47,6 +47,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `virtual-lists` | 20 lists of 1 000 | many virtual lists at once, idle |
 | `filter-chips-one-changing` | 500 rows of 3 chips | many independent `FilterChips`; one row is marked changed every frame (no relayout), so a rebuild check that visits every row shows |
 | `filter-chips-idle` | 500 rows of 3 chips | the same rows with no change: the floor `filter-chips-one-changing` is read against |
+| `filter-chips-selection-changing` | 500 rows of 3 chips | one row's selection re-inserted per frame, the other rows unrelated (#709) |
 | `list-notes-changing` | 500 `List`s of 3 noted items | many independent lists; one `ItemNote` is marked changed every frame (no relayout), so a note sync that visits every row shows (#666) |
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
@@ -69,6 +70,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
+| `segmented-controls-selection-changing` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, the others unrelated (#709) |
 | `palette-combos-idle` | 50 | closed `ColorPaletteCombo`s over the 242 Tailwind colours, nothing changing (#680) |
 | `theme-editors-idle` | 1 | `ThemeEditor`s with every popup closed, nothing changing (#680) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
@@ -330,6 +332,34 @@ about 7 % at 500 controls and 15 % at 2000, growing with the count as the quadra
 rest of the frame is other systems. Animation and removal are dominated by something else:
 `indicators-animating` replaces a `Selection` every frame (about 30 ms at 500 controls), which
 costs the selection widgets' own systems, not the indicator (follow-up ticket).
+
+## Selection restyling (#709)
+
+`segmented_control.rs`'s `selection_change` and `filter_chips.rs`'s `restyle_changed_chips` reacted
+to any changed `Selection` by looking at every control or chip row, so one selection change cost
+work in every unrelated widget. Both now collect the changed selections and touch only the widgets
+whose own `Selection`, or the one their `Selection::Ref` resolves to, changed (the scoping #659 gave
+`TabBar`). `FilterChips` also restyles only the chips of those rows, the hovered ones and the chips
+of a changed `Item<Chip>`, where it ran `theme_chips` over all of them; as a side effect a hover or
+an item edit in a frame where a selection changed is no longer dropped. `list.rs`, `combo.rs` and
+`breadcrumbs.rs` were already scoped per widget and are unchanged. Tests:
+`a_segmented_control_follows_only_the_selection_it_draws_from`,
+`filter_chips_restyle_only_the_rows_whose_selection_changed` and
+`a_hover_and_an_item_edit_are_restyled_in_a_frame_where_a_selection_changed` (the first two fail on
+the old code). Mean frame time in microseconds, three runs (shared cloud container, noisy),
+`bench --workload NAME --size N`:
+
+| workload | size | before | after |
+| --- | --- | --- | --- |
+| `filter-chips-selection-changing` | 500 | 26122 / 26824 / 26229 | 8354 / 8173 / 8409 |
+| `filter-chips-selection-changing` | 2000 | 119975 / 111106 / 107197 | 32930 / 30060 / 29007 |
+| `segmented-controls-selection-changing` | 500 | 32899 / 32936 / 31752 | 9476 / 9855 / 9259 |
+| `segmented-controls-selection-changing` | 2000 | 209373 / 209096 / 215321 | 35371 / 31774 / 32758 |
+
+Entities (6824 and 26324 for chips, 7828 and 30328 for segments) and memory are unchanged. A frame
+with one changed selection costs about a third of what it did for chips and a sixth for segmented
+controls at 2000 widgets. `theme_chips` still walks all chip views once per chip it restyles; that
+is a follow-up.
 
 ## Large item changes in a `List` (#676)
 

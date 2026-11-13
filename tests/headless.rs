@@ -11224,6 +11224,168 @@ fn a_tab_bar_follows_only_the_selection_it_draws_from() {
 }
 
 #[test]
+fn a_segmented_control_follows_only_the_selection_it_draws_from() {
+    let mut app = headless_app();
+    let first = spawn_segmented_control(&mut app);
+    let second = spawn_segmented_control(&mut app);
+    let root = app.world().get::<ChildOf>(first).unwrap().parent();
+    let shared = app
+        .world_mut()
+        .spawn((SegmentedControl, Selection::reference(first), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let item_of = |app: &App, control: Entity, i: usize| {
+        app.world()
+            .get::<Segment>(segments_of(app, control)[i])
+            .unwrap()
+            .item()
+    };
+    let wanted = item_of(&app, first, 2);
+
+    // Knock the second control's `Selected` out of step without a selection change.
+    let auto = segments_of(&app, second)[0];
+    app.world_mut().entity_mut(auto).remove::<Selected>();
+    settle(&mut app);
+    assert!(selected_segments(&app, second).is_empty());
+
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    settle(&mut app);
+    assert_eq!(selected_segments(&app, first), ["Off"]);
+    assert_eq!(selected_segments(&app, shared), ["Off"]);
+    assert!(
+        selected_segments(&app, second).is_empty(),
+        "the independent control is not looked at"
+    );
+
+    // Its own selection change does reach it.
+    let own = item_of(&app, second, 1);
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Selection::Value(SelectionValue::One(own)));
+    settle(&mut app);
+    assert_eq!(selected_segments(&app, second), ["Manual"]);
+}
+
+/// The label text colour of a chip.
+fn chip_label_color(app: &App, view: Entity) -> Color {
+    let label = app.world().get::<ChipRefs>(view).unwrap().label;
+    app.world().get::<TextColor>(label).unwrap().0
+}
+
+#[test]
+fn filter_chips_restyle_only_the_rows_whose_selection_changed() {
+    let mut app = headless_app();
+    let (root, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, three_chips());
+    let shared = app
+        .world_mut()
+        .spawn((FilterChips, Selection::reference(first), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    let wrong = Color::srgb(1.0, 0.0, 0.0);
+    let item_of = |app: &App, row: Entity, i: usize| {
+        app.world()
+            .get::<ChipView>(chip_views(app, row)[i])
+            .unwrap()
+            .item()
+    };
+    let wanted = item_of(&app, first, 2);
+
+    // Knock a chip of the second row out of step without a selection change.
+    let second_views = chip_views(&app, second);
+    app.world_mut()
+        .entity_mut(second_views[1])
+        .insert(BackgroundColor(wrong));
+    settle(&mut app);
+    assert_eq!(background(&app, second_views[1]), wrong);
+
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    settle(&mut app);
+    let first_views = chip_views(&app, first);
+    let shared_views = chip_views(&app, shared);
+    assert_eq!(background(&app, first_views[2]), colors.chip_on);
+    assert_eq!(background(&app, first_views[0]), Color::NONE);
+    assert_eq!(background(&app, shared_views[2]), colors.chip_on);
+    assert_eq!(background(&app, shared_views[0]), Color::NONE);
+    assert_eq!(
+        background(&app, second_views[1]),
+        wrong,
+        "the independent row is not restyled"
+    );
+
+    // Its own selection change does reach it.
+    let own = item_of(&app, second, 1);
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Selection::Value(SelectionValue::One(own)));
+    settle(&mut app);
+    assert_eq!(background(&app, second_views[1]), colors.chip_on);
+}
+
+#[test]
+fn a_hover_and_an_item_edit_are_restyled_in_a_frame_where_a_selection_changed() {
+    let mut app = headless_app();
+    let (_, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, three_chips());
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    let wrong = Color::srgb(1.0, 0.0, 0.0);
+    let second_views = chip_views(&app, second);
+    let wanted = app
+        .world()
+        .get::<ChipView>(chip_views(&app, first)[1])
+        .unwrap()
+        .item();
+    let edited = app.world().get::<ChipView>(second_views[2]).unwrap().item();
+    assert_eq!(
+        chip_label_color(&app, second_views[0]),
+        colors.chip_on_ink,
+        "the active chip of the second row"
+    );
+    assert_eq!(
+        chip_label_color(&app, second_views[1]),
+        colors.text_secondary
+    );
+    app.world_mut()
+        .entity_mut(second_views[0])
+        .insert(BackgroundColor(wrong));
+
+    // In one frame: the selection of the first row changes, the pointer reaches a chip of the
+    // second row and an item of the second row is edited. Only `Update` runs, as
+    // `PreUpdate` would put `Hovered` back to false in an app with no pointer.
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    app.world_mut()
+        .entity_mut(second_views[1])
+        .insert(Hovered(true));
+    app.world_mut()
+        .get_mut::<Item<Chip>>(edited)
+        .unwrap()
+        .data
+        .label = "Renamed".into();
+    for _ in 0..3 {
+        app.world_mut().run_schedule(Update);
+    }
+
+    assert_eq!(
+        chip_label_color(&app, second_views[1]),
+        colors.text_primary,
+        "the hovered chip is restyled"
+    );
+    assert_eq!(chip_texts(&app, second_views[2]).0, "Renamed");
+    assert_eq!(
+        background(&app, second_views[0]),
+        wrong,
+        "a chip of the independent row that did not change is left alone"
+    );
+}
+
+#[test]
 fn a_toolbar_does_not_look_at_its_buttons_in_a_frame_without_a_change() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());

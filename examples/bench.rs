@@ -138,6 +138,9 @@ enum Workload {
     FilterChipsOneChanging,
     /// The same `FilterChips`, idle: the floor the changing workload is read against.
     FilterChipsIdle,
+    /// The same `FilterChips`; one row's selection moves to its next chip every frame, so only
+    /// that row is restyled (#709).
+    FilterChipsSelectionChanging,
     /// Many independent `List`s of three noted items; one note is marked changed every frame.
     ListNotesChanging,
     /// The same lists, idle: the floor the changing workload is read against.
@@ -186,6 +189,9 @@ enum Workload {
     SettingRowsChanging,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
+    /// The same controls; one control's selection moves to its next segment every frame, and
+    /// only that control is restyled (#709).
+    SegmentedControlsSelectionChanging,
     /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
     /// every frame, so its indicator slides (#677).
     IndicatorsAnimating,
@@ -253,6 +259,7 @@ impl Workload {
         Self::VirtualLists,
         Self::FilterChipsOneChanging,
         Self::FilterChipsIdle,
+        Self::FilterChipsSelectionChanging,
         Self::ListNotesChanging,
         Self::ListNotesIdle,
         Self::SteppersIdle,
@@ -275,6 +282,7 @@ impl Workload {
         Self::SettingRowsIdle,
         Self::SettingRowsChanging,
         Self::SegmentedControlsIdle,
+        Self::SegmentedControlsSelectionChanging,
         Self::IndicatorsAnimating,
         Self::IndicatorsRemoved,
         Self::GalleriesIdle,
@@ -313,6 +321,7 @@ impl Workload {
             Self::VirtualLists => "virtual-lists",
             Self::FilterChipsOneChanging => "filter-chips-one-changing",
             Self::FilterChipsIdle => "filter-chips-idle",
+            Self::FilterChipsSelectionChanging => "filter-chips-selection-changing",
             Self::ListNotesChanging => "list-notes-changing",
             Self::ListNotesIdle => "list-notes-idle",
             Self::ListItemsInitial => "list-items-initial",
@@ -335,6 +344,7 @@ impl Workload {
             Self::SettingRowsIdle => "setting-rows-idle",
             Self::SettingRowsChanging => "setting-rows-changing",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
+            Self::SegmentedControlsSelectionChanging => "segmented-controls-selection-changing",
             Self::IndicatorsAnimating => "indicators-animating",
             Self::IndicatorsRemoved => "indicators-removed",
             Self::GalleriesIdle => "galleries-idle",
@@ -382,6 +392,7 @@ impl Workload {
             | Self::WheelDeepIdle => 200,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
+            | Self::FilterChipsSelectionChanging
             | Self::ListNotesChanging
             | Self::ListNotesIdle
             | Self::ToastsIdle
@@ -393,6 +404,7 @@ impl Workload {
             | Self::SettingRowsIdle
             | Self::SettingRowsChanging
             | Self::SegmentedControlsIdle
+            | Self::SegmentedControlsSelectionChanging
             | Self::GalleriesIdle
             | Self::IndicatorsAnimating
             | Self::IndicatorsRemoved
@@ -935,7 +947,25 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.entity_mut(entity).insert(selection);
         }
     }
-    if workload == Workload::IndicatorsAnimating {
+    if workload == Workload::FilterChipsSelectionChanging {
+        // Moves the selection of one row to its next chip: only that row is restyled.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<(Entity, &ItemValues), With<FilterChips>>();
+        let count = query.iter(world).count();
+        let next = query
+            .iter(world)
+            .nth(index * 7 % count.max(1))
+            .and_then(|(entity, items)| items.iter().nth(index % 3).map(|item| (entity, item)));
+        if let Some((entity, item)) = next {
+            world
+                .entity_mut(entity)
+                .insert(SelectionValue::One(item).into_component());
+        }
+    }
+    if matches!(
+        workload,
+        Workload::IndicatorsAnimating | Workload::SegmentedControlsSelectionChanging
+    ) {
         // Moves the selection of one control to its next segment, so that control's indicator
         // slides over the following frames while the others stay settled.
         let world = app.world_mut();
@@ -1144,7 +1174,9 @@ fn spawn(world: &mut World, run: Run) {
                     ));
                 }
             }
-            Workload::FilterChipsOneChanging | Workload::FilterChipsIdle => {
+            Workload::FilterChipsOneChanging
+            | Workload::FilterChipsIdle
+            | Workload::FilterChipsSelectionChanging => {
                 for row in 0..run.size {
                     root.spawn((
                         FilterChips,
@@ -1264,6 +1296,7 @@ fn spawn(world: &mut World, run: Run) {
                 root.spawn((SegmentedControl, list_items(run.size)));
             }
             Workload::SegmentedControlsIdle
+            | Workload::SegmentedControlsSelectionChanging
             | Workload::IndicatorsAnimating
             | Workload::IndicatorsRemoved => {
                 for row in 0..run.size {
