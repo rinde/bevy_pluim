@@ -74,11 +74,11 @@ pub(crate) struct PaletteDormant;
 /// Builds the swatches of a dormant palette from all the items it draws from and lets
 /// [`on_items_changed`] keep them in step again.
 pub(crate) fn wake(palette: In<Entity>, selections: SelectionParam, mut commands: Commands) {
-    let Some((_, values)) = selections.get_item_values(palette.0) else {
+    let Some((_, values)) = selections.get_items(palette.0) else {
         commands.entity(palette.0).remove::<PaletteDormant>();
         return;
     };
-    let items = values.iter().collect();
+    let items = values.iter().copied().collect();
     commands.entity(palette.0).remove::<PaletteDormant>();
     commands.run_system_cached_with(
         on_items_changed,

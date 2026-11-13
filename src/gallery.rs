@@ -214,11 +214,11 @@ fn sync_cards(
         let Ok((children, built)) = galleries.get(gallery) else {
             continue;
         };
-        let Some((_, values)) = selections.get_item_values(gallery) else {
+        let Some((_, values)) = selections.get_items(gallery) else {
             continue;
         };
         let mut wanted: Vec<(String, Vec<Entity>)> = Vec::new();
-        for item in values.iter() {
+        for item in values.iter().copied() {
             let Ok(card) = items.get(item) else {
                 continue;
             };

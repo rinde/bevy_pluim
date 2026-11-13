@@ -513,7 +513,7 @@ fn show_rows(
     mut lists: Query<(
         Entity,
         &VirtualList,
-        &VirtualListState,
+        &mut VirtualListState,
         &ActiveDescendant,
         &mut Node,
         Option<&ItemViewCreator>,
@@ -537,10 +537,14 @@ fn show_rows(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    for (list, virtual_list, state, active, mut list_node, creator) in &mut lists {
-        let Some((_, items)) = selections.get_item_values(list) else {
+    for (list, virtual_list, mut state, active, mut list_node, creator) in &mut lists {
+        // A source without `ItemValues` has no items: the rows empty out and the height drops.
+        let Some((_, items)) = selections.get_items(list) else {
             continue;
         };
+        if items.is_empty() && state.active.is_some() {
+            state.active = None;
+        }
         let Some(view) = views.of(list) else {
             continue;
         };

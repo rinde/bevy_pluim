@@ -334,12 +334,12 @@ fn sync_buttons(
         let Ok((toolbar, children)) = toolbars.get(toolbar_ref) else {
             continue;
         };
-        let Some((_, values)) = selections.get_item_values(toolbar_ref) else {
+        let Some((_, values)) = selections.get_items(toolbar_ref) else {
             continue;
         };
         let mut wanted = Vec::new();
         let mut last_group = None;
-        for item in values.iter() {
+        for item in values.iter().copied() {
             let Ok(tool) = items.get(item) else {
                 continue;
             };
