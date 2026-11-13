@@ -17164,6 +17164,85 @@ fn renaming_an_item_updates_the_visible_and_accessible_text_of_every_list_that_s
 }
 
 #[test]
+fn renaming_an_item_leaves_a_custom_view_alone_while_a_default_row_sharing_it_updates() {
+    let mut app = headless_app();
+    let (custom, items) = spawn_custom_list(&mut app, Selection::builder().one());
+    let default_list = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder().one().build_with_items_ref(items),
+        ))
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    let custom_views = views_of_list(&mut app, custom);
+    let default_views = views_of_list(&mut app, default_list);
+    assert_eq!(custom_views.len(), 2);
+    assert_eq!(default_views.len(), 2);
+    let item = app
+        .world()
+        .get::<ItemView>(custom_views[0])
+        .unwrap()
+        .item_ref;
+    let default_view = *default_views
+        .iter()
+        .find(|view| app.world().get::<ItemView>(**view).unwrap().item_ref == item)
+        .unwrap();
+    let children_before: Vec<Vec<Entity>> = custom_views
+        .iter()
+        .map(|view| app.world().get::<Children>(*view).unwrap().to_vec())
+        .collect();
+    // `ItemLabel` is crate-private: copy it from the default row's label onto the creator's
+    // text, so that the text is one that `sync_item_label_text` would overwrite were it not for
+    // the `CustomView` filter.
+    let label_id = app
+        .world()
+        .components()
+        .iter_registered()
+        .find(|(_, info)| info.name().to_string().ends_with("ItemLabel"))
+        .map(|(id, _)| id)
+        .unwrap();
+    let default_label = app
+        .world()
+        .get::<Children>(default_view)
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains_id(label_id))
+        .unwrap();
+    for view in &custom_views {
+        let (text, _) = nested(&app, *view);
+        app.world_mut()
+            .entity_mut(default_label)
+            .clone_with_opt_in(text, move |builder| {
+                builder.allow_by_ids(label_id);
+            });
+        assert!(app.world().entity(text).contains_id(label_id));
+    }
+    let created_before = app.world().get_resource::<CreatedViews>().unwrap().0.len();
+
+    rename(&mut app, item, "renamed");
+
+    assert_eq!(row_text(&app, default_view), "renamed");
+    for (view, before) in custom_views.iter().zip(&children_before) {
+        assert_eq!(
+            &app.world().get::<Children>(*view).unwrap().to_vec(),
+            before,
+            "the creator's children were rebuilt"
+        );
+        let (text, _) = nested(&app, *view);
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "row");
+    }
+    assert_eq!(
+        app.world().get_resource::<CreatedViews>().unwrap().0.len(),
+        created_before,
+        "the creator ran again"
+    );
+}
+
+#[test]
 fn renaming_the_selected_item_updates_a_combos_button_and_popup_but_not_its_placeholder() {
     let mut app = headless_app();
     let (combo, button) = spawn_combo(&mut app);
