@@ -17143,6 +17143,32 @@ fn renaming_an_item_leaves_a_custom_view_alone_while_a_default_row_sharing_it_up
         .iter()
         .map(|view| app.world().get::<Children>(*view).unwrap().to_vec())
         .collect();
+    // `ItemLabel` is crate-private: copy it from the default row's label onto the creator's
+    // text, so that the text is one that `sync_item_label_text` would overwrite were it not for
+    // the `CustomView` filter.
+    let label_id = app
+        .world()
+        .components()
+        .iter_registered()
+        .find(|(_, info)| info.name().to_string().ends_with("ItemLabel"))
+        .map(|(id, _)| id)
+        .unwrap();
+    let default_label = app
+        .world()
+        .get::<Children>(default_view)
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains_id(label_id))
+        .unwrap();
+    for view in &custom_views {
+        let (text, _) = nested(&app, *view);
+        app.world_mut()
+            .entity_mut(default_label)
+            .clone_with_opt_in(text, move |builder| {
+                builder.allow_by_ids(label_id);
+            });
+        assert!(app.world().entity(text).contains_id(label_id));
+    }
     let created_before = app.world().get_resource::<CreatedViews>().unwrap().0.len();
 
     rename(&mut app, item, "renamed");
