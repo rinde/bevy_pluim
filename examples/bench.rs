@@ -31,6 +31,7 @@ use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionValue};
 use bevy_pluim::tab_bar::TabBar;
+use bevy_pluim::toast::Toast;
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
@@ -98,6 +99,9 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
+    /// One source of many items shared by `SHARED_LISTS` hidden `List`s; one item is added every
+    /// frame, so one `ItemsChanged` reaches every watcher.
+    ItemsSharedAdding,
     /// One `ColorPalette` of many swatches; one item is added every frame (#679).
     PaletteItemsAdding,
     /// One `TabBar` of many tabs; one item is added every frame (#679).
@@ -111,6 +115,10 @@ enum Workload {
     /// Groups of ten `NumericStepper`s mirroring one shared `Value`; `CHANGED_STEPPERS` shared
     /// values are changed every frame.
     SteppersSharedChanging,
+    /// Many parents, each with a `ToastStack` holding one long toast, idle (#678).
+    ToastsIdle,
+    /// The same parents; `TOAST_BURST` short toasts are spawned under other parents every frame.
+    ToastsBursting,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
     /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
@@ -151,7 +159,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 35] = [
+    const ALL: [Self; 38] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -166,11 +174,14 @@ impl Workload {
         Self::SteppersIdle,
         Self::ListItemsInitial,
         Self::ListItemsAdding,
+        Self::ItemsSharedAdding,
         Self::PaletteItemsAdding,
         Self::TabItemsAdding,
         Self::SegmentItemsAdding,
         Self::SteppersChanging,
         Self::SteppersSharedChanging,
+        Self::ToastsIdle,
+        Self::ToastsBursting,
         Self::SegmentedControlsIdle,
         Self::IndicatorsAnimating,
         Self::IndicatorsRemoved,
@@ -204,12 +215,15 @@ impl Workload {
             Self::ListNotesIdle => "list-notes-idle",
             Self::ListItemsInitial => "list-items-initial",
             Self::ListItemsAdding => "list-items-adding",
+            Self::ItemsSharedAdding => "items-shared-adding",
             Self::PaletteItemsAdding => "palette-items-adding",
             Self::TabItemsAdding => "tab-items-adding",
             Self::SegmentItemsAdding => "segment-items-adding",
             Self::SteppersIdle => "steppers-idle",
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
+            Self::ToastsIdle => "toasts-idle",
+            Self::ToastsBursting => "toasts-bursting",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::IndicatorsAnimating => "indicators-animating",
             Self::IndicatorsRemoved => "indicators-removed",
@@ -239,13 +253,16 @@ impl Workload {
             | Self::ListItemsAdding
             | Self::PaletteItemsAdding
             | Self::TabItemsAdding
-            | Self::SegmentItemsAdding => 5_000,
+            | Self::SegmentItemsAdding
+            | Self::ItemsSharedAdding => 5_000,
             Self::VirtualLists => 20,
             Self::WheelDeep | Self::WheelDeepIdle => 200,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
             | Self::ListNotesChanging
             | Self::ListNotesIdle
+            | Self::ToastsIdle
+            | Self::ToastsBursting
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
             | Self::IndicatorsAnimating
@@ -558,6 +575,13 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.spawn((Item::new(format!("Added {index}")), ItemOf(list)));
         }
     }
+    if workload == Workload::ItemsSharedAdding {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, (With<ItemValues>, Without<List>)>();
+        if let Some(source) = query.iter(world).next() {
+            world.spawn((Item::new(format!("Added {index}")), ItemOf(source)));
+        }
+    }
     if workload == Workload::PaletteItemsAdding {
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<ColorPalette>>();
@@ -647,6 +671,23 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             }
         }
     }
+    if workload == Workload::ToastsBursting {
+        // A burst of short toasts under other parents: duplicates are rare (the text has the
+        // frame number), and each toast goes after a few frames, so the stacks stay.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<ToastParent>>();
+        let parents: Vec<Entity> = query.iter(world).collect();
+        if !parents.is_empty() {
+            for offset in 0..TOAST_BURST {
+                if let Some(parent) = parents.get((index * 7 + offset * 13) % parents.len()) {
+                    world.spawn((
+                        Toast::new(format!("Burst {index}.{offset}")).with_duration(0.05),
+                        ChildOf(*parent),
+                    ));
+                }
+            }
+        }
+    }
     if workload == Workload::RovingGroupsFocus {
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<Segment>>();
@@ -697,6 +738,13 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
     }
     app.update();
 }
+
+/// Marks a parent node of the toast workloads.
+#[derive(Component)]
+struct ToastParent;
+
+/// Toasts spawned per frame by `toasts-bursting`.
+const TOAST_BURST: usize = 20;
 
 fn spawn(world: &mut World, run: Run) {
     world.spawn(Camera2d);
@@ -825,6 +873,28 @@ fn spawn(world: &mut World, run: Run) {
             Workload::ListItemsInitial | Workload::ListItemsAdding => {
                 root.spawn((List, list_items(run.size)));
             }
+            Workload::ItemsSharedAdding => {
+                let source = root.spawn(list_items(run.size)).id();
+                // Hidden, so layout does not drown the cost of the item events.
+                root.spawn(Node {
+                    display: Display::None,
+                    ..default()
+                })
+                .with_children(|hidden| {
+                    for _ in 0..SHARED_LISTS {
+                        hidden.spawn((
+                            List,
+                            Selection::builder().one().build_with_items_ref(source),
+                        ));
+                    }
+                });
+            }
+            Workload::ToastsIdle | Workload::ToastsBursting => {
+                for row in 0..run.size {
+                    root.spawn((Node::default(), ToastParent))
+                        .with_child(Toast::new(format!("Long {row}")).with_duration(86_400.0));
+                }
+            }
             Workload::PaletteItemsAdding => {
                 root.spawn((
                     ColorPalette,
@@ -883,6 +953,8 @@ fn spawn(world: &mut World, run: Run) {
         });
 }
 
+/// How many lists share the source of `items-shared-adding`.
+const SHARED_LISTS: usize = 8;
 /// A colour that differs by index, for the palette workload.
 #[expect(clippy::cast_precision_loss, reason = "a bench colour")]
 const fn palette_color(index: usize) -> Color {
