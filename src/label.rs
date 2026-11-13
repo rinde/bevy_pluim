@@ -166,7 +166,7 @@ fn theme_labels(
         };
         let overline = matches!(label, Label::Overline(_));
         *text_color = TextColor(color);
-        *text_font = TextFont {
+        text_font.set_if_neq(TextFont {
             font: font.clone().into(),
             font_size: Theme::font_size(font_size),
             weight: if overline {
@@ -175,7 +175,7 @@ fn theme_labels(
                 FontWeight::default()
             },
             ..default()
-        };
+        });
         *letter_spacing = if overline {
             LetterSpacing::Px(OVERLINE_LETTER_SPACING)
         } else {

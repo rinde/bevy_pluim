@@ -593,11 +593,11 @@ impl SliderStyler<'_, '_> {
             return;
         };
         if let Ok((_, _, mut font)) = self.texts.get_mut(text_entity) {
-            *font = TextFont {
+            font.set_if_neq(TextFont {
                 font: self.theme.body_font.clone().into(),
                 font_size: Theme::font_size(self.theme.font_size_secondary),
                 ..default()
-            };
+            });
         }
     }
 }

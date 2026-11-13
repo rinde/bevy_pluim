@@ -1193,8 +1193,14 @@ fn theme_filter_combos(
         }
         if let Ok((mut color, mut font)) = empties.get_mut(refs.empty) {
             color.0 = theme.colors().text_secondary;
-            font.font = theme.body_font.clone().into();
-            font.font_size = Theme::font_size(theme.font_size_secondary);
+            let face = theme.body_font.clone().into();
+            if font.font != face {
+                font.font = face;
+            }
+            let size = Theme::font_size(theme.font_size_secondary);
+            if font.font_size != size {
+                font.font_size = size;
+            }
         }
     };
     match combo.0 {

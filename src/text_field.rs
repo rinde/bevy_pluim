@@ -506,7 +506,7 @@ fn theme_text_fields(
                 continue;
             };
             text_color.0 = color;
-            *text_font = font.clone();
+            text_font.set_if_neq(font.clone());
             if part == refs.input {
                 match cursor_style {
                     Some(mut style) => *style = cursor,
