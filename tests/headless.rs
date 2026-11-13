@@ -3767,7 +3767,12 @@ fn a_list_keeps_the_node_fields_the_app_gave_it() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.width, Val::Px(120.0));
     assert_eq!(node.margin, UiRect::all(Val::Px(7.0)));
-    assert_eq!(node.display, Display::Grid);
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "a one-column list is a flex column"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Column);
     assert_eq!(node.position_type, PositionType::Relative);
 }
 
@@ -3812,6 +3817,7 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     assert_eq!(node.grid_auto_flow, expected.grid_auto_flow);
     assert_eq!(node.grid_template_columns, expected.grid_template_columns);
     assert_eq!(node.grid_template_columns.len(), 1);
+    assert_eq!(node.display, Display::Grid, "several columns need the grid");
     assert_eq!(node.width, Val::Px(120.0), "the app's width survives");
 
     app.world_mut()
@@ -3821,6 +3827,19 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
     assert!(node.grid_template_columns.is_empty());
+    assert_eq!(node.display, Display::Grid);
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::Vertical);
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "back to one column is a flex column"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Column);
 }
 
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
@@ -11213,6 +11232,168 @@ fn a_tab_bar_follows_only_the_selection_it_draws_from() {
 }
 
 #[test]
+fn a_segmented_control_follows_only_the_selection_it_draws_from() {
+    let mut app = headless_app();
+    let first = spawn_segmented_control(&mut app);
+    let second = spawn_segmented_control(&mut app);
+    let root = app.world().get::<ChildOf>(first).unwrap().parent();
+    let shared = app
+        .world_mut()
+        .spawn((SegmentedControl, Selection::reference(first), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let item_of = |app: &App, control: Entity, i: usize| {
+        app.world()
+            .get::<Segment>(segments_of(app, control)[i])
+            .unwrap()
+            .item()
+    };
+    let wanted = item_of(&app, first, 2);
+
+    // Knock the second control's `Selected` out of step without a selection change.
+    let auto = segments_of(&app, second)[0];
+    app.world_mut().entity_mut(auto).remove::<Selected>();
+    settle(&mut app);
+    assert!(selected_segments(&app, second).is_empty());
+
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    settle(&mut app);
+    assert_eq!(selected_segments(&app, first), ["Off"]);
+    assert_eq!(selected_segments(&app, shared), ["Off"]);
+    assert!(
+        selected_segments(&app, second).is_empty(),
+        "the independent control is not looked at"
+    );
+
+    // Its own selection change does reach it.
+    let own = item_of(&app, second, 1);
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Selection::Value(SelectionValue::One(own)));
+    settle(&mut app);
+    assert_eq!(selected_segments(&app, second), ["Manual"]);
+}
+
+/// The label text colour of a chip.
+fn chip_label_color(app: &App, view: Entity) -> Color {
+    let label = app.world().get::<ChipRefs>(view).unwrap().label;
+    app.world().get::<TextColor>(label).unwrap().0
+}
+
+#[test]
+fn filter_chips_restyle_only_the_rows_whose_selection_changed() {
+    let mut app = headless_app();
+    let (root, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, three_chips());
+    let shared = app
+        .world_mut()
+        .spawn((FilterChips, Selection::reference(first), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    let wrong = Color::srgb(1.0, 0.0, 0.0);
+    let item_of = |app: &App, row: Entity, i: usize| {
+        app.world()
+            .get::<ChipView>(chip_views(app, row)[i])
+            .unwrap()
+            .item()
+    };
+    let wanted = item_of(&app, first, 2);
+
+    // Knock a chip of the second row out of step without a selection change.
+    let second_views = chip_views(&app, second);
+    app.world_mut()
+        .entity_mut(second_views[1])
+        .insert(BackgroundColor(wrong));
+    settle(&mut app);
+    assert_eq!(background(&app, second_views[1]), wrong);
+
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    settle(&mut app);
+    let first_views = chip_views(&app, first);
+    let shared_views = chip_views(&app, shared);
+    assert_eq!(background(&app, first_views[2]), colors.chip_on);
+    assert_eq!(background(&app, first_views[0]), Color::NONE);
+    assert_eq!(background(&app, shared_views[2]), colors.chip_on);
+    assert_eq!(background(&app, shared_views[0]), Color::NONE);
+    assert_eq!(
+        background(&app, second_views[1]),
+        wrong,
+        "the independent row is not restyled"
+    );
+
+    // Its own selection change does reach it.
+    let own = item_of(&app, second, 1);
+    app.world_mut()
+        .entity_mut(second)
+        .insert(Selection::Value(SelectionValue::One(own)));
+    settle(&mut app);
+    assert_eq!(background(&app, second_views[1]), colors.chip_on);
+}
+
+#[test]
+fn a_hover_and_an_item_edit_are_restyled_in_a_frame_where_a_selection_changed() {
+    let mut app = headless_app();
+    let (_, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, three_chips());
+    let colors = *app.world().get_resource::<Theme>().unwrap().colors();
+    let wrong = Color::srgb(1.0, 0.0, 0.0);
+    let second_views = chip_views(&app, second);
+    let wanted = app
+        .world()
+        .get::<ChipView>(chip_views(&app, first)[1])
+        .unwrap()
+        .item();
+    let edited = app.world().get::<ChipView>(second_views[2]).unwrap().item();
+    assert_eq!(
+        chip_label_color(&app, second_views[0]),
+        colors.chip_on_ink,
+        "the active chip of the second row"
+    );
+    assert_eq!(
+        chip_label_color(&app, second_views[1]),
+        colors.text_secondary
+    );
+    app.world_mut()
+        .entity_mut(second_views[0])
+        .insert(BackgroundColor(wrong));
+
+    // In one frame: the selection of the first row changes, the pointer reaches a chip of the
+    // second row and an item of the second row is edited. Only `Update` runs, as
+    // `PreUpdate` would put `Hovered` back to false in an app with no pointer.
+    app.world_mut()
+        .entity_mut(first)
+        .insert(Selection::Value(SelectionValue::One(wanted)));
+    app.world_mut()
+        .entity_mut(second_views[1])
+        .insert(Hovered(true));
+    app.world_mut()
+        .get_mut::<Item<Chip>>(edited)
+        .unwrap()
+        .data
+        .label = "Renamed".into();
+    for _ in 0..3 {
+        app.world_mut().run_schedule(Update);
+    }
+
+    assert_eq!(
+        chip_label_color(&app, second_views[1]),
+        colors.text_primary,
+        "the hovered chip is restyled"
+    );
+    assert_eq!(chip_texts(&app, second_views[2]).0, "Renamed");
+    assert_eq!(
+        background(&app, second_views[0]),
+        wrong,
+        "a chip of the independent row that did not change is left alone"
+    );
+}
+
+#[test]
 fn a_toolbar_does_not_look_at_its_buttons_in_a_frame_without_a_change() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
@@ -15793,6 +15974,35 @@ fn a_removed_indicator_is_made_again_once_and_other_tracks_keep_theirs() {
 }
 
 #[test]
+fn an_indicator_reparented_away_from_its_track_is_taken_back_not_doubled() {
+    let mut app = headless_app();
+    let tracks = spawn_indicator_tracks(&mut app);
+    let before = tracks.map(|(t, n)| indicators_named(&app, t, n)[0]);
+    let elsewhere = app.world_mut().spawn(Node::default()).id();
+    for indicator in before {
+        app.world_mut()
+            .entity_mut(indicator)
+            .insert(ChildOf(elsewhere));
+    }
+    for (track, name) in tracks {
+        assert!(indicators_named(&app, track, name).is_empty());
+    }
+    app.world_mut()
+        .entity_mut(tracks[0].0)
+        .insert(SegmentedControl);
+    app.world_mut().entity_mut(tracks[1].0).insert(TabBar);
+    app.world_mut()
+        .entity_mut(tracks[2].0)
+        .insert(LightDarkToggle);
+    for _ in 0..3 {
+        app.update();
+    }
+    for (i, (track, name)) in tracks.into_iter().enumerate() {
+        assert_eq!(indicators_named(&app, track, name), vec![before[i]]);
+    }
+}
+
+#[test]
 fn despawning_a_track_leaves_the_indicators_of_the_others_alone() {
     let mut app = headless_app();
     let tracks = spawn_indicator_tracks(&mut app);
@@ -16248,6 +16458,186 @@ fn a_palette_despawns_a_second_swatch_of_one_item_and_keeps_the_others() {
     let after = item_views(&app, palette);
     assert_eq!(after.len(), 3);
     assert_eq!(after[..2], views[..]);
+}
+
+// Shared glyph images (#683).
+
+/// A headless app with an `Assets<Image>`.
+fn glyph_app() -> App {
+    headless_app_with(|app| {
+        app.init_resource::<Assets<Image>>();
+    })
+}
+
+fn images(app: &App) -> &Assets<Image> {
+    app.world().get_resource::<Assets<Image>>().unwrap()
+}
+
+fn images_mut(app: &mut App) -> Mut<'_, Assets<Image>> {
+    app.world_mut().get_resource_mut::<Assets<Image>>().unwrap()
+}
+
+fn image_count(app: &App) -> usize {
+    images(app).len()
+}
+
+/// The distinct image handles the `ImageNode`s of the app show, the default handle left out.
+fn shown_images(app: &mut App) -> Vec<AssetId<Image>> {
+    let mut ids: Vec<_> = app
+        .world_mut()
+        .query::<&ImageNode>()
+        .iter(app.world())
+        .filter(|node| node.image != Handle::default())
+        .map(|node| node.image.id())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn spawn_glyph_widgets(app: &mut App, count: usize) {
+    for _ in 0..count {
+        app.world_mut().spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a"].map(|s| Item::new(s.to_string()))),
+        ));
+        app.world_mut().spawn((
+            FilterCombo::default(),
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a"].map(|s| Item::new(s.to_string()))),
+        ));
+        app.world_mut().spawn((
+            NumericStepper::default(),
+            Value::new_u8(1, 0, 3, 1).unwrap(),
+        ));
+        app.world_mut().spawn(LightDarkToggle);
+    }
+    app.update();
+    app.update();
+}
+
+#[test]
+fn many_widgets_share_one_image_per_generated_glyph() {
+    let mut app = glyph_app();
+    spawn_glyph_widgets(&mut app, 1);
+    let one = image_count(&app);
+    let shown_one = shown_images(&mut app);
+    spawn_glyph_widgets(&mut app, 25);
+    // Chevron, minus, plus, sun, computer and moon, whatever the number of widgets.
+    assert_eq!(one, 6);
+    assert_eq!(image_count(&app), 6);
+    assert_eq!(shown_images(&mut app), shown_one);
+}
+
+#[test]
+fn a_custom_stepper_icon_is_kept_and_only_the_default_one_is_shared() {
+    let mut app = glyph_app();
+    let custom = images_mut(&mut app).add(Image::default());
+    let stepper = NumericStepper {
+        decrease_icon: custom.clone(),
+        ..default()
+    };
+    app.world_mut()
+        .spawn((stepper, Value::new_u8(1, 0, 3, 1).unwrap()));
+    app.update();
+    app.update();
+    let shown = shown_images(&mut app);
+    assert!(shown.contains(&custom.id()));
+    // The custom image and the shared plus; no minus was made for this stepper.
+    assert_eq!(image_count(&app), 2);
+    assert_eq!(shown.len(), 2);
+}
+
+#[test]
+fn an_app_without_image_assets_gets_default_handles_and_the_images_once_assets_exist() {
+    let mut app = headless_app();
+    assert!(!app.world().contains_resource::<Assets<Image>>());
+    spawn_glyph_widgets(&mut app, 2);
+    assert!(shown_images(&mut app).is_empty());
+    app.world_mut().init_resource::<Assets<Image>>();
+    spawn_glyph_widgets(&mut app, 3);
+    assert_eq!(image_count(&app), 6);
+    assert_eq!(shown_images(&mut app).len(), 6);
+}
+
+#[test]
+fn separate_apps_do_not_share_glyph_images() {
+    let mut first = glyph_app();
+    let mut second = glyph_app();
+    spawn_glyph_widgets(&mut first, 2);
+    spawn_glyph_widgets(&mut second, 2);
+    assert_eq!(image_count(&first), 6);
+    assert_eq!(image_count(&second), 6);
+    assert_eq!(shown_images(&mut first), shown_images(&mut second));
+}
+
+#[test]
+fn reinserting_and_despawning_widgets_reuse_the_shared_images() {
+    let mut app = glyph_app();
+    let stepper = app
+        .world_mut()
+        .spawn((
+            NumericStepper::default(),
+            Value::new_u8(1, 0, 3, 1).unwrap(),
+        ))
+        .id();
+    app.update();
+    let before = shown_images(&mut app);
+    assert_eq!(image_count(&app), 2);
+    app.world_mut().entity_mut(stepper).insert(NumericStepper {
+        increase_name: "More".into(),
+        ..default()
+    });
+    app.update();
+    app.update();
+    assert_eq!(image_count(&app), 2);
+    assert_eq!(shown_images(&mut app), before);
+    // The images outlive the widget: a new one finds them where they were.
+    app.world_mut().entity_mut(stepper).despawn();
+    app.update();
+    spawn_glyph_widgets(&mut app, 1);
+    assert_eq!(image_count(&app), 6);
+    for id in before {
+        assert!(images(&app).get(id).is_some());
+    }
+}
+
+#[test]
+fn an_image_the_app_removed_is_generated_again() {
+    let mut app = glyph_app();
+    spawn_glyph_widgets(&mut app, 1);
+    let old = shown_images(&mut app);
+    let handles: Vec<_> = app
+        .world_mut()
+        .query::<&ImageNode>()
+        .iter(app.world())
+        .map(|node| node.image.clone())
+        .collect();
+    // Despawn the widgets so only the shared resource holds the handles, then remove one image.
+    let nodes: Vec<Entity> = app
+        .world_mut()
+        .query_filtered::<Entity, With<Node>>()
+        .iter(app.world())
+        .collect();
+    for node in nodes {
+        if let Ok(entity) = app.world_mut().get_entity_mut(node) {
+            entity.despawn();
+        }
+    }
+    app.update();
+    let removed = old[0];
+    images_mut(&mut app).remove(removed);
+    drop(handles);
+    spawn_glyph_widgets(&mut app, 1);
+    let now = shown_images(&mut app);
+    assert_eq!(now.len(), 6);
+    assert!(!now.contains(&removed));
+    for id in now {
+        assert!(images(&app).get(id).is_some());
+    }
 }
 
 /// Entities the pointers are on, for [`wheel_app`]: the headless app has no picking backend, so

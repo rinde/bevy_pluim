@@ -95,6 +95,10 @@ impl Plugin for ListPlugin {
 /// list up to the maximum and then scrolls, as a [`Panel`](crate::panel::Panel) body does. A
 /// list has no maximum height of its own, since a `ScrollArea` already scrolls it, keeps a
 /// focused row in view and draws the scroll bar.
+///
+/// A list spawns a view (several entities and layout nodes) per item, so it suits tens to
+/// hundreds of items. For thousands, use a [`VirtualList`](crate::virtual_list::VirtualList),
+/// which renders only the rows in view.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -225,7 +229,7 @@ impl List {
 }
 
 /// Sets the grid fields of the [`Node`] of `entity` from its [`ListLayout`], in place: the
-/// fields a [`List`] owns (`display`, `position_type`, `grid_auto_flow` and
+/// fields a [`List`] owns (`display`, `flex_direction`, `position_type`, `grid_auto_flow` and
 /// `grid_template_columns`) and nothing else, so a width or margin of the app survives.
 /// Does nothing for an entity that is not a [`List`] or has no [`Node`] yet.
 fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
@@ -247,9 +251,16 @@ fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
         return;
     };
     node.position_type = PositionType::Relative;
-    node.display = Display::Grid;
     node.grid_auto_flow = grid_auto_flow;
     node.grid_template_columns = grid_template_columns;
+    if matches!(layout, ListLayout::Vertical) {
+        // One column needs no grid: a flex column lays out the same and is far cheaper in
+        // Taffy at thousands of rows (#729).
+        node.display = Display::Flex;
+        node.flex_direction = FlexDirection::Column;
+    } else {
+        node.display = Display::Grid;
+    }
 }
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).

@@ -20,6 +20,7 @@ pub mod filter_combo;
 pub mod float;
 pub(crate) mod focus;
 pub mod gallery;
+pub(crate) mod glyph_images;
 pub mod icon;
 pub mod icon_button;
 pub(crate) mod indicator;
@@ -113,6 +114,7 @@ impl Plugin for WidgetsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Theme>()
             .init_resource::<HoverLock>()
+            .init_resource::<glyph_images::GlyphImages>()
             .add_plugins(FocusPlugin)
             .add_plugins(ListPlugin)
             .add_plugins(VirtualListPlugin)
