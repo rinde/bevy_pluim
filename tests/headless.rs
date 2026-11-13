@@ -3769,7 +3769,12 @@ fn a_list_keeps_the_node_fields_the_app_gave_it() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.width, Val::Px(120.0));
     assert_eq!(node.margin, UiRect::all(Val::Px(7.0)));
-    assert_eq!(node.display, Display::Grid);
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "a one-column list is a flex column"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Column);
     assert_eq!(node.position_type, PositionType::Relative);
 }
 
@@ -3814,6 +3819,7 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     assert_eq!(node.grid_auto_flow, expected.grid_auto_flow);
     assert_eq!(node.grid_template_columns, expected.grid_template_columns);
     assert_eq!(node.grid_template_columns.len(), 1);
+    assert_eq!(node.display, Display::Grid, "several columns need the grid");
     assert_eq!(node.width, Val::Px(120.0), "the app's width survives");
 
     app.world_mut()
@@ -3823,6 +3829,19 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
     assert!(node.grid_template_columns.is_empty());
+    assert_eq!(node.display, Display::Grid);
+
+    app.world_mut()
+        .entity_mut(list)
+        .insert(ListLayout::Vertical);
+    app.update();
+    let node = app.world().entity(list).get::<Node>().unwrap();
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "back to one column is a flex column"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Column);
 }
 
 fn item_views(app: &App, list: Entity) -> Vec<Entity> {
