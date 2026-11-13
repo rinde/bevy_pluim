@@ -21,6 +21,7 @@ use bevy::ecs::system::SystemChangeTick;
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy_pluim::WidgetsPlugin;
+use bevy_pluim::color_palette::ColorPalette;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::list::{ItemNote, List};
@@ -74,6 +75,12 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
+    /// One `ColorPalette` of many swatches; one item is added every frame (#679).
+    PaletteItemsAdding,
+    /// One `TabBar` of many tabs; one item is added every frame (#679).
+    TabItemsAdding,
+    /// One `SegmentedControl` of many segments; one item is added every frame (#679).
+    SegmentItemsAdding,
     /// Many independent `NumericStepper`s, idle: the floor the changing workloads are read against.
     SteppersIdle,
     /// The same steppers; `CHANGED_STEPPERS` values are marked changed every frame.
@@ -120,7 +127,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 32] = [
+    const ALL: [Self; 34] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -135,6 +142,9 @@ impl Workload {
         Self::SteppersIdle,
         Self::ListItemsInitial,
         Self::ListItemsAdding,
+        Self::PaletteItemsAdding,
+        Self::TabItemsAdding,
+        Self::SegmentItemsAdding,
         Self::SteppersChanging,
         Self::SteppersSharedChanging,
         Self::ToastsIdle,
@@ -170,6 +180,9 @@ impl Workload {
             Self::ListNotesIdle => "list-notes-idle",
             Self::ListItemsInitial => "list-items-initial",
             Self::ListItemsAdding => "list-items-adding",
+            Self::PaletteItemsAdding => "palette-items-adding",
+            Self::TabItemsAdding => "tab-items-adding",
+            Self::SegmentItemsAdding => "segment-items-adding",
             Self::SteppersIdle => "steppers-idle",
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
@@ -196,9 +209,13 @@ impl Workload {
     const fn default_size(self) -> usize {
         match self {
             Self::BevyTexts | Self::PushButtons => 1_000,
-            Self::BevyNodes | Self::Tooltips | Self::ListItemsInitial | Self::ListItemsAdding => {
-                5_000
-            }
+            Self::BevyNodes
+            | Self::Tooltips
+            | Self::ListItemsInitial
+            | Self::ListItemsAdding
+            | Self::PaletteItemsAdding
+            | Self::TabItemsAdding
+            | Self::SegmentItemsAdding => 5_000,
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
@@ -512,6 +529,32 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.spawn((Item::new(format!("Added {index}")), ItemOf(list)));
         }
     }
+    if workload == Workload::PaletteItemsAdding {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<ColorPalette>>();
+        if let Some(palette) = query.iter(world).next() {
+            world.spawn((
+                Item {
+                    data: palette_color(index),
+                },
+                ItemOf(palette),
+            ));
+        }
+    }
+    if workload == Workload::TabItemsAdding {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<TabBar>>();
+        if let Some(bar) = query.iter(world).next() {
+            world.spawn((Item::new(format!("Added {index}")), ItemOf(bar)));
+        }
+    }
+    if workload == Workload::SegmentItemsAdding {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<SegmentedControl>>();
+        if let Some(control) = query.iter(world).next() {
+            world.spawn((Item::new(format!("Added {index}")), ItemOf(control)));
+        }
+    }
     if workload == Workload::VirtualListScrolling {
         let world = app.world_mut();
         let mut query = world.query_filtered::<&mut ScrollPosition, With<ScrollContents>>();
@@ -763,6 +806,22 @@ fn spawn(world: &mut World, run: Run) {
                         .with_child(Toast::new(format!("Long {row}")).with_duration(86_400.0));
                 }
             }
+            Workload::PaletteItemsAdding => {
+                root.spawn((
+                    ColorPalette,
+                    Selection::builder()
+                        .one()
+                        .build_with_items((0..run.size).map(|i| Item {
+                            data: palette_color(i),
+                        })),
+                ));
+            }
+            Workload::TabItemsAdding => {
+                root.spawn((TabBar, list_items(run.size)));
+            }
+            Workload::SegmentItemsAdding => {
+                root.spawn((SegmentedControl, list_items(run.size)));
+            }
             Workload::SegmentedControlsIdle
             | Workload::IndicatorsAnimating
             | Workload::IndicatorsRemoved => {
@@ -803,6 +862,12 @@ fn spawn(world: &mut World, run: Run) {
                 }
             }
         });
+}
+
+/// A colour that differs by index, for the palette workload.
+#[expect(clippy::cast_precision_loss, reason = "a bench colour")]
+const fn palette_color(index: usize) -> Color {
+    Color::hsl((index % 360) as f32, 0.7, 0.5)
 }
 
 /// A `One` selection over `size` items, for the list workloads.

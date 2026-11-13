@@ -15239,3 +15239,169 @@ fn a_list_of_thousands_of_items_gets_one_view_each_and_marks_the_selected_one() 
     assert_eq!(views[..COUNT], first_views[..]);
     assert_eq!(selected_labels(&app, list), ["item 0"]);
 }
+
+/// Removes the items called `names` from `source` and adds one for each of `added`, in one frame.
+fn swap_items(app: &mut App, source: Entity, removed: &[&str], added: &[&str]) {
+    let doomed: Vec<Entity> = {
+        let world = app.world_mut();
+        let mut query = world.query::<(Entity, &Item<String>, &ItemOf)>();
+        query
+            .iter(world)
+            .filter(|(_, item, of)| of.0 == source && removed.contains(&item.data.as_str()))
+            .map(|(entity, ..)| entity)
+            .collect()
+    };
+    for entity in doomed {
+        app.world_mut().entity_mut(entity).despawn();
+    }
+    for name in added {
+        app.world_mut().spawn((Item::new(*name), ItemOf(source)));
+    }
+    for _ in 0..3 {
+        app.update();
+    }
+}
+
+#[test]
+fn a_segmented_control_keeps_the_segments_of_kept_items_and_a_child_of_the_app_through_a_swap() {
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    let before = segments_of(&app, control);
+    let own = app.world_mut().spawn(ChildOf(control)).id();
+    app.update();
+    swap_items(&mut app, control, &["Manual"], &["New"]);
+    let after = segments_of(&app, control);
+    assert_eq!(segment_texts(&app, control), ["Auto", "Off", "New"]);
+    assert_eq!(after[..2], [before[0], before[2]]);
+    assert!(app.world().get_entity(before[1]).is_err());
+    assert!(app.world().get_entity(own).is_ok());
+    assert_eq!(selected_segments(&app, control), ["Auto"]);
+}
+
+#[test]
+fn a_tab_bar_keeps_the_tabs_of_kept_items_and_a_child_of_the_app_through_a_swap() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    let before = tabs_of(&app, bar);
+    let own = app.world_mut().spawn(ChildOf(bar)).id();
+    app.update();
+    swap_items(&mut app, bar, &["Audio"], &["New"]);
+    let after = tabs_of(&app, bar);
+    let texts: Vec<_> = after.iter().map(|t| segment_text(&app, *t)).collect();
+    assert_eq!(texts, ["General", "Input", "New"]);
+    assert_eq!(after[..2], [before[0], before[2]]);
+    assert!(app.world().get_entity(before[1]).is_err());
+    assert!(app.world().get_entity(own).is_ok());
+    assert_eq!(selected_tabs(&app, bar), ["General"]);
+}
+
+#[test]
+fn thousands_of_tabs_and_segments_are_built_and_reordered_in_item_order() {
+    const COUNT: usize = 3_000;
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let names: Vec<String> = (0..COUNT).map(|i| format!("Item {i}")).collect();
+    let bar = app
+        .world_mut()
+        .spawn((
+            TabBar,
+            Selection::builder()
+                .one()
+                .build_with_items(names.clone().into_iter().map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    let control = app
+        .world_mut()
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(names.clone().into_iter().map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let texts: Vec<_> = tabs_of(&app, bar)
+        .iter()
+        .map(|t| segment_text(&app, *t))
+        .collect();
+    assert_eq!(texts, names);
+    assert_eq!(segment_texts(&app, control), names);
+    // one more item at the front: every existing child stays, in place after it
+    let before = tabs_of(&app, bar);
+    let first = app
+        .world()
+        .entity(before[0])
+        .get::<TabBarTab>()
+        .unwrap()
+        .item();
+    let new = app.world_mut().spawn(Item::new("Front")).id();
+    app.world_mut()
+        .entity_mut(bar)
+        .insert_related::<ItemOf>(0, &[new]);
+    for _ in 0..3 {
+        app.update();
+    }
+    let after = tabs_of(&app, bar);
+    assert_eq!(after.len(), COUNT + 1);
+    assert_eq!(segment_text(&app, after[0]), "Front");
+    assert_eq!(after[1..], before[..]);
+    assert_eq!(
+        app.world()
+            .entity(after[1])
+            .get::<TabBarTab>()
+            .unwrap()
+            .item(),
+        first
+    );
+}
+
+#[test]
+fn a_palette_despawns_a_second_swatch_of_one_item_and_keeps_the_others() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let colors = [Color::WHITE, Color::BLACK];
+    let items = app
+        .world_mut()
+        .spawn(
+            Selection::builder()
+                .one()
+                .build_with_items(colors.map(|data| Item { data })),
+        )
+        .id();
+    let palette = app
+        .world_mut()
+        .spawn((ColorPalette, Selection::reference(items), ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let views = item_views(&app, palette);
+    assert_eq!(views.len(), 2);
+    let item = app.world().get::<ItemView>(views[0]).unwrap().item_ref;
+    let twin = app
+        .world_mut()
+        .spawn((
+            ItemView {
+                item_ref: item,
+                list_ref: palette,
+            },
+            ChildOf(palette),
+        ))
+        .id();
+    app.world_mut()
+        .spawn((Item { data: Color::BLACK }, ItemOf(items)));
+    app.update();
+    app.update();
+    assert!(app.world().get_entity(twin).is_err());
+    let after = item_views(&app, palette);
+    assert_eq!(after.len(), 3);
+    assert_eq!(after[..2], views[..]);
+}
