@@ -1454,6 +1454,85 @@ fn a_disabled_link_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
     assert_eq!(link_text_color(&app, link), dark.text_primary);
 }
 
+/// The text colour of a link whose own text is found by marker, not position.
+fn link_label_color(app: &App, link: Entity) -> Color {
+    let children = app.world().entity(link).get::<Children>().unwrap();
+    children
+        .iter()
+        .find_map(|child| {
+            let entity = app.world().entity(child);
+            (entity.contains::<Text>() && entity.get::<Text>().unwrap().0 == "link")
+                .then(|| entity.get::<TextColor>().unwrap().0)
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_link_with_an_app_child_before_its_text_still_themes_hovers_and_disables() {
+    let mut app = headless_app();
+    let link = spawn_link(&mut app, false);
+    let extra = app.world_mut().spawn(Node::default()).id();
+    app.world_mut()
+        .entity_mut(link)
+        .insert_children(0, &[extra]);
+    app.update();
+    assert_eq!(
+        app.world().entity(link).get::<Children>().unwrap()[0],
+        extra
+    );
+
+    // Hover: the label takes the link colour on the background of a hover.
+    app.world_mut().trigger(PointerOver {
+        entity: link,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
+    app.update();
+    assert_eq!(
+        background(&app, link),
+        DEFAULT_LIGHT_THEME_COLORS.background_secondary
+    );
+
+    // Press changes the label colour, which is only reachable through the owned child.
+    app.world_mut().trigger(PointerPress {
+        entity: link,
+        pointer: Pointer::new(PointerId::Mouse, pointer_location()),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
+    app.update();
+    assert_eq!(
+        link_label_color(&app, link),
+        DEFAULT_LIGHT_THEME_COLORS.link_selected
+    );
+
+    // Disabled: plain text colour.
+    app.world_mut().entity_mut(link).insert(InteractionDisabled);
+    app.update();
+    assert_eq!(
+        link_label_color(&app, link),
+        DEFAULT_LIGHT_THEME_COLORS.text_primary
+    );
+
+    // Theme change restyles the label, and the app child is kept.
+    app.world_mut()
+        .entity_mut(link)
+        .remove::<InteractionDisabled>();
+    app.update();
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    app.update();
+    assert_ne!(
+        link_label_color(&app, link),
+        DEFAULT_LIGHT_THEME_COLORS.link_selected
+    );
+    assert!(app.world().get_entity(extra).is_ok());
+    assert_eq!(app.world().entity(link).get::<Children>().unwrap().len(), 2);
+}
+
 #[test]
 fn a_disabled_link_keeps_its_button_and_is_interaction_disabled() {
     let mut app = headless_app();
