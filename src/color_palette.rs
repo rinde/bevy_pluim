@@ -34,6 +34,7 @@ impl Plugin for ColorPalettePlugin {
                     .pipe(theme_items)
                     .run_if(resource_changed::<Theme>),
                 on_selection_change,
+                sync_item_colors,
                 sync_accessible_names,
             ),
         )
@@ -188,6 +189,46 @@ fn on_items_changed(
     }
 
     commands.run_system_cached_with(theme_items, Some(*list_ref));
+}
+
+/// Puts the edited colour of an [`Item<Color>`] on its swatches and redraws their highlight.
+///
+/// Only the swatches of the items that changed are touched; a quiet frame looks at nothing.
+fn sync_item_colors(
+    changed: Query<Entity, Changed<Item<Color>>>,
+    items: Query<&Item<Color>>,
+    palettes: Query<(), With<ColorPalette>>,
+    selections: SelectionParam,
+    views: Query<(Entity, &ItemView, &Children, &Hovered)>,
+    mut squares: Query<&mut BackgroundColor, Without<ItemView>>,
+    mut commands: Commands,
+) {
+    let changed: HashSet<Entity> = changed.iter().collect();
+    if changed.is_empty() {
+        return;
+    }
+    for (view_id, view, children, hovered) in &views {
+        if !changed.contains(&view.item_ref) || !palettes.contains(view.list_ref) {
+            continue;
+        }
+        let Ok(Item { data }) = items.get(view.item_ref) else {
+            continue;
+        };
+        if let Some(mut square) = children
+            .first()
+            .and_then(|child| squares.get_mut(*child).ok())
+            && square.0 != *data
+        {
+            square.0 = *data;
+        }
+        let selected = selections
+            .get(view.list_ref)
+            .is_some_and(|selection| selection.is_selected(view.item_ref));
+        commands.run_system_cached_with(
+            set_highlight,
+            (view_id, *data, HoverState::of(selected, hovered.get())),
+        );
+    }
 }
 
 /// Keeps the label of each swatch's [`AccessibilityNode`] at the name of its colour.

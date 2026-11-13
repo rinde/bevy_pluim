@@ -37,6 +37,7 @@ impl Plugin for ColorPaletteComboPlugin {
                     .run_if(resource_changed::<Theme>),
                 close_combos_on_outside_click,
                 on_selection_change,
+                sync_edited_item_colors,
             ),
         )
         .add_systems(PostUpdate, sync_accessibility.in_set(AccessibilitySync))
@@ -533,6 +534,41 @@ fn on_selection_change(
                 .next()
                 .unwrap_or(Color::Srgba(Srgba::NONE));
             color_square_background.0 = color;
+            commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
+        }
+    }
+}
+
+/// Shows the edited colour of a selected [`Item<Color>`] in the button's square.
+///
+/// Looks at the combos only when an item colour changed, and writes only on a difference.
+fn sync_edited_item_colors(
+    changed: Query<(), Changed<Item<Color>>>,
+    combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
+    color_square_refs: Query<&ColorSquareRef>,
+    mut color_squares: Query<&mut BackgroundColor, With<ColorSquare>>,
+    selections: SelectionParam,
+    items: Query<&Item<Color>>,
+    mut commands: Commands,
+) {
+    if changed.is_empty() {
+        return;
+    }
+    for (combo, sub_refs) in &combos {
+        let Some(selection) = selections.get(combo) else {
+            continue;
+        };
+        let Ok(color_square_ref) = color_square_refs.get(sub_refs.button) else {
+            continue;
+        };
+        let Ok(mut square) = color_squares.get_mut(color_square_ref.entity()) else {
+            continue;
+        };
+        let color = selected_colors(selection, &items)
+            .next()
+            .unwrap_or(Color::Srgba(Srgba::NONE));
+        if square.0 != color {
+            square.0 = color;
             commands.run_system_cached_with(color_push_button::update_theme, Some(sub_refs.button));
         }
     }
