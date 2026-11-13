@@ -2820,6 +2820,9 @@ fn the_popup_swatches_of_a_color_palette_combo_show_the_selection_the_combo_refe
     app.update();
 
     let palette = single_entity_with::<ColorPalette>(&mut app);
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    click(&mut app, button);
     assert_eq!(selected_colors(&app, palette), [GREEN]);
 }
 
@@ -2905,6 +2908,9 @@ fn a_click_on_the_selected_swatch_closes_the_popup_of_a_one_palette_combo_and_ke
     click_row(&mut app, swatches[0]);
 
     assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Closed);
+    // The closed popup holds no swatches, so reopen it to read the kept selection.
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
     assert_eq!(selected_colors(&app, palette), [Color::WHITE]);
 }
 
@@ -15128,4 +15134,125 @@ fn a_list_of_thousands_of_items_gets_one_view_each_and_marks_the_selected_one() 
     assert_eq!(views.len(), COUNT + 1);
     assert_eq!(views[..COUNT], first_views[..]);
     assert_eq!(selected_labels(&app, list), ["item 0"]);
+}
+
+/// A closed palette combo over `selection` (two colours): the combo and its palette.
+fn closed_palette_combo_over(app: &mut App, selection: impl Bundle) -> (Entity, Entity) {
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let root = app.world_mut().spawn(Node::default()).id();
+    let combo = app
+        .world_mut()
+        .spawn((ColorPaletteCombo, selection, ChildOf(root)))
+        .id();
+    app.update();
+    app.update();
+    let palette = single_entity_with::<ColorPalette>(app);
+    (combo, palette)
+}
+
+#[test]
+fn a_closed_color_palette_combo_builds_no_swatches_until_it_opens() {
+    let mut app = headless_app();
+    let (combo, palette) = closed_palette_combo_over(&mut app, two_color_selection());
+    assert!(item_views(&app, palette).is_empty());
+
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    click(&mut app, button);
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Open);
+    assert_eq!(item_views(&app, palette).len(), 2);
+
+    click(&mut app, button);
+    app.update();
+    assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Closed);
+    assert!(item_views(&app, palette).is_empty());
+
+    click(&mut app, button);
+    assert_eq!(item_views(&app, palette).len(), 2);
+}
+
+#[test]
+fn a_reopened_color_palette_combo_shows_the_selection_changed_while_it_was_closed() {
+    let mut app = headless_app();
+    let (_, palette) = closed_palette_combo_over(&mut app, two_color_selection());
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    // Pick black while closed, through the palette's own selection.
+    let black = {
+        let world = app.world_mut();
+        let mut items = world.query::<(Entity, &Item<Color>)>();
+        items
+            .iter(world)
+            .find(|(_, item)| item.data == Color::BLACK)
+            .map(|(entity, _)| entity)
+            .unwrap()
+    };
+    let owner = single_entity_with::<ColorPaletteCombo>(&mut app);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(Selection::Value(SelectionValue::ZeroOrOne(Some(black))));
+    app.update();
+    assert!(item_views(&app, palette).is_empty());
+
+    click(&mut app, button);
+    assert_eq!(selected_colors(&app, palette), [Color::BLACK]);
+}
+
+#[test]
+fn items_added_while_a_color_palette_combo_is_closed_have_swatches_once_it_opens() {
+    let mut app = headless_app();
+    let (_, palette) = closed_palette_combo_over(&mut app, two_color_selection());
+    let button = single_entity_with::<ColorPushButton>(&mut app);
+    let items = app.world().get::<ItemsRef>(palette).map(|r| r.0);
+    let owner = items.unwrap_or_else(|| single_entity_with::<ColorPaletteCombo>(&mut app));
+    app.world_mut().spawn((Item { data: RED }, ItemOf(owner)));
+    app.update();
+    assert!(item_views(&app, palette).is_empty());
+
+    click(&mut app, button);
+    assert_eq!(item_views(&app, palette).len(), 3);
+
+    // And while open the palette follows further changes.
+    app.world_mut().spawn((Item { data: BLUE }, ItemOf(owner)));
+    app.update();
+    app.update();
+    assert_eq!(item_views(&app, palette).len(), 4);
+}
+
+#[test]
+fn an_open_color_palette_combo_popup_is_visible_and_takes_the_focus() {
+    let mut app = headless_app();
+    let (combo, palette, _) = open_palette_combo_over(&mut app, two_color_selection());
+    app.update();
+    let float = app
+        .world()
+        .get::<ColorPaletteComboRefs>(combo)
+        .map(ColorPaletteComboRefs::popup)
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Visibility>(float),
+        Some(&Visibility::Visible)
+    );
+    assert_eq!(
+        app.world()
+            .get_resource::<InputFocus>()
+            .and_then(InputFocus::get),
+        Some(palette)
+    );
+}
+
+#[test]
+fn despawning_color_palette_combos_open_or_dormant_leaves_no_swatches_behind() {
+    let mut app = headless_app();
+    let (open, _, _) = open_palette_combo_over(&mut app, two_color_selection());
+    app.world_mut().entity_mut(open).despawn();
+    app.update();
+    app.update();
+    let mut views = app.world_mut().query::<&ItemView>();
+    assert_eq!(views.iter(app.world()).count(), 0);
+
+    let mut app = headless_app();
+    let (closed, _) = closed_palette_combo_over(&mut app, two_color_selection());
+    app.world_mut().entity_mut(closed).despawn();
+    app.update();
+    let mut palettes = app.world_mut().query::<&ColorPalette>();
+    assert_eq!(palettes.iter(app.world()).count(), 0);
 }

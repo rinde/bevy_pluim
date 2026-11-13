@@ -15,6 +15,7 @@
         Check(App(Accessible(of: Within(Name("one or more palette combo"), Component("ColorPushButton")), role: Some("ComboBox"), label: None, value: Some("slate-50"), states: []))),
         MoveTo(Within(Name("zero or more palette combo"), Component("ColorPushButton"))),
         Click(Left),
+        Wait(1),
         Check(Component(target: Name("zero or more palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
         MoveTo(Nth(60, Within(Name("zero or more palette combo popup"), Component("ItemView")))),
         Click(Left),

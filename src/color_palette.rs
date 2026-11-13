@@ -60,18 +60,66 @@ impl Plugin for ColorPalettePlugin {
 )]
 pub struct ColorPalette;
 
+/// Marks a palette that builds no swatches: it keeps its [`Selection`] and its watch of the
+/// items, but [`on_items_changed`] leaves it empty until [`wake`] builds them.
+///
+/// A [`ColorPaletteCombo`](crate::color_palette_combo::ColorPaletteCombo) keeps the palette of
+/// its closed popup dormant, since a hidden popup of 242 swatches still costs entities, layout
+/// and memory; it wakes the palette when the popup opens and puts it to sleep when it closes.
+#[derive(Component, Debug, Clone, Copy)]
+pub(crate) struct PaletteDormant;
+
+/// Builds the swatches of a dormant palette from all the items it draws from and lets
+/// [`on_items_changed`] keep them in step again.
+pub(crate) fn wake(palette: In<Entity>, selections: SelectionParam, mut commands: Commands) {
+    let Some((_, values)) = selections.get_item_values(palette.0) else {
+        commands.entity(palette.0).remove::<PaletteDormant>();
+        return;
+    };
+    let items = values.iter().collect();
+    commands.entity(palette.0).remove::<PaletteDormant>();
+    commands.run_system_cached_with(
+        on_items_changed,
+        ItemsChangedInput {
+            list_ref: palette.0,
+            items,
+        },
+    );
+}
+
+/// Despawns the swatches of a palette and makes it dormant.
+pub(crate) fn sleep(
+    palette: In<Entity>,
+    children: Query<&Children>,
+    views: Query<(), With<ItemView>>,
+    mut commands: Commands,
+) {
+    commands.entity(palette.0).insert(PaletteDormant);
+    for child in children
+        .get(palette.0)
+        .into_iter()
+        .flat_map(RelationshipTarget::iter)
+        .filter(|child| views.contains(*child))
+    {
+        commands.entity(child).despawn();
+    }
+}
+
 fn on_items_changed(
     input: In<ItemsChangedInput>,
     items_query: Query<&Item<Color>>,
     mut commands: Commands,
-    lists: Query<Option<&Children>, With<ColorPalette>>,
+    lists: Query<(Option<&Children>, Has<PaletteDormant>), With<ColorPalette>>,
     item_views: Query<(Entity, &ItemView)>,
     selections: SelectionParam,
 ) {
     let ItemsChangedInput { list_ref, items } = &*input;
-    let Ok(children) = lists.get(*list_ref) else {
+    let Ok((children, dormant)) = lists.get(*list_ref) else {
         return;
     };
+    if dormant {
+        return;
+    }
     let selection = selections.get(*list_ref);
 
     let existing = children
