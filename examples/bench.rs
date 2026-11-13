@@ -122,7 +122,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 31] = [
+    const ALL: [Self; 33] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
