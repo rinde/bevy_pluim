@@ -216,7 +216,7 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
-    /// `ListItemsAdding` with `ListLayout::Horizontal` (a Taffy grid, one column per item).
+    /// `ListItemsAdding` with `ListLayout::Horizontal` (a flex row, since Horizontal is no longer a grid).
     ListItemsHorizontalAdding,
     /// `ListItemsAdding` with `ListLayout::VerticalGrid` of four columns (a Taffy grid).
     ListItemsGridAdding,

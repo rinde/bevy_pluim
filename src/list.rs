@@ -1016,6 +1016,9 @@ fn on_items_changed(
                     display: Display::Flex,
                     justify_self: JustifySelf::Stretch,
                     // flex_grow: 1.0,
+                    // A row keeps its content width, as in the old grid with auto columns:
+                    // a Horizontal flex row overflows a narrow list instead of squeezing rows.
+                    flex_shrink: 0.0,
                     justify_content: JustifyContent::Stretch,
                     align_items: AlignItems::Stretch,
                     padding: UiRect::ZERO,
