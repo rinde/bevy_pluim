@@ -7,6 +7,7 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 
@@ -409,25 +410,39 @@ fn theme_chips(
 }
 
 /// Restyles the chips whose state changed: the pointer came or went, their [`Chip`] changed,
-/// or a selection changed. Does nothing in a frame where none did.
+/// or the selection their row draws from changed (its own, or the one its `Selection::Ref`
+/// resolves to). Chips of a row that draws from another source are left alone, and nothing
+/// happens in a frame where nothing changed.
 fn restyle_changed_chips(
     hovered: Query<Entity, (With<ChipView>, Changed<Hovered>)>,
     views: Query<(Entity, &ChipView)>,
     changed_items: Query<Entity, Changed<Item<Chip>>>,
-    changed_selections: Query<(), Changed<Selection>>,
+    changed_selections: Query<Entity, Changed<Selection>>,
+    selections: SelectionParam,
     mut commands: Commands,
 ) {
-    if !changed_selections.is_empty() {
-        commands.run_system_cached_with(theme_chips, None);
-        return;
-    }
-    for chip in &hovered {
-        commands.run_system_cached_with(theme_chips, Some(chip));
-    }
-    for item in &changed_items {
-        for (chip, _) in views.iter().filter(|(_, view)| view.item == item) {
-            commands.run_system_cached_with(theme_chips, Some(chip));
+    let changed_selections: EntityHashSet = changed_selections.iter().collect();
+    let changed_items: EntityHashSet = changed_items.iter().collect();
+    // Whether each row has been found to draw from a changed selection, resolved once per row.
+    let mut rows = HashMap::<Entity, bool>::default();
+    let mut restyle = EntityHashSet::default();
+    restyle.extend(&hovered);
+    if !changed_selections.is_empty() || !changed_items.is_empty() {
+        for (chip, view) in &views {
+            let row_changed = !changed_selections.is_empty()
+                && *rows.entry(view.owner()).or_insert_with(|| {
+                    changed_selections.contains(&view.owner())
+                        || selections
+                            .get_ref(view.owner())
+                            .is_some_and(|source| changed_selections.contains(&source))
+                });
+            if row_changed || changed_items.contains(&view.item) {
+                restyle.insert(chip);
+            }
         }
+    }
+    for chip in restyle {
+        commands.run_system_cached_with(theme_chips, Some(chip));
     }
 }
 

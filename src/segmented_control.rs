@@ -602,18 +602,28 @@ fn hover_change(segments: Query<&Segment, Changed<Hovered>>, mut commands: Comma
     }
 }
 
-/// Keeps [`Selected`] and the colours of the segments in step with the selection, own or referenced.
+/// Keeps [`Selected`] and the colours of the segments in step with the selection, own or
+/// referenced. Looks only at the controls whose own selection, or the one their
+/// `Selection::Ref` resolves to, changed.
 fn selection_change(
-    changed: Query<(), Changed<Selection>>,
+    changed: Query<Entity, Changed<Selection>>,
     controls: Query<(Entity, Option<&Children>), With<SegmentedControl>>,
     segments: Query<(&Segment, Has<Selected>)>,
     selections: SelectionParam,
     mut commands: Commands,
 ) {
+    let changed: EntityHashSet = changed.iter().collect();
     if changed.is_empty() {
         return;
     }
     for (control, children) in &controls {
+        if !changed.contains(&control)
+            && !selections
+                .get_ref(control)
+                .is_some_and(|source| changed.contains(&source))
+        {
+            continue;
+        }
         let Some(selection) = selections.get(control) else {
             continue;
         };
