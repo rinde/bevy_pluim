@@ -387,8 +387,11 @@ the old code). Mean frame time in microseconds, three runs (shared cloud contain
 
 Entities (6824 and 26324 for chips, 7828 and 30328 for segments) and memory are unchanged. A frame
 with one changed selection costs about a third of what it did for chips and a sixth for segmented
-controls at 2000 widgets. `theme_chips` still walks all chip views once per chip it restyles; that
-is a follow-up.
+controls at 2000 widgets. `theme_chips` still walked all chip views once per chip it restyled; #760
+made it look up the one chip it is given (`Query::get_mut`), so the work scales with the chips
+restyled. At size 2000 the mean stays 29749 / 31480 / 32962 us, because that workload restyles
+only the chips of one row and the frame is dominated by `restyle_changed_chips`'s own scan of all
+chip views.
 
 ## Large item changes in a `List` (#676)
 
