@@ -49,6 +49,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `list-notes-idle` | the same | the same lists with no change: the floor `list-notes-changing` is read against |
 | `list-items-initial` | 5 000 | one `List` whose whole `List` entity is respawned every frame, so the first `ItemsChanged` builds every view (#676) |
 | `list-items-adding` | 5 000 | one `List`; one item is added every frame, so each `ItemsChanged` reconciles the existing views with one more (#676) |
+| `items-shared-adding` | 5 000 | one source of items shared by eight `List`s under a `Display::None` parent; one item is added every frame, so one `ItemsChanged` reaches eight watchers (#681) |
 | `steppers-idle` | 2 000 | independent `NumericStepper`s with no change: the floor the next two are read against (#663) |
 | `steppers-changing` | 2 000 | the same steppers; 20 values are marked changed every frame (`set_changed`, the value itself unchanged, so no relayout from a new width) |
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
@@ -303,3 +304,18 @@ frame (about 600 ms for 4 000 rows, by sampling). Timing the observer alone
 Temporary memory is two `HashSet`s of N entities (about 16 bytes an entry),
 replacing the cloned `Vec` and its per-row clone, so it is the same order and
 does not show in the resident set. For long lists use `VirtualList`.
+
+## Shared item snapshot (#681)
+
+`ItemsChanged::items` is an `Arc<[Entity]>`: `items_change` copies the source's
+items once and every observer (`watch_items`, `List`, `SegmentedControl`,
+`TabBar`, palettes) clones the `Arc`, instead of one copy for the event plus
+one per watcher. The snapshot is taken when the change is detected, so
+ordering and intermediate state are as before. `items-shared-adding` at 5 000
+items, mean `App::update` over 300 frames, optimised build, main against this
+change (two runs of main): 113.1 / 109.4 ms before, 115.0 ms after, memory
+added 1056 MiB both. The difference is within noise: with real `List`s the
+per-frame cost is the views each list reconciles (8 x 5 000), not the copy
+of 5 000 `Entity` ids (40 KB per copy). The change removes the copies
+(`1 + N` down to 1 per change, and the `Vec` per watcher) but this workload
+cannot show a gain; there is no allocation counter (see above).

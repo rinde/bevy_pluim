@@ -73,6 +73,9 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
+    /// One source of many items shared by `SHARED_LISTS` hidden `List`s; one item is added every
+    /// frame, so one `ItemsChanged` reaches every watcher.
+    ItemsSharedAdding,
     /// Many independent `NumericStepper`s, idle: the floor the changing workloads are read against.
     SteppersIdle,
     /// The same steppers; `CHANGED_STEPPERS` values are marked changed every frame.
@@ -115,7 +118,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 30] = [
+    const ALL: [Self; 31] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -130,6 +133,7 @@ impl Workload {
         Self::SteppersIdle,
         Self::ListItemsInitial,
         Self::ListItemsAdding,
+        Self::ItemsSharedAdding,
         Self::SteppersChanging,
         Self::SteppersSharedChanging,
         Self::SegmentedControlsIdle,
@@ -163,6 +167,7 @@ impl Workload {
             Self::ListNotesIdle => "list-notes-idle",
             Self::ListItemsInitial => "list-items-initial",
             Self::ListItemsAdding => "list-items-adding",
+            Self::ItemsSharedAdding => "items-shared-adding",
             Self::SteppersIdle => "steppers-idle",
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
@@ -187,9 +192,11 @@ impl Workload {
     const fn default_size(self) -> usize {
         match self {
             Self::BevyTexts | Self::PushButtons => 1_000,
-            Self::BevyNodes | Self::Tooltips | Self::ListItemsInitial | Self::ListItemsAdding => {
-                5_000
-            }
+            Self::BevyNodes
+            | Self::Tooltips
+            | Self::ListItemsInitial
+            | Self::ListItemsAdding
+            | Self::ItemsSharedAdding => 5_000,
             Self::VirtualLists => 20,
             Self::FilterChipsOneChanging
             | Self::FilterChipsIdle
@@ -501,6 +508,13 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.spawn((Item::new(format!("Added {index}")), ItemOf(list)));
         }
     }
+    if workload == Workload::ItemsSharedAdding {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, (With<ItemValues>, Without<List>)>();
+        if let Some(source) = query.iter(world).next() {
+            world.spawn((Item::new(format!("Added {index}")), ItemOf(source)));
+        }
+    }
     if workload == Workload::VirtualListScrolling {
         let world = app.world_mut();
         let mut query = world.query_filtered::<&mut ScrollPosition, With<ScrollContents>>();
@@ -722,6 +736,22 @@ fn spawn(world: &mut World, run: Run) {
             Workload::ListItemsInitial | Workload::ListItemsAdding => {
                 root.spawn((List, list_items(run.size)));
             }
+            Workload::ItemsSharedAdding => {
+                let source = root.spawn(list_items(run.size)).id();
+                // Hidden, so layout does not drown the cost of the item events.
+                root.spawn(Node {
+                    display: Display::None,
+                    ..default()
+                })
+                .with_children(|hidden| {
+                    for _ in 0..SHARED_LISTS {
+                        hidden.spawn((
+                            List,
+                            Selection::builder().one().build_with_items_ref(source),
+                        ));
+                    }
+                });
+            }
             Workload::SegmentedControlsIdle
             | Workload::IndicatorsAnimating
             | Workload::IndicatorsRemoved => {
@@ -763,6 +793,9 @@ fn spawn(world: &mut World, run: Run) {
             }
         });
 }
+
+/// How many lists share the source of `items-shared-adding`.
+const SHARED_LISTS: usize = 8;
 
 /// A `One` selection over `size` items, for the list workloads.
 fn list_items(size: usize) -> impl Bundle {

@@ -1,5 +1,7 @@
 //! `List`: renders the items of a [`Selection`] as views and keeps them in sync.
 
+use std::sync::Arc;
+
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::system::SystemId;
@@ -907,7 +909,7 @@ fn selection_change(
 
 pub(crate) struct ItemsChangedInput {
     pub(crate) list_ref: Entity,
-    pub(crate) items: Vec<Entity>,
+    pub(crate) items: Arc<[Entity]>,
 }
 
 fn on_items_changed(
@@ -1071,7 +1073,7 @@ pub(crate) fn watch_items<M: 'static>(
                     on_items_changed,
                     ItemsChangedInput {
                         list_ref,
-                        items: t.event().items.iter().collect(),
+                        items: Arc::clone(&t.event().items),
                     },
                 );
             })

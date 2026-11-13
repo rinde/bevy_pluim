@@ -82,7 +82,7 @@ fn on_items_changed(
         })
         .unwrap_or_default();
 
-    let mut items = items.clone();
+    let mut items = items.to_vec();
     for (
         view_ref,
         ItemView {
