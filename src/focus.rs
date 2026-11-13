@@ -44,6 +44,11 @@ impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(navigate_roving_group)
             .add_systems(PostUpdate, draw_focus_ring.in_set(DrawFocusRing))
+            .init_resource::<HiddenDirty>()
+            .add_systems(
+                PostUpdate,
+                collect_hidden_changes.after(VisibilitySystems::VisibilityPropagate),
+            )
             .add_systems(
                 PostUpdate,
                 (
@@ -51,7 +56,7 @@ impl Plugin for FocusPlugin {
                     sync_roving_groups.after(sync_tab_index),
                     sync_accessibility_hidden,
                 )
-                    .after(VisibilitySystems::VisibilityPropagate),
+                    .after(collect_hidden_changes),
             )
             .configure_sets(PostUpdate, DrawFocusRing.before(UiSystems::Layout))
             .configure_sets(
@@ -321,14 +326,45 @@ pub(crate) fn is_hidden(
     }
 }
 
-/// What changed this frame that can change whether something is hidden, shared by
-/// `sync_tab_index` and `sync_accessibility_hidden` so that neither walks every entity each
-/// frame.
+/// The entities whose hidden state may have changed this frame, worked out once by
+/// [`collect_hidden_changes`] and read by `sync_tab_index`, `sync_accessibility_hidden`,
+/// `sync_roving_groups` and the tab bar's `sync_tab_index`, so none of them scans the changed
+/// nodes or walks a subtree of its own.
 ///
 /// Hidden is a function of an entity's [`InheritedVisibility`] and of `Display::None` on it or
 /// an ancestor. [`InheritedVisibility`] propagates by itself (a change reaches the
 /// descendants as changes of their own), but `Display::None` does not touch it, so when the
 /// display of a node flips or a node is reparented the whole subtree is dirty too.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct HiddenDirty(EntityHashSet);
+
+impl HiddenDirty {
+    /// The entities whose hidden state may have changed since the last frame.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.0.iter().copied()
+    }
+
+    /// Whether `entity` is among them.
+    pub(crate) fn contains(&self, entity: Entity) -> bool {
+        self.0.contains(&entity)
+    }
+
+    /// The entities of `extra` that are not already in the set, for a consumer that adds
+    /// candidates of its own.
+    pub(crate) fn iter_with<'a>(
+        &'a self,
+        extra: &'a EntityHashSet,
+    ) -> impl Iterator<Item = Entity> + 'a {
+        self.iter().chain(
+            extra
+                .iter()
+                .copied()
+                .filter(|entity| !self.contains(*entity)),
+        )
+    }
+}
+
+/// What changed this frame that can change whether something is hidden.
 #[derive(SystemParam)]
 pub(crate) struct HiddenChanges<'w, 's> {
     visibility: Query<'w, 's, Entity, Changed<InheritedVisibility>>,
@@ -339,37 +375,63 @@ pub(crate) struct HiddenChanges<'w, 's> {
     removed_parents: RemovedComponents<'w, 's, ChildOf>,
     /// The entities known to have `Display::None`, to tell a flip from another edit.
     display_none: Local<'s, EntityHashSet>,
+    /// The roots whose subtrees are dirty, kept between frames for the allocation.
+    roots: Local<'s, Vec<Entity>>,
+    /// The entities already walked this frame, so overlapping roots visit nothing twice.
+    walked: Local<'s, EntityHashSet>,
+    /// The depth-first stack of the walk.
+    stack: Local<'s, Vec<Entity>>,
 }
 
-impl HiddenChanges<'_, '_> {
-    /// The entities whose hidden state may have changed since the last call.
-    pub(crate) fn dirty(&mut self) -> EntityHashSet {
-        let mut dirty = EntityHashSet::default();
-        let mut subtrees = Vec::new();
-        dirty.extend(self.visibility.iter());
-        for (entity, node) in &self.nodes {
-            let none = node.display == Display::None;
-            if none != self.display_none.contains(&entity) {
-                if none {
-                    self.display_none.insert(entity);
-                } else {
-                    self.display_none.remove(&entity);
+/// Collects into [`HiddenDirty`] the entities whose hidden state may have changed, once per
+/// frame for all consumers. It runs after visibility propagation and before them.
+///
+/// A subtree is walked once however many changed roots overlap in it: an entity that was
+/// reached already has had its children queued, so the walk stops there.
+pub(crate) fn collect_hidden_changes(mut changes: HiddenChanges, mut dirty: ResMut<HiddenDirty>) {
+    let dirty = &mut dirty.0;
+    dirty.clear();
+    changes.roots.clear();
+    changes.walked.clear();
+    dirty.extend(changes.visibility.iter());
+    for (entity, node) in &changes.nodes {
+        let none = node.display == Display::None;
+        if none != changes.display_none.contains(&entity) {
+            if none {
+                changes.display_none.insert(entity);
+            } else {
+                changes.display_none.remove(&entity);
+            }
+            changes.roots.push(entity);
+        }
+    }
+    for entity in changes.removed_nodes.read() {
+        if changes.display_none.remove(&entity) {
+            changes.roots.push(entity);
+        }
+    }
+    changes.roots.extend(changes.reparented.iter());
+    changes.roots.extend(changes.removed_parents.read());
+    for index in 0..changes.roots.len() {
+        let Some(&root) = changes.roots.get(index) else {
+            continue;
+        };
+        if !changes.walked.insert(root) {
+            continue;
+        }
+        dirty.insert(root);
+        changes.stack.push(root);
+        while let Some(entity) = changes.stack.pop() {
+            let Ok(children) = changes.children.get(entity) else {
+                continue;
+            };
+            for &child in children {
+                if changes.walked.insert(child) {
+                    dirty.insert(child);
+                    changes.stack.push(child);
                 }
-                subtrees.push(entity);
             }
         }
-        for entity in self.removed_nodes.read() {
-            if self.display_none.remove(&entity) {
-                subtrees.push(entity);
-            }
-        }
-        subtrees.extend(self.reparented.iter());
-        subtrees.extend(self.removed_parents.read());
-        for root in subtrees {
-            dirty.insert(root);
-            dirty.extend(self.children.iter_descendants(root));
-        }
-        dirty
     }
 }
 
@@ -380,7 +442,7 @@ impl HiddenChanges<'_, '_> {
 /// [`Unreachable`] marker, and the stops whose visibility, `Display::None` (on them or an
 /// ancestor) or parent changed.
 fn sync_tab_index(
-    mut changes: HiddenChanges,
+    hidden_changes: Res<HiddenDirty>,
     mut stops: Query<
         (&mut TabIndex, Has<InteractionDisabled>, Has<Unreachable>),
         (With<TabStop>, Without<RovingItem>),
@@ -393,13 +455,13 @@ fn sync_tab_index(
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    let mut dirty = changes.dirty();
-    dirty.extend(new_stops.iter());
-    dirty.extend(disabled_added.iter());
-    dirty.extend(unreachable_added.iter());
-    dirty.extend(disabled_removed.read());
-    dirty.extend(unreachable_removed.read());
-    for entity in dirty {
+    let mut extra = EntityHashSet::default();
+    extra.extend(new_stops.iter());
+    extra.extend(disabled_added.iter());
+    extra.extend(unreachable_added.iter());
+    extra.extend(disabled_removed.read());
+    extra.extend(unreachable_removed.read());
+    for entity in hidden_changes.iter_with(&extra) {
         let Ok((mut index, disabled, unreachable)) = stops.get_mut(entity) else {
             continue;
         };
@@ -421,7 +483,7 @@ fn sync_tab_index(
 /// those whose node was added or changed, or whose visibility, `Display::None` (on them or
 /// an ancestor) or parent changed, are looked at.
 fn sync_accessibility_hidden(
-    mut changes: HiddenChanges,
+    hidden_changes: Res<HiddenDirty>,
     mut nodes: ParamSet<(
         Query<Entity, Changed<AccessibilityNode>>,
         Query<&mut AccessibilityNode>,
@@ -429,10 +491,9 @@ fn sync_accessibility_hidden(
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    let mut dirty = changes.dirty();
-    dirty.extend(nodes.p0().iter());
+    let changed: EntityHashSet = nodes.p0().iter().collect();
     let mut accessible = nodes.p1();
-    for entity in dirty {
+    for entity in hidden_changes.iter_with(&changed) {
         let Ok(mut node) = accessible.get_mut(entity) else {
             continue;
         };
@@ -628,7 +689,7 @@ struct RovingChanges<'w, 's> {
 /// selection it reads changed (for a group that enters at the selected item) or the focus moved
 /// into or out of it.
 fn sync_roving_groups(
-    mut changes: HiddenChanges,
+    hidden_changes: Res<HiddenDirty>,
     mut roving: RovingChanges,
     mut groups: Query<(Entity, &mut RovingGroup)>,
     items: Query<(&RovingItem, Has<InteractionDisabled>, Has<Unreachable>)>,
@@ -640,12 +701,12 @@ fn sync_roving_groups(
     shown: Query<(Option<&Node>, Option<&InheritedVisibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    let mut dirty_items = changes.dirty();
-    dirty_items.extend(roving.disabled_removed.read());
-    dirty_items.extend(roving.unreachable_removed.read());
+    let mut extra_items = EntityHashSet::default();
+    extra_items.extend(roving.disabled_removed.read());
+    extra_items.extend(roving.unreachable_removed.read());
     let gone: Vec<Entity> = roving.items_removed.read().collect();
     let mut dirty_groups = EntityHashSet::default();
-    for entity in dirty_items {
+    for entity in hidden_changes.iter_with(&extra_items) {
         if let Ok((item, _, _)) = items.get(entity) {
             dirty_groups.insert(item.owner);
         }

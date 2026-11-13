@@ -65,6 +65,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `theme-editors-idle` | 1 | `ThemeEditor`s with every popup closed, nothing changing (#680) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `tab-bars-idle` | 500 `TabBar`s of 3 tabs | idle frames of independent tab bars (#670) |
+| `deep-trees-idle`, `deep-trees-display`, `deep-trees-reparenting` | chains of 40 nodes with a button | idle, `Display::None` flips and reparenting of deep trees (#684) |
 | `roving-groups-idle` | 500 `SegmentedControl`s of 3 segments | independent roving groups with no change: the floor the two below are read against (#662) |
 | `roving-groups-focus` | the same | the `InputFocus` moves to a segment of another control every frame |
 | `roving-groups-selection` | the same | one control's `Selection` is replaced every frame, so `Changed<Selection>` fires for that control alone (the control's own redraw is part of the cost) |
@@ -250,7 +251,7 @@ and `a_shared_selection_change_looks_at_every_group_that_reads_it_and_no_other`.
 ancestors of every bar. It now looks only at bars that are new, whose `SelectedTab` or `Children`
 changed, that have a tab whose `InteractionDisabled` (added or removed) or `TabIndex` changed, that
 held or now hold the focus, or whose visibility, `Display::None` or parent changed (the shared
-`HiddenChanges` of `focus.rs`). Mean frame time in microseconds of
+`HiddenDirty` of `focus.rs`). Mean frame time in microseconds of
 `bench --workload tab-bars-idle --size 500`, three runs (shared cloud container, noisy):
 
 | before | after |
@@ -442,3 +443,26 @@ Release build, one run each, before / after:
 
 Startup time is not measured separately; the five-editor run took 47.9 s of wall
 time before.
+
+## Shared hidden-state change set (#684)
+
+`sync_tab_index`, `sync_accessibility_hidden`, `sync_roving_groups` and the tab bar's
+`sync_tab_index` each used to build their own `HiddenChanges` (visibility, `Display::None` flips,
+reparents and a subtree walk per changed root). `focus.rs`'s `collect_hidden_changes` now does it
+once per frame into the `HiddenDirty` resource, with one deduplicated walk, so overlapping roots no
+longer revisit descendants. Workloads `deep-trees-idle`, `deep-trees-display` (flips `Display::None`
+on three nested nodes of one chain per frame) and `deep-trees-reparenting` (moves one chain per
+frame), 200 chains of 40 nodes each with a button at the bottom, release build, size 200, two runs
+each, mean / median frame time in microseconds:
+
+| Workload | Before | After |
+| --- | --- | --- |
+| `deep-trees-idle` | 5227 / 5019, 5920 / 5923 | 5657 / 5488, 5668 / 5494 |
+| `deep-trees-display` | 71005 / 69162, 74272 / 70724 | 70477 / 67317, 70991 / 65918 |
+| `deep-trees-reparenting` | 102272 / 91229, 97616 / 85178 | 100059 / 89843, 93887 / 80541 |
+
+Entities and memory are the same (the resource is one extra entity, 42 MiB added either way). The
+differences are inside the run-to-run spread: the frame is dominated by layout and the UI systems,
+not the hidden-state collection, so the consolidation is CPU-neutral. It is kept for one
+definition of "what changed" (a consumer can no longer miss a root another one saw) and the
+regression test for overlapping flips and a reparent in one frame.
