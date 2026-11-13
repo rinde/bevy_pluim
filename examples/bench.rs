@@ -173,7 +173,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 42] = [
+    const ALL: [Self; 43] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -761,7 +761,7 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         let world = app.world_mut();
         let mut query = world.query::<(&DeepChain, &mut Node)>();
         let chain = index * 7 % size.max(1);
-        let display = if index % 2 == 0 {
+        let display = if index.is_multiple_of(2) {
             Display::None
         } else {
             Display::Flex
