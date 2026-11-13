@@ -15969,6 +15969,35 @@ fn a_removed_indicator_is_made_again_once_and_other_tracks_keep_theirs() {
 }
 
 #[test]
+fn an_indicator_reparented_away_from_its_track_is_taken_back_not_doubled() {
+    let mut app = headless_app();
+    let tracks = spawn_indicator_tracks(&mut app);
+    let before = tracks.map(|(t, n)| indicators_named(&app, t, n)[0]);
+    let elsewhere = app.world_mut().spawn(Node::default()).id();
+    for indicator in before {
+        app.world_mut()
+            .entity_mut(indicator)
+            .insert(ChildOf(elsewhere));
+    }
+    for (track, name) in tracks {
+        assert!(indicators_named(&app, track, name).is_empty());
+    }
+    app.world_mut()
+        .entity_mut(tracks[0].0)
+        .insert(SegmentedControl);
+    app.world_mut().entity_mut(tracks[1].0).insert(TabBar);
+    app.world_mut()
+        .entity_mut(tracks[2].0)
+        .insert(LightDarkToggle);
+    for _ in 0..3 {
+        app.update();
+    }
+    for (i, (track, name)) in tracks.into_iter().enumerate() {
+        assert_eq!(indicators_named(&app, track, name), vec![before[i]]);
+    }
+}
+
+#[test]
 fn despawning_a_track_leaves_the_indicators_of_the_others_alone() {
     let mut app = headless_app();
     let tracks = spawn_indicator_tracks(&mut app);
