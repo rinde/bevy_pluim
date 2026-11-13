@@ -305,12 +305,13 @@ fn theme_tab_bars(
             .get(tab.owner())
             .is_some_and(|selection| selection.is_selected(tab.item()));
         text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
-        *text_font = TextFont {
+        // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+        text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(TAB_FONT_SIZE),
             weight: FontWeight::SEMIBOLD,
             ..default()
-        };
+        });
     }
 }
 

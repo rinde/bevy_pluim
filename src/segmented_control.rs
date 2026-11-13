@@ -370,12 +370,13 @@ fn theme_segmented_controls(
             .get(segment.owner())
             .is_some_and(|selection| selection.is_selected(segment.item()));
         text_color.0 = segment_colors(theme.colors(), selected, hovered.get()).1;
-        *text_font = TextFont {
+        // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+        text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(SEGMENT_FONT_SIZE),
             weight: FontWeight::SEMIBOLD,
             ..default()
-        };
+        });
     }
 
     for (child_of, mut image) in &mut icons {

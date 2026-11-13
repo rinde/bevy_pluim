@@ -538,12 +538,13 @@ fn theme_toggles(
             continue;
         };
         text_color.0 = *ink;
-        *text_font = TextFont {
+        // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+        text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(OPTION_FONT_SIZE),
             weight: FontWeight::SEMIBOLD,
             ..default()
-        };
+        });
     }
 }
 

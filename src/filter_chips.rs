@@ -404,7 +404,9 @@ fn theme_chips(
             if node.margin.left != margin {
                 node.margin.left = margin;
             }
-            *font = chip_font(&theme);
+            // Only a difference may be written: a write marks the font changed, which makes
+            // Bevy lay the text, and so the whole tree, out again (#710).
+            font.set_if_neq(chip_font(&theme));
         }
     }
 }
