@@ -31,6 +31,7 @@ use bevy_pluim::scroll_area::{ScrollArea, ScrollContents};
 use bevy_pluim::segmented_control::{Segment, SegmentIndicator, SegmentedControl};
 use bevy_pluim::select::{Item, ItemOf, ItemValues, Selection, SelectionValue};
 use bevy_pluim::tab_bar::TabBar;
+use bevy_pluim::toast::Toast;
 use bevy_pluim::tooltip::Tooltip;
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
@@ -90,6 +91,10 @@ enum Workload {
     /// Groups of ten `NumericStepper`s mirroring one shared `Value`; `CHANGED_STEPPERS` shared
     /// values are changed every frame.
     SteppersSharedChanging,
+    /// Many parents, each with a `ToastStack` holding one long toast, idle (#678).
+    ToastsIdle,
+    /// The same parents; `TOAST_BURST` short toasts are spawned under other parents every frame.
+    ToastsBursting,
     /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
     /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
@@ -125,7 +130,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 34] = [
+    const ALL: [Self; 36] = [
         Self::BevyTexts,
         Self::PushButtons,
         Self::BevyNodes,
@@ -146,6 +151,8 @@ impl Workload {
         Self::SegmentItemsAdding,
         Self::SteppersChanging,
         Self::SteppersSharedChanging,
+        Self::ToastsIdle,
+        Self::ToastsBursting,
         Self::SegmentedControlsIdle,
         Self::IndicatorsAnimating,
         Self::IndicatorsRemoved,
@@ -184,6 +191,8 @@ impl Workload {
             Self::SteppersIdle => "steppers-idle",
             Self::SteppersChanging => "steppers-changing",
             Self::SteppersSharedChanging => "steppers-shared-changing",
+            Self::ToastsIdle => "toasts-idle",
+            Self::ToastsBursting => "toasts-bursting",
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::IndicatorsAnimating => "indicators-animating",
             Self::IndicatorsRemoved => "indicators-removed",
@@ -218,6 +227,8 @@ impl Workload {
             | Self::FilterChipsIdle
             | Self::ListNotesChanging
             | Self::ListNotesIdle
+            | Self::ToastsIdle
+            | Self::ToastsBursting
             | Self::SegmentedControlsIdle
             | Self::GalleriesIdle
             | Self::IndicatorsAnimating
@@ -603,6 +614,23 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             }
         }
     }
+    if workload == Workload::ToastsBursting {
+        // A burst of short toasts under other parents: duplicates are rare (the text has the
+        // frame number), and each toast goes after a few frames, so the stacks stay.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<Entity, With<ToastParent>>();
+        let parents: Vec<Entity> = query.iter(world).collect();
+        if !parents.is_empty() {
+            for offset in 0..TOAST_BURST {
+                if let Some(parent) = parents.get((index * 7 + offset * 13) % parents.len()) {
+                    world.spawn((
+                        Toast::new(format!("Burst {index}.{offset}")).with_duration(0.05),
+                        ChildOf(*parent),
+                    ));
+                }
+            }
+        }
+    }
     if workload == Workload::RovingGroupsFocus {
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<Segment>>();
@@ -653,6 +681,13 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
     }
     app.update();
 }
+
+/// Marks a parent node of the toast workloads.
+#[derive(Component)]
+struct ToastParent;
+
+/// Toasts spawned per frame by `toasts-bursting`.
+const TOAST_BURST: usize = 20;
 
 fn spawn(world: &mut World, run: Run) {
     world.spawn(Camera2d);
@@ -793,6 +828,12 @@ fn spawn(world: &mut World, run: Run) {
                         ));
                     }
                 });
+            }
+            Workload::ToastsIdle | Workload::ToastsBursting => {
+                for row in 0..run.size {
+                    root.spawn((Node::default(), ToastParent))
+                        .with_child(Toast::new(format!("Long {row}")).with_duration(86_400.0));
+                }
             }
             Workload::PaletteItemsAdding => {
                 root.spawn((
