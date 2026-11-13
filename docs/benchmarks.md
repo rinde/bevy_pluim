@@ -362,7 +362,7 @@ and its children (`replacing_one_controls_selection_restyles_only_that_control`)
 machine back to back, mean frame time of `indicators-animating` before and after the change is 9.2 ms
 and 8.1 ms at 500 controls and 40.4 ms and 35.3 ms at 2000, so the gain is about 12 %. The 30 ms and
 205 ms in the table above predate other changes on `main` and are stale; moving the indicator without
-a layout pass is the follow-up #768.
+a layout pass was the follow-up #768, done: see "Sliding indicators without layout (#768)" below.
 
 ## Selection restyling (#709)
 
@@ -667,3 +667,25 @@ to the floor of hover tracking; the median is about the same because most frames
 `bool` read in the `MouseEvent` observer transformer and once per hovered tooltip. Memory
 is the stepper's 16 more entities. Run-to-run variation is about 0.2 ms, so read the
 difference loosely.
+
+## Sliding indicators without layout (#768)
+
+`indicator.rs`'s `animate` used to write the indicator's `Node::left` and `width` every frame while it
+slid, which dirtied layout up to the root. The `Node` now holds the goal (the selected item's laid-out
+box) and is written only when that box moves; the slide is the indicator's `UiTransform` (translation
+and scale easing to rest), which needs no layout pass.
+
+Measured on one machine back to back (release build, `bench --workload indicators-animating --size N`,
+mean frame time in microseconds, parent commit 2798db7 against this change; the #677 table above is
+stale, see #709):
+
+| size | before (2798db7) | after (#768) |
+| --- | --- | --- |
+| 500 | 10923 | 10175 |
+| 2000 | 40079 | 36529 |
+
+Honest reading: about 7 to 9 % better, which is close to run-to-run noise, and frame time still grows
+roughly linearly with the number of controls. The acceptance of #768 (time stops growing with control
+count) is **not met** by this change alone. Entities are unchanged. The sliding frames themselves no
+longer write a `Node`, but what dominates the workload is not shown to be the per-frame selection
+re-insert of the workload (that attribution is unverified); finding the residual cost is tracked in #782.

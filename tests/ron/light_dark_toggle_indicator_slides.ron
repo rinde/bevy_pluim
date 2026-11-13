@@ -1,5 +1,5 @@
 // Picking another option slides the toggle's indicator to it: two frames later it is between the
-// old option (System) and the new one (Dark), its `Node.left` has moved but not all the way, and in
+// old option (System) and the new one (Dark), its `UiTransform` still holds the offset left to go, and in
 // the end it lies on the laid-out box of the picked option.
 (
     format_version: 3,
@@ -10,17 +10,17 @@
         Capture(name: "from x", value: Component(target: Within(Name("light dark toggle"), Role(role: Button, label: "System")), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
         Capture(name: "to x", value: Component(target: Within(Name("light dark toggle"), Role(role: Button, label: "Dark")), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
         Capture(name: "to width", value: Component(target: Within(Name("light dark toggle"), Role(role: Button, label: "Dark")), path: "ComputedNode.size.x", unit: Logical)),
-        Capture(name: "left before", value: Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "Node.left.0")),
+        Capture(name: "shift before", value: Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "UiTransform.translation.x.0")),
         // It starts on the selected item.
         Check(Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(Captured(name: "from x", plus: -1.0), Captured(name: "from x", plus: 1.0)))),
         MoveTo(Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))),
         Click(Left),
         Wait(2),
         // On its way: past where it was and short of where it is going (the new item is to the
-        // right), and its `Node.left` has grown.
+        // right), and its the `UiTransform` offset is still negative.
         Check(Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Gt(Captured(name: "from x", plus: 1.0)))),
         Check(Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Lt(Captured(name: "to x", plus: -1.0)))),
-        Check(Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "Node.left.0", is: Gt(Captured(name: "left before", plus: 0.5)))),
+        Check(Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "UiTransform.translation.x.0", is: Lt(Captured(name: "shift before", plus: -0.5)))),
         Wait(60),
         // Arrived: on the laid-out box of the picked item.
         Check(Component(target: Within(Name("light dark toggle"), Name("OptionIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(Captured(name: "to x", plus: -1.0), Captured(name: "to x", plus: 1.0)))),
