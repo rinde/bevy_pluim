@@ -214,21 +214,26 @@ impl IconButton {
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
-        if world.get::<IconButtonRefs>(entity).is_none() {
-            let mut commands = world.commands();
-            let icon_id = commands
+        // Checked when the command runs, not now: two inserts before a flush would both see no
+        // refs and both spawn an icon and register the observers.
+        world.commands().queue(move |world: &mut World| {
+            let Ok(mut entity_mut) = world.get_entity_mut(entity) else {
+                return;
+            };
+            if entity_mut.contains::<IconButtonRefs>() {
+                return;
+            }
+            entity_mut.observe(handle_hover);
+            entity_mut.observe(toggle_on_activate);
+            let icon_id = world
                 .spawn((
                     Icon::bundle(Handle::default(), 0.0),
                     Pickable::IGNORE,
                     ChildOf(entity),
                 ))
                 .id();
-            commands
-                .entity(entity)
-                .insert(IconButtonRefs { icon_id })
-                .observe(handle_hover)
-                .observe(toggle_on_activate);
-        }
+            world.entity_mut(entity).insert(IconButtonRefs { icon_id });
+        });
         if let Some(button) = world.get::<Self>(entity) {
             let tooltip = Tooltip::new(button.name.clone());
             world.commands().entity(entity).insert(tooltip);

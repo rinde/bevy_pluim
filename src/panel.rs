@@ -339,13 +339,25 @@ impl Panel {
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let panel = context.entity;
-        let has_parts = world.get::<PanelRefs>(panel).is_some();
         let mut commands = world.commands();
-        if !has_parts {
-            spawn_parts(&mut commands, panel);
-        }
+        // Whether the parts exist is decided when the command runs, so two inserts before a
+        // flush build them once.
+        commands.run_system_cached_with(spawn_missing_parts, panel);
         commands.run_system_cached_with(sync_panel, panel);
     }
+}
+
+/// Builds the parts of a panel that does not have them yet.
+fn spawn_missing_parts(
+    panel: In<Entity>,
+    refs: Query<(), With<PanelRefs>>,
+    mut commands: Commands,
+) {
+    let panel = panel.0;
+    if refs.contains(panel) {
+        return;
+    }
+    spawn_parts(&mut commands, panel);
 }
 
 fn spawn_parts(commands: &mut Commands, panel: Entity) {

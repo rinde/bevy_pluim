@@ -16628,3 +16628,128 @@ fn a_structural_change_to_a_gallery_keeps_the_cards_of_the_items_that_stay() {
         Some(before[4])
     );
 }
+
+#[test]
+fn two_inserts_of_a_setting_row_in_one_command_batch_build_one_set_of_parts_and_the_last_wins() {
+    let mut app = headless_app();
+    let row = app.world_mut().spawn_empty().id();
+    let app_child = app.world_mut().spawn((Node::default(), ChildOf(row))).id();
+    app.world_mut().commands().queue(move |world: &mut World| {
+        // Both inserts happen before the hooks' own commands run.
+        world.insert_batch([
+            (row, SettingRow::new("A", "first")),
+            (row, SettingRow::new("B", "second")),
+        ]);
+    });
+    app.world_mut().flush();
+    app.update();
+    app.update();
+
+    let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
+    // The app's child, the content and the divider, nothing twice.
+    assert_eq!(app.world().get::<Children>(row).unwrap().len(), 3);
+    assert!(
+        app.world()
+            .get::<Children>(row)
+            .unwrap()
+            .contains(&app_child)
+    );
+    assert_eq!(app.world().get::<Text>(refs.title_id).unwrap().0, "B");
+    assert_eq!(
+        app.world().get::<Text>(refs.description_id).unwrap().0,
+        "second"
+    );
+    let node = app.world().get::<AccessibilityNode>(row).unwrap();
+    assert_eq!(node.label(), Some("B"));
+}
+
+#[test]
+fn two_inserts_of_a_panel_in_one_command_batch_build_one_set_of_parts_and_one_close_observer() {
+    let mut app = headless_app();
+    app.init_resource::<PanelsClosed>();
+    app.add_observer(|t: On<PanelClosed>, mut closed: ResMut<PanelsClosed>| {
+        closed.0.push(t.event().event_target());
+    });
+    let panel = app.world_mut().spawn_empty().id();
+    let app_child = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(panel)))
+        .id();
+    app.world_mut().commands().queue(move |world: &mut World| {
+        // Both inserts happen before the hooks' own commands run.
+        world.insert_batch([
+            (
+                panel,
+                Panel::new("First").with_close_icon(Handle::default()),
+            ),
+            (
+                panel,
+                Panel::new("Second").with_close_icon(Handle::default()),
+            ),
+        ]);
+    });
+    app.world_mut().flush();
+    app.update();
+    app.update();
+
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    // The app's child, header, strip, two dividers, scroll area and footer.
+    assert_eq!(app.world().get::<Children>(panel).unwrap().len(), 7);
+    assert!(
+        app.world()
+            .get::<Children>(panel)
+            .unwrap()
+            .contains(&app_child)
+    );
+    assert_eq!(app.world().get::<Text>(refs.title()).unwrap().0, "Second");
+    app.world_mut().trigger(Activate {
+        entity: refs.close(),
+    });
+    app.update();
+    assert_eq!(
+        app.world().get_resource::<PanelsClosed>().unwrap().0,
+        vec![panel],
+        "one notification per activation"
+    );
+}
+
+#[test]
+fn two_inserts_of_an_icon_button_in_one_command_batch_build_one_icon_and_one_set_of_observers() {
+    let mut app = headless_app();
+    let button = app.world_mut().spawn(ToggleState(false)).id();
+    let app_child = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(button)))
+        .id();
+    app.world_mut().commands().queue(move |world: &mut World| {
+        // Both inserts happen before the hooks' own commands run.
+        world.insert_batch([
+            (
+                button,
+                IconButton::new(Handle::default(), "First", IconButtonSize::Regular),
+            ),
+            (
+                button,
+                IconButton::new(Handle::default(), "Second", IconButtonSize::Large),
+            ),
+        ]);
+    });
+    app.world_mut().flush();
+    app.update();
+    app.update();
+
+    let children = app.world().get::<Children>(button).unwrap();
+    let icons = children
+        .iter()
+        .filter(|child| app.world().get::<Icon>(*child).is_some())
+        .count();
+    assert_eq!(icons, 1, "one icon");
+    assert!(children.contains(&app_child));
+    assert_eq!(app.world().get::<Tooltip>(button).unwrap().text, "Second");
+    app.world_mut().trigger(Activate { entity: button });
+    app.update();
+    assert!(
+        app.world().get::<ToggleState>(button).unwrap().0,
+        "one toggle observer flips the state once"
+    );
+}
