@@ -399,6 +399,7 @@ fn spawn_parts(commands: &mut Commands, panel: Entity) {
     let strip = commands
         .spawn((
             Name::new("PanelStrip"),
+            PanelSection(panel),
             Node {
                 flex_wrap: FlexWrap::Wrap,
                 padding: UiRect {
@@ -450,6 +451,7 @@ fn spawn_parts(commands: &mut Commands, panel: Entity) {
     let footer = commands
         .spawn((
             Name::new("PanelFooter"),
+            PanelSection(panel),
             Node {
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::axes(Val::Px(18.0), Val::Px(10.0)),
@@ -511,15 +513,47 @@ fn sync_panel(
     }
 }
 
+/// Marks the strip and the footer of a panel with the panel they belong to, so a change to
+/// their children finds the panel without a scan.
+#[derive(Component, Clone, Copy, Debug)]
+struct PanelSection(Entity);
+
 /// Shows the strip and the footer (and the divider above it) only while they
-/// have children.
+/// have children, and keeps the body's bottom margin and maximum height.
+///
+/// Looks only at the panels a change concerns: a new or re-inserted [`Panel`], a strip or
+/// footer whose children changed (or lost their last), and every panel when the [`Theme`]
+/// changes. A quiet frame reads no panel.
 fn sync_optional_sections(
     theme: Res<Theme>,
-    panels: Query<(&Panel, &PanelRefs)>,
+    changed_panels: Query<Entity, Or<(Changed<Panel>, Changed<PanelRefs>)>>,
+    changed_sections: Query<&PanelSection, Changed<Children>>,
+    sections: Query<&PanelSection>,
+    mut emptied: RemovedComponents<Children>,
+    panels: Query<(Entity, &Panel, &PanelRefs)>,
     children: Query<&Children>,
     mut nodes: Query<&mut Node>,
 ) {
-    for (panel, refs) in &panels {
+    let wanted: Vec<Entity> = if theme.is_changed() {
+        panels.iter().map(|(entity, ..)| entity).collect()
+    } else {
+        let mut wanted: Vec<Entity> = changed_panels
+            .iter()
+            .chain(changed_sections.iter().map(|section| section.0))
+            .chain(
+                emptied
+                    .read()
+                    .filter_map(|e| sections.get(e).ok().map(|s| s.0)),
+            )
+            .collect();
+        wanted.sort_unstable();
+        wanted.dedup();
+        wanted
+    };
+    for entity in wanted {
+        let Ok((_, panel, refs)) = panels.get(entity) else {
+            continue;
+        };
         for (section, divider) in [(refs.strip, None), (refs.footer, Some(refs.footer_divider))] {
             let display = if children.get(section).is_ok_and(|c| !c.is_empty()) {
                 Display::Flex

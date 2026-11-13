@@ -7255,6 +7255,121 @@ fn replacing_a_badge_on_a_toolbar_item_updates_its_button_without_a_second_pill(
     assert_eq!(description(&app).as_deref(), Some("2"));
 }
 
+#[test]
+fn a_badge_follows_its_item_to_the_buttons_made_when_the_toolbar_style_changes() {
+    let mut app = headless_app();
+    let toolbar = spawn_toolbar(
+        &mut app,
+        ToolbarStyle::Underlined,
+        Selection::builder().one(),
+    );
+    let old_button = toolbar_buttons(&app, toolbar)[1];
+    let item = app.world().get::<ToolbarButton>(old_button).unwrap().item();
+    app.world_mut().entity_mut(item).insert(Badge::count(5));
+    settle(&mut app);
+    assert_eq!(badge_under(&app, old_button).unwrap().1, "5");
+
+    app.world_mut()
+        .entity_mut(toolbar)
+        .insert(Toolbar::new(ToolbarStyle::Filled));
+    settle(&mut app);
+    let buttons = toolbar_buttons(&app, toolbar);
+    let new_button = buttons
+        .into_iter()
+        .find(|b| app.world().get::<ToolbarButton>(*b).unwrap().item() == item)
+        .unwrap();
+    assert_eq!(badge_under(&app, new_button).unwrap().1, "5");
+    let description = app
+        .world()
+        .get::<AccessibilityNode>(new_button)
+        .and_then(|node| node.description().map(str::to_owned));
+    assert_eq!(description.as_deref(), Some("5"));
+}
+
+#[test]
+fn a_theme_change_recolours_a_badge_that_did_not_change() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            IconButton::new(Handle::default(), "Trains", IconButtonSize::Regular),
+            Badge::count(3),
+            ChildOf(root),
+        ))
+        .id();
+    settle(&mut app);
+    // Quiet frames change nothing.
+    settle(&mut app);
+    let (badge, _) = badge_under(&app, button).unwrap();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(badge).unwrap().0,
+        DEFAULT_LIGHT_THEME_COLORS.pill_background
+    );
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    settle(&mut app);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(badge).unwrap().0,
+        DEFAULT_DARK_THEME_COLORS.pill_background
+    );
+}
+
+#[test]
+fn a_panel_keeps_its_sections_and_corner_margin_across_theme_changes_and_quiet_frames() {
+    let mut app = headless_app();
+    let panel = app.world_mut().spawn(Panel::new("Trains")).id();
+    settle(&mut app);
+    let refs = *app.world().get::<PanelRefs>(panel).unwrap();
+    let margin = |app: &App| {
+        app.world()
+            .get::<Node>(refs.scroll_area())
+            .unwrap()
+            .margin
+            .bottom
+    };
+    let strip_text = app
+        .world_mut()
+        .spawn((Label::caption("Filter"), ChildOf(refs.strip())))
+        .id();
+    settle(&mut app);
+    let display = |app: &App, e: Entity| app.world().get::<Node>(e).unwrap().display;
+    assert_eq!(display(&app, refs.strip()), Display::Flex);
+    app.world_mut().despawn(strip_text);
+    settle(&mut app);
+    assert_eq!(display(&app, refs.strip()), Display::None);
+
+    let new_radius = Val::Px(20.0);
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .panel_radius = new_radius;
+    settle(&mut app);
+    assert_eq!(margin(&app), new_radius);
+    assert_eq!(
+        app.world()
+            .get::<Node>(refs.scroll_area())
+            .unwrap()
+            .max_height,
+        Val::Px(640.0)
+    );
+
+    // A new maximum height is applied through a new Panel.
+    app.world_mut()
+        .entity_mut(panel)
+        .insert(Panel::new("Trains").with_max_body_height(100.0).unwrap());
+    settle(&mut app);
+    assert_eq!(
+        app.world()
+            .get::<Node>(refs.scroll_area())
+            .unwrap()
+            .max_height,
+        Val::Px(120.0)
+    );
+}
+
 fn spawn_toned_icon_button(app: &mut App, tone: Tone, size: IconButtonSize) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app

@@ -58,6 +58,10 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `steppers-shared-changing` | 2 000 | groups of 10 mirror steppers (`ValueRef`) around one shared `Value`; 20 shared values marked changed per frame |
 | `toasts-idle` | 500 parents | one long-lived `Toast` under each of many parents, no new toast: the floor `toasts-bursting` is read against (#678) |
 | `toasts-bursting` | 500 parents | the same parents; 20 short `Toast`s (0.05 s) are raised under pseudo-random parents every frame, so stacks are looked up, reused and emptied (#678) |
+| `badges-idle` | 500 buttons | `IconButton`s each with a `Badge`, no change: the floor for `sync_badges` and `mirror_item_badges` (#685) |
+| `badges-changing` | 500 buttons | the same buttons; 20 get a new `Badge::count` every frame (#685) |
+| `panels-idle` | 500 panels | `Panel`s, no change: the floor for `sync_optional_sections` (#685) |
+| `panels-changing` | 500 panels | the same panels; 20 are inserted again with a new title every frame (#685) |
 | `segmented-controls-idle` | 500 `SegmentedControl`s of 3 segments | idle frames of independent controls (#661) |
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
@@ -442,3 +446,31 @@ Release build, one run each, before / after:
 
 Startup time is not measured separately; the five-editor run took 47.9 s of wall
 time before.
+
+## Idle badge and panel synchronization (#685)
+
+`mirror_item_badges` and `sync_badges` (badge.rs) and `sync_optional_sections`
+(panel.rs) visited every badge host, toolbar button and panel each `Update`.
+They now return at once on a quiet frame: badges look at the hosts whose
+`Badge` changed or was removed, new nodes, nodes whose `AccessibilityNode`
+changed (Bevy rewrites it, which drops the description) and the buttons of a
+changed or new `Item<Tool>`; panels look at the panels whose `Panel` or
+`PanelRefs` changed or whose strip or footer `Children` changed (a private
+`PanelSection` marker names the panel). A `Theme` change still visits all.
+
+Measured with `cargo run --release --example bench`, one run each, mean frame
+time in microseconds (shared box, noisy), `main` against this change:
+
+| workload | size | before mean / median | after mean / median |
+| --- | --- | --- | --- |
+| `badges-idle` | 500 | 1981 / 1890 | 2136 / 2077 |
+| `badges-changing` | 500 | 2246 / 2149 | 2573 / 2506 |
+| `panels-idle` | 500 | 5259 / 4797 | 4739 / 4587 |
+| `panels-changing` | 500 | 6336 / 6056 | 7440 / 6891 |
+
+Entities and memory are unchanged (badges 2 821 entities, 14.7 to 15.3 MiB;
+panels 9 831 entities, 52.9 to 53.4 MiB). Honest reading: at 500 hosts the
+scans were cheap next to layout and accessibility updates, so the differences
+are within run-to-run noise (the badge rows even read slightly higher after,
+the panel idle row lower); the change removes the per-frame walk, whose cost
+grows with the number of hosts, rather than a visible share of this frame.
