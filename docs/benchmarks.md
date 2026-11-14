@@ -715,18 +715,20 @@ taffy's flexbox layout, so something still dirtied layout every frame. Two cause
 To separate the two, `bevy-nodes-resizing` is the plain-Bevy baseline: the same rows (a control with
 three text segments and an absolute child) with no widgets, moving one node's `left` per frame.
 
-Mean frame time in microseconds, release build, one machine, back to back (the before column was measured earlier in the same session, so machine drift is part of the spread; run-to-run noise is about 20 %):
+Mean frame time in microseconds, release build, one machine. Before (main at d1686d0, which has #781) and after (this change) are two binaries run alternately, three runs each in one session, so drift hits both; run-to-run noise is about 20 %:
 
 | workload | size | before (#781) | after (#782) |
 | --- | --- | --- | --- |
-| `indicators-animating` | 500 | 9093 | 6584 to 8715 (two runs) |
-| `indicators-animating` | 2000 | 31395 | 25880 to 28368 |
+| `indicators-animating` | 500 | 7321 / 10534 / 8466 | 8250 / 6397 / 7226 |
+| `indicators-animating` | 2000 | 32529 / 39339 / 36896 | 28213 / 22277 / 25038 |
 | `segmented-controls-idle` | 500 | 3595 | 3968 to 4036 |
 | `segmented-controls-idle` | 2000 | 12572 | 11742 to 11836 |
 | `bevy-nodes-resizing` (baseline) | 500 | - | 3817 to 4512 |
 | `bevy-nodes-resizing` (baseline) | 2000 | - | 12273 to 13234 |
 
-Reading: `indicators-animating` improves by about 20 to 25 %, and the plain-Bevy baseline grows with the control count in the same way, about 3x from 500 to 2000 controls. The restyle fix removes the layout dirtying that the widgets caused themselves; what is left
+The `segmented-controls-idle` and `bevy-nodes-resizing` rows come from an earlier session, not the back-to-back runs above, and are indicative only.
+
+Reading: at 2000 controls `indicators-animating` improves by about 25 to 30 % (the ranges do not overlap); at 500 the improvement (means 8774 before, 7291 after) is within the noise; and the plain-Bevy baseline grows with the control count in the same way, about 3x from 500 to 2000 controls. The restyle fix removes the layout dirtying that the widgets caused themselves; what is left
 is the baseline's one-write-per-frame cost. The acceptance of #768 therefore holds relative to the
 plain-Bevy baseline (the library adds a roughly constant overhead per control, not a growing one),
 not as an absolute flat line, which a single layout write per frame under a flat root cannot give.
