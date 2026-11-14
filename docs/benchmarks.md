@@ -393,9 +393,15 @@ Entities (6824 and 26324 for chips, 7828 and 30328 for segments) and memory are 
 with one changed selection costs about a third of what it did for chips and a sixth for segmented
 controls at 2000 widgets. `theme_chips` still walked all chip views once per chip it restyled; #760
 made it look up the one chip it is given (`Query::get_mut`), so the work scales with the chips
-restyled. At size 2000 the mean stays 29749 / 31480 / 32962 us, because that workload restyles
-only the chips of one row and the frame is dominated by `restyle_changed_chips`'s own scan of all
-chip views.
+restyled. At size 2000 the mean stayed 29749 / 31480 / 32962 us, because the frame was dominated
+by `restyle_changed_chips`'s own scan of all chip views.
+
+#779 removed that scan: `restyle_changed_chips` now walks the `FilterChips` rows (one cheap check
+each) and, for a row whose selection or items changed, only that row's `Children`; a changed
+`Item<Chip>` is matched to rows through the items entity of `sources_of` and to chips by
+`ChipView::item`. At size 2000 the mean is now 12980 / 12016 / 12035 us (about 2.6 times faster than
+the 29749 / 31480 / 32962 us above). Test:
+`an_item_edit_restyles_only_the_chips_of_rows_drawing_from_its_items`.
 
 ## Large item changes in a `List` (#676)
 

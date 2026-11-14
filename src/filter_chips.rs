@@ -7,7 +7,6 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::picking::hover::Hovered;
-use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ui_widgets::{Activate, Button};
 use itertools::Either;
@@ -15,7 +14,9 @@ use itertools::Either;
 use crate::focus::{
     AccessibilitySync, RovingGroup, RovingItem, TabStop, sync_label, sync_role, sync_toggled,
 };
-use crate::select::{Item, Selection, SelectionParam, StructureChanges, order_views, plan_views};
+use crate::select::{
+    Item, ItemOf, Selection, SelectionParam, StructureChanges, order_views, plan_views,
+};
 use crate::theme::{Theme, ThemeColors};
 
 /// The height of a chip.
@@ -420,29 +421,42 @@ fn theme_chips(
 /// happens in a frame where nothing changed.
 fn restyle_changed_chips(
     hovered: Query<Entity, (With<ChipView>, Changed<Hovered>)>,
-    views: Query<(Entity, &ChipView)>,
-    changed_items: Query<Entity, Changed<Item<Chip>>>,
+    rows: Query<(Entity, &Children), With<FilterChips>>,
+    views: Query<&ChipView>,
+    changed_items: Query<(Entity, &ItemOf), Changed<Item<Chip>>>,
     changed_selections: Query<Entity, Changed<Selection>>,
     selections: SelectionParam,
     mut commands: Commands,
 ) {
     let changed_selections: EntityHashSet = changed_selections.iter().collect();
-    let changed_items: EntityHashSet = changed_items.iter().collect();
-    // Whether each row has been found to draw from a changed selection, resolved once per row.
-    let mut rows = HashMap::<Entity, bool>::default();
+    let changed_item_entities: EntityHashSet = changed_items.iter().map(|(item, _)| item).collect();
+    let changed_item_owners: EntityHashSet = changed_items.iter().map(|(_, of)| of.0).collect();
     let mut restyle = EntityHashSet::default();
     restyle.extend(&hovered);
-    if !changed_selections.is_empty() || !changed_items.is_empty() {
-        for (chip, view) in &views {
-            let row_changed = !changed_selections.is_empty()
-                && *rows.entry(view.owner()).or_insert_with(|| {
-                    changed_selections.contains(&view.owner())
-                        || selections
-                            .get_ref(view.owner())
-                            .is_some_and(|source| changed_selections.contains(&source))
-                });
-            if row_changed || changed_items.contains(&view.item) {
-                restyle.insert(chip);
+    // Only the rows (not their chips) are visited to find the affected ones, and only the
+    // children of an affected row are looked at, so the work scales with the chips restyled.
+    if !changed_selections.is_empty() || !changed_item_entities.is_empty() {
+        for (row, children) in &rows {
+            let selection_changed = !changed_selections.is_empty()
+                && (changed_selections.contains(&row)
+                    || selections
+                        .get_ref(row)
+                        .is_some_and(|source| changed_selections.contains(&source)));
+            let items_changed = !selection_changed
+                && !changed_item_entities.is_empty()
+                && selections
+                    .sources_of(row)
+                    .is_some_and(|(_, items)| changed_item_owners.contains(&items));
+            if !selection_changed && !items_changed {
+                continue;
+            }
+            for chip in children {
+                let Ok(view) = views.get(*chip) else {
+                    continue;
+                };
+                if selection_changed || changed_item_entities.contains(&view.item) {
+                    restyle.insert(*chip);
+                }
             }
         }
     }
