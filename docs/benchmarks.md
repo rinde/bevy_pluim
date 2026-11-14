@@ -746,6 +746,26 @@ never visible; `animate` now also resets it to rest when it hides. Corner radius
 horizontally is drawn 8.4 px by 6 px wide). It cannot be compensated without writing the `Node`,
 which is what this change avoids; it is visible only mid-slide and snaps back at rest.
 
+### Decision on the residual growth (#789)
+
+Two options were weighed: (a) change the workload so the controls sit under separate roots or
+contained subtrees, so one dirty node relayouts only its own subtree; (b) accept the baseline-relative
+result and amend the acceptance of #768. **(b) is taken.** The growth is taffy's flex pass over one wide
+flat parent after one legitimate `Node` write, which `bevy-nodes-resizing` shows with no widget code at
+all; the library cannot remove it, and the sliding frames themselves already write no `Node`. Option (a)
+would make the number flat by measuring a different scene, one an app with a wide flat row does not
+have, and would hide the cost it is meant to show, so the workload stays as it is.
+
+The amended acceptance of #768 is: `indicators-animating` grows with the control count like
+`bevy-nodes-resizing` (both about 3x from 500 to 2000 controls), at a roughly constant factor above it
+(about 2x in the table above, against a run-to-run noise of about 20 %), and a frame in which no goal
+moves writes no `Node` (`a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone`). It is not
+a flat line in the control count, and the factor above the baseline is accepted, not
+within noise. The hide-time `UiTransform` reset is covered by
+`an_indicator_hidden_mid_slide_has_its_transform_back_at_rest` in `tests/scenarios.rs`, which slides an
+indicator, clears the selection, and asserts `Display::None`, translation `Val2::ZERO` and scale
+`Vec2::ONE`.
+
 ## Cost of a list row and of the non-vertical layouts (#766)
 
 Two changes, measured with `--frames 15` (release build; columns: mean frame time in
