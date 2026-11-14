@@ -565,7 +565,7 @@ impl SliderStyler<'_, '_> {
             if text.0 != shown {
                 text.0 = shown;
             }
-            color.0 = look.text;
+            color.set_if_neq(TextColor(look.text));
         }
     }
 

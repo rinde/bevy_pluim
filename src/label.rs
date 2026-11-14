@@ -165,7 +165,7 @@ fn theme_labels(
             ),
         };
         let overline = matches!(label, Label::Overline(_));
-        *text_color = TextColor(color);
+        text_color.set_if_neq(TextColor(color));
         text_font.set_if_neq(TextFont {
             font: font.clone().into(),
             font_size: Theme::font_size(font_size),

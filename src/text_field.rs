@@ -505,7 +505,7 @@ fn theme_text_fields(
             let Ok((mut text_color, mut text_font, cursor_style)) = texts.get_mut(part) else {
                 continue;
             };
-            text_color.0 = color;
+            text_color.set_if_neq(TextColor(color));
             text_font.set_if_neq(font.clone());
             if part == refs.input {
                 match cursor_style {

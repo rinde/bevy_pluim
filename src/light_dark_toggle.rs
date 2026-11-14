@@ -546,7 +546,7 @@ fn theme_toggles(
         let Some((_, ink)) = colours.iter().find(|(id, _)| *id == child_of.parent()) else {
             continue;
         };
-        text_color.0 = *ink;
+        text_color.set_if_neq(TextColor(*ink));
         // Written only when it differs: a write makes Bevy lay the tree out again (#710).
         text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),

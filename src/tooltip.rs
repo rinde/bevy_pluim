@@ -313,7 +313,7 @@ fn restyle_popups(
         for child in children {
             if let Ok((mut font, mut color)) = texts.get_mut(*child) {
                 font.set_if_neq(text_font(&theme));
-                color.0 = theme.colors().text_primary;
+                color.set_if_neq(TextColor(theme.colors().text_primary));
             }
         }
     }

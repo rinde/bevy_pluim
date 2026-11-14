@@ -797,7 +797,7 @@ fn theme_numeric_stepper(
         if numeric_stepper_ref.is_some_and(|stepper| stepper != label.0) {
             continue;
         }
-        *text_color = TextColor(theme.colors().text_primary);
+        text_color.set_if_neq(TextColor(theme.colors().text_primary));
         text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_secondary),

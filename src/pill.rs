@@ -147,7 +147,7 @@ fn theme_pills(
             PillTone::Problem => (colors.warning_background, colors.warning_text),
         };
         background.0 = bg;
-        text_color.0 = text;
+        text_color.set_if_neq(TextColor(text));
         text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(PILL_FONT_SIZE),

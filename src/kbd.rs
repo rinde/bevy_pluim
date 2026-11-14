@@ -105,7 +105,7 @@ fn theme_kbds(
 
     for (mut border, mut text_color, mut text_font) in iter {
         *border = BorderColor::all(theme.colors().border);
-        text_color.0 = theme.colors().text_secondary;
+        text_color.set_if_neq(TextColor(theme.colors().text_secondary));
         text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(theme.font_size_caption),

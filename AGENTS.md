@@ -646,6 +646,12 @@ of them (`just example gallery -- --run-all stack link`).
   all of them with `(|| None::<Entity>).pipe(theme_x).run_if(resource_changed::<Theme>)`.
   `itertools::Either` unifies the two iterators. See `card.rs` for the
   smallest example.
+  A restyle writes `TextFont` and `TextColor` only when the value differs
+  (`set_if_neq`, or a compare before assigning a field): every write marks
+  the text changed and Bevy lays the whole tree out again, so a colour-only
+  theme change writes no `TextFont` and a font-only one no `TextColor`
+  (`restyling_text_widgets_*`, `restyling_a_toolbar_*` and
+  `restyling_a_showing_tooltip_popup_*` in `tests/headless.rs`, #762, #778).
   A widget with an interaction state (hovered, pressed, selected) takes its
   background from one function of that state (`background_for` in
   `push_button.rs`, `item_background` in `list.rs`) that both its pointer

@@ -698,7 +698,7 @@ fn update_buttons(
             }
             color.set_if_neq(TextColor(look.icon.color(theme.colors())));
             if theme.is_changed() || refs.is_added() {
-                *font = label_font(&theme);
+                font.set_if_neq(label_font(&theme));
             }
         }
         if let Some(hint) = refs.hint()
@@ -712,7 +712,10 @@ fn update_buttons(
                 look.icon.color(theme.colors()).with_alpha(HINT_OPACITY),
             ));
             if theme.is_changed() || refs.is_added() {
-                font.font = theme.body_font.clone().into();
+                let body_font = theme.body_font.clone().into();
+                if font.font != body_font {
+                    font.font = body_font;
+                }
             }
         }
         if let Some(bar) = refs.bar()

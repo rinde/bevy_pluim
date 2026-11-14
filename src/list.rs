@@ -1256,7 +1256,7 @@ fn theme_item_labels(
     };
 
     for (mut text_color, mut text_font) in it {
-        text_color.0 = theme.colors().text_primary;
+        text_color.set_if_neq(TextColor(theme.colors().text_primary));
         let font = theme.body_font.clone().into();
         if text_font.font != font {
             text_font.font = font;
