@@ -11556,6 +11556,48 @@ fn a_hover_and_an_item_edit_are_restyled_in_a_frame_where_a_selection_changed() 
 }
 
 #[test]
+fn an_item_edit_restyles_only_the_chips_of_rows_drawing_from_its_items() {
+    let mut app = headless_app();
+    let (root, first) = spawn_chips(&mut app, three_chips());
+    let (_, second) = spawn_chips(&mut app, three_chips());
+    let shared = app
+        .world_mut()
+        .spawn((FilterChips, Selection::reference(first), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let wrong = Color::srgb(1.0, 0.0, 0.0);
+    let item = |app: &App, row: Entity, i: usize| {
+        app.world()
+            .get::<ChipView>(chip_views(app, row)[i])
+            .unwrap()
+            .item()
+    };
+    let edited = item(&app, first, 2);
+    // A chip of the edited row that shows another item, the shared row's chip of the edited
+    // item and the other row's chips are knocked out of step.
+    let first_views = chip_views(&app, first);
+    let shared_views = chip_views(&app, shared);
+    let second_views = chip_views(&app, second);
+    for chip in [first_views[1], shared_views[2], second_views[2]] {
+        app.world_mut()
+            .entity_mut(chip)
+            .insert(BackgroundColor(wrong));
+    }
+    app.world_mut()
+        .get_mut::<Item<Chip>>(edited)
+        .unwrap()
+        .data
+        .label = "Renamed".into();
+    settle(&mut app);
+
+    assert_eq!(chip_texts(&app, first_views[2]).0, "Renamed");
+    assert_eq!(chip_texts(&app, shared_views[2]).0, "Renamed");
+    assert_ne!(background(&app, shared_views[2]), wrong, "shared row");
+    assert_eq!(background(&app, first_views[1]), wrong, "other item");
+    assert_eq!(background(&app, second_views[2]), wrong, "other source");
+}
+
+#[test]
 fn a_toolbar_does_not_look_at_its_buttons_in_a_frame_without_a_change() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
