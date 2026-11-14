@@ -535,13 +535,13 @@ fn theme_push_button(
 
         // label
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
-            *text_color = TextColor(if disabled {
+            text_color.set_if_neq(TextColor(if disabled {
                 theme.colors().text_disabled
             } else if on {
                 theme.colors().accent_subtle_text
             } else {
                 theme.colors().text_primary
-            });
+            }));
             text_font.set_if_neq(TextFont {
                 font: theme.body_font.clone().into(),
                 font_size: Theme::font_size(font_size),
@@ -554,13 +554,13 @@ fn theme_push_button(
         if let Some(icon_id) = refs.icon_id
             && let Ok((mut text_color, mut text_font)) = icons.get_mut(icon_id)
         {
-            *text_color = TextColor(if disabled {
+            text_color.set_if_neq(TextColor(if disabled {
                 theme.colors().text_disabled
             } else if on {
                 theme.colors().accent_subtle_text
             } else {
                 theme.colors().text_primary
-            });
+            }));
             text_font.set_if_neq(TextFont {
                 font: theme.body_font.clone().into(),
                 font_size: Theme::font_size(font_size),

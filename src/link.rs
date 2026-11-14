@@ -220,7 +220,7 @@ fn handle_hover(
     let Ok(mut text_color) = link_texts.get_mut(text_id) else {
         return;
     };
-    text_color.0 = link_color;
+    text_color.set_if_neq(TextColor(link_color));
 }
 
 fn theme_link(
@@ -267,6 +267,6 @@ fn theme_link(
         if text_font.font_size != size {
             text_font.font_size = size;
         }
-        text_color.0 = link_color;
+        text_color.set_if_neq(TextColor(link_color));
     }
 }

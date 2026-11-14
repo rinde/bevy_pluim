@@ -18436,6 +18436,182 @@ fn restyling_text_widgets_with_a_changed_font_still_writes_it() {
     );
 }
 
+/// Counts, once per frame, the entities whose `TextColor` was written since the last frame (#778).
+#[derive(Resource, Default)]
+struct ColorWrites(usize);
+
+fn count_color_writes(changed: Query<(), Changed<TextColor>>, mut writes: ResMut<ColorWrites>) {
+    writes.0 += changed.iter().count();
+}
+
+fn app_counting_text_writes() -> App {
+    let mut app = app_counting_font_writes();
+    app.init_resource::<ColorWrites>();
+    app.add_systems(Last, count_color_writes);
+    app
+}
+
+/// Like `font_writes_of_a_restyle`, for `TextColor`.
+fn color_writes_of_a_restyle(app: &mut App, change: impl FnOnce(&mut Theme)) -> usize {
+    settle(app);
+    app.world_mut().get_resource_mut::<ColorWrites>().unwrap().0 = 0;
+    let mut theme = app.world_mut().get_resource_mut::<Theme>().unwrap();
+    theme.set_changed();
+    change(&mut theme);
+    settle(app);
+    app.world().get_resource::<ColorWrites>().unwrap().0
+}
+
+/// Spawns a filled toolbar whose first tool has a key hint, so its restyle visits label and hint.
+fn spawn_hinted_toolbar(app: &mut App) -> Entity {
+    let root = app.world_mut().spawn(Node::default()).id();
+    let items = [
+        Tool::new(Handle::default(), "Rail").with_key_hint("1"),
+        Tool::new(Handle::default(), "Signal"),
+    ];
+    let toolbar = app
+        .world_mut()
+        .spawn((
+            Toolbar::new(ToolbarStyle::Filled),
+            Selection::builder()
+                .one()
+                .build_with_items(items.map(|data| Item { data })),
+            ChildOf(root),
+        ))
+        .id();
+    settle(app);
+    toolbar
+}
+
+#[test]
+fn restyling_a_toolbar_with_an_unchanged_theme_writes_no_text_font_or_colour() {
+    let mut app = app_counting_text_writes();
+    spawn_hinted_toolbar(&mut app);
+    assert_eq!(font_writes_of_a_restyle(&mut app, |_| ()), 0);
+    assert_eq!(color_writes_of_a_restyle(&mut app, |_| ()), 0);
+}
+
+#[test]
+fn restyling_a_toolbar_with_a_colour_only_change_writes_no_text_font() {
+    let mut app = app_counting_text_writes();
+    spawn_hinted_toolbar(&mut app);
+    let writes = font_writes_of_a_restyle(&mut app, |theme| theme.set_mode(ThemeMode::Dark));
+    assert_eq!(writes, 0);
+}
+
+#[test]
+fn restyling_a_toolbar_with_a_changed_font_still_writes_it_to_label_and_hint() {
+    let mut app = app_counting_text_writes();
+    spawn_hinted_toolbar(&mut app);
+    let writes = font_writes_of_a_restyle(&mut app, |theme| {
+        theme.body_font = bevy::asset::uuid_handle!("7a10b3c4-5d6e-4f70-8a91-b2c3d4e5f607");
+    });
+    // Two labels and one hint.
+    assert!(writes >= 3, "label and hint take the new font: {writes}");
+}
+
+#[test]
+fn restyling_text_widgets_with_an_unchanged_theme_writes_no_text_colour() {
+    let mut app = app_counting_text_writes();
+    spawn_text_widgets(&mut app);
+    assert_eq!(color_writes_of_a_restyle(&mut app, |_| ()), 0);
+}
+
+#[test]
+fn restyling_text_widgets_with_a_font_only_change_writes_no_text_colour() {
+    let mut app = app_counting_text_writes();
+    spawn_text_widgets(&mut app);
+    let writes = color_writes_of_a_restyle(&mut app, |theme| theme.font_size_body += 2.0);
+    assert_eq!(writes, 0);
+}
+
+#[test]
+fn restyling_text_widgets_with_a_changed_colour_still_writes_it() {
+    let mut app = app_counting_text_writes();
+    spawn_text_widgets(&mut app);
+    let writes = color_writes_of_a_restyle(&mut app, |theme| theme.set_mode(ThemeMode::Dark));
+    assert!(writes >= 8, "the text takes the new colours: {writes}");
+}
+
+/// Shows the popup of a hovered icon button and returns its text entity.
+fn showing_tooltip_text(app: &mut App, button: Entity) -> Entity {
+    app.world_mut().entity_mut(button).insert(Hovered(true));
+    for _ in 0..6 {
+        tick(app);
+    }
+    let world = app.world_mut();
+    let mut query = world.query_filtered::<&Children, With<TooltipPopup>>();
+    let children: Vec<Entity> = query
+        .iter(world)
+        .flat_map(RelationshipTarget::iter)
+        .collect();
+    children
+        .into_iter()
+        .find(|c| world.get::<Text>(*c).is_some())
+        .unwrap()
+}
+
+#[test]
+fn restyling_a_showing_tooltip_popup_writes_text_font_only_for_a_font_change() {
+    let (mut app, button) = tooltip_app();
+    app.init_resource::<FontWrites>();
+    app.add_systems(Last, count_font_writes);
+    let text = showing_tooltip_text(&mut app, button);
+    tick(&mut app);
+    tick(&mut app);
+
+    app.world_mut().get_resource_mut::<FontWrites>().unwrap().0 = 0;
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    tick(&mut app);
+    tick(&mut app);
+    assert_eq!(app.world().get_resource::<FontWrites>().unwrap().0, 0);
+
+    let size = app.world().get::<TextFont>(text).unwrap().font_size;
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .font_size_small += 4.0;
+    tick(&mut app);
+    tick(&mut app);
+    assert_ne!(app.world().get::<TextFont>(text).unwrap().font_size, size);
+}
+
+#[test]
+fn restyling_a_showing_tooltip_popup_writes_text_colour_only_for_a_colour_change() {
+    let (mut app, button) = tooltip_app();
+    app.init_resource::<ColorWrites>();
+    app.add_systems(Last, count_color_writes);
+    let text = showing_tooltip_text(&mut app, button);
+    tick(&mut app);
+    tick(&mut app);
+
+    app.world_mut().get_resource_mut::<ColorWrites>().unwrap().0 = 0;
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .font_size_small += 4.0;
+    tick(&mut app);
+    tick(&mut app);
+    assert_eq!(app.world().get_resource::<ColorWrites>().unwrap().0, 0);
+
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_mode(ThemeMode::Dark);
+    tick(&mut app);
+    tick(&mut app);
+    let dark = app
+        .world()
+        .get_resource::<Theme>()
+        .unwrap()
+        .colors()
+        .text_primary;
+    assert_eq!(app.world().get::<TextColor>(text).unwrap().0, dark);
+}
+
 /// Plays the despawning of the source behind a widget's selection: the widget refers to a
 /// selection entity (`spawn` gets its entity) that holds the `ItemsRef`, so despawning the source
 /// takes that entity with it and the widget's `Selection::Ref` dangles. `shown` counts what the

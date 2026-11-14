@@ -1192,7 +1192,7 @@ fn theme_filter_combos(
             border.set_all(theme.colors().border);
         }
         if let Ok((mut color, mut font)) = empties.get_mut(refs.empty) {
-            color.0 = theme.colors().text_secondary;
+            color.set_if_neq(TextColor(theme.colors().text_secondary));
             let face = theme.body_font.clone().into();
             if font.font != face {
                 font.font = face;
