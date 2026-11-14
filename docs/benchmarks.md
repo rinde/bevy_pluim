@@ -739,6 +739,13 @@ is the baseline's one-write-per-frame cost. The acceptance of #768 therefore hol
 plain-Bevy baseline (the library adds a roughly constant overhead per control, not a growing one),
 not as an absolute flat line, which a single layout write per frame under a flat root cannot give.
 
+Stale `UiTransform`: with no selected item the indicator is `Display::None` and the transform was
+not drawn, and a re-shown indicator starts from the goal (`placed` is false), so a stale value was
+never visible; `animate` now also resets it to rest when it hides. Corner radius: the radius is a
+`Node` field, so a scale stretches it for the frames of a slide (a 6 px radius on a box scaled 1.4x
+horizontally is drawn 8.4 px by 6 px wide). It cannot be compensated without writing the `Node`,
+which is what this change avoids; it is visible only mid-slide and snaps back at rest.
+
 ### Decision on the residual growth (#789)
 
 Two options were weighed: (a) change the workload so the controls sit under separate roots or
@@ -749,20 +756,15 @@ all; the library cannot remove it, and the sliding frames themselves already wri
 would make the number flat by measuring a different scene, one an app with a wide flat row does not
 have, and would hide the cost it is meant to show, so the workload stays as it is.
 
-The amended acceptance of #768 is: `indicators-animating` is within the noise of `bevy-nodes-resizing`
-at the same size (both about 3x from 500 to 2000 controls), and a frame in which no goal moves writes
-no `Node` (`a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone`). It is not a flat line
-in the control count. The hide-time `UiTransform` reset is covered by
+The amended acceptance of #768 is: `indicators-animating` grows with the control count like
+`bevy-nodes-resizing` (both about 3x from 500 to 2000 controls), at a roughly constant factor above it
+(about 2x in the table above, against a run-to-run noise of about 20 %), and a frame in which no goal
+moves writes no `Node` (`a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone`). It is not
+a flat line in the control count, and the factor above the baseline is accepted, not
+within noise. The hide-time `UiTransform` reset is covered by
 `an_indicator_hidden_mid_slide_has_its_transform_back_at_rest` in `tests/scenarios.rs`, which slides an
 indicator, clears the selection, and asserts `Display::None`, translation `Val2::ZERO` and scale
 `Vec2::ONE`.
-
-Stale `UiTransform`: with no selected item the indicator is `Display::None` and the transform was
-not drawn, and a re-shown indicator starts from the goal (`placed` is false), so a stale value was
-never visible; `animate` now also resets it to rest when it hides. Corner radius: the radius is a
-`Node` field, so a scale stretches it for the frames of a slide (a 6 px radius on a box scaled 1.4x
-horizontally is drawn 8.4 px by 6 px wide). It cannot be compensated without writing the `Node`,
-which is what this change avoids; it is visible only mid-slide and snaps back at rest.
 
 ## Cost of a list row and of the non-vertical layouts (#766)
 
