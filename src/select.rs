@@ -36,6 +36,7 @@ impl Plugin for ItemsPlugin {
             .add_observer(on_add_selection)
             .add_observer(repair_pending_selections)
             .add_observer(on_replace_items_ref)
+            .add_observer(on_add_items_ref)
             .add_observer(forget_removed_selection)
             .register_type::<Item<String>>()
             .register_type::<ItemOf>()
@@ -301,6 +302,12 @@ fn on_replace_items_ref(t: On<Discard<ItemsRef>>, mut commands: Commands) {
     commands.run_system_cached_with(refresh_selection_items, t.event_target());
 }
 
+/// Starts a refresh of the selection on an entity that gets an [`ItemsRef`] it did not have, as
+/// after Bevy dropped one whose target was gone: a replacement is [`on_replace_items_ref`]'s.
+fn on_add_items_ref(t: On<Add<ItemsRef>>, mut commands: Commands) {
+    commands.run_system_cached_with(refresh_selection_items, t.event_target());
+}
+
 /// Points the selection on `entity` at the items of its (new) [`ItemsRef`].
 ///
 /// Selected items that are not items of the new source are dropped, as a selection of one item
@@ -309,12 +316,28 @@ fn on_replace_items_ref(t: On<Discard<ItemsRef>>, mut commands: Commands) {
 /// widgets that follow it draw the new items.
 fn refresh_selection_items(
     In(entity): In<Entity>,
-    selections: Query<(&Selection, &ItemsRef)>,
+    selections: Query<(&Selection, Option<&ItemsRef>)>,
+    referrers: Query<(Entity, &Selection)>,
     item_values: Query<&ItemValues>,
     mut r: ResMut<SelectionResource>,
     mut commands: Commands,
 ) {
-    let Ok((Selection::Value(value), ItemsRef(items_entity))) = selections.get(entity) else {
+    let Ok((selection, items_ref)) = selections.get(entity) else {
+        return;
+    };
+    // The widgets that refer to this selection (`Selection::Ref`) took their items from the old
+    // source; inserting their selection again makes them look the source up anew, so they clear
+    // or redraw whatever the new source is, also one that is gone.
+    for (referrer, referrer_selection) in &referrers {
+        if matches!(referrer_selection, Selection::Ref(target) if *target == entity) {
+            commands.entity(referrer).insert(referrer_selection.clone());
+        }
+    }
+    let (Selection::Value(value), Some(ItemsRef(items_entity))) = (selection, items_ref) else {
+        // The `ItemsRef` is gone (removed, or its target did not exist and Bevy dropped it): the
+        // selection is inserted again unchanged, so the widgets that follow it look up their
+        // source anew and clear what they showed of the old one.
+        commands.entity(entity).insert(selection.clone());
         return;
     };
     let items: &[Entity] = item_values.get(*items_entity).map_or(&[], |v| &v.0);
@@ -718,6 +741,7 @@ pub struct SelectionParam<'w, 's, F: QueryFilter + 'static = ()> {
     subset: Query<'w, 's, (Entity, &'static Selection), F>,
     item_values: Query<'w, 's, (Entity, &'static ItemValues)>,
     items_refs: Query<'w, 's, (Entity, &'static ItemsRef)>,
+    entities: Query<'w, 's, Entity>,
     commands: Commands<'w, 's>,
 }
 
@@ -855,7 +879,9 @@ where
             .items_refs
             .get(root)
             .map_or(root, |(_, ItemsRef(sel))| *sel);
-        Some((root, items))
+        // An `ItemsRef` to an entity that is gone has no items to draw (Bevy drops it a moment
+        // later, but the widgets must not watch the dead entity in between).
+        self.entities.contains(items).then_some((root, items))
     }
 
     /// Changes the one selection matching the filter.

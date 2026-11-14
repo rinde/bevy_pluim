@@ -3788,6 +3788,71 @@ fn a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone() {
     assert_eq!(shift(&app), 0.0);
 }
 
+#[test]
+fn an_indicator_hidden_mid_slide_has_its_transform_back_at_rest() {
+    use bevy_pluim::segmented_control::{SegmentIndicator, SegmentedControl};
+    use bevy_pluim::select::{Item, Selection, SelectionParam};
+
+    let mut app = widgets_app();
+    let world = app.world_mut();
+    let root = spawn_camera_and_root(world);
+    let control = world
+        .spawn((
+            SegmentedControl,
+            Selection::builder()
+                .one()
+                .build_with_items(["Auto", "Manual", "Off"].map(Item::new)),
+            ChildOf(root),
+        ))
+        .id();
+    for _ in 0..5 {
+        app.update();
+    }
+    let indicator = app
+        .world()
+        .entity(control)
+        .get::<Children>()
+        .unwrap()
+        .iter()
+        .find(|c| app.world().entity(*c).contains::<SegmentIndicator>())
+        .unwrap();
+    app.world_mut()
+        .run_system_once(move |mut selections: SelectionParam| {
+            let item = selections
+                .get_item_values(control)
+                .unwrap()
+                .1
+                .iter()
+                .nth(2)
+                .unwrap();
+            selections.update_selection(control, |s| s.set_selection([item]));
+        })
+        .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    let slid = app.world().get::<UiTransform>(indicator).unwrap();
+    assert!(slid.translation != Val2::ZERO, "the indicator is sliding");
+
+    // The control ends up with no selected item mid-slide: the indicator hides and rests.
+    let selected: Vec<Entity> = app
+        .world_mut()
+        .query_filtered::<Entity, With<Selected>>()
+        .iter(app.world())
+        .collect();
+    for e in selected {
+        app.world_mut().entity_mut(e).remove::<Selected>();
+    }
+    app.update();
+    assert_eq!(
+        app.world().get::<Node>(indicator).unwrap().display,
+        Display::None
+    );
+    let transform = app.world().get::<UiTransform>(indicator).unwrap();
+    assert_eq!(transform.translation, Val2::ZERO);
+    assert_eq!(transform.scale, Vec2::ONE);
+}
+
 /// The drawn left of the child of `track` named `indicator`, in logical pixels, and the left edge of
 /// `item` relative to `track`, as the layout has it.
 fn named_indicator_left_and_goal(

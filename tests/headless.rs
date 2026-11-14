@@ -11442,6 +11442,47 @@ fn a_segmented_control_follows_only_the_selection_it_draws_from() {
 }
 
 #[test]
+fn reinserting_a_segmented_controls_selection_does_not_change_any_node() {
+    // A write to a `Node`, even of equal values, makes Bevy lay the tree out again (#782).
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    settle(&mut app);
+    settle(&mut app);
+
+    let item = app
+        .world()
+        .get::<Segment>(segments_of(&app, control)[1])
+        .unwrap()
+        .item();
+    app.world_mut()
+        .entity_mut(control)
+        .insert(Selection::Value(SelectionValue::One(item)));
+    settle(&mut app);
+    // The same selection again: the restyle runs but styles what is already there.
+    let nodes: Vec<Entity> = segments_of(&app, control)
+        .into_iter()
+        .chain([control, indicator_of(&app, control)])
+        .collect();
+    let before = app.world().read_change_tick();
+    app.world_mut()
+        .entity_mut(control)
+        .insert(Selection::Value(SelectionValue::One(item)));
+    app.update();
+    for entity in nodes {
+        let changed = app
+            .world()
+            .entity(entity)
+            .get_ref::<Node>()
+            .unwrap()
+            .last_changed();
+        assert!(
+            !changed.is_newer_than(before, app.world().read_change_tick()),
+            "the Node of {entity} was written by a restyle that changed nothing"
+        );
+    }
+}
+
+#[test]
 fn replacing_one_controls_selection_restyles_only_that_control() {
     let mut app = headless_app();
     let first = spawn_segmented_control(&mut app);
@@ -18922,4 +18963,207 @@ fn restyling_a_light_dark_toggle_without_a_visible_change_does_not_write_any_nod
     settle(&mut app);
     let writes = &app.world().get_resource::<NodeWrites>().unwrap().0;
     assert!(writes.is_empty(), "nodes written again: {writes:?}");
+}
+
+/// Plays the re-pointing of a live selection's `ItemsRef` at items that are gone, and then at a
+/// live source. The widget refers to the selection (`Selection::Ref`), so it must not keep views
+/// of the old items, and shows the new ones once they exist. `shown` counts what it has built.
+fn points_a_live_selection_at_items_that_are_gone<T: Send + Sync + 'static>(
+    name: &str,
+    spawn: impl FnOnce(&mut App, Entity) -> Entity,
+    items: [T; 4],
+    shown: impl Fn(&App, Entity) -> usize,
+) {
+    let mut app = headless_app();
+    let [a1, a2, b1, c1] = items;
+    let a = typed_source(&mut app, [a1, a2]);
+    let selection = app
+        .world_mut()
+        .spawn(Selection::builder().one().build_with_items_ref(a))
+        .id();
+    let widget = spawn(&mut app, selection);
+    assert!(shown(&app, widget) > 0, "{name}: built over a");
+
+    let gone = typed_source(&mut app, [b1]);
+    app.world_mut().entity_mut(gone).despawn();
+    app.world_mut().entity_mut(selection).insert(ItemsRef(gone));
+    settle_frames(&mut app);
+    assert_eq!(
+        shown(&app, widget),
+        0,
+        "{name}: cleared by items that are gone"
+    );
+
+    let c = typed_source(&mut app, [c1]);
+    app.world_mut().entity_mut(selection).insert(ItemsRef(c));
+    settle_frames(&mut app);
+    assert!(shown(&app, widget) > 0, "{name}: recovered over c");
+}
+
+#[test]
+fn a_list_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "list",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let list = app
+                .world_mut()
+                .spawn((List, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            list
+        },
+        ["p", "q", "r", "s"].map(String::from),
+        |app, list| item_views(app, list).len(),
+    );
+}
+
+#[test]
+fn a_filter_chips_row_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "filter chips",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let chips = app
+                .world_mut()
+                .spawn((FilterChips, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            chips
+        },
+        ["p", "q", "r", "s"].map(Chip::new),
+        |app, chips| chip_views(app, chips).len(),
+    );
+}
+
+#[test]
+fn a_toolbar_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "toolbar",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let toolbar = app
+                .world_mut()
+                .spawn((
+                    Toolbar::new(ToolbarStyle::Filled),
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            toolbar
+        },
+        ["p", "q", "r", "s"].map(|label| Tool::in_group(Handle::default(), label, 0)),
+        |app, toolbar| toolbar_buttons(app, toolbar).len(),
+    );
+}
+
+#[test]
+fn a_gallery_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "gallery",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let gallery = app
+                .world_mut()
+                .spawn((Gallery, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            gallery
+        },
+        ["p", "q", "r", "s"].map(|label| GalleryCard::new(Handle::default(), label, "Group")),
+        |app, gallery| children_of(app, gallery).len(),
+    );
+}
+
+#[test]
+fn a_color_palette_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "color palette",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let palette = app
+                .world_mut()
+                .spawn((ColorPalette, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            palette
+        },
+        [
+            Color::WHITE,
+            Color::BLACK,
+            Color::srgb(1.0, 0.0, 0.0),
+            Color::srgb(0.0, 1.0, 0.0),
+        ],
+        |app, palette| item_views(app, palette).len(),
+    );
+}
+
+#[test]
+fn a_segmented_control_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "segmented control",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let control = app
+                .world_mut()
+                .spawn((
+                    SegmentedControl,
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            control
+        },
+        ["p", "q", "r", "s"].map(String::from),
+        |app, control| segments_of(app, control).len(),
+    );
+}
+
+#[test]
+fn a_tab_bar_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "tab bar",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let bar = app
+                .world_mut()
+                .spawn((TabBar, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            bar
+        },
+        ["p", "q", "r", "s"].map(String::from),
+        |app, bar| tabs_of(app, bar).len(),
+    );
+}
+
+#[test]
+fn a_virtual_list_over_items_that_are_gone_shows_nothing_and_recovers() {
+    points_a_live_selection_at_items_that_are_gone(
+        "virtual list",
+        |app, selection| {
+            app.world_mut().spawn((Window::default(), PrimaryWindow));
+            let root = app.world_mut().spawn(Node::default()).id();
+            let list = app
+                .world_mut()
+                .spawn((
+                    VirtualList::new(RowHeight::new(28.0).unwrap()),
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            list
+        },
+        ["p", "q", "r", "s"].map(String::from),
+        |app, list| {
+            children_of(app, list)
+                .into_iter()
+                .filter_map(|child| app.world().get::<VirtualListRow>(child))
+                .filter(|row| row.shown.is_some())
+                .count()
+        },
+    );
 }

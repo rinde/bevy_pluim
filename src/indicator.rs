@@ -113,6 +113,13 @@ pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
             if node.display != Display::None {
                 node.display = Display::None;
             }
+            // Hidden, the transform is not drawn, but a stale one must not outlive the slide.
+            if transform.translation != Val2::ZERO {
+                transform.translation = Val2::ZERO;
+            }
+            if transform.scale != Vec2::ONE {
+                transform.scale = Vec2::ONE;
+            }
             continue;
         };
         let scale = item.inverse_scale_factor();
