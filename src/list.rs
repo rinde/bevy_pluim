@@ -71,6 +71,7 @@ impl Plugin for ListPlugin {
             .add_observer(keep_navigation_keys)
             .add_observer(pass_first_presses_from_descendants)
             .add_observer(handle_custom_view_mouse_events)
+            .add_observer(handle_mouse_events)
             .register_type::<ItemView>()
             .register_type::<ItemNote>()
             .register_type::<NoteTone>()
@@ -254,13 +255,18 @@ fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
     node.position_type = PositionType::Relative;
     node.grid_auto_flow = grid_auto_flow;
     node.grid_template_columns = grid_template_columns;
-    if matches!(layout, ListLayout::Vertical) {
-        // One column needs no grid: a flex column lays out the same and is far cheaper in
-        // Taffy at thousands of rows (#729).
-        node.display = Display::Flex;
-        node.flex_direction = FlexDirection::Column;
-    } else {
-        node.display = Display::Grid;
+    match layout {
+        // One column or one row needs no grid: a flex column or row lays out the same and is
+        // far cheaper in Taffy at thousands of rows (#729, #766).
+        ListLayout::Vertical => {
+            node.display = Display::Flex;
+            node.flex_direction = FlexDirection::Column;
+        }
+        ListLayout::Horizontal => {
+            node.display = Display::Flex;
+            node.flex_direction = FlexDirection::Row;
+        }
+        ListLayout::VerticalGrid { columns: _ } => node.display = Display::Grid,
     }
 }
 
@@ -539,10 +545,16 @@ impl ItemLabel {
     }
 }
 
+/// Marks a default [`ItemView`] of a [`List`] (not a custom view, not a palette swatch): the
+/// one global `handle_mouse_events` observer colours these under the pointer, so a row needs no
+/// observer entity of its own.
+#[derive(Component, Debug, Copy, Clone, Default)]
+struct DefaultRow;
+
 fn handle_mouse_events(
     t: On<MouseEvent>,
     selections: SelectionParam,
-    mut item_views: Query<(&ItemView, &mut BackgroundColor)>,
+    mut item_views: Query<(&ItemView, &mut BackgroundColor), With<DefaultRow>>,
     styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
@@ -1004,6 +1016,9 @@ fn on_items_changed(
                     display: Display::Flex,
                     justify_self: JustifySelf::Stretch,
                     // flex_grow: 1.0,
+                    // A row keeps its content width, as in the old grid with auto columns:
+                    // a Horizontal flex row overflows a narrow list instead of squeezing rows.
+                    flex_shrink: 0.0,
                     justify_content: JustifyContent::Stretch,
                     align_items: AlignItems::Stretch,
                     padding: UiRect::ZERO,
@@ -1026,7 +1041,7 @@ fn on_items_changed(
                 let create = creator.create;
                 commands_run.push((create, spawner));
             } else if let Some(item) = item {
-                view.observe(handle_mouse_events).with_children(|parent| {
+                view.insert(DefaultRow).with_children(|parent| {
                     parent.spawn((Text(item.data.clone()), ItemLabel, Pickable::IGNORE));
                 });
             }

@@ -42,7 +42,7 @@ use bevy_pluim::icon_button::{IconButton, IconButtonSize};
 use bevy_pluim::kbd::Kbd;
 use bevy_pluim::label::Label;
 use bevy_pluim::light_dark_toggle::{LightDarkToggle, ThemePreference};
-use bevy_pluim::list::{ItemViewCreator, ItemViewSpawner, List};
+use bevy_pluim::list::{ItemViewCreator, ItemViewSpawner, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value};
 use bevy_pluim::panel::{Panel, PanelRefs};
 use bevy_pluim::pill::Pill;
@@ -3986,6 +3986,40 @@ fn a_text_field_with_a_minimum_above_its_maximum_is_as_wide_as_the_minimum() {
     assert_eq!(stretched.min_width, px(400));
     assert_eq!(stretched.max_width, px(320));
     assert_width(text_field_width(stretched, px(1000), true), 400.0);
+}
+
+#[test]
+fn a_horizontal_list_in_a_narrow_parent_keeps_the_content_width_of_its_rows() {
+    let mut app = widgets_app();
+    app.world_mut().spawn(Camera2d);
+    let parent = app
+        .world_mut()
+        .spawn(Node {
+            width: px(200),
+            ..default()
+        })
+        .id();
+    app.world_mut().spawn((
+        List,
+        ListLayout::Horizontal,
+        Selection::builder()
+            .one()
+            .build_with_items((0..10).map(|n| Item::new(format!("a long item label number {n}")))),
+        ChildOf(parent),
+    ));
+    for _ in 0..6 {
+        app.update();
+    }
+    let rows: Vec<Entity> = app
+        .world_mut()
+        .query_filtered::<Entity, With<bevy_pluim::list::ItemView>>()
+        .iter(app.world())
+        .collect();
+    assert_eq!(rows.len(), 10);
+    for row in rows {
+        let width = logical_width(&app, row);
+        assert!(width > 100.0, "a row shrank to {width} px in a 200 px list");
+    }
 }
 
 #[test]

@@ -3699,6 +3699,31 @@ fn spawn_list_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
 }
 
 #[test]
+fn a_default_list_row_is_a_view_and_a_label_with_no_observer_entity_and_still_follows_the_pointer()
+{
+    let mut app = headless_app();
+    let (_list, views, _selection) =
+        spawn_list(&mut app, Selection::builder().zero_or_one(), &["a", "b"]);
+    let colors = DEFAULT_LIGHT_THEME_COLORS;
+    for view in &views {
+        let entity = app.world().entity(*view);
+        assert!(
+            entity.get::<bevy::ecs::observer::ObservedBy>().is_none(),
+            "a default row has no observer entity of its own (#766)"
+        );
+        assert_eq!(
+            entity.get::<Children>().map(RelationshipTarget::len),
+            Some(1)
+        );
+    }
+    let view = *views.first().unwrap();
+    pointer_over_or_out(&mut app, view, true);
+    assert_eq!(background(&app, view), colors.hovered_item);
+    pointer_over_or_out(&mut app, view, false);
+    assert_ne!(background(&app, view), colors.hovered_item);
+}
+
+#[test]
 fn a_list_grid_with_zero_columns_does_not_panic_and_acts_as_one_column() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -3827,7 +3852,12 @@ fn changing_the_layout_of_a_live_list_updates_its_grid() {
     let node = app.world().entity(list).get::<Node>().unwrap();
     assert_eq!(node.grid_auto_flow, GridAutoFlow::ColumnDense);
     assert!(node.grid_template_columns.is_empty());
-    assert_eq!(node.display, Display::Grid);
+    assert_eq!(
+        node.display,
+        Display::Flex,
+        "one row is a flex row, not a grid (#766)"
+    );
+    assert_eq!(node.flex_direction, FlexDirection::Row);
 
     app.world_mut()
         .entity_mut(list)

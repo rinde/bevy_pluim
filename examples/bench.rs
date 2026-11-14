@@ -28,7 +28,7 @@ use bevy_pluim::color_palette_combo::ColorPaletteCombo;
 use bevy_pluim::filter_chips::{Chip, FilterChips};
 use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::icon_button::{IconButton, IconButtonSize};
-use bevy_pluim::list::{ItemNote, List};
+use bevy_pluim::list::{ItemNote, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
 use bevy_pluim::panel::Panel;
 use bevy_pluim::push_button::PushButton;
@@ -216,6 +216,10 @@ enum Workload {
     ListItemsInitial,
     /// One `List` of many items; one item is added every frame: an incremental change.
     ListItemsAdding,
+    /// `ListItemsAdding` with `ListLayout::Horizontal` (a flex row, since Horizontal is no longer a grid).
+    ListItemsHorizontalAdding,
+    /// `ListItemsAdding` with `ListLayout::VerticalGrid` of four columns (a Taffy grid).
+    ListItemsGridAdding,
     /// Many closed `ColorPaletteCombo`s over one shared 242-colour source, idle.
     PaletteCombosIdle,
     /// Several `ThemeEditor`s, idle: each has a closed palette combo per colour slot.
@@ -313,7 +317,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 62] = [
+    const ALL: [Self; 64] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
@@ -337,6 +341,8 @@ impl Workload {
         Self::ThemeEditorsIdle,
         Self::ListItemsInitial,
         Self::ListItemsAdding,
+        Self::ListItemsHorizontalAdding,
+        Self::ListItemsGridAdding,
         Self::ItemsSharedAdding,
         Self::PaletteItemsAdding,
         Self::TabItemsAdding,
@@ -400,6 +406,8 @@ impl Workload {
             Self::ListsSelectionIdle => "lists-selection-idle",
             Self::ListItemsInitial => "list-items-initial",
             Self::ListItemsAdding => "list-items-adding",
+            Self::ListItemsHorizontalAdding => "list-items-horizontal-adding",
+            Self::ListItemsGridAdding => "list-items-grid-adding",
             Self::ItemsSharedAdding => "items-shared-adding",
             Self::PaletteItemsAdding => "palette-items-adding",
             Self::TabItemsAdding => "tab-items-adding",
@@ -455,6 +463,8 @@ impl Workload {
             | Self::TooltipsScrubbing
             | Self::ListItemsInitial
             | Self::ListItemsAdding
+            | Self::ListItemsHorizontalAdding
+            | Self::ListItemsGridAdding
             | Self::PaletteItemsAdding
             | Self::TabItemsAdding
             | Self::SegmentItemsAdding
@@ -843,7 +853,12 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.spawn((List, list_items(size), ChildOf(parent)));
         }
     }
-    if workload == Workload::ListItemsAdding {
+    if matches!(
+        workload,
+        Workload::ListItemsAdding
+            | Workload::ListItemsHorizontalAdding
+            | Workload::ListItemsGridAdding
+    ) {
         // One more item for the list's `ItemValues`, so one `ItemsChanged` per frame.
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<List>>();
@@ -1349,6 +1364,16 @@ fn spawn(world: &mut World, run: Run) {
             }
             Workload::ListItemsInitial | Workload::ListItemsAdding => {
                 root.spawn((List, list_items(run.size)));
+            }
+            Workload::ListItemsHorizontalAdding => {
+                root.spawn((List, ListLayout::Horizontal, list_items(run.size)));
+            }
+            Workload::ListItemsGridAdding => {
+                root.spawn((
+                    List,
+                    ListLayout::VerticalGrid { columns: 4 },
+                    list_items(run.size),
+                ));
             }
             Workload::PaletteCombosIdle => {
                 let colors = root
