@@ -18860,3 +18860,66 @@ fn a_color_palette_is_cleared_when_the_source_behind_its_selection_is_despawned(
         |app, palette| item_views(app, palette).len(),
     );
 }
+
+/// Counts the frames in which a `Node` was written, equal value or not.
+#[derive(Resource, Default)]
+struct NodeWrites(Vec<Entity>);
+
+fn record_node_writes(changed: Query<Entity, Changed<Node>>, mut writes: ResMut<NodeWrites>) {
+    writes.0.extend(&changed);
+}
+
+#[test]
+fn restyling_a_tab_bar_without_a_visible_change_does_not_write_any_node() {
+    let mut app = headless_app();
+    let bar = spawn_tab_bar(
+        &mut app,
+        Selection::builder()
+            .one()
+            .build_with_items(["General", "Audio", "Input"].map(Item::new)),
+    );
+    settle(&mut app);
+    app.init_resource::<NodeWrites>();
+    app.add_systems(Last, record_node_writes);
+    settle(&mut app);
+    app.world_mut()
+        .get_resource_mut::<NodeWrites>()
+        .unwrap()
+        .0
+        .clear();
+
+    let selection = app.world().get::<Selection>(bar).unwrap().clone();
+    app.world_mut().entity_mut(bar).insert(selection);
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_changed();
+    settle(&mut app);
+    let writes = &app.world().get_resource::<NodeWrites>().unwrap().0;
+    assert!(writes.is_empty(), "nodes written again: {writes:?}");
+}
+
+#[test]
+fn restyling_a_light_dark_toggle_without_a_visible_change_does_not_write_any_node() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().spawn((LightDarkToggle, ChildOf(root)));
+    settle(&mut app);
+    app.init_resource::<NodeWrites>();
+    app.add_systems(Last, record_node_writes);
+    settle(&mut app);
+    app.world_mut()
+        .get_resource_mut::<NodeWrites>()
+        .unwrap()
+        .0
+        .clear();
+
+    app.world_mut().insert_resource(ThemePreference::System);
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .set_changed();
+    settle(&mut app);
+    let writes = &app.world().get_resource::<NodeWrites>().unwrap().0;
+    assert!(writes.is_empty(), "nodes written again: {writes:?}");
+}
