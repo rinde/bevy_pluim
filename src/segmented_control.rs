@@ -19,7 +19,10 @@ use crate::focus::{
 };
 use crate::indicator::{self, Indicator};
 use crate::list::sync_selected;
-use crate::select::{Item, ItemsObserver, Selection, SelectionParam, items_in_order, watch_items};
+use crate::select::{
+    Item, ItemsObserver, ItemsRef, Selection, SelectionParam, items_in_order,
+    unwatch_dangling_items, watch_items,
+};
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
@@ -54,6 +57,7 @@ impl Plugin for SegmentedControlPlugin {
                 (|| None::<Entity>)
                     .pipe(theme_segmented_controls)
                     .run_if(resource_changed::<Theme>),
+                clear_dangling_controls,
                 selection_change,
                 sync_icons,
                 sync_label_text,
@@ -772,6 +776,35 @@ fn order_segments(
     });
     if !wanted.iter().copied().eq(children.iter()) {
         commands.entity(*control_ref).replace_children(&wanted);
+    }
+}
+
+/// Clears the segments of the controls whose items no longer resolve, as if their source had
+/// none (see `list.rs`'s `clear_dangling_lists`). Looks only in a frame where a `Selection` or
+/// `ItemsRef` was removed.
+fn clear_dangling_controls(
+    mut removed_selections: RemovedComponents<Selection>,
+    mut removed_refs: RemovedComponents<ItemsRef>,
+    controls: Query<(Entity, &ItemsObserver), With<SegmentedControl>>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let removed = removed_selections.read().count() + removed_refs.read().count() > 0;
+    if removed {
+        unwatch_dangling_items(
+            &controls,
+            &selections,
+            &mut commands,
+            |commands, control_ref| {
+                commands.run_system_cached_with(
+                    on_items_changed,
+                    ItemsChangedInput {
+                        control_ref,
+                        items: Arc::from(Vec::<Entity>::new()),
+                    },
+                );
+            },
+        );
     }
 }
 

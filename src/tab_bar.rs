@@ -18,7 +18,10 @@ use bevy::ui_widgets::{SelectedTab, Tab, TabList, ValueChange};
 use crate::focus::{AccessibilitySync, HiddenDirty, collect_hidden_changes, is_hidden, sync_label};
 use crate::indicator::{self, Indicator};
 use crate::segmented_control::segment_colors;
-use crate::select::{Item, ItemsObserver, Selection, SelectionParam, items_in_order, watch_items};
+use crate::select::{
+    Item, ItemsObserver, ItemsRef, Selection, SelectionParam, items_in_order,
+    unwatch_dangling_items, watch_items,
+};
 use crate::theme::Theme;
 
 /// The height of a tab, in logical pixels.
@@ -48,6 +51,7 @@ impl Plugin for TabBarPlugin {
                 (|| None::<Entity>)
                     .pipe(theme_tab_bars)
                     .run_if(resource_changed::<Theme>),
+                clear_dangling_tab_bars,
                 selection_change,
                 hover_change,
                 sync_label_text,
@@ -589,6 +593,30 @@ fn sync_label_text(
         {
             text.0.clone_from(&item.data);
         }
+    }
+}
+
+/// Clears the tabs of the bars whose items no longer resolve, as if their source had none (see
+/// `list.rs`'s `clear_dangling_lists`). Looks only in a frame where a `Selection` or `ItemsRef`
+/// was removed.
+fn clear_dangling_tab_bars(
+    mut removed_selections: RemovedComponents<Selection>,
+    mut removed_refs: RemovedComponents<ItemsRef>,
+    bars: Query<(Entity, &ItemsObserver), With<TabBar>>,
+    selections: SelectionParam,
+    mut commands: Commands,
+) {
+    let removed = removed_selections.read().count() + removed_refs.read().count() > 0;
+    if removed {
+        unwatch_dangling_items(&bars, &selections, &mut commands, |commands, bar_ref| {
+            commands.run_system_cached_with(
+                on_items_changed,
+                ItemsChangedInput {
+                    bar_ref,
+                    items: Arc::from(Vec::<Entity>::new()),
+                },
+            );
+        });
     }
 }
 

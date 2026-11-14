@@ -10988,6 +10988,75 @@ fn removing_a_color_palette_combo_removes_its_button_popup_and_palette() {
     assert_eq!(palette_combo_parts(&mut app, combo), (1, 1, 1));
 }
 
+#[test]
+fn a_segmented_control_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "segmented control",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let control = app
+                .world_mut()
+                .spawn((
+                    SegmentedControl,
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            control
+        },
+        ["p", "q", "r"].map(String::from),
+        |app, control| segments_of(app, control).len(),
+    );
+}
+
+#[test]
+fn a_tab_bar_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "tab bar",
+        |app, selection| {
+            let root = app.world_mut().spawn(Node::default()).id();
+            let bar = app
+                .world_mut()
+                .spawn((TabBar, Selection::reference(selection), ChildOf(root)))
+                .id();
+            settle_frames(app);
+            bar
+        },
+        ["p", "q", "r"].map(String::from),
+        |app, bar| tabs_of(app, bar).len(),
+    );
+}
+
+#[test]
+fn a_virtual_list_is_cleared_when_the_source_behind_its_selection_is_despawned() {
+    despawns_the_source_of_a_widget(
+        "virtual list",
+        |app, selection| {
+            app.world_mut().spawn((Window::default(), PrimaryWindow));
+            let root = app.world_mut().spawn(Node::default()).id();
+            let list = app
+                .world_mut()
+                .spawn((
+                    VirtualList::new(RowHeight::new(28.0).unwrap()),
+                    Selection::reference(selection),
+                    ChildOf(root),
+                ))
+                .id();
+            settle_frames(app);
+            list
+        },
+        ["p", "q", "r"].map(String::from),
+        |app, list| {
+            children_of(app, list)
+                .into_iter()
+                .filter_map(|child| app.world().get::<VirtualListRow>(child))
+                .filter(|row| row.shown.is_some())
+                .count()
+        },
+    );
+}
+
 fn observers_of(app: &mut App, entity: Entity) -> usize {
     app.world_mut()
         .query::<&Observer>()

@@ -539,10 +539,11 @@ fn show_rows(
     mut commands: Commands,
 ) {
     for (list, virtual_list, mut state, active, mut list_node, creator) in &mut lists {
-        // A source without `ItemValues` has no items: the rows empty out and the height drops.
-        let Some((_, items)) = selections.get_items(list) else {
-            continue;
-        };
+        // A source without `ItemValues`, or one that is gone (a despawned selection behind a
+        // `Selection::Ref`), has no items: the rows empty out and the height drops.
+        let items = selections
+            .get_items(list)
+            .map_or(&[][..], |(_, items)| items);
         if items.is_empty() && state.active.is_some() {
             state.active = None;
         }

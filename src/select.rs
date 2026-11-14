@@ -1194,6 +1194,25 @@ pub(crate) fn watch_items(
     true
 }
 
+/// For each widget of `widgets` that watches a values entity but whose items no longer resolve
+/// (the source behind its `Selection::Ref` was despawned, which `ItemsChanged` does not report
+/// because its observers go with the source): removes its [`ItemsObserver`], so pointing it at a
+/// live source watches again, and calls `clear(commands, widget)`.
+pub(crate) fn unwatch_dangling_items<F: QueryFilter>(
+    widgets: &Query<(Entity, &ItemsObserver), F>,
+    selections: &SelectionParam,
+    commands: &mut Commands,
+    clear: impl Fn(&mut Commands, Entity),
+) {
+    for (widget, _) in widgets {
+        if selections.get_items(widget).is_some() {
+            continue;
+        }
+        commands.entity(widget).remove::<ItemsObserver>();
+        clear(commands, widget);
+    }
+}
+
 /// Triggers [`ItemsChanged`] for every changed [`ItemValues`], and, with no items, for a live
 /// entity that has just lost its last item and so its `ItemValues`, so the widgets drawn from it
 /// clear their views.
