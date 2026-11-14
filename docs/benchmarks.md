@@ -692,6 +692,52 @@ count) is **not met** by this change alone. Entities are unchanged. The sliding 
 longer write a `Node`, but what dominates the workload is not shown to be the per-frame selection
 re-insert of the workload (that attribution is unverified); finding the residual cost is tracked in #782.
 
+### What still costs, found with a profile (#782)
+
+A callgrind profile of `indicators-animating` (500 controls) put almost all the remaining time in
+taffy's flexbox layout, so something still dirtied layout every frame. Two causes:
+
+1. **The segmented control restyled with unconditional `Node` writes.** `selection_change` restyles the
+   changed control on every selection change, and `style_control`, `style_segment` and
+   `style_indicator` assigned `Node` fields through `&mut Node`. Bevy's `upsert_node` calls taffy's
+   `set_style`, which always marks the node dirty, up to the root, even for equal values or a
+   border-radius-only change. The three now clone the node, edit the clone and write it back with
+   `set_if_neq` (`reinserting_a_segmented_controls_selection_does_not_change_any_node`). `TabBar` and
+   `LightDarkToggle` have the same pattern in their `theme_*` systems; not in this workload, filed
+   separately.
+2. **The workload's own legitimate write.** It moves one indicator's goal per frame, a real `Node`
+   write. Taffy then dirties that node's ancestors, and the bench root is one wrapping flex row with
+   every control as a flat child, whose flex pass is O(children) even with cached children. With
+   that write disabled the frame cost equals `segmented-controls-idle`. No way of writing a `Node`
+   avoids this (also none that would compensate the corner radius under a scale), so the remaining
+   growth is Bevy's cost of one layout write under a wide parent, not the indicator's.
+
+To separate the two, `bevy-nodes-resizing` is the plain-Bevy baseline: the same rows (a control with
+three text segments and an absolute child) with no widgets, moving one node's `left` per frame.
+
+Mean frame time in microseconds, release build, one machine, back to back (the before column was measured earlier in the same session, so machine drift is part of the spread; run-to-run noise is about 20 %):
+
+| workload | size | before (#781) | after (#782) |
+| --- | --- | --- | --- |
+| `indicators-animating` | 500 | 9093 | 6584 to 8715 (two runs) |
+| `indicators-animating` | 2000 | 31395 | 25880 to 28368 |
+| `segmented-controls-idle` | 500 | 3595 | 3968 to 4036 |
+| `segmented-controls-idle` | 2000 | 12572 | 11742 to 11836 |
+| `bevy-nodes-resizing` (baseline) | 500 | - | 3817 to 4512 |
+| `bevy-nodes-resizing` (baseline) | 2000 | - | 12273 to 13234 |
+
+Reading: `indicators-animating` improves by about 20 to 25 %, and the plain-Bevy baseline grows with the control count in the same way, about 3x from 500 to 2000 controls. The restyle fix removes the layout dirtying that the widgets caused themselves; what is left
+is the baseline's one-write-per-frame cost. The acceptance of #768 therefore holds relative to the
+plain-Bevy baseline (the library adds a roughly constant overhead per control, not a growing one),
+not as an absolute flat line, which a single layout write per frame under a flat root cannot give.
+
+Stale `UiTransform`: with no selected item the indicator is `Display::None` and the transform was
+not drawn, and a re-shown indicator starts from the goal (`placed` is false), so a stale value was
+never visible; `animate` now also resets it to rest when it hides. Corner radius: the radius is a
+`Node` field, so a scale stretches it for the frames of a slide (a 6 px radius on a box scaled 1.4x
+horizontally is drawn 8.4 px by 6 px wide). It cannot be compensated without writing the `Node`,
+which is what this change avoids; it is visible only mid-slide and snaps back at rest.
+
 ## Cost of a list row and of the non-vertical layouts (#766)
 
 Two changes, measured with `--frames 15` (release build; columns: mean frame time in

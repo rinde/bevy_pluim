@@ -265,6 +265,10 @@ enum Workload {
     /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
     /// every frame, so its indicator slides (#677).
     IndicatorsAnimating,
+    /// Plain Bevy nodes in the same root; one node's left offset changes every frame: the
+    /// baseline of `indicators-animating`, whose one layout write per frame costs the same in
+    /// Bevy's layout whatever the widgets are (#782).
+    BevyNodesResizing,
     /// The same controls; one control's indicator is despawned every frame and must be made again
     /// (#677).
     IndicatorsRemoved,
@@ -317,7 +321,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 64] = [
+    const ALL: [Self; 65] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
@@ -360,6 +364,7 @@ impl Workload {
         Self::SegmentedControlsIdle,
         Self::SegmentedControlsSelectionChanging,
         Self::IndicatorsAnimating,
+        Self::BevyNodesResizing,
         Self::IndicatorsRemoved,
         Self::GalleriesIdle,
         Self::FilterChipsEditing,
@@ -428,6 +433,7 @@ impl Workload {
             Self::SegmentedControlsIdle => "segmented-controls-idle",
             Self::SegmentedControlsSelectionChanging => "segmented-controls-selection-changing",
             Self::IndicatorsAnimating => "indicators-animating",
+            Self::BevyNodesResizing => "bevy-nodes-resizing",
             Self::IndicatorsRemoved => "indicators-removed",
             Self::GalleriesIdle => "galleries-idle",
             Self::FilterChipsEditing => "filter-chips-editing",
@@ -495,6 +501,7 @@ impl Workload {
             | Self::SegmentedControlsSelectionChanging
             | Self::GalleriesIdle
             | Self::IndicatorsAnimating
+            | Self::BevyNodesResizing
             | Self::IndicatorsRemoved
             | Self::TabBarsIdle
             | Self::DeepTreesIdle
@@ -1118,6 +1125,15 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
                 .insert(SelectionValue::One(item).into_component());
         }
     }
+    if workload == Workload::BevyNodesResizing {
+        // One plain node moves every frame, as one indicator's goal does.
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<&mut Node, With<BaselineMover>>();
+        let count = query.iter(world).count();
+        if let Some(mut node) = query.iter_mut(world).nth(index * 7 % count.max(1)) {
+            node.left = px(index % 3);
+        }
+    }
     if workload == Workload::DeepTreesDisplay {
         // Two nested nodes of one chain flip together, so two dirty roots overlap.
         let world = app.world_mut();
@@ -1203,6 +1219,10 @@ struct DeepSpare;
 #[derive(Component)]
 struct ToastParent;
 
+/// The absolutely placed node of a `bevy-nodes-resizing` row that moves.
+#[derive(Component)]
+struct BaselineMover;
+
 /// Toasts spawned per frame by `toasts-bursting`.
 const TOAST_BURST: usize = 20;
 
@@ -1224,6 +1244,35 @@ fn spawn(world: &mut World, run: Run) {
             Workload::BevyTexts => {
                 for index in 0..run.size {
                     root.spawn((Node::default(), Text::new(format!("Button {index}"))));
+                }
+            }
+            Workload::BevyNodesResizing => {
+                for row in 0..run.size {
+                    root.spawn(Node {
+                        height: px(32),
+                        padding: UiRect::axes(px(4), px(0)),
+                        ..default()
+                    })
+                    .with_children(|control| {
+                        for segment in 0..3 {
+                            control
+                                .spawn(Node {
+                                    min_width: px(48),
+                                    padding: UiRect::axes(px(12), px(0)),
+                                    ..default()
+                                })
+                                .with_child(Text::new(format!("Segment {row}.{segment}")));
+                        }
+                        control.spawn((
+                            BaselineMover,
+                            Node {
+                                position_type: PositionType::Absolute,
+                                width: px(48),
+                                height: px(32),
+                                ..default()
+                            },
+                        ));
+                    });
                 }
             }
             Workload::BevyNodes => {

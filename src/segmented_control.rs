@@ -309,25 +309,37 @@ fn on_activate(t: On<Activate>, segments: Query<&Segment>, mut selections: Selec
     });
 }
 
-fn style_control(theme: &Theme, node: &mut Node, background: &mut BackgroundColor) {
-    node.border_radius = BorderRadius::all(theme.control_radius);
-    background.0 = theme.colors().segmented_track;
+/// Writes `styled` into `node` only when it differs: a write, even of equal values, makes Bevy
+/// lay the tree out again, and a selection change restyles its control each time (#782).
+fn set_node(node: &mut Mut<Node>, styled: Node) {
+    node.set_if_neq(styled);
 }
 
-fn style_segment(theme: &Theme, node: &mut Node, background: &mut BackgroundColor) {
-    node.height = Val::Px(SEGMENT_HEIGHT);
-    node.min_width = Val::Px(SEGMENT_MIN_WIDTH);
-    node.padding = UiRect::axes(Val::Px(SEGMENT_SIDE_PADDING), Val::ZERO);
-    node.align_items = AlignItems::Center;
-    node.justify_content = JustifyContent::Center;
-    node.column_gap = Val::Px(SEGMENT_ICON_GAP);
-    node.border_radius = BorderRadius::all(theme.control_radius);
-    background.0 = Color::NONE;
+fn style_control(theme: &Theme, mut node: Mut<Node>, mut background: Mut<BackgroundColor>) {
+    let mut styled = node.clone();
+    styled.border_radius = BorderRadius::all(theme.control_radius);
+    set_node(&mut node, styled);
+    background.set_if_neq(BackgroundColor(theme.colors().segmented_track));
 }
 
-fn style_indicator(theme: &Theme, node: &mut Node, background: &mut BackgroundColor) {
-    node.border_radius = BorderRadius::all(theme.control_radius);
-    background.0 = theme.colors().segmented_selected;
+fn style_segment(theme: &Theme, mut node: Mut<Node>, mut background: Mut<BackgroundColor>) {
+    let mut styled = node.clone();
+    styled.height = Val::Px(SEGMENT_HEIGHT);
+    styled.min_width = Val::Px(SEGMENT_MIN_WIDTH);
+    styled.padding = UiRect::axes(Val::Px(SEGMENT_SIDE_PADDING), Val::ZERO);
+    styled.align_items = AlignItems::Center;
+    styled.justify_content = JustifyContent::Center;
+    styled.column_gap = Val::Px(SEGMENT_ICON_GAP);
+    styled.border_radius = BorderRadius::all(theme.control_radius);
+    set_node(&mut node, styled);
+    background.set_if_neq(BackgroundColor(Color::NONE));
+}
+
+fn style_indicator(theme: &Theme, mut node: Mut<Node>, mut background: Mut<BackgroundColor>) {
+    let mut styled = node.clone();
+    styled.border_radius = BorderRadius::all(theme.control_radius);
+    set_node(&mut node, styled);
+    background.set_if_neq(BackgroundColor(theme.colors().segmented_selected));
 }
 
 fn style_label(
@@ -382,27 +394,27 @@ fn theme_segmented_controls(
     };
 
     if let Some(id) = control_id.0 {
-        let Ok((_, mut node, mut background)) = controls.get_mut(id) else {
+        let Ok((_, node, background)) = controls.get_mut(id) else {
             return;
         };
-        style_control(&theme, &mut node, &mut background);
+        style_control(&theme, node, background);
         let Ok(kids) = children.get(id) else {
             return;
         };
         for kid in kids.iter() {
-            if let Ok((indicator, mut node, mut background)) = indicators.get_mut(kid) {
+            if let Ok((indicator, node, background)) = indicators.get_mut(kid) {
                 if indicator.owner() == id {
-                    style_indicator(&theme, &mut node, &mut background);
+                    style_indicator(&theme, node, background);
                 }
                 continue;
             }
-            let Ok((segment, mut node, mut background)) = segments.get_mut(kid) else {
+            let Ok((segment, node, background)) = segments.get_mut(kid) else {
                 continue;
             };
             if segment.owner() != id {
                 continue;
             }
-            style_segment(&theme, &mut node, &mut background);
+            style_segment(&theme, node, background);
             let Ok((_, hovered)) = states.get(kid) else {
                 continue;
             };
@@ -424,14 +436,14 @@ fn theme_segmented_controls(
         return;
     }
 
-    for (_, mut node, mut background) in &mut controls {
-        style_control(&theme, &mut node, &mut background);
+    for (_, node, background) in &mut controls {
+        style_control(&theme, node, background);
     }
-    for (_, mut node, mut background) in &mut segments {
-        style_segment(&theme, &mut node, &mut background);
+    for (_, node, background) in &mut segments {
+        style_segment(&theme, node, background);
     }
-    for (_, mut node, mut background) in &mut indicators {
-        style_indicator(&theme, &mut node, &mut background);
+    for (_, node, background) in &mut indicators {
+        style_indicator(&theme, node, background);
     }
     for (child_of, text_color, text_font) in &mut labels {
         let Ok((segment, hovered)) = states.get(child_of.parent()) else {

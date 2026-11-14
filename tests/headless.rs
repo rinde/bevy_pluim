@@ -11442,6 +11442,47 @@ fn a_segmented_control_follows_only_the_selection_it_draws_from() {
 }
 
 #[test]
+fn reinserting_a_segmented_controls_selection_does_not_change_any_node() {
+    // A write to a `Node`, even of equal values, makes Bevy lay the tree out again (#782).
+    let mut app = headless_app();
+    let control = spawn_segmented_control(&mut app);
+    settle(&mut app);
+    settle(&mut app);
+
+    let item = app
+        .world()
+        .get::<Segment>(segments_of(&app, control)[1])
+        .unwrap()
+        .item();
+    app.world_mut()
+        .entity_mut(control)
+        .insert(Selection::Value(SelectionValue::One(item)));
+    settle(&mut app);
+    // The same selection again: the restyle runs but styles what is already there.
+    let nodes: Vec<Entity> = segments_of(&app, control)
+        .into_iter()
+        .chain([control, indicator_of(&app, control)])
+        .collect();
+    let before = app.world().read_change_tick();
+    app.world_mut()
+        .entity_mut(control)
+        .insert(Selection::Value(SelectionValue::One(item)));
+    app.update();
+    for entity in nodes {
+        let changed = app
+            .world()
+            .entity(entity)
+            .get_ref::<Node>()
+            .unwrap()
+            .last_changed();
+        assert!(
+            !changed.is_newer_than(before, app.world().read_change_tick()),
+            "the Node of {entity} was written by a restyle that changed nothing"
+        );
+    }
+}
+
+#[test]
 fn replacing_one_controls_selection_restyles_only_that_control() {
     let mut app = headless_app();
     let first = spawn_segmented_control(&mut app);
