@@ -272,30 +272,37 @@ fn theme_tab_bars(
         if bar_id.0.is_some_and(|id| id != bar) {
             continue;
         }
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors().segmented_track;
+        let mut styled = node.clone();
+        styled.border_radius = BorderRadius::all(theme.control_radius);
+        // Written only when it differs: any `Node` write makes Bevy lay the tree out again.
+        node.set_if_neq(styled);
+        background.set_if_neq(BackgroundColor(theme.colors().segmented_track));
     }
 
     for (tab, mut node, mut background) in &mut tabs {
         if bar_id.0.is_some_and(|id| id != tab.owner()) {
             continue;
         }
-        node.height = Val::Px(TAB_HEIGHT);
-        node.min_width = Val::Px(TAB_MIN_WIDTH);
-        node.padding = UiRect::axes(Val::Px(TAB_SIDE_PADDING), Val::ZERO);
-        node.align_items = AlignItems::Center;
-        node.justify_content = JustifyContent::Center;
-        node.border_radius = BorderRadius::all(theme.control_radius);
+        let mut styled = node.clone();
+        styled.height = Val::Px(TAB_HEIGHT);
+        styled.min_width = Val::Px(TAB_MIN_WIDTH);
+        styled.padding = UiRect::axes(Val::Px(TAB_SIDE_PADDING), Val::ZERO);
+        styled.align_items = AlignItems::Center;
+        styled.justify_content = JustifyContent::Center;
+        styled.border_radius = BorderRadius::all(theme.control_radius);
+        node.set_if_neq(styled);
         // The selected look is the indicator's, which slides.
-        background.0 = Color::NONE;
+        background.set_if_neq(BackgroundColor(Color::NONE));
     }
 
     for (indicator, mut node, mut background) in &mut indicators {
         if bar_id.0.is_some_and(|id| id != indicator.owner) {
             continue;
         }
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = TabIndicator::color(&theme);
+        let mut styled = node.clone();
+        styled.border_radius = BorderRadius::all(theme.control_radius);
+        node.set_if_neq(styled);
+        background.set_if_neq(BackgroundColor(TabIndicator::color(&theme)));
     }
 
     for (child_of, mut text_color, mut text_font) in &mut labels {

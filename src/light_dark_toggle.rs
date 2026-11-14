@@ -501,8 +501,11 @@ fn theme_toggles(
         if toggle_id.0.is_some_and(|id| id != toggle) {
             continue;
         }
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = theme.colors().segmented_track;
+        let mut styled = node.clone();
+        styled.border_radius = BorderRadius::all(theme.control_radius);
+        // Written only when it differs: any `Node` write makes Bevy lay the tree out again.
+        node.set_if_neq(styled);
+        background.set_if_neq(BackgroundColor(theme.colors().segmented_track));
     }
 
     let preference = preference.map(|p| *p);
@@ -516,13 +519,15 @@ fn theme_toggles(
         if is_selected != selected.contains(option_id) {
             sync_selected(&mut commands, option_id, !is_selected, is_selected);
         }
-        node.height = Val::Px(OPTION_HEIGHT);
-        node.padding = UiRect::axes(Val::Px(OPTION_SIDE_PADDING), Val::ZERO);
-        node.align_items = AlignItems::Center;
-        node.justify_content = JustifyContent::Center;
-        node.border_radius = BorderRadius::all(theme.control_radius);
+        let mut styled = node.clone();
+        styled.height = Val::Px(OPTION_HEIGHT);
+        styled.padding = UiRect::axes(Val::Px(OPTION_SIDE_PADDING), Val::ZERO);
+        styled.align_items = AlignItems::Center;
+        styled.justify_content = JustifyContent::Center;
+        styled.border_radius = BorderRadius::all(theme.control_radius);
+        node.set_if_neq(styled);
         // The selected look is the indicator's, which slides.
-        background.0 = Color::NONE;
+        background.set_if_neq(BackgroundColor(Color::NONE));
         colours.push((
             option_id,
             segment_colors(theme.colors(), is_selected, hovered.get()).1,
@@ -533,8 +538,10 @@ fn theme_toggles(
         if toggle_id.0.is_some_and(|id| id != indicator.owner) {
             continue;
         }
-        node.border_radius = BorderRadius::all(theme.control_radius);
-        background.0 = OptionIndicator::color(&theme);
+        let mut styled = node.clone();
+        styled.border_radius = BorderRadius::all(theme.control_radius);
+        node.set_if_neq(styled);
+        background.set_if_neq(BackgroundColor(OptionIndicator::color(&theme)));
     }
 
     for (child_of, mut image) in &mut icons {
