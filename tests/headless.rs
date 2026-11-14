@@ -18554,11 +18554,13 @@ fn showing_tooltip_text(app: &mut App, button: Entity) -> Entity {
 #[test]
 fn restyling_a_showing_tooltip_popup_writes_text_font_only_for_a_font_change() {
     let (mut app, button) = tooltip_app();
+    // `tick` runs only `Update`, so the counter runs there too.
     app.init_resource::<FontWrites>();
-    app.add_systems(Last, count_font_writes);
+    app.add_systems(Update, count_font_writes);
     let text = showing_tooltip_text(&mut app, button);
-    tick(&mut app);
-    tick(&mut app);
+    for _ in 0..4 {
+        tick(&mut app);
+    }
 
     app.world_mut().get_resource_mut::<FontWrites>().unwrap().0 = 0;
     app.world_mut()
@@ -18577,16 +18579,19 @@ fn restyling_a_showing_tooltip_popup_writes_text_font_only_for_a_font_change() {
     tick(&mut app);
     tick(&mut app);
     assert_ne!(app.world().get::<TextFont>(text).unwrap().font_size, size);
+    assert!(app.world().get_resource::<FontWrites>().unwrap().0 >= 1);
 }
 
 #[test]
 fn restyling_a_showing_tooltip_popup_writes_text_colour_only_for_a_colour_change() {
     let (mut app, button) = tooltip_app();
+    // `tick` runs only `Update`, so the counter runs there too.
     app.init_resource::<ColorWrites>();
-    app.add_systems(Last, count_color_writes);
+    app.add_systems(Update, count_color_writes);
     let text = showing_tooltip_text(&mut app, button);
-    tick(&mut app);
-    tick(&mut app);
+    for _ in 0..4 {
+        tick(&mut app);
+    }
 
     app.world_mut().get_resource_mut::<ColorWrites>().unwrap().0 = 0;
     app.world_mut()
@@ -18610,6 +18615,7 @@ fn restyling_a_showing_tooltip_popup_writes_text_colour_only_for_a_colour_change
         .colors()
         .text_primary;
     assert_eq!(app.world().get::<TextColor>(text).unwrap().0, dark);
+    assert!(app.world().get_resource::<ColorWrites>().unwrap().0 >= 1);
 }
 
 /// Plays the despawning of the source behind a widget's selection: the widget refers to a
