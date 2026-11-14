@@ -739,6 +739,24 @@ is the baseline's one-write-per-frame cost. The acceptance of #768 therefore hol
 plain-Bevy baseline (the library adds a roughly constant overhead per control, not a growing one),
 not as an absolute flat line, which a single layout write per frame under a flat root cannot give.
 
+### Decision on the residual growth (#789)
+
+Two options were weighed: (a) change the workload so the controls sit under separate roots or
+contained subtrees, so one dirty node relayouts only its own subtree; (b) accept the baseline-relative
+result and amend the acceptance of #768. **(b) is taken.** The growth is taffy's flex pass over one wide
+flat parent after one legitimate `Node` write, which `bevy-nodes-resizing` shows with no widget code at
+all; the library cannot remove it, and the sliding frames themselves already write no `Node`. Option (a)
+would make the number flat by measuring a different scene, one an app with a wide flat row does not
+have, and would hide the cost it is meant to show, so the workload stays as it is.
+
+The amended acceptance of #768 is: `indicators-animating` is within the noise of `bevy-nodes-resizing`
+at the same size (both about 3x from 500 to 2000 controls), and a frame in which no goal moves writes
+no `Node` (`a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone`). It is not a flat line
+in the control count. The hide-time `UiTransform` reset is covered by
+`an_indicator_hidden_mid_slide_has_its_transform_back_at_rest` in `tests/scenarios.rs`, which slides an
+indicator, clears the selection, and asserts `Display::None`, translation `Val2::ZERO` and scale
+`Vec2::ONE`.
+
 Stale `UiTransform`: with no selected item the indicator is `Display::None` and the transform was
 not drawn, and a re-shown indicator starts from the goal (`placed` is false), so a stale value was
 never visible; `animate` now also resets it to rest when it hides. Corner radius: the radius is a
