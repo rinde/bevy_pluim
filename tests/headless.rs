@@ -19268,6 +19268,10 @@ fn steady_moves(count: u16, step: Vec2) -> Vec<Vec2> {
 
 fn fling_app() -> (App, Entity, Entity) {
     let mut app = wheel_app();
+    // A manual clock before any update, so no wall-clock time leaks into `Time`.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ));
     let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
     let target = target_at(&mut app, Some(area), Vec2::ZERO, 1.0);
     app.update();
