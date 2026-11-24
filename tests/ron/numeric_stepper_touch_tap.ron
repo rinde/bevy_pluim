@@ -1,0 +1,24 @@
+// A tap with a finger steps with "+" and "-" and opens the number editor on the
+// value; typing a number sets it.
+(
+    format_version: 3,
+    name: "a finger taps a numeric stepper's buttons and value",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+        TouchTap(Within(Name("default stepper"), Name("Increase"))),
+        Check(TextOf(Name("default stepper"), Exact("2"))),
+        TouchTap(Within(Name("default stepper"), Name("Increase"))),
+        Check(TextOf(Name("default stepper"), Exact("3"))),
+        TouchTap(Within(Name("default stepper"), Name("Decrease"))),
+        Check(TextOf(Name("default stepper"), Exact("2"))),
+        TouchTap(Within(Name("default stepper"), Text("2"))),
+        Wait(2),
+        Check(Exists(Within(Name("default stepper"), Component("TextInput")))),
+        Type(text: "7", into: Within(Name("default stepper"), Component("TextInput"))),
+        Tap(key: Enter),
+        Wait(2),
+        Check(TextOf(Name("default stepper"), Exact("7"))),
+    ],
+    expect: [],
+)

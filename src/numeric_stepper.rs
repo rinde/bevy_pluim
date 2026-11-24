@@ -33,6 +33,8 @@ use crate::glyph_images::{GlyphKey, shared};
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::text_field::{TextField, TextFieldCommit, TextFieldRefs};
 use crate::theme::Theme;
+use bevy::picking::pointer::PointerId;
+
 use crate::{HoverLock, MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`NumericStepper`].
@@ -755,6 +757,9 @@ struct Scrub {
     start: Option<f64>,
     /// Whether that press became a drag, so its release is no click and no step.
     dragged: bool,
+    /// The pointer (the mouse or one finger) that went down, the only one that scrubs until it
+    /// lifts: a second finger neither starts another scrub nor moves this one.
+    pointer: Option<PointerId>,
 }
 /// The text field that replaces the value label while the user types a number.
 #[derive(Component, Clone, Copy, Debug)]
@@ -998,13 +1003,20 @@ fn on_mouse(
     };
     match event.kind {
         MouseKind::Pressed => {
+            if scrub.start.is_some() && scrub.pointer != Some(event.pointer) {
+                return;
+            }
             scrub.dragged = false;
+            scrub.pointer = Some(event.pointer);
             scrub.start = values.get(value_entity).ok().map(Value::fraction);
         }
         MouseKind::Drag => {
             let Some(start) = scrub.start else {
                 return;
             };
+            if scrub.pointer != Some(event.pointer) {
+                return;
+            }
             if !scrub.dragged && event.distance.x.abs() < DRAG_THRESHOLD {
                 return;
             }

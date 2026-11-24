@@ -283,6 +283,8 @@ struct MouseEvent {
     button: Option<PointerButton>,
     /// Whether the pointer is a finger ([`PointerId::Touch`]). A finger does not hover.
     touch: bool,
+    /// The pointer that produced the event: the mouse, or one finger.
+    pointer: PointerId,
 }
 
 impl MouseEvent {
@@ -410,6 +412,7 @@ where
             distance: trigger.event().distance(),
             button: trigger.event().button(),
             touch: matches!(trigger.event().pointer().id, PointerId::Touch(_)),
+            pointer: trigger.event().pointer().id,
         });
     }
 }
@@ -425,6 +428,7 @@ mod tests {
             distance: Vec2::ZERO,
             button: None,
             touch,
+            pointer: PointerId::Mouse,
         }
     }
 

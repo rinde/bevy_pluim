@@ -1,0 +1,30 @@
+// A second finger down during a scrub neither starts a second scrub nor ends the
+// first early. Finger 0 scrubs the default stepper from its "+" button towards
+// the right; finger 1 lands on "-" and moves left, which changes nothing; once
+// finger 1 lifts, finger 0 still scrubs on (right to the maximum) and its lift
+// over "+" steps nothing more.
+(
+    format_version: 3,
+    name: "a second finger during a numeric stepper scrub is ignored",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+        TouchDown(at: Within(Name("default stepper"), Name("Increase")), finger: 0),
+        TouchMove(to: Within(Name("second mirror stepper"), Name("Increase")), finger: 0),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        TouchDown(at: Within(Name("default stepper"), Name("Decrease")), finger: 1),
+        TouchMove(to: Screen((0.0, 70.0)), finger: 1),
+        TouchMove(to: Screen((0.0, 90.0)), finger: 1),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        TouchUp(finger: 1),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        TouchMove(to: Screen((0.0, 70.0)), finger: 0),
+        Check(TextOf(Name("default stepper"), Exact("0"))),
+        TouchMove(to: Within(Name("second mirror stepper"), Name("Increase")), finger: 0),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+    ],
+    expect: [],
+)

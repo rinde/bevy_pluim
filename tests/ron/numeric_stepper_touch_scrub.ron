@@ -1,0 +1,22 @@
+// A finger scrubs a numeric stepper like the mouse: a drag that starts on the
+// "+" button reaches the maximum instead of stepping, one that starts on "-"
+// walks back to the minimum, and neither leaves the stepper stuck: a tap on "+"
+// steps right after.
+(
+    format_version: 3,
+    name: "a finger drag scrubs a numeric stepper",
+    setup: App(NumericStepper),
+    steps: [
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+        TouchDrag(from: Within(Name("default stepper"), Name("Increase")), to: Within(Name("second mirror stepper"), Name("Increase")), frames: 5),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        TouchDrag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        TouchDrag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        TouchDrag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        TouchDrag(from: Within(Name("default stepper"), Name("Decrease")), to: Screen((0.0, 70.0)), frames: 5),
+        Check(TextOf(Name("default stepper"), Exact("0"))),
+        TouchTap(Within(Name("default stepper"), Name("Increase"))),
+        Check(TextOf(Name("default stepper"), Exact("1"))),
+    ],
+    expect: [],
+)

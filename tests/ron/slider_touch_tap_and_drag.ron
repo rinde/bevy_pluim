@@ -1,0 +1,27 @@
+// A finger on a slider acts like the mouse: a tap on the track jumps the thumb
+// there (to a step where the slider has them), a drag of the thumb moves it and
+// stops at the ends however far the finger goes. A disabled slider ignores it
+// (forced, as the tester will not touch a disabled widget).
+(
+    format_version: 3,
+    name: "a finger taps and drags a slider",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        TouchTap(Name("stepped slider")),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(5.0))),
+        Check(Resource(path: "SliderChanges.last", is: Eq(5.0))),
+        TouchDrag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((140.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(6.0))),
+        TouchDrag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((600.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(10.0))),
+        TouchDrag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((0.0, 70.0)), frames: 5),
+        Check(Component(target: Name("stepped slider"), path: "SliderValue.0", is: Eq(0.0))),
+        TouchTap(Name("formatted slider")),
+        Check(TextOf(Name("formatted slider"), Exact("50 %"))),
+        Force(TouchTap(Name("disabled slider"))),
+        Check(Component(target: Name("disabled slider"), path: "SliderValue.0", is: Eq(3.0))),
+        Check(TextOf(Name("disabled slider"), Exact("3"))),
+    ],
+    expect: [],
+)

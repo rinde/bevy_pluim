@@ -1,0 +1,25 @@
+// A finger on the scroll thumb shows the held colour (selected_hovered_item,
+// blue-400) while down, never the hover colour (a finger does not hover), and
+// the thumb is back at rest (gray-400) after the lift, after a cancel and after
+// a drag that ends away from the thumb.
+(
+    format_version: 3,
+    name: "the scroll thumb is held only while a finger is on it",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Within(Name("vertical scroll area"), Name("ScrollThumb")), finger: 0),
+        Check(Component(target: Within(Name("vertical scroll area"), Name("ScrollThumb")), path: "BackgroundColor.0", is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("vertical scroll area"), Name("ScrollThumb")), path: "BackgroundColor.0", is: Eq(Srgba((red:0.6117647,green:0.6392157,blue:0.6862745,alpha:1.0))))),
+        TouchDown(at: Within(Name("vertical scroll area"), Name("ScrollThumb")), finger: 0),
+        TouchCancel(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("vertical scroll area"), Name("ScrollThumb")), path: "BackgroundColor.0", is: Eq(Srgba((red:0.6117647,green:0.6392157,blue:0.6862745,alpha:1.0))))),
+        TouchDrag(from: Within(Name("vertical scroll area"), Name("ScrollThumb")), to: Screen((900.0, 500.0)), frames: 5),
+        Wait(2),
+        Check(Component(target: Within(Name("vertical scroll area"), Name("ScrollThumb")), path: "BackgroundColor.0", is: Eq(Srgba((red:0.6117647,green:0.6392157,blue:0.6862745,alpha:1.0))))),
+    ],
+    expect: [],
+)

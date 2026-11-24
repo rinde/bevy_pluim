@@ -1,0 +1,28 @@
+// A finger down on a slider shows the pressed thumb (a finger never hovers), the
+// thumb is at rest again once the finger lifts or the touch is cancelled, and a
+// finger that drags off the slider and lifts leaves it at rest too.
+(
+    format_version: 3,
+    name: "a finger shows the pressed thumb only while down",
+    setup: App(Slider),
+    steps: [
+        Wait(2),
+        Capture(name: "rest", value: Resource(path: "Theme.colors.card_surface")),
+        Capture(name: "pressed", value: Resource(path: "Theme.colors.accent")),
+        TouchDown(at: Name("stepped slider"), finger: 0),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("pressed")))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("rest")))),
+        TouchDown(at: Screen((200.0, 70.0)), finger: 0),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("pressed")))),
+        Wait(2),
+        TouchCancel(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("rest")))),
+        TouchDrag(from: Within(Name("stepped slider"), Name("SliderThumb")), to: Screen((900.0, 500.0)), frames: 5),
+        Wait(2),
+        Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("rest")))),
+    ],
+    expect: [],
+)
