@@ -111,6 +111,9 @@ person would see after using the UI.
   (a `TouchTap` on "Add" counts one `Activate` in `Clicks`) is the smoke
   scenario that the steps reach the widgets; the touch epic (#793) adds the
   per-widget touch files. See the tester's README ("Touch").
+  `every_interactive_gallery_group_has_a_touch_scenario` (`tests/scenarios.rs`) reads
+  the gallery's `GROUPS` and fails when an interactive group has no `*_touch*.ron`
+  file; a display-only group is listed in `GROUPS_WITHOUT_TOUCH` there.
 - **Start from a screen.** `.app_setup(WidgetsSetup::Buttons)` (or `setup:
   App(Buttons)` in a file) instead of a `.setup(..)` closure, when a screen of
   `tests/widgets_setup/mod.rs` has the widgets the scenario needs. `mod

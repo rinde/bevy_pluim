@@ -4622,3 +4622,87 @@ fn the_overview_scroll_area_page_has_rows_and_visible_scroll_bars() {
         "the bars of the six areas that overflow: the two lists' and the squares' areas (the list areas' horizontal bar needs text layout)"
     );
 }
+
+/// Gallery groups with no touch scenario because they are not interactive, or
+/// are built only from widgets whose own groups have one.
+const GROUPS_WITHOUT_TOUCH: [(&str, &str); 7] = [
+    (
+        "ThemeEditor",
+        "a card of steppers, sliders, combos and fields, each covered by its own group",
+    ),
+    (
+        "Stack",
+        "shows the child its selection names; a tab bar switches it (`TabBar`)",
+    ),
+    (
+        "SettingRow",
+        "display only: a title, description and control slot",
+    ),
+    ("Badge", "display only: a pill in the corner of a button"),
+    ("Toast", "display only: a timed message"),
+    ("Theme", "colours and fonts, no input"),
+    ("Accessibility", "the accessibility tree, not input"),
+];
+
+#[test]
+fn every_interactive_gallery_group_has_a_touch_scenario() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // `GROUPS` lives in the gallery example, which a test cannot import.
+    let gallery = std::fs::read_to_string(root.join("examples/gallery.rs")).unwrap();
+    let table = gallery
+        .split("const GROUPS")
+        .nth(1)
+        .and_then(|rest| rest.split("];").next())
+        .expect("examples/gallery.rs has a `const GROUPS` table");
+    let groups: Vec<(&str, &str)> = table
+        .lines()
+        .filter_map(|line| {
+            let mut quoted = line.split('"').skip(1).step_by(2);
+            Some((quoted.next()?, quoted.next()?))
+        })
+        .collect();
+    assert!(
+        groups.len() > 20,
+        "the GROUPS table was not read: {groups:?}"
+    );
+
+    let mut with_touch = std::collections::BTreeSet::new();
+    for file in std::fs::read_dir(root.join("tests/ron")).unwrap() {
+        let path = file.unwrap().path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        if path.extension().is_none_or(|e| e != "ron") || !stem.contains("_touch") {
+            continue;
+        }
+        // The gallery's rule: the first prefix that matches picks the group.
+        if let Some((_, group)) = groups.iter().find(|(prefix, _)| stem.starts_with(prefix)) {
+            with_touch.insert(*group);
+        }
+    }
+
+    let mut missing: Vec<&str> = groups
+        .iter()
+        .map(|(_, group)| *group)
+        .filter(|group| {
+            !with_touch.contains(group)
+                && !GROUPS_WITHOUT_TOUCH
+                    .iter()
+                    .any(|(exempt, _)| exempt == group)
+        })
+        .collect();
+    missing.dedup();
+    assert!(
+        missing.is_empty(),
+        "these gallery groups have no `*_touch*.ron` scenario in tests/ron: {missing:?}; add one \
+         or, if the widget takes no input, list it in GROUPS_WITHOUT_TOUCH"
+    );
+    for (exempt, reason) in GROUPS_WITHOUT_TOUCH {
+        assert!(
+            groups.iter().any(|(_, group)| *group == exempt),
+            "{exempt} ({reason}) is exempt but is not a gallery group"
+        );
+        assert!(
+            !with_touch.contains(exempt),
+            "{exempt} has a touch scenario now: take it off GROUPS_WITHOUT_TOUCH"
+        );
+    }
+}
