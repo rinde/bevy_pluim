@@ -1,0 +1,27 @@
+// A quick pan that the finger lets go of runs on and slows down: the vertical area (x 240..440,
+// y 20..220, scrolling 0..220) is at 25 where the finger lifts after five moves of 5 px
+// (300 px a second) and comes to rest well beyond that, short of its end. Nothing moves once it
+// has stopped.
+(
+    format_version: 3,
+    name: "a quick finger pan on the vertical scroll area keeps scrolling after the lift",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((340.0, 200.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 195.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 190.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 185.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 180.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 175.0)), finger: 0),
+        TouchUp(finger: 0),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Gt(25.0))),
+        Wait(240),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Gt(100.0))),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Lt(220.0))),
+        Capture(name: "rest", value: Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y")),
+        Wait(60),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Eq(Captured("rest")))),
+    ],
+    expect: [],
+)

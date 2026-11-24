@@ -87,6 +87,8 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `roving-groups-selection` | the same | one control's `Selection` is replaced every frame, so `Changed<Selection>` fires for that control alone (the control's own redraw is part of the cost) |
 | `wheel-deep` | a 200-deep chain in a vertical `ScrollArea`, with a nested horizontal area in the middle | 16 `MouseWheel` messages per frame, over two pointers whose hover map holds the nested area's 8 ancestors and a leaf (the headless app has no picking backend, so the example writes the hover map); the cost of `update_scroll_position` (#682) |
 | `wheel-deep-idle` | the same | the same tree and hover map, no wheel messages: the floor `wheel-deep` is read against |
+| `scroll-flings-idle` | 200 scroll areas of 100 by 100 px with a 1 000 000 px tall child | no fling anywhere: the floor `scroll-flings-active` is read against (#801) |
+| `scroll-flings-active` | the same | a touch pan and lift (one step a frame from frame 5) on every area leaves all 200 flinging for the first ~100 frames, then slowing; the cost of `step_flings` (#801) |
 | `sliders-idle` | 2000 sliders | no change: the floor `sliders-pressing` is read against (#698) |
 | `sliders-pressing` | 2000 sliders | one slider released and another pressed every frame, so `restyle_sliders` visits only those (#698) |
 | `filter-chips-restyling` | 500 rows of 3 chips | the same rows with the `Theme` marked changed every frame, so every chip is restyled with the font it has; the font is written only on a difference, so no relayout (#710): mean 28.3 ms per frame with the unconditional write, 4.0 ms without (release build, 500 rows) |
@@ -501,6 +503,24 @@ remaining cost worth it. Tests: `many_wheel_messages_in_one_frame_are_applied_an
 `only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit`,
 `a_fixed_node_stops_the_search_for_a_scroll_area_above_it` and
 `an_area_two_pointers_are_on_scrolls_once_for_each_pointer_and_message` in `tests/headless.rs`.
+
+## Fling (#801)
+
+`step_flings` runs only while an area carries a `Fling` (`run_if(any_with_component::<Fling>)`),
+so an app that never flings pays nothing per frame beyond that run condition, and
+`scroll-flings-idle` measures that floor. `scroll-flings-active` presses, drags 4 steps and lifts
+on the content of all 200 areas, which then fling; each step moves 200 positions.
+
+Measured (release build, size 200, 300 frames, median us over three alternating runs, 4 vCPU
+Intel Xeon @ 2.10 GHz, `cargo run --release --example bench -- --workload scroll-flings-active`):
+
+| workload | medians |
+| --- | --- |
+| `scroll-flings-idle` | 1681 / 2225 / 2366 |
+| `scroll-flings-active` | 1816 / 2196 / 2005 |
+
+The two overlap within the run-to-run spread of this machine (about 0.6 ms), so the fling
+steps for 200 areas cost less than the noise; read the result loosely.
 
 ## Shared item snapshot (#681)
 

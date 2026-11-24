@@ -115,7 +115,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 
 **Containers and display**
 
-- [`scroll_area.rs`](docs/modules/scroll_area.md): `ScrollArea`: scrolling contents with themed scroll bars, the wheel handler, a finger's pan and scroll-into-view.
+- [`scroll_area.rs`](docs/modules/scroll_area.md): `ScrollArea`: scrolling contents with themed scroll bars, the wheel handler, a finger's pan with its fling (the crate-private `Fling` marker, per-axis velocity, only on flinging areas; no rubber band or bounce, a non-goal) and scroll-into-view.
 - [`card.rs`](docs/modules/card.md): `Card`: themed background, border, radius and shadow; the smallest theming example.
 - [`panel.rs`](docs/modules/panel.md): `Panel`: a card with a header, optional close button, strip, scrolling body and footer.
 - [`setting_row.rs`](docs/modules/setting_row.md): `SettingRow` and `SettingRows`: a title, description and control slot, divided rows.
@@ -131,7 +131,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 - Examples (`just example NAME`, need a window): `overview` (every widget, one
   page per group; a new widget or variant goes on its page), `hud` (the
   redesign's HUD over sample data), `bench` (headless CPU and memory
-  benchmark) and `gallery` (plays the scenario files in a window). See
+  benchmark; `scroll-flings-idle` and `scroll-flings-active` cover flings) and `gallery` (plays the scenario files in a window). See
   [`docs/examples.md`](docs/examples.md).
 - Tests: `tests/headless.rs` (behaviour in a headless `App`),
   `tests/reflection.rs` (type registry), `tests/scenarios.rs` and

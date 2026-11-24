@@ -1,0 +1,27 @@
+// A slow drag ends where the finger lifted: twelve moves of 1 px (60 px a second) are under the
+// speed that flings.
+(
+    format_version: 3,
+    name: "a slow finger pan does not fling",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((340.0, 200.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 199.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 198.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 197.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 196.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 195.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 194.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 193.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 192.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 191.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 190.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 189.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 188.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(120),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Eq(12.0))),
+    ],
+    expect: [],
+)

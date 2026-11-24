@@ -25,7 +25,7 @@ use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
 use crate::popup::{self, ButtonLook, PopupPointers};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
-use crate::scroll_area::{popup_scroll_bar, update_scroll_position};
+use crate::scroll_area::{popup_scroll_bar, step_flings, update_scroll_position};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
@@ -47,7 +47,9 @@ impl Plugin for ComboPlugin {
         )
         .add_systems(
             Update,
-            close_on_ancestor_scroll.after(update_scroll_position),
+            close_on_ancestor_scroll
+                .after(update_scroll_position)
+                .after(step_flings),
         )
         .add_systems(
             PostUpdate,

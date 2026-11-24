@@ -19207,6 +19207,283 @@ fn touch_gesture(app: &mut App, target: Entity, moves: &[Vec2]) {
     app.update();
 }
 
+/// A finger pans `target` by `moves` (the distance since the press, as picking reports it) a
+/// sixtieth of a second apart, however short the frames are (`frames_per_move` of them make up
+/// that sixtieth), lifts, and the area then runs on for `settle` seconds.
+#[expect(clippy::cast_sign_loss, reason = "a settle time is not negative")]
+fn fling_gesture(app: &mut App, target: Entity, moves: &[Vec2], frames_per_move: u32, settle: f32) {
+    let frame = std::time::Duration::from_secs_f64(1.0 / 60.0 / f64::from(frames_per_move));
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(frame));
+    let pointer = || Pointer::new(PointerId::Touch(1), pointer_location());
+    let hit = || HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    let wait = |app: &mut App| {
+        for _ in 0..frames_per_move {
+            app.update();
+        }
+    };
+    app.world_mut().trigger(PointerPress {
+        entity: target,
+        pointer: pointer(),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: hit(),
+    });
+    wait(app);
+    let mut last = Vec2::ZERO;
+    for &distance in moves {
+        app.world_mut().trigger(PointerDrag {
+            entity: target,
+            pointer: pointer(),
+            button: PointerButton::Primary,
+            distance,
+            delta: distance - last,
+        });
+        last = distance;
+        wait(app);
+    }
+    app.world_mut().trigger(PointerClick {
+        entity: target,
+        pointer: pointer(),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: hit(),
+        duration: std::time::Duration::ZERO,
+    });
+    app.world_mut().trigger(PointerRelease {
+        entity: target,
+        pointer: pointer(),
+        button: PointerButton::Primary,
+        hit: hit(),
+    });
+    app.update();
+    for _ in 0..(settle * 60.0 * frames_per_move as f32) as u32 {
+        app.update();
+    }
+}
+
+/// `count` moves of `step` logical pixels each, the finger's distance since the press.
+fn steady_moves(count: u16, step: Vec2) -> Vec<Vec2> {
+    (1..=count).map(|n| step * f32::from(n)).collect()
+}
+
+fn fling_app() -> (App, Entity, Entity) {
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::ZERO, 1.0);
+    app.update();
+    app.update();
+    (app, area, target)
+}
+
+#[test]
+fn a_fast_pan_flings_on_after_the_finger_lifts_and_stops_inside_the_area() {
+    let (mut app, area, target) = fling_app();
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(5, Vec2::new(0.0, -5.0)),
+        1,
+        0.0,
+    );
+    let lifted = scroll_of(&app, area).y;
+    assert!(lifted >= 25.0, "{lifted}");
+    // 300 px a second decays to about 150 px more.
+    fling_gesture_settle(&mut app, 4.0);
+    let rested = scroll_of(&app, area).y;
+    assert!(rested > lifted + 100.0 && rested < 300.0, "{rested}");
+    // It has stopped: nothing moves any more.
+    fling_gesture_settle(&mut app, 1.0);
+    assert_eq!(scroll_of(&app, area).y, rested);
+}
+
+#[expect(clippy::cast_sign_loss, reason = "a settle time is not negative")]
+fn fling_gesture_settle(app: &mut App, seconds: f32) {
+    for _ in 0..(seconds * 60.0) as u32 {
+        app.update();
+    }
+}
+
+#[test]
+fn a_fling_into_the_end_of_the_area_stops_at_the_end_without_overshoot() {
+    let (mut app, area, target) = fling_app();
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(4, Vec2::new(0.0, -20.0)),
+        1,
+        3.0,
+    );
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 300.0));
+}
+
+#[test]
+fn a_slow_pan_does_not_fling() {
+    let (mut app, area, target) = fling_app();
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(12, Vec2::new(0.0, -1.0)),
+        1,
+        2.0,
+    );
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 12.0));
+}
+
+#[test]
+fn a_pan_that_rests_before_the_finger_lifts_does_not_fling() {
+    let (mut app, area, target) = fling_app();
+    let mut moves = steady_moves(5, Vec2::new(0.0, -10.0));
+    moves.extend([Vec2::new(0.0, -50.0); 8]);
+    fling_gesture(&mut app, target, &moves, 1, 2.0);
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 50.0));
+}
+
+#[test]
+fn a_fling_travels_as_far_in_frames_of_a_quarter_the_length() {
+    let moves = steady_moves(6, Vec2::new(0.0, -6.0));
+    let (mut app, area, target) = fling_app();
+    fling_gesture(&mut app, target, &moves, 1, 4.0);
+    let at_sixty = scroll_of(&app, area).y;
+    let (mut app, area, target) = fling_app();
+    fling_gesture(&mut app, target, &moves, 4, 4.0);
+    let at_two_forty = scroll_of(&app, area).y;
+    assert!(at_sixty > 100.0, "{at_sixty}");
+    assert!(
+        (at_sixty - at_two_forty).abs() < 1.0,
+        "{at_sixty} against {at_two_forty}"
+    );
+}
+
+#[test]
+fn a_sideways_only_area_flings_on_a_vertical_pan() {
+    let mut app = wheel_app();
+    let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 1.0);
+    let target = target_at(&mut app, Some(area), Vec2::ZERO, 1.0);
+    app.update();
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(5, Vec2::new(0.0, -5.0)),
+        1,
+        4.0,
+    );
+    let scrolled = scroll_of(&app, area);
+    assert!(scrolled.x > 100.0 && scrolled.y == 0.0, "{scrolled}");
+}
+
+#[test]
+fn a_new_touch_stops_a_fling_and_taps_nothing() {
+    let (mut app, area, _) = fling_app();
+    app.init_resource::<PanActivations>();
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("tap me"), ChildOf(area)))
+        .observe(|_: On<Activate>, mut count: ResMut<PanActivations>| count.0 += 1)
+        .id();
+    app.update();
+    app.update();
+    fling_gesture(
+        &mut app,
+        button,
+        &steady_moves(5, Vec2::new(0.0, -5.0)),
+        1,
+        0.2,
+    );
+    let running = scroll_of(&app, area).y;
+    assert!(running > 25.0 && running < 150.0, "{running}");
+    // The finger lands on the button while the area runs on, and lifts without moving.
+    touch_gesture(&mut app, button, &[]);
+    let caught = scroll_of(&app, area).y;
+    fling_gesture_settle(&mut app, 3.0);
+    assert_eq!(scroll_of(&app, area).y, caught, "the fling stopped");
+    assert_eq!(
+        app.world().get_resource::<PanActivations>().unwrap().0,
+        0,
+        "no tap"
+    );
+    // The next touch taps as usual.
+    touch_gesture(&mut app, button, &[]);
+    assert_eq!(app.world().get_resource::<PanActivations>().unwrap().0, 1);
+}
+
+#[test]
+fn a_wheel_turn_stops_a_fling() {
+    use bevy::input::mouse::MouseScrollUnit::Pixel;
+    let (mut app, area, target) = fling_app();
+    hover(&mut app, &[(PointerId::Mouse, area)]);
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(5, Vec2::new(0.0, -5.0)),
+        1,
+        0.2,
+    );
+    wheel(&mut app, Pixel, 0.0, -10.0);
+    app.update();
+    let after_wheel = scroll_of(&app, area).y;
+    fling_gesture_settle(&mut app, 3.0);
+    assert_eq!(scroll_of(&app, area).y, after_wheel);
+}
+
+#[test]
+fn a_fling_that_moves_closes_a_combo_in_the_area_and_one_at_its_limit_marks_nothing_changed() {
+    let (mut app, area, target) = fling_app();
+    app.init_resource::<ScrollChanges>();
+    app.add_systems(Last, count_scroll_changes);
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            Selection::builder()
+                .zero_or_one()
+                .build_with_items(["a", "b"].map(|s| Item::new(s.to_string()))),
+            ChildOf(area),
+        ))
+        .id();
+    app.update();
+    app.update();
+    // A fling at the far end of the area has nowhere to go.
+    app.world_mut().get_mut::<ScrollPosition>(area).unwrap().0 = Vec2::new(0.0, 300.0);
+    app.update();
+    app.world_mut().entity_mut(combo).insert(ComboState::Open);
+    app.update();
+    app.update();
+    app.world_mut()
+        .get_resource_mut::<ScrollChanges>()
+        .unwrap()
+        .0 = 0;
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(5, Vec2::new(0.0, -5.0)),
+        1,
+        1.0,
+    );
+    assert_eq!(app.world().get_resource::<ScrollChanges>().unwrap().0, 0);
+    assert_eq!(
+        app.world().get::<ComboState>(combo),
+        Some(&ComboState::Open)
+    );
+    // Up from there, it moves the position and closes the combo.
+    app.world_mut().get_mut::<ScrollPosition>(area).unwrap().0 = Vec2::new(0.0, 150.0);
+    app.update();
+    app.world_mut().entity_mut(combo).insert(ComboState::Open);
+    app.update();
+    app.update();
+    fling_gesture(
+        &mut app,
+        target,
+        &steady_moves(5, Vec2::new(0.0, 5.0)),
+        1,
+        0.3,
+    );
+    assert!(scroll_of(&app, area).y < 150.0);
+    assert_eq!(
+        app.world().get::<ComboState>(combo),
+        Some(&ComboState::Closed)
+    );
+}
+
 #[derive(Resource, Default)]
 struct PanActivations(usize);
 
@@ -19240,11 +19517,14 @@ fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_tha
         .get_resource_mut::<ScrollChanges>()
         .unwrap()
         .0 = 0;
-    touch_gesture(
-        &mut app,
-        button,
-        &[Vec2::new(0.0, -10.0), Vec2::new(0.0, -50.0)],
-    );
+    // The finger rests before it lifts, so the content does not run on (#801); frames are a
+    // sixtieth of a second, so eight of them rest longer than the velocity window.
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ));
+    let mut moves = vec![Vec2::new(0.0, -10.0)];
+    moves.extend([Vec2::new(0.0, -50.0); 8]);
+    touch_gesture(&mut app, button, &moves);
     assert_eq!(
         app.world().get_resource::<PanActivations>().unwrap().0,
         1,

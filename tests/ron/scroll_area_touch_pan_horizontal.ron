@@ -10,11 +10,13 @@
         TouchMove(to: Screen((520.0, 120.0)), finger: 0),
         Wait(1),
         Check(Component(target: Within(Name("horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((60.0, 0.0)))),
+        Wait(8), // rest before lifting: a finger that keeps moving flings (#801)
         TouchUp(finger: 0),
         TouchDown(at: Screen((560.0, 150.0)), finger: 0),
         TouchMove(to: Screen((560.0, 120.0)), finger: 0),
         Wait(1),
         Check(Component(target: Within(Name("horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((90.0, 0.0)))),
+        Wait(8), // rest before lifting: a finger that keeps moving flings (#801)
         TouchUp(finger: 0),
     ],
     expect: [],

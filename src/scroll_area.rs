@@ -5,7 +5,7 @@
 //! on the track. This module keeps the layout, the look, the wheel and scrolling a
 //! focused row into view.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use accesskit::Role;
@@ -43,6 +43,11 @@ impl Plugin for ScrollAreaPlugin {
             .add_observer(scroll_into_view)
             .add_observer(pan_with_finger)
             .add_systems(Update, update_scroll_position)
+            .add_systems(Update, step_flings.run_if(any_with_component::<Fling>))
+            .add_systems(
+                Update,
+                end_caught_presses.run_if(|pans: Res<TouchPans>| !pans.caught.is_empty()),
+            )
             .add_systems(
                 PostUpdate,
                 (
@@ -527,6 +532,8 @@ pub(crate) fn update_scroll_position(
     mut scrolled_node_query: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
+    flinging: Query<(), With<Fling>>,
+    mut commands: Commands,
     mut scratch: Local<WheelScratch>,
 ) {
     if mouse_wheel_events.is_empty() {
@@ -614,6 +621,10 @@ pub(crate) fn update_scroll_position(
             } else {
                 dx
             };
+            // A turn of the wheel stops a fling, even one the area cannot move any further.
+            if flinging.contains(*entity) {
+                commands.entity(*entity).try_remove::<Fling>();
+            }
             scroll_by(&mut scroll_position, computed, node, dx, dy);
         }
     }
@@ -632,11 +643,11 @@ fn scroll_by(
     dx: f32,
     dy: f32,
 ) {
-    let overflow = (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
+    let overflow = max_scroll(computed);
     let new_x = (node.overflow.x == OverflowAxis::Scroll)
-        .then(|| (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0)));
+        .then(|| (scroll_position.x - dx).clamp(0.0, overflow.x));
     let new_y = (node.overflow.y == OverflowAxis::Scroll)
-        .then(|| (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0)));
+        .then(|| (scroll_position.y - dy).clamp(0.0, overflow.y));
     if new_x.is_some_and(|x| x.to_bits() != scroll_position.x.to_bits())
         || new_y.is_some_and(|y| y.to_bits() != scroll_position.y.to_bits())
     {
@@ -649,19 +660,32 @@ fn scroll_by(
     }
 }
 
+/// How far the contents of `computed` overflow it, in logical pixels: the largest
+/// [`ScrollPosition`] on each axis (0 when they fit).
+fn max_scroll(computed: &ComputedNode) -> Vec2 {
+    ((computed.content_size() - computed.size()) * computed.inverse_scale_factor()).max(Vec2::ZERO)
+}
+
 /// Where each finger's last press began and whether it became a pan.
 ///
 /// An entry stays after the lift, until the same finger presses again, so the systems that
 /// read the lift and the click (one frame later than the last drag) can still tell a pan from
 /// a tap.
 #[derive(Resource, Debug, Default)]
-pub(crate) struct TouchPans(HashMap<PointerId, Pan>);
+pub(crate) struct TouchPans {
+    pans: HashMap<PointerId, Pan>,
+    /// Presses that landed on a flinging area, as the node pressed and the area, whose
+    /// pressed look is ended by [`end_caught_presses`] once the press has been delivered.
+    caught: Vec<(Entity, Entity)>,
+}
 
 impl TouchPans {
     /// Whether the finger's last press moved past [`DRAG_THRESHOLD`] over a scroll area, so
     /// what it lifts on is not a tap: nothing is activated, picked or closed by it.
     pub(crate) fn panned(&self, pointer: PointerId) -> bool {
-        self.0.get(&pointer).is_some_and(|pan| pan.panning)
+        self.pans
+            .get(&pointer)
+            .is_some_and(|pan| pan.panning || pan.caught)
     }
 }
 
@@ -676,6 +700,12 @@ struct Pan {
     /// How much of the finger's travel since the press has been scrolled.
     applied: Vec2,
     panning: bool,
+    /// The finger went down on an area that was flinging and stopped it: like a pan, its lift
+    /// is not a tap.
+    caught: bool,
+    /// The finger's travel since the press at the times it was seen (seconds of [`Time`]),
+    /// the last ~[`VELOCITY_WINDOW`] of it, from which the fling starts.
+    samples: VecDeque<(f32, Vec2)>,
 }
 
 /// Scrolls the innermost scroll area under a finger as the finger drags, once it has moved
@@ -692,32 +722,45 @@ fn pan_with_finger(
     hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
     own_drag: Query<(), Or<(With<Slider>, With<NumericStepper>, With<ScrollBar>)>>,
     mut scrolled: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
+    flinging: Query<(), With<Fling>>,
+    time: Res<Time>,
     mut commands: Commands,
 ) {
     let event = *t.event();
+    let now = time.elapsed_secs();
     if !event.touch || event.button.is_some_and(|b| b != PointerButton::Primary) {
         return;
     }
     match event.kind {
         MouseKind::Pressed => {
             let target = find_pan_target(event.entity, &hierarchy, &own_drag, &scrolled);
-            pans.0.insert(
+            // A finger that lands on a flinging area stops it, and is not a tap on what it
+            // landed on, as on iOS.
+            let caught = target.is_some_and(|area| flinging.contains(area));
+            if let Some(area) = target.filter(|_| caught) {
+                commands.entity(area).try_remove::<Fling>();
+                pans.caught.push((event.entity, area));
+            }
+            pans.pans.insert(
                 event.pointer,
                 Pan {
                     started_on: event.entity,
                     target,
                     applied: Vec2::ZERO,
                     panning: false,
+                    caught,
+                    samples: VecDeque::from([(now, Vec2::ZERO)]),
                 },
             );
         }
         MouseKind::Drag => {
-            let Some(pan) = pans.0.get_mut(&event.pointer) else {
+            let Some(pan) = pans.pans.get_mut(&event.pointer) else {
                 return;
             };
             let Some(target) = pan.target else {
                 return;
             };
+            record_sample(&mut pan.samples, now, event.distance);
             if !pan.panning {
                 if event.distance.length() <= DRAG_THRESHOLD {
                     return;
@@ -740,7 +783,181 @@ fn pan_with_finger(
             };
             scroll_by(&mut scroll_position, computed, node, dx, delta.y);
         }
+        MouseKind::Released => {
+            let Some(pan) = pans.pans.get_mut(&event.pointer) else {
+                return;
+            };
+            let samples = std::mem::take(&mut pan.samples);
+            let Some(area) = pan.target.filter(|_| pan.panning) else {
+                return;
+            };
+            let Ok((scroll_position, _, node)) = scrolled.get(area) else {
+                return;
+            };
+            let velocity = fling_velocity(release_velocity(&samples, now), node);
+            if velocity.length() >= MIN_FLING_SPEED {
+                commands.entity(area).try_insert(Fling {
+                    velocity,
+                    expected: scroll_position.0,
+                });
+            }
+        }
         _ => {}
+    }
+}
+
+/// How long a finger's last movement counts towards the speed it lets go with, in seconds.
+const VELOCITY_WINDOW: f32 = 0.1;
+
+/// The slowest release, in logical pixels a second, that still flings: a slower drag ends where
+/// the finger lifted.
+const MIN_FLING_SPEED: f32 = 100.0;
+
+/// A fling ends when it is slower than this, in logical pixels a second: half a pixel in a frame
+/// of a sixtieth of a second.
+const STOP_FLING_SPEED: f32 = 30.0;
+
+/// How much of its speed a fling keeps each millisecond: iOS `DecelerationRate.normal`.
+const DECELERATION_PER_MS: f32 = 0.998;
+
+/// Adds the finger's travel `distance` at time `now` to `samples`, forgetting what is older than
+/// [`VELOCITY_WINDOW`] but the newest such sample, which the speed is measured from.
+fn record_sample(samples: &mut VecDeque<(f32, Vec2)>, now: f32, distance: Vec2) {
+    samples.push_back((now, distance));
+    while samples
+        .get(1)
+        .is_some_and(|&(time, _)| time <= now - VELOCITY_WINDOW)
+    {
+        samples.pop_front();
+    }
+}
+
+/// The finger's velocity in logical pixels a second at `now`, from the last [`VELOCITY_WINDOW`]
+/// of `samples`: its travel since the newest sample at least that old (the oldest when none is),
+/// over the time since. A finger that rested for the whole window has none.
+fn release_velocity(samples: &VecDeque<(f32, Vec2)>, now: f32) -> Vec2 {
+    let (Some(&(then, from)), Some(&(_, to))) = (
+        samples
+            .iter()
+            .rev()
+            .find(|&&(time, _)| time <= now - VELOCITY_WINDOW)
+            .or_else(|| samples.front()),
+        samples.back(),
+    ) else {
+        return Vec2::ZERO;
+    };
+    let elapsed = now - then;
+    if elapsed <= f32::EPSILON {
+        return Vec2::ZERO;
+    }
+    (to - from) / elapsed
+}
+
+/// The scroll velocity a finger moving at `finger` gives the area `node`: opposite to the finger,
+/// along the axes the area scrolls, with a sideways-only area taking a mostly vertical finger as
+/// horizontal, as a pan does.
+fn fling_velocity(finger: Vec2, node: &Node) -> Vec2 {
+    let scrolls_x = node.overflow.x == OverflowAxis::Scroll;
+    let scrolls_y = node.overflow.y == OverflowAxis::Scroll;
+    let x = if !scrolls_y && finger.y.abs() > finger.x.abs() {
+        finger.y
+    } else {
+        finger.x
+    };
+    Vec2::new(
+        if scrolls_x { -x } else { 0.0 },
+        if scrolls_y { -finger.y } else { 0.0 },
+    )
+}
+
+/// A scroll area that keeps scrolling after a finger let go of it, slowing down. Put on the area
+/// when a fast pan ends and taken off when it stops, so only flinging areas are visited.
+#[derive(Component, Debug)]
+pub(crate) struct Fling {
+    /// Scroll velocity in logical pixels a second.
+    velocity: Vec2,
+    /// Where the fling left the [`ScrollPosition`]. Anything else moving it (the wheel, a scroll
+    /// bar, scrolling a row into view) shows as a difference, and ends the fling.
+    expected: Vec2,
+}
+
+/// How far a speed of `velocity` (logical pixels a second) travels in `dt` seconds while it decays
+/// by [`DECELERATION_PER_MS`] each millisecond, and what it is after. Integrated exactly, so the
+/// distance does not depend on how the time is cut into frames.
+fn decelerate(velocity: Vec2, dt: f32) -> (Vec2, Vec2) {
+    // `v(t) = v0 * r^(1000 t)` for `r` per millisecond; its integral is `v0 (f - 1) / ln_rate`.
+    let ln_rate = DECELERATION_PER_MS.ln() * 1000.0;
+    let kept = (ln_rate * dt).exp();
+    (velocity * ((kept - 1.0) / ln_rate), velocity * kept)
+}
+
+/// Moves each flinging area on by the time since the last frame, stopping an axis at its limit and
+/// the fling when it is slow, or when something else moved the area.
+///
+/// Writes the [`ScrollPosition`] only when the result differs, so an area at its limit marks
+/// nothing changed and does not close a combo in it.
+pub(crate) fn step_flings(
+    time: Res<Time>,
+    mut flinging: Query<(
+        Entity,
+        &mut Fling,
+        &mut ScrollPosition,
+        &ComputedNode,
+        &Node,
+    )>,
+    mut commands: Commands,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut fling, mut position, computed, node) in &mut flinging {
+        if position.0 != fling.expected {
+            commands.entity(entity).try_remove::<Fling>();
+            continue;
+        }
+        let (distance, velocity) = decelerate(fling.velocity, dt);
+        let max = max_scroll(computed);
+        let wanted = position.0 + distance;
+        let moved = wanted.clamp(Vec2::ZERO, max);
+        let scrolls_x = node.overflow.x == OverflowAxis::Scroll;
+        let scrolls_y = node.overflow.y == OverflowAxis::Scroll;
+        // An axis that ran into its limit, or does not scroll, stops there.
+        let velocity = Vec2::new(
+            if scrolls_x && moved.x.to_bits() == wanted.x.to_bits() {
+                velocity.x
+            } else {
+                0.0
+            },
+            if scrolls_y && moved.y.to_bits() == wanted.y.to_bits() {
+                velocity.y
+            } else {
+                0.0
+            },
+        );
+        let moved = Vec2::new(
+            if scrolls_x { moved.x } else { position.x },
+            if scrolls_y { moved.y } else { position.y },
+        );
+        if moved != position.0 {
+            position.0 = moved;
+        }
+        if velocity.length() < STOP_FLING_SPEED {
+            commands.entity(entity).try_remove::<Fling>();
+        } else {
+            fling.velocity = velocity;
+            fling.expected = moved;
+        }
+    }
+}
+
+/// Ends the pressed look of the nodes a finger landed on while their area was flinging, so its
+/// lift activates nothing. Runs after the frame's pointer events: the press that made the node
+/// `Pressed` may be delivered after the observer that saw the touch.
+fn end_caught_presses(
+    mut pans: ResMut<TouchPans>,
+    hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
+    mut commands: Commands,
+) {
+    for (started_on, area) in std::mem::take(&mut pans.caught) {
+        end_press(&mut commands, &hierarchy, started_on, area);
     }
 }
 
@@ -1058,5 +1275,149 @@ fn theme_new_popup_scroll_bars(
 ) {
     for bar in &new {
         commands.run_system_cached_with(theme_popup_scroll_bars, Some(bar));
+    }
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "tests may abort loudly")]
+mod tests {
+    use super::*;
+
+    fn samples(points: &[(f32, f32)]) -> VecDeque<(f32, Vec2)> {
+        points
+            .iter()
+            .map(|&(t, y)| (t, Vec2::new(0.0, y)))
+            .collect()
+    }
+
+    #[test]
+    fn the_release_velocity_is_the_travel_over_the_last_tenth_of_a_second() {
+        // 10 px every sixtieth of a second: 600 px a second, however long the pan was before.
+        let mut recorded = VecDeque::new();
+        for frame in 0..30_u8 {
+            record_sample(
+                &mut recorded,
+                f32::from(frame) / 60.0,
+                Vec2::new(0.0, -10.0 * f32::from(frame)),
+            );
+        }
+        let velocity = release_velocity(&recorded, 29.0 / 60.0);
+        assert!((velocity.y + 600.0).abs() < 1.0, "{velocity}");
+        // Old samples are forgotten but for the one the speed is measured from.
+        assert!(recorded.len() <= 8, "{}", recorded.len());
+    }
+
+    #[test]
+    fn a_pan_that_sped_up_at_the_end_lets_go_at_the_end_speed() {
+        // Slow for a second (1 px per frame), then 10 px per frame for the last tenth.
+        let mut recorded = VecDeque::new();
+        let mut y = 0.0;
+        for frame in 0..60_u8 {
+            y -= 1.0;
+            record_sample(&mut recorded, f32::from(frame) / 60.0, Vec2::new(0.0, y));
+        }
+        for frame in 60..66_u8 {
+            y -= 10.0;
+            record_sample(&mut recorded, f32::from(frame) / 60.0, Vec2::new(0.0, y));
+        }
+        let velocity = release_velocity(&recorded, 65.0 / 60.0);
+        assert!(velocity.y < -400.0, "{velocity}");
+    }
+
+    #[test]
+    fn a_finger_that_rested_for_the_window_lets_go_at_no_speed() {
+        let recorded = samples(&[(0.0, 0.0), (0.05, -40.0)]);
+        assert_eq!(release_velocity(&recorded, 0.3), Vec2::ZERO);
+        assert_eq!(release_velocity(&VecDeque::new(), 0.3), Vec2::ZERO);
+        // No time between the sample and the release: no speed rather than a division by zero.
+        assert_eq!(release_velocity(&samples(&[(0.2, 0.0)]), 0.2), Vec2::ZERO);
+    }
+
+    #[test]
+    fn a_fling_goes_opposite_to_the_finger_along_the_axes_the_area_scrolls() {
+        let vertical = Node {
+            overflow: Overflow::scroll_y(),
+            ..default()
+        };
+        let sideways = Node {
+            overflow: Overflow::scroll_x(),
+            ..default()
+        };
+        let finger = Vec2::new(30.0, -400.0);
+        assert_eq!(fling_velocity(finger, &vertical), Vec2::new(0.0, 400.0));
+        // A sideways-only area takes a mostly vertical finger as horizontal.
+        assert_eq!(fling_velocity(finger, &sideways), Vec2::new(400.0, 0.0));
+        assert_eq!(
+            fling_velocity(
+                finger,
+                &Node {
+                    overflow: Overflow::scroll(),
+                    ..default()
+                }
+            ),
+            Vec2::new(-30.0, 400.0)
+        );
+    }
+
+    #[test]
+    fn velocity_decays_by_0_998_a_millisecond_whatever_the_frame_length() {
+        let (_, after) = decelerate(Vec2::new(1000.0, 0.0), 0.1);
+        assert!(
+            (after.x - 0.998_f32.powi(100).mul_add(1000.0, 0.0)).abs() < 0.01,
+            "{after}"
+        );
+        let run = |frames: u32| {
+            let dt = 10.0 / frames as f32;
+            let (mut velocity, mut travelled) = (Vec2::new(1000.0, 0.0), 0.0);
+            for _ in 0..frames {
+                let (distance, next) = decelerate(velocity, dt);
+                travelled += distance.x;
+                velocity = next;
+            }
+            travelled
+        };
+        // About 1000 px a second over `1 / (1000 * -ln 0.998)` seconds in all.
+        assert!((run(600) - 499.5).abs() < 2.0, "{}", run(600));
+        assert!((run(600) - run(2400)).abs() < 0.1);
+        assert!((run(600) - run(7)).abs() < 0.1);
+    }
+
+    #[test]
+    fn a_fling_ends_on_stopping_and_an_idle_area_has_none_to_visit() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f32(1.0 / 60.0),
+        ));
+        app.add_systems(Update, step_flings.run_if(any_with_component::<Fling>));
+        let area = app
+            .world_mut()
+            .spawn((
+                Node {
+                    overflow: Overflow::scroll_y(),
+                    ..default()
+                },
+                ScrollPosition::default(),
+                ComputedNode {
+                    size: Vec2::splat(100.0),
+                    content_size: Vec2::splat(10_000.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                Fling {
+                    velocity: Vec2::new(0.0, 200.0),
+                    expected: Vec2::ZERO,
+                },
+            ))
+            .id();
+        app.update();
+        for _ in 0..600 {
+            app.update();
+        }
+        assert!(!app.world().entity(area).contains::<Fling>());
+        let rested = app.world().get::<ScrollPosition>(area).unwrap().0;
+        assert!(rested.y > 50.0 && rested.x == 0.0, "{rested}");
+        app.update();
+        assert_eq!(app.world().get::<ScrollPosition>(area).unwrap().0, rested);
     }
 }

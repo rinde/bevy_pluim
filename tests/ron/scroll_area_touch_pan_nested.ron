@@ -17,10 +17,12 @@
         Wait(1),
         Check(Component(target: Within(Name("nested horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
         Check(Component(target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
+        Wait(8), // rest before lifting: a finger that keeps moving flings (#801)
         TouchUp(finger: 0),
         // Beside the nested area the outer one pans.
         TouchDown(at: Screen((212.0, 450.0)), finger: 0),
         TouchMove(to: Screen((212.0, 390.0)), finger: 0),
+        Wait(8), // rest before lifting: a finger that keeps moving flings (#801)
         TouchUp(finger: 0),
         Wait(1),
         Check(Component(target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))), path: "ScrollPosition.0", is: Eq((0.0, 60.0)))),
