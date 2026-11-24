@@ -5,7 +5,7 @@
 //! on the track. This module keeps the layout, the look, the wheel and scrolling a
 //! focused row into view.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use accesskit::Role;
@@ -16,6 +16,7 @@ use bevy::ecs::template::TemplateContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::{HoverMap, Hovered};
+use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::scene::EmptySceneEffect;
 use bevy::ui::{FixedNode, Pressed, UiSystems};
@@ -25,8 +26,10 @@ use bevy::ui_widgets::{
 use itertools::Either;
 
 use crate::focus::FOCUS_RING_REACH;
+use crate::numeric_stepper::NumericStepper;
+use crate::slider::Slider;
 use crate::theme::{Theme, ThemeColors};
-use crate::{MouseEvent, MouseKind};
+use crate::{DRAG_THRESHOLD, MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`ScrollArea`].
 ///
@@ -36,7 +39,9 @@ pub struct ScrollAreaPlugin;
 
 impl Plugin for ScrollAreaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(scroll_into_view)
+        app.init_resource::<TouchPans>()
+            .add_observer(scroll_into_view)
+            .add_observer(pan_with_finger)
             .add_systems(Update, update_scroll_position)
             .add_systems(
                 PostUpdate,
@@ -602,8 +607,6 @@ pub(crate) fn update_scroll_position(
             else {
                 continue;
             };
-            let overflow =
-                (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
             // A mouse wheel only turns vertically, so an area that scrolls sideways
             // alone takes the vertical turn for a horizontal one.
             let dx = if dx == 0.0 && node.overflow.y != OverflowAxis::Scroll {
@@ -611,24 +614,195 @@ pub(crate) fn update_scroll_position(
             } else {
                 dx
             };
-            // Write only a position that moves: a mutable dereference marks the
-            // `ScrollPosition` changed, which wakes its observers (a combo closing on an
-            // ancestor's scroll) although nothing scrolled.
-            let new_x = (node.overflow.x == OverflowAxis::Scroll)
-                .then(|| (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0)));
-            let new_y = (node.overflow.y == OverflowAxis::Scroll)
-                .then(|| (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0)));
-            if new_x.is_some_and(|x| x.to_bits() != scroll_position.x.to_bits())
-                || new_y.is_some_and(|y| y.to_bits() != scroll_position.y.to_bits())
-            {
-                if let Some(x) = new_x {
-                    scroll_position.x = x;
-                }
-                if let Some(y) = new_y {
-                    scroll_position.y = y;
-                }
-            }
+            scroll_by(&mut scroll_position, computed, node, dx, dy);
         }
+    }
+}
+
+/// Scrolls `scroll_position` by `(-dx, -dy)` logical pixels along the axes `node` scrolls,
+/// keeping each in `[0, max]`, `max` being how far the contents overflow.
+///
+/// Writes only a position that moves: a mutable dereference marks the `ScrollPosition`
+/// changed, which wakes its observers (a combo closing on an ancestor's scroll) although
+/// nothing scrolled. Shared by the wheel and a finger's pan.
+fn scroll_by(
+    scroll_position: &mut Mut<ScrollPosition>,
+    computed: &ComputedNode,
+    node: &Node,
+    dx: f32,
+    dy: f32,
+) {
+    let overflow = (computed.content_size() - computed.size()) * computed.inverse_scale_factor();
+    let new_x = (node.overflow.x == OverflowAxis::Scroll)
+        .then(|| (scroll_position.x - dx).clamp(0.0, overflow.x.max(0.0)));
+    let new_y = (node.overflow.y == OverflowAxis::Scroll)
+        .then(|| (scroll_position.y - dy).clamp(0.0, overflow.y.max(0.0)));
+    if new_x.is_some_and(|x| x.to_bits() != scroll_position.x.to_bits())
+        || new_y.is_some_and(|y| y.to_bits() != scroll_position.y.to_bits())
+    {
+        if let Some(x) = new_x {
+            scroll_position.x = x;
+        }
+        if let Some(y) = new_y {
+            scroll_position.y = y;
+        }
+    }
+}
+
+/// Where each finger's last press began and whether it became a pan.
+///
+/// An entry stays after the lift, until the same finger presses again, so the systems that
+/// read the lift and the click (one frame later than the last drag) can still tell a pan from
+/// a tap.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct TouchPans(HashMap<PointerId, Pan>);
+
+impl TouchPans {
+    /// Whether the finger's last press moved past [`DRAG_THRESHOLD`] over a scroll area, so
+    /// what it lifts on is not a tap: nothing is activated, picked or closed by it.
+    pub(crate) fn panned(&self, pointer: PointerId) -> bool {
+        self.0.get(&pointer).is_some_and(|pan| pan.panning)
+    }
+}
+
+#[derive(Debug)]
+struct Pan {
+    /// The node the finger went down on.
+    started_on: Entity,
+    /// The innermost scrollable ancestor of `started_on`, or `None` when the finger went down
+    /// on a control that is dragged itself (a slider, a stepper, a scroll bar) or on nothing
+    /// that scrolls.
+    target: Option<Entity>,
+    /// How much of the finger's travel since the press has been scrolled.
+    applied: Vec2,
+    panning: bool,
+}
+
+/// Scrolls the innermost scroll area under a finger as the finger drags, once it has moved
+/// past [`DRAG_THRESHOLD`], and ends the press the drag began on so the lift neither activates
+/// nor picks it.
+///
+/// The area is routed as the wheel does: the nearest scrollable ancestor of the node the finger
+/// went down on, stopping after a [`FixedNode`] (a popup that scrolls itself is found first),
+/// and nothing is passed on at a limit. A finger that goes down on a [`Slider`], a
+/// [`NumericStepper`] or a [`ScrollBar`] keeps its own drag and does not pan.
+fn pan_with_finger(
+    t: On<MouseEvent>,
+    mut pans: ResMut<TouchPans>,
+    hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
+    own_drag: Query<(), Or<(With<Slider>, With<NumericStepper>, With<ScrollBar>)>>,
+    mut scrolled: Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
+    mut commands: Commands,
+) {
+    let event = *t.event();
+    if !event.touch || event.button.is_some_and(|b| b != PointerButton::Primary) {
+        return;
+    }
+    match event.kind {
+        MouseKind::Pressed => {
+            let target = find_pan_target(event.entity, &hierarchy, &own_drag, &scrolled);
+            pans.0.insert(
+                event.pointer,
+                Pan {
+                    started_on: event.entity,
+                    target,
+                    applied: Vec2::ZERO,
+                    panning: false,
+                },
+            );
+        }
+        MouseKind::Drag => {
+            let Some(pan) = pans.0.get_mut(&event.pointer) else {
+                return;
+            };
+            let Some(target) = pan.target else {
+                return;
+            };
+            if !pan.panning {
+                if event.distance.length() <= DRAG_THRESHOLD {
+                    return;
+                }
+                pan.panning = true;
+                end_press(&mut commands, &hierarchy, pan.started_on, target);
+            }
+            let delta = event.distance - pan.applied;
+            pan.applied = event.distance;
+            let Ok((mut scroll_position, computed, node)) = scrolled.get_mut(target) else {
+                return;
+            };
+            // A finger gives both axes, so an area that scrolls sideways alone takes a
+            // mostly vertical drag as a horizontal one, as the wheel does.
+            let sideways_only = node.overflow.y != OverflowAxis::Scroll;
+            let dx = if sideways_only && delta.y.abs() > delta.x.abs() {
+                delta.y
+            } else {
+                delta.x
+            };
+            scroll_by(&mut scroll_position, computed, node, dx, delta.y);
+        }
+        _ => {}
+    }
+}
+
+/// The scroll area a finger that went down on `entity` pans, if any.
+fn find_pan_target(
+    entity: Entity,
+    hierarchy: &Query<(Option<&ChildOf>, Has<FixedNode>)>,
+    own_drag: &Query<(), Or<(With<Slider>, With<NumericStepper>, With<ScrollBar>)>>,
+    scrolled: &Query<(&mut ScrollPosition, &ComputedNode, &Node)>,
+) -> Option<Entity> {
+    let mut found = None;
+    let mut current = Some(entity);
+    while let Some(entity) = current {
+        if own_drag.contains(entity) {
+            return None;
+        }
+        if found.is_none()
+            && scrolled.get(entity).is_ok_and(|(_, _, node)| {
+                node.overflow.x == OverflowAxis::Scroll || node.overflow.y == OverflowAxis::Scroll
+            })
+        {
+            found = Some(entity);
+        }
+        let (parent, fixed) = hierarchy.get(entity).ok()?;
+        // Look on past the area for a control dragged itself only up to the area, and stop at
+        // a floating popup, whose owner does not scroll with it.
+        if found.is_some() || fixed {
+            break;
+        }
+        current = parent.map(ChildOf::parent);
+    }
+    found
+}
+
+/// Ends the press a pan began, from the node the finger went down on up to the area: the
+/// buttons among them lose `Pressed`, so the lift fires no `Activate` (Bevy's button needs it),
+/// and a `Cancel` restores the resting look as a cancelled touch does.
+fn end_press(
+    commands: &mut Commands,
+    hierarchy: &Query<(Option<&ChildOf>, Has<FixedNode>)>,
+    started_on: Entity,
+    area: Entity,
+) {
+    let mut entity = started_on;
+    loop {
+        commands.entity(entity).try_remove::<Pressed>();
+        commands.trigger(MouseEvent {
+            entity,
+            kind: MouseKind::Cancel,
+            distance: Vec2::ZERO,
+            button: None,
+            // Not marked as a finger's, so the pan does not take it for the finger going away.
+            touch: false,
+            pointer: PointerId::Mouse,
+        });
+        if entity == area {
+            break;
+        }
+        let Ok((Some(parent), _)) = hierarchy.get(entity) else {
+            break;
+        };
+        entity = parent.parent();
     }
 }
 

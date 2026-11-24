@@ -85,7 +85,7 @@ use crate::numeric_stepper::NumericStepperPlugin;
 use crate::panel::PanelPlugin;
 use crate::pill::PillPlugin;
 use crate::push_button::PushButtonPlugin;
-use crate::scroll_area::ScrollAreaPlugin;
+use crate::scroll_area::{ScrollAreaPlugin, TouchPans};
 use crate::segmented_control::SegmentedControlPlugin;
 use crate::select::ItemsPlugin;
 use crate::setting_row::SettingRowPlugin;
@@ -389,8 +389,12 @@ struct HoverLock(bool);
 /// Re-triggers a pointer event `E` as a [`MouseEvent`]. The `Trigger` bound says that
 /// `E` bubbles through [`PointerTraversal`], as every pointer event does, which is what
 /// gives `On<E>` its `original_event_target`.
-fn observer_transformer<E>(trigger: On<E>, hover_lock: Res<HoverLock>, mut commands: Commands)
-where
+fn observer_transformer<E>(
+    trigger: On<E>,
+    hover_lock: Res<HoverLock>,
+    pans: Res<TouchPans>,
+    mut commands: Commands,
+) where
     E: PointerEvent
         + ToMouseEvent
         + for<'t> EntityEvent<Trigger<'t> = PropagateEntityTrigger<true, E, PointerTraversal>>,
@@ -407,6 +411,11 @@ where
     let kind = trigger.event().to_mouse_kind();
     // During a drag (a stepper being scrubbed) nothing else reacts to the pointer arriving.
     if hover_lock.0 && matches!(kind, MouseKind::Over) {
+        return;
+    }
+    // A finger that panned a scroll area did not tap what it went down on: no click of it.
+    let pointer = trigger.event().pointer().id;
+    if matches!(kind, MouseKind::Click(_)) && pans.panned(pointer) {
         return;
     }
     if trigger.event_target() == original {

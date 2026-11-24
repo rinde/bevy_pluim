@@ -24,7 +24,7 @@ use bevy::prelude::*;
 
 use crate::MouseKind;
 use crate::focus::{Unreachable, clear_label, sync_controls, sync_role, sync_value};
-use crate::scroll_area::PopupScrollBar;
+use crate::scroll_area::{PopupScrollBar, TouchPans};
 use crate::theme::Theme;
 
 /// How a combo's button is coloured.
@@ -108,9 +108,16 @@ pub(crate) struct PopupPointers<'w, 's> {
     pressing: Query<'w, 's, (&'static PointerId, &'static PointerPressState)>,
     parents: Query<'w, 's, &'static ChildOf>,
     bars: Query<'w, 's, &'static PopupScrollBar>,
+    pans: Res<'w, TouchPans>,
 }
 
 impl PopupPointers<'_, '_> {
+    /// Whether the finger's last press was a pan of a scroll area: its lift is not a tap, so
+    /// it closes nothing.
+    pub(crate) fn panned(&self, pointer: PointerId) -> bool {
+        self.pans.panned(pointer)
+    }
+
     /// Whether `test` holds for a hit of `pointer` or one of its ancestors. `None` asks about
     /// every pointer that is there now. A finger that just lifted is gone from the hover
     /// map, and is looked up where it was a frame before.

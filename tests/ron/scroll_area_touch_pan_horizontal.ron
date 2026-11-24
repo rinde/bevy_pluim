@@ -1,0 +1,21 @@
+// A finger pan on the horizontal-only area scrolls it sideways, and a vertical pan scrolls it
+// sideways too, as the wheel does (the area spans x 460..660, y 20..220).
+(
+    format_version: 3,
+    name: "a finger pan scrolls the horizontal scroll area, a vertical pan sideways too",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((580.0, 120.0)), finger: 0),
+        TouchMove(to: Screen((520.0, 120.0)), finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((60.0, 0.0)))),
+        TouchUp(finger: 0),
+        TouchDown(at: Screen((560.0, 150.0)), finger: 0),
+        TouchMove(to: Screen((560.0, 120.0)), finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((90.0, 0.0)))),
+        TouchUp(finger: 0),
+    ],
+    expect: [],
+)

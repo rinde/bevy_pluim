@@ -1,0 +1,22 @@
+// A finger pans the capped popup of `long combo` (it scrolls itself): the list scrolls, the
+// popup stays open and what the finger went down on is not picked.
+(
+    format_version: 3,
+    name: "a touch pan scrolls a capped combo popup and keeps it open",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("long combo"), Component("ComboButton"))),
+        Wait(3),
+        Check(Component(target: Name("long combo"), path: "ComboState", is: Eq(Open))),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "ScrollPosition.0.y", is: Eq(0.0))),
+        TouchDown(at: Within(Name("long combo"), Role(role: ListItem, label: "Option 4")), finger: 0),
+        TouchMove(to: Within(Name("long combo"), Role(role: ListItem, label: "Option 1")), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("long combo"), Component("ComboList")), path: "ScrollPosition.0.y", is: Gt(0.0))),
+        Check(Component(target: Name("long combo"), path: "ComboState", is: Eq(Open))),
+        Check(App(Selected(of: Name("long combo"), items: []))),
+    ],
+    expect: [],
+)

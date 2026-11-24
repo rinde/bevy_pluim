@@ -870,6 +870,9 @@ fn close_on_outside_click(
     mut commands: Commands,
 ) {
     for pointer in popup::primary_releases(&mut inputs) {
+        if pointers.panned(pointer) {
+            continue;
+        }
         let over = |entity: Entity| pointers.over(Some(pointer), entity);
         for (root, &state, refs) in &combos {
             if state != ComboState::Open {

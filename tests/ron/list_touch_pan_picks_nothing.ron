@@ -1,0 +1,20 @@
+// A finger that goes down on a row of a list in a scroll area and pans picks nothing and
+// leaves no pressed look; a tap on a row afterwards picks as before.
+(
+    format_version: 3,
+    name: "a touch pan over a list scrolls its area and picks nothing",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        TouchDown(at: Within(Name("list scroll area"), Role(role: ListItem, label: "Row 2")), finger: 0),
+        TouchMove(to: Within(Name("list scroll area"), Role(role: ListItem, label: "Row 1")), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("list scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Gt(0.0))),
+        Check(App(Selected(of: Name("scrolling list"), items: ["Row 1"]))),
+        TouchTap(Within(Name("list scroll area"), Role(role: ListItem, label: "Row 3"))),
+        Wait(1),
+        Check(App(Selected(of: Name("scrolling list"), items: ["Row 3"]))),
+    ],
+    expect: [],
+)

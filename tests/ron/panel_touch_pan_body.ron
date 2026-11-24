@@ -1,0 +1,15 @@
+// A finger pans the body of the `tall panel`, whose 100 px body scrolls, and picks nothing.
+(
+    format_version: 3,
+    name: "a touch pan scrolls a panel body",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        TouchDown(at: Within(Name("tall panel"), Text("Line 3")), finger: 0),
+        TouchMove(to: Within(Name("tall panel"), Text("Line 1")), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Within(Name("tall panel"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Gt(0.0))),
+    ],
+    expect: [],
+)

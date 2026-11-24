@@ -1,0 +1,15 @@
+// A pan over an area whose contents fit scrolls nothing (x 680..880, y 20..220).
+(
+    format_version: 3,
+    name: "a finger pan over a fitting scroll area moves nothing",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((780.0, 150.0)), finger: 0),
+        TouchMove(to: Screen((740.0, 80.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("fitting scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
+    ],
+    expect: [],
+)
