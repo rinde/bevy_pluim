@@ -1,0 +1,28 @@
+// A finger on a resting segment shows no hover look after it lifts, and one that slides off
+// before lifting picks nothing. The icon of a segment follows its text.
+(
+    format_version: 3,
+    name: "a finger leaves no hover look on a segment and sliding off picks nothing",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Capture(name: "resting icon", value: Component(target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))), path: "ImageNode.color")),
+        Capture(name: "resting ink", value: Component(target: Within(Name("own segmented control"), Text("Manual")), path: "TextColor.0")),
+        TouchDown(at: Within(Name("icon segmented control"), Role(role: Button, label: "List")), finger: 0),
+        TouchMove(to: Screen((900.0, 500.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Nth(1, Within(Name("icon segmented control"), Name("SegmentIcon"))), path: "ImageNode.color", is: Eq(Captured("resting icon")))),
+        Check(Not(Selected(Within(Name("icon segmented control"), Role(role: Button, label: "List"))))),
+        TouchDown(at: Within(Name("own segmented control"), Role(role: Button, label: "Manual")), finger: 0),
+        TouchMove(to: Screen((900.0, 500.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Auto"]))),
+        TouchTap(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Wait(2),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        Check(Component(target: Within(Name("own segmented control"), Text("Auto")), path: "TextColor.0", is: Eq(Captured("resting ink")))),
+    ],
+    expect: [],
+)

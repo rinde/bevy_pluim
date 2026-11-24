@@ -1,0 +1,34 @@
+// A touch tap on a tab picks it as a click does, and the stack shows its panel (created on
+// the first tap). A finger that slides off a tab before lifting picks nothing, and the
+// indicator slides to the tapped tab.
+(
+    format_version: 3,
+    name: "a touch tap on a tab shows its panel and a finger sliding off picks nothing",
+    setup: App(Tabs),
+    steps: [
+        Wait(10),
+        Capture(name: "from x", value: Component(target: Role(role: Tab, label: "Panel A"), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        Capture(name: "to x", value: Component(target: Role(role: Tab, label: "Panel B"), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        TouchDown(at: Role(role: Tab, label: "Panel B"), finger: 0),
+        TouchMove(to: Screen((900.0, 500.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(App(Selected(of: Role(role: Tab, label: "Panel A"), items: ["Panel A"]))),
+        Check(Not(Exists(Within(Name("Stack"), Text("Panel B"))))),
+        TouchTap(Role(role: Tab, label: "Panel B")),
+        Wait(2),
+        Check(App(Selected(of: Role(role: Tab, label: "Panel B"), items: ["Panel B"]))),
+        Check(Selected(Role(role: Tab, label: "Panel B"))),
+        Check(Visible(Within(Name("Stack"), Text("Panel B")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Gt(Captured(name: "from x", plus: 1.0)))),
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Lt(Captured(name: "to x", plus: -1.0)))),
+        Wait(60),
+        Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(Captured(name: "to x", plus: -1.0), Captured(name: "to x", plus: 1.0)))),
+        TouchTap(Role(role: Tab, label: "Panel A")),
+        Wait(2),
+        Check(Visible(Within(Name("Stack"), Text("Panel A")))),
+        Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
+    ],
+    expect: [],
+)

@@ -1,0 +1,27 @@
+// A touch tap on a segment picks it as a click does, in a text control and in an icon-only one;
+// a tap on the picked segment keeps it, and the roving tab stop follows the tapped segment.
+(
+    format_version: 3,
+    name: "a touch tap on a segment picks it",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Auto"]))),
+        TouchTap(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Wait(2),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        Check(Selected(Within(Name("own segmented control"), Role(role: Button, label: "Manual")))),
+        Check(Not(Selected(Within(Name("own segmented control"), Role(role: Button, label: "Auto"))))),
+        TouchTap(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Wait(2),
+        Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
+        TouchTap(Within(Name("icon only segmented control"), Role(role: Button, label: "Table"))),
+        Wait(2),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Table"]))),
+        Check(App(Selected(of: Name("first shared segmented control"), items: ["Dark"]))),
+        // The stop follows the picked segment: Tab enters the control at it.
+        Tap(key: Tab),
+        Check(App(Focused(of: Within(Name("own segmented control"), Role(role: Button, label: "Manual"))))),
+    ],
+    expect: [],
+)

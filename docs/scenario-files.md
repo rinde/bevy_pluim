@@ -179,7 +179,7 @@ selection), each with "Change theme". Their `*_text_follows_rem_size.ron` files 
 label is `Rem(0.6)` text and fits inside its fixed px card (104 x 92) or button (66 x 60) at
 `[text 1.5x]`; both pass, so those sizes stay px. The `Toolbar` screen also has three toolbars
 absolutely placed at x 0 (y 150, 300, 450) and spawned last, so nothing above moves and the tab
-order of the first two stays: `optional toolbar` (Pan, Zoom, `ZeroOrOne`, nothing open),
+order of the first two stays: `optional toolbar` (Pan, Zoom (`Tone::Warning`), `ZeroOrOne`, nothing open),
 `icon only toolbar` (`ToolbarLabels::Hidden`, Rail with key hint "1" and Signal with "2", `One`)
 and `underlined toolbar` (Trains, Stops, `One`, icon only, so each button has a `Tooltip`).
 `toolbar_click_picks_tool.ron` and `gallery_click_picks_card.ron` read the active look (the
