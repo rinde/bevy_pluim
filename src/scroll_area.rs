@@ -392,9 +392,9 @@ fn handle_hover(
         return;
     };
     // The pointer is on the thumb for every event but `Out`, a release included.
-    let hovered = !matches!(kind, MouseKind::Out);
+    let hovered = trigger.event().hovered();
     let dragging = drag.is_some_and(|drag| drag.dragging);
-    let pressed = matches!(kind, MouseKind::Pressed) || (dragging && hovered);
+    let pressed = trigger.event().pressed() || (dragging && hovered);
     if pressed {
         commands.entity(thumb).insert(Pressed);
     } else {

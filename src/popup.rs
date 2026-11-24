@@ -33,11 +33,29 @@ pub(crate) enum ButtonLook {
 /// A drag says nothing new about the pointer being on the button, and can arrive after the
 /// pointer left it, so it does not restyle it. A release or a click on a closed combo does
 /// not either. An open combo stays highlighted whatever the pointer does.
-pub(crate) const fn button_look(kind: MouseKind, open: bool) -> Option<ButtonLook> {
+///
+/// `hovered` is `MouseEvent::hovered`: a finger never hovers, so its `Over` changes nothing,
+/// its press shows the highlight while it is down, and its release or cancel puts the button
+/// back at rest.
+pub(crate) const fn button_look(kind: MouseKind, hovered: bool, open: bool) -> Option<ButtonLook> {
     match (kind, open) {
-        (MouseKind::Drag, _) | (MouseKind::Released | MouseKind::Click(_), false) => None,
-        (MouseKind::Over | MouseKind::Pressed, _) | (_, true) => Some(ButtonLook::Highlighted),
-        (MouseKind::Out, false) => Some(ButtonLook::Resting),
+        (MouseKind::Drag, _) => None,
+        (_, true) | (MouseKind::Pressed, false) => Some(ButtonLook::Highlighted),
+        (MouseKind::Over, false) => {
+            if hovered {
+                Some(ButtonLook::Highlighted)
+            } else {
+                None
+            }
+        }
+        (MouseKind::Out | MouseKind::Cancel, false) => Some(ButtonLook::Resting),
+        (MouseKind::Released | MouseKind::Click(_), false) => {
+            if hovered {
+                None
+            } else {
+                Some(ButtonLook::Resting)
+            }
+        }
     }
 }
 
@@ -123,15 +141,15 @@ mod tests {
     #[test]
     fn a_closed_button_highlights_on_over_and_press_and_rests_on_out() {
         assert_eq!(
-            button_look(MouseKind::Over, false),
+            button_look(MouseKind::Over, true, false),
             Some(ButtonLook::Highlighted)
         );
         assert_eq!(
-            button_look(MouseKind::Pressed, false),
+            button_look(MouseKind::Pressed, true, false),
             Some(ButtonLook::Highlighted)
         );
         assert_eq!(
-            button_look(MouseKind::Out, false),
+            button_look(MouseKind::Out, true, false),
             Some(ButtonLook::Resting)
         );
     }
@@ -140,7 +158,25 @@ mod tests {
     fn a_closed_button_ignores_drags_releases_and_clicks() {
         let click = MouseKind::Click(PointerButton::Primary);
         for kind in [MouseKind::Drag, MouseKind::Released, click] {
-            assert_eq!(button_look(kind, false), None);
+            assert_eq!(button_look(kind, true, false), None);
+        }
+    }
+
+    #[test]
+    fn a_finger_highlights_a_closed_button_only_while_it_is_down() {
+        let click = MouseKind::Click(PointerButton::Primary);
+        assert_eq!(button_look(MouseKind::Over, false, false), None);
+        assert_eq!(
+            button_look(MouseKind::Pressed, false, false),
+            Some(ButtonLook::Highlighted)
+        );
+        for kind in [
+            MouseKind::Released,
+            click,
+            MouseKind::Out,
+            MouseKind::Cancel,
+        ] {
+            assert_eq!(button_look(kind, false, false), Some(ButtonLook::Resting));
         }
     }
 
@@ -153,10 +189,14 @@ mod tests {
             MouseKind::Released,
             click,
             MouseKind::Out,
+            MouseKind::Cancel,
         ] {
-            assert_eq!(button_look(kind, true), Some(ButtonLook::Highlighted));
+            assert_eq!(
+                button_look(kind, false, true),
+                Some(ButtonLook::Highlighted)
+            );
         }
-        assert_eq!(button_look(MouseKind::Drag, true), None);
+        assert_eq!(button_look(MouseKind::Drag, false, true), None);
     }
 
     #[test]

@@ -1,0 +1,26 @@
+// A finger that slides off a push button before lifting activates nothing and
+// leaves no pressed or hover look behind.
+(
+    format_version: 3,
+    name: "a finger that slides off a push button activates nothing",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Role(role: Button, label: "Add"), finger: 0),
+        TouchMove(to: Role(role: Button, label: "Other"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Component(
+            target: Role(role: Button, label: "Other"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(0))],
+)

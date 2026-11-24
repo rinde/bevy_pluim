@@ -583,8 +583,8 @@ fn handle_mouse_events(
     // `on_reselect_row`; a release only recolours.
 
     // The pointer is on the view for every event but `Out`; a press looks selected.
-    let hovered = !matches!(t.event().kind, MouseKind::Out);
-    let pressed = matches!(t.event().kind, MouseKind::Pressed);
+    let hovered = t.event().hovered();
+    let pressed = t.event().pressed();
     let style = styles.get(*list_ref).copied().unwrap_or(CornerStyle::None);
     background_color.0 = item_background(theme.colors(), style, is_selected || pressed, hovered);
 }
@@ -645,7 +645,10 @@ fn handle_custom_view_mouse_events(
     theme: Res<Theme>,
 ) {
     let kind = t.event().kind;
-    if !matches!(kind, MouseKind::Pressed | MouseKind::Released) {
+    if !matches!(
+        kind,
+        MouseKind::Pressed | MouseKind::Released | MouseKind::Cancel
+    ) {
         return;
     }
     let Some(view) = custom_view_of(t.event().event_target(), &parents, &custom_views, &nested)

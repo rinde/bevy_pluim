@@ -315,9 +315,9 @@ fn handle_mouse_events(
 
     let highlight = match t.event().kind {
         // A press is a pointer on the swatch, and shows the strongest highlight.
-        MouseKind::Pressed => Some(HoverState::SelectedHover),
-        MouseKind::Over => Some(HoverState::of(is_selected, true)),
-        MouseKind::Out => Some(HoverState::of(is_selected, false)),
+        MouseKind::Pressed => Some(HoverState::of(true, t.event().hovered())),
+        MouseKind::Over => Some(HoverState::of(is_selected, t.event().hovered())),
+        MouseKind::Out | MouseKind::Cancel => Some(HoverState::of(is_selected, false)),
         // A click and a drag say nothing new about the pointer being on the swatch: the
         // over, press, release and out events around them set the highlight. A drag in
         // particular can arrive after the pointer left the swatch.

@@ -1,0 +1,16 @@
+// A finger that slides off a panel's close button before lifting does not
+// close the panel.
+(
+    format_version: 3,
+    name: "a finger sliding off a panel's close button leaves the panel open",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        TouchDown(at: Within(Name("closable panel"), Component("IconButton")), finger: 0),
+        TouchMove(to: Name("tall panel"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Exists(Name("closable panel"))),
+    ],
+    expect: [],
+)

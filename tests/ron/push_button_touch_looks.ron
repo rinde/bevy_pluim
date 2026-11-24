@@ -1,0 +1,28 @@
+// A finger on a push button shows the pressed look while it is down, a tap
+// activates once, and no hover look stays after the finger lifts (a finger
+// never hovers). Colours are DEFAULT_LIGHT_THEME_COLORS: background_primary
+// at rest and selected_hovered_item while pressed.
+(
+    format_version: 3,
+    name: "a finger shows the pressed look while down and no hover look after",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Role(role: Button, label: "Add"), finger: 0),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))),
+        )),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(1))],
+)

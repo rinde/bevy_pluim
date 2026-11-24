@@ -1,0 +1,21 @@
+// A finger that slides off a crumb before lifting trims nothing, and a tap on
+// the current (disabled) crumb does nothing either.
+(
+    format_version: 3,
+    name: "a finger sliding off a crumb or tapping the current one trims nothing",
+    setup: App(BreadCrumbs),
+    steps: [
+        Wait(2),
+        TouchTap(Role(role: Button, label: "Go to Panel B")),
+        Wait(2),
+        TouchDown(at: Within(Name("BreadCrumbs"), Role(role: Button, label: "Home")), finger: 0),
+        TouchMove(to: Screen((900.0, 500.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel B"]))),
+        Force(TouchTap(Within(Name("BreadCrumbs"), Role(role: Button, label: "Panel B")))),
+        Wait(2),
+        Check(App(Selected(of: Name("BreadCrumbs"), items: ["Home", "Panel B"]))),
+    ],
+    expect: [],
+)

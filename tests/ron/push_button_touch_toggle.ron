@@ -1,0 +1,17 @@
+// A tap flips a toggle push button; a finger that slides off does not.
+(
+    format_version: 3,
+    name: "a touch tap flips a toggle push button and a slide-off does not",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Role(role: Button, label: "Toggle"), finger: 0),
+        TouchMove(to: Role(role: Button, label: "Add"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Role(role: Button, label: "Toggle"), path: "ToggleState.0", is: Eq(false))),
+        TouchTap(Role(role: Button, label: "Toggle")),
+        Check(Component(target: Role(role: Button, label: "Toggle"), path: "ToggleState.0", is: Eq(true))),
+    ],
+    expect: [],
+)

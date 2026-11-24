@@ -376,8 +376,8 @@ fn handle_hover(
     if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
-    let pressed = matches!(kind, MouseKind::Pressed);
-    let hovered = !matches!(kind, MouseKind::Out);
+    let pressed = trigger.event().pressed();
+    let hovered = trigger.event().hovered();
     let target = trigger.event().event_target();
     if let Ok((button, refs, mut background, mut border, toggle)) = buttons.get_mut(target) {
         let on = toggle.is_some_and(|t| t.0);

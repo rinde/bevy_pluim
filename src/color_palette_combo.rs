@@ -738,6 +738,7 @@ fn handle_combo_button_mouse_events(
 
     if let Some(look) = popup::button_look(
         trigger.event().kind,
+        trigger.event().hovered(),
         *combo_state == ColorPaletteComboState::Open,
     ) {
         popup::apply_look(look, &theme, &mut background_color, &mut border_color);

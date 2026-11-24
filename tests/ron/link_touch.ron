@@ -1,0 +1,29 @@
+// A tap activates a link once, a finger that slides off activates nothing,
+// and the pressed text colour shows only while the finger is down.
+(
+    format_version: 3,
+    name: "a touch tap activates a link and a slide-off does not",
+    setup: App(ButtonNames),
+    steps: [
+        Wait(2),
+        TouchDown(at: Name("link"), finger: 0),
+        Check(Component(
+            target: Within(Name("link"), Text("Docs")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.11764706,green:0.2509804,blue:0.6862745,alpha:1.0))),
+        )),
+        TouchMove(to: Name("plain button"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Resource(path: "TouchTaps.link", is: Eq(0))),
+        TouchTap(Name("link")),
+        Check(Resource(path: "TouchTaps.link", is: Eq(1))),
+        Wait(2),
+        Check(Component(
+            target: Within(Name("link"), Text("Docs")),
+            path: "TextColor.0",
+            is: Eq(Srgba((red:0.14509805,green:0.3882353,blue:0.92156863,alpha:1.0))),
+        )),
+    ],
+    expect: [Resource(path: "TouchTaps.link", is: Eq(1))],
+)

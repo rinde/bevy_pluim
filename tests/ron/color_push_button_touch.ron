@@ -1,0 +1,18 @@
+// A tap activates a colour button once; a finger that slides off activates
+// nothing.
+(
+    format_version: 3,
+    name: "a touch tap activates a colour button and a slide-off does not",
+    setup: App(ButtonNames),
+    steps: [
+        Wait(2),
+        TouchDown(at: Name("colour button"), finger: 0),
+        TouchMove(to: Name("plain button"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Resource(path: "TouchTaps.colour", is: Eq(0))),
+        TouchTap(Name("colour button")),
+        Check(Resource(path: "TouchTaps.colour", is: Eq(1))),
+    ],
+    expect: [Resource(path: "TouchTaps.colour", is: Eq(1))],
+)

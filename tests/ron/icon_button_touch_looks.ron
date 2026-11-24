@@ -1,0 +1,21 @@
+// A finger on an icon button shows the pressed look while it is down and no
+// hover look stays after it lifts; a forced tap on a disabled toggle button
+// changes nothing.
+(
+    format_version: 3,
+    name: "a finger shows the pressed look on an icon button and a disabled one ignores it",
+    setup: App(IconButtons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Name("regular button"), finger: 0),
+        Check(Component(target: Name("regular button"), path: "BackgroundColor.0", is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Name("regular button"), path: "BackgroundColor.0", is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))))),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        Force(TouchTap(Name("disabled toggle button"))),
+        Wait(2),
+        Check(Component(target: Name("disabled toggle button"), path: "ToggleState.0", is: Eq(false))),
+    ],
+    expect: [],
+)

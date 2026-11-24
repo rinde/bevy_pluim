@@ -598,7 +598,11 @@ fn handle_combo_button_mouse_events(
         return;
     };
 
-    if let Some(look) = popup::button_look(trigger.event().kind, *combo_state == ComboState::Open) {
+    if let Some(look) = popup::button_look(
+        trigger.event().kind,
+        trigger.event().hovered(),
+        *combo_state == ComboState::Open,
+    ) {
         popup::apply_look(look, &theme, &mut background_color, &mut border_color);
     }
 }

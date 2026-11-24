@@ -1,0 +1,16 @@
+// A touch tap on a disabled push button does nothing. The tester refuses to
+// tap a button that is not actionable (a disabled one is not), so the tap is
+// played with `Force`: it reaches the button as a real finger would, and the
+// widget has to ignore it.
+(
+    format_version: 3,
+    name: "a touch tap on a disabled push button does nothing",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        Force(TouchTap(Role(role: Button, label: "Disabled"))),
+        Wait(2),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(0))],
+)

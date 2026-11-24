@@ -1,0 +1,17 @@
+// A compact push button takes a tap and shows the pressed look while the
+// finger is down, resting again after it lifts.
+(
+    format_version: 3,
+    name: "a finger on a compact push button taps and shows the pressed look",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Name("compact button"), finger: 0),
+        Check(Component(target: Name("compact button"), path: "BackgroundColor.0", is: Eq(Srgba((red:0.3764706,green:0.64705884,blue:0.98039216,alpha:1.0))))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Component(target: Name("compact button"), path: "BackgroundColor.0", is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))))),
+        Check(Resource(path: "TouchTaps.compact", is: Eq(1))),
+    ],
+    expect: [Resource(path: "TouchTaps.compact", is: Eq(1))],
+)
