@@ -1,0 +1,23 @@
+// A tap opens a filter combo with the focus in the search box; typing filters the options
+// and a tap on the remaining option picks it and closes the popup.
+(
+    format_version: 3,
+    name: "a tap opens a filter combo, typing filters and a tap on an option picks it",
+    setup: App(FilterCombos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("filter combo"), Component("ComboButton"))),
+        Wait(3),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Open))),
+        Check(App(Focused(of: Within(Name("filter combo"), Component("TextInput"))))),
+        Type(text: "Del", into: Within(Name("filter combo"), Component("TextInput"))),
+        Wait(2),
+        Check(Component(target: Nth(1, Within(Name("filter combo"), Component("ItemView"))), path: "Node.display", is: Eq(Flex))),
+        Check(Component(target: Nth(0, Within(Name("filter combo"), Component("ItemView"))), path: "Node.display", is: Eq(None))),
+        TouchTap(Nth(1, Within(Name("filter combo"), Component("ItemView")))),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("filter combo"), items: ["Delft"]))),
+    ],
+    expect: [],
+)

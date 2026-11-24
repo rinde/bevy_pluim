@@ -1,0 +1,28 @@
+// A tap anywhere else takes the focus off a text field and commits its text, on empty space
+// as on another widget, as a click does.
+(
+    format_version: 3,
+    name: "a tap elsewhere takes the focus off a text field and commits it",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("name field"), Component("TextInput"))),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("name field"), Component("TextInput"))))),
+        Type(text: "1", into: Within(Name("name field"), Component("TextInput"))),
+        Wait(2),
+        TouchTap(Screen((900.0, 500.0))),
+        Wait(2),
+        Check(Not(App(Focused(of: Within(Name("name field"), Component("TextInput")))))),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(1))),
+        Check(Resource(path: "FieldEvents.committed", is: Eq("Alpha1"))),
+        TouchTap(Within(Name("seed field"), Component("TextInput"))),
+        Type(text: "7", into: Within(Name("seed field"), Component("TextInput"))),
+        Wait(2),
+        TouchTap(Role(role: Button, label: "Other")),
+        Wait(2),
+        Check(Resource(path: "FieldEvents.commits", is: Eq(2))),
+        Check(Resource(path: "FieldEvents.committed", is: Eq("7"))),
+    ],
+    expect: [],
+)

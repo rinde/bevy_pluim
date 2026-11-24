@@ -1,0 +1,21 @@
+// A tap on the 1 px border of a text field's box gives the field the keyboard focus, as a
+// click does, and a tap on its text focuses it too.
+(
+    format_version: 3,
+    name: "a tap on the border or the text of a text field gives it the focus",
+    setup: App(TextFields),
+    steps: [
+        Wait(2),
+        Check(Not(App(Focused(of: Within(Name("name field"), Component("TextInput")))))),
+        TouchTap(Screen((20.5, 32.0))),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("name field"), Component("TextInput"))))),
+        TouchTap(Role(role: Button, label: "Other")),
+        Wait(2),
+        Check(Not(App(Focused(of: Within(Name("name field"), Component("TextInput")))))),
+        TouchTap(Within(Name("seed field"), Component("TextInput"))),
+        Wait(2),
+        Check(App(Focused(of: Within(Name("seed field"), Component("TextInput"))))),
+    ],
+    expect: [],
+)

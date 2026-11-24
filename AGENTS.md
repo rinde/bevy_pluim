@@ -197,6 +197,7 @@ which doc to open, and each doc links on to the design notes it relies on.
   Every `Activate` widget (`IconButton`, `Toolbar`, `SegmentedControl`, an app's button) is
   covered without code of its own; a widget that picks on `MouseKind::Click` or `Released` would
   not be. The drag threshold is the shared `crate::DRAG_THRESHOLD`.
+- **No on-screen keyboard.** Bevy has no API to show one on touch targets, so `TextField`, the `FilterCombo` search box and the stepper's editor take the focus on a tap but the app must raise any soft keyboard itself.
 - **Corner radius is a `Node` field.** Since Bevy 0.18 `BorderRadius` is
   `Node::border_radius`, not a component; set it on the node. Since Bevy 0.20
   its corners are `CornerRadius`es and its constructors (`BorderRadius::all`,
