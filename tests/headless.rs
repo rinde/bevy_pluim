@@ -15169,20 +15169,17 @@ fn a_clicked_option_picks_by_the_same_rules_and_a_click_outside_closes_without_p
     let mut fa = filter_app();
     fa.open();
     fa.type_text("utr");
-    // A press and release on nothing: the pointer is on neither the button nor the popup.
-    for state in [
-        bevy::input::ButtonState::Pressed,
-        bevy::input::ButtonState::Released,
-    ] {
-        fa.app
-            .world_mut()
-            .write_message(bevy::input::mouse::MouseButtonInput {
-                button: MouseButton::Left,
-                state,
-                window: fa.window,
-            });
-        fa.app.update();
-    }
+    // A release on nothing: the pointer is on neither the button nor the popup.
+    fa.app
+        .world_mut()
+        .write_message(bevy::picking::pointer::PointerInput::new(
+            PointerId::Mouse,
+            pointer_location(),
+            bevy::picking::pointer::PointerAction::Release(
+                bevy::picking::pointer::PointerButton::Primary,
+            ),
+        ));
+    fa.app.update();
     fa.settle();
     assert_eq!(fa.state(), ComboState::Closed);
     assert!(fa.selected().is_empty());

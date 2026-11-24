@@ -1,0 +1,17 @@
+// A tap on a palette combo's colour button opens its popup and a second tap on it closes it.
+(
+    format_version: 3,
+    name: "a tap on a palette combo's button opens the popup and a second tap closes it",
+    setup: App(ColorPalette),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Wait(1),
+        Check(Component(target: Name("first palette combo"), path: "ColorPaletteComboState", is: Eq(Open))),
+        Check(Visible(Name("first palette combo popup"))),
+        TouchTap(Within(Name("first palette combo"), Component("ColorPushButton"))),
+        Check(Component(target: Name("first palette combo"), path: "ColorPaletteComboState", is: Eq(Closed))),
+        Check(Not(Visible(Name("first palette combo popup")))),
+    ],
+    expect: [],
+)

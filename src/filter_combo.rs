@@ -15,7 +15,7 @@ use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusCause, FocusGained, FocusLost, FocusedInput, InputFocus};
-use bevy::picking::hover::Hovered;
+use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextEdit};
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiSystems};
@@ -34,9 +34,9 @@ use crate::focus::{
 use crate::glyph_images::{GlyphKey, shared};
 use crate::icon::Icon;
 use crate::list::{CornerStyle, ItemView, List};
-use crate::popup::{self, ButtonLook};
+use crate::popup::{self, ButtonLook, PopupPointers};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
-use crate::scroll_area::{PopupScrollBar, popup_scroll_bar, popup_scroll_bar_hovered};
+use crate::scroll_area::popup_scroll_bar;
 use crate::select::{Item, ItemOf, Selection, SelectionParam, SelectionValue};
 use crate::text_field::{OwnKeys, TextField, TextFieldChange, TextFieldRefs};
 use crate::theme::Theme;
@@ -203,7 +203,6 @@ impl FilterCombo {
                 BorderColor::default(),
                 // A popup floats over what is below it, so it takes the pointer from there.
                 Pickable::default(),
-                Hovered::default(),
                 Visibility::Hidden,
                 FilterPart(root),
                 ChildOf(root),
@@ -212,7 +211,6 @@ impl FilterCombo {
         let field = commands
             .spawn((
                 search_field(combo_name.as_deref()),
-                Hovered::default(),
                 FilterPart(root),
                 ChildOf(popup),
             ))
@@ -242,7 +240,6 @@ impl FilterCombo {
                 Text::new(NO_MATCHES_TEXT),
                 FilterEmpty,
                 FilterPart(root),
-                Hovered::default(),
                 Node {
                     display: Display::None,
                     padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
@@ -799,8 +796,7 @@ fn on_focus_lost(
     lost: On<FocusLost>,
     parts: Query<&FilterPart>,
     combos: Query<(&FilterComboRefs, &ComboState)>,
-    hovered: Query<&Hovered>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    pointers: PopupPointers,
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
@@ -810,15 +806,17 @@ fn on_focus_lost(
     let Ok((refs, &state)) = combos.get(root) else {
         return;
     };
-    let over = |entity: Entity| hovered.get(entity).is_ok_and(Hovered::get);
+    let over = |entity: Entity| pointers.over(None, entity);
     let open = state == ComboState::Open;
     if open {
         // The focus going to the button: by a press on it, the button toggles the popup itself
         // on release; by Shift+Tab, the popup closes.
+        // A press on the button, a finger included, is not leaving whatever took the focus.
+        if pointers.pressed_over(refs.button) {
+            return;
+        }
         if focus.get() == Some(refs.button) {
-            if !(over(refs.button) && mouse.pressed(MouseButton::Left)) {
-                commands.entity(root).insert(ComboState::Closed);
-            }
+            commands.entity(root).insert(ComboState::Closed);
             return;
         }
         // A click in the popup takes the focus off the search box (the list, the empty line
@@ -856,39 +854,40 @@ fn on_list_focus(
     }
 }
 
-/// Closes an open combo when the left button is released outside of it.
+/// Closes an open combo when a pointer lifts its primary button, or a finger, outside of it.
 ///
-/// Inside is the button, which toggles the popup itself, and the popup: the search box and the
+/// Inside, for the pointer that lifted (picking's hover map has an entry for a finger as well
+/// as for the mouse), is the button, which toggles the popup itself, and the popup: the search box and the
 /// zero-results line always, and the list only for a selection of many, so that a pick there
 /// keeps the popup open for the next one.
 fn close_on_outside_click(
-    mouse_button: Res<ButtonInput<MouseButton>>,
+    mut inputs: MessageReader<PointerInput>,
+    pointers: PopupPointers,
     combos: Query<(Entity, &ComboState, &FilterComboRefs), With<FilterCombo>>,
-    hovered: Query<&Hovered>,
-    scroll_bars: Query<(&PopupScrollBar, &Hovered)>,
     selections: SelectionParam,
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    if !mouse_button.just_released(MouseButton::Left) {
-        return;
-    }
-    let over = |entity: Entity| hovered.get(entity).is_ok_and(Hovered::get);
-    for (root, &state, refs) in &combos {
-        if state != ComboState::Open {
-            continue;
-        }
-        let multiple = selections
-            .get(refs.list)
-            .is_some_and(SelectionValue::allow_multiple);
-        let inside = over(refs.popup)
-            && (multiple || !over(refs.list) || popup_scroll_bar_hovered(&scroll_bars, refs.list));
-        if popup::closes_on_outside_release(true, over(refs.button), inside) {
-            if let Ok((mut background, mut border)) = buttons.get_mut(refs.button) {
-                popup::apply_look(ButtonLook::Resting, &theme, &mut background, &mut border);
+    for pointer in popup::primary_releases(&mut inputs) {
+        let over = |entity: Entity| pointers.over(Some(pointer), entity);
+        for (root, &state, refs) in &combos {
+            if state != ComboState::Open {
+                continue;
             }
-            commands.entity(root).insert(ComboState::Closed);
+            let multiple = selections
+                .get(refs.list)
+                .is_some_and(SelectionValue::allow_multiple);
+            let inside = over(refs.popup)
+                && (multiple
+                    || !over(refs.list)
+                    || pointers.over_scroll_bar(Some(pointer), refs.list));
+            if popup::closes_on_outside_release(true, over(refs.button), inside) {
+                if let Ok((mut background, mut border)) = buttons.get_mut(refs.button) {
+                    popup::apply_look(ButtonLook::Resting, &theme, &mut background, &mut border);
+                }
+                commands.entity(root).insert(ComboState::Closed);
+            }
         }
     }
 }

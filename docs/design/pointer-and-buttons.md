@@ -37,9 +37,9 @@ observer on `UiRoot` would never see those for a button. `PointerOver`,
 `Click` is a press and a release on the same node, which `Released` cannot
 say (it also ends a press that began elsewhere), and `Drag` is a move with a
 button held, which widgets ignore but the `NumericStepper` (the scroll thumb's drag is the
-`bevy_ui_widgets` `Scrollbar`'s). The combo's outside-click handler
-reads `ButtonInput<MouseButton>`, not a pointer event, so a `Button` cannot
-starve it.
+`bevy_ui_widgets` `Scrollbar`'s). The popups' outside-click handlers
+read `PointerInput` releases and the hover map, not a `MouseEvent`, so a `Button` cannot
+starve them, and a tap works as a click (#796).
 
 ## Touch (#793, #795)
 
@@ -57,7 +57,7 @@ a lift, slide off or cancel no hover look stays. Picking's `Hovered` follows
 `PointerId::Mouse` only, so a system that reads it never sees a finger. A tap
 activates once, a disabled button ignores it and a finger that slides off before
 lifting activates nothing (`push_button_touch_*.ron` (looks, disabled, slide-off, cancel, toggle, compact, no default hover), `icon_button_touch_tap.ron`, `icon_button_touch_looks.ron`,
-`breadcrumbs_touch_tap_trims.ron`, `breadcrumbs_touch_slide_off_and_disabled.ron`, `breadcrumbs_touch_looks.ron`, `panel_touch_close.ron`, `panel_touch_slide_off.ron`, `link_touch.ron`, `color_push_button_touch.ron`; the list widgets' `list_touch_*.ron`, `virtual_list_touch_*.ron` and `color_palette_touch_taps_pick.ron` (a tap picks as a click does, a custom row reads `Hovered`, which a finger never sets); the `TouchTaps` resource counts the `Activate`s of `compact button` and `no hover button` (end of the `Buttons` screen) and of `ButtonNames`' link and colour button, and the `IconButtons` screen ends with a `disabled toggle button`; the other widgets' touch
+`breadcrumbs_touch_tap_trims.ron`, `breadcrumbs_touch_slide_off_and_disabled.ron`, `breadcrumbs_touch_looks.ron`, `panel_touch_close.ron`, `panel_touch_slide_off.ron`, `link_touch.ron`, `color_push_button_touch.ron`; the list widgets' `list_touch_*.ron`, `virtual_list_touch_*.ron` and `color_palette_touch_taps_pick.ron` (a tap picks as a click does, a custom row reads `Hovered`, which a finger never sets); the popups' (#796): `combo_touch_*.ron`, `filter_combo_touch_*.ron` and `color_palette_combo_touch_*.ron` (a tap opens, a second tap closes, a tap on an option picks, a tap outside closes, a tap on the popup does not reach what is beneath); the `TouchTaps` resource counts the `Activate`s of `compact button` and `no hover button` (end of the `Buttons` screen) and of `ButtonNames`' link and colour button, and the `IconButtons` screen ends with a `disabled toggle button`; the other widgets' touch
 work is the rest of epic #793).
 
 **Long press on a `Tooltip` (#802).** A finger held `TOOLTIP_DELAY_SECS` on a `Tooltip` node without moving past `DRAG_THRESHOLD` shows the popup (above the node when it fits). When it shows, the press is cancelled (`Pressed` removed, a `MouseKind::Cancel` for the look), so the lift fires no `Activate` and the widget picks nothing; a short tap is unchanged. See [`tooltip.rs`](../modules/tooltip.md).
@@ -70,13 +70,9 @@ A system that asks where
 the pointer is now, outside a `MouseEvent`, reads `bevy::picking::hover::Hovered`
 (required by the component it asks about): true while the mouse pointer is on
 the entity or on any of its descendants, as picking's `HoverMap` says. The
-outside-click systems of `Combo` and `ColorPaletteCombo` read it on their
-button (`ComboButton`, the palette combo's `ColorPaletteComboButton`) and popup
-(`ComboList`, `ColorPaletteComboFloat`), and the `selection_change` of
+`selection_change` of
 `list.rs` and `color_palette.rs` on each `ItemView`, to keep the hover colour of
-the item under the pointer. It is on the button rather than the combo because a
-`Combo`'s popup list is its descendant, so the combo's own `Hovered` would be
-true over the list as well. Bevy's `RelativeCursorPosition` is not used: it is
+the item under the pointer. Bevy's `RelativeCursorPosition` is not used: it is
 only computed for cameras that render to a window, so UI drawn to an image (the
 recorder, any render-to-texture UI) never had the pointer on it (#100).
 `Hovered` follows the hover map, not the geometry: a node is only hovered when
@@ -84,8 +80,7 @@ nothing above it that blocks the pointer (`should_block_lower`) is in the way,
 so an item under an open popup is not. A node with `should_block_lower: false`
 (a combo's button, an `ItemView`) is hovered and lets what is below be hovered
 too; a `Pickable::IGNORE` node (an item's label) is never in the hover map, so
-only the node it lies on counts. It follows `PointerId::Mouse` only, not touch;
-the outside click reads the mouse button anyway. It is updated in `PreUpdate`,
+only the node it lies on counts. It follows `PointerId::Mouse` only, not touch; the combo popups read the hover map of the pointer that released instead (`popup::PopupPointers`). It is updated in `PreUpdate`,
 so an `Update` system sees this frame's pointer.
 
 ## Buttons are `bevy::ui_widgets::Button`

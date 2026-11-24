@@ -1,0 +1,31 @@
+// A tap on a filter combo's button opens it with the focus in the search box, a tap on its
+// search box leaves it open, a tap on an option picks it and closes the popup for a selection
+// of one, and a second tap on the button closes an open popup.
+(
+    format_version: 3,
+    name: "taps open a filter combo, keep it open on the search box and pick an option",
+    setup: App(FilterCombos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("filter combo"), Component("ComboButton"))),
+        Wait(3),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Open))),
+        Check(App(Focused(of: Within(Name("filter combo"), Component("TextInput"))))),
+        TouchTap(Within(Name("filter combo"), Component("TextInput"))),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Open))),
+        Check(App(Focused(of: Within(Name("filter combo"), Component("TextInput"))))),
+        TouchTap(Within(Name("filter combo"), Component("ComboButton"))),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Closed))),
+        TouchTap(Within(Name("filter combo"), Component("ComboButton"))),
+        Wait(3),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Open))),
+        TouchTap(Nth(3, Within(Name("filter combo"), Component("ItemView")))),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("filter combo"), items: ["Utrecht"]))),
+        Check(App(Selected(of: Name("city list"), items: ["Utrecht"]))),
+    ],
+    expect: [],
+)

@@ -1,0 +1,25 @@
+// A tap on an option of an open combo picks it, closes the popup and labels the button, as a
+// click does. The popup floats over the "Underneath" button, which the tap does not reach.
+(
+    format_version: 3,
+    name: "a tap on a combo's option picks it and closes the popup",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("first combo"), Component("ComboButton"))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        TouchTap(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
+        Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
+        Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Canada"))),
+        Check(App(Selected(of: Name("third combo"), items: ["Canada"]))),
+        Check(App(Selected(of: Name("own combo"), items: []))),
+        // Another pick replaces the first.
+        TouchTap(Within(Name("first combo"), Component("ComboButton"))),
+        TouchTap(Within(Name("first combo"), Role(role: ListItem, label: "Belgium"))),
+        Check(App(Selected(of: Name("first combo"), items: ["Belgium"]))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+    ],
+    expect: [App(Selected(of: Name("first combo"), items: ["Belgium"]))],
+)

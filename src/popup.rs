@@ -12,11 +12,19 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashMap;
+use bevy::ecs::system::SystemParam;
 use bevy::input_focus::{FocusCause, InputFocus};
+use bevy::picking::backend::HitData;
+use bevy::picking::hover::{HoverMap, PreviousHoverMap};
+use bevy::picking::pointer::{
+    PointerAction, PointerButton, PointerId, PointerInput, PointerPressState,
+};
 use bevy::prelude::*;
 
 use crate::MouseKind;
 use crate::focus::{Unreachable, clear_label, sync_controls, sync_role, sync_value};
+use crate::scroll_area::PopupScrollBar;
 use crate::theme::Theme;
 
 /// How a combo's button is coloured.
@@ -78,8 +86,74 @@ pub(crate) fn apply_look(
     }
 }
 
-/// Whether a release of the left button closes the popup: it is open and the pointer is on
-/// neither the button nor the part of the popup that counts as inside.
+/// The pointers that lifted their primary button (the left mouse button, a finger) since the
+/// system last looked. Reading the messages takes them, so call it once per run.
+pub(crate) fn primary_releases(inputs: &mut MessageReader<PointerInput>) -> Vec<PointerId> {
+    inputs
+        .read()
+        .filter(|input| matches!(input.action, PointerAction::Release(PointerButton::Primary)))
+        .map(|input| input.pointer_id)
+        .collect()
+}
+
+/// Where the pointers are, whatever their kind: the hover map of picking, which has an entry
+/// for a finger as well as for the mouse, where picking's `Hovered` follows the mouse only.
+///
+/// A node is under a pointer when it, or a descendant of it, is among the entities that
+/// pointer hits, which is what `Hovered` says for the mouse.
+#[derive(SystemParam)]
+pub(crate) struct PopupPointers<'w, 's> {
+    hover_map: Res<'w, HoverMap>,
+    previous: Res<'w, PreviousHoverMap>,
+    pressing: Query<'w, 's, (&'static PointerId, &'static PointerPressState)>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    bars: Query<'w, 's, &'static PopupScrollBar>,
+}
+
+impl PopupPointers<'_, '_> {
+    /// Whether `test` holds for a hit of `pointer` or one of its ancestors. `None` asks about
+    /// every pointer that is there now. A finger that just lifted is gone from the hover
+    /// map, and is looked up where it was a frame before.
+    fn hit(&self, pointer: Option<PointerId>, test: impl Fn(Entity) -> bool) -> bool {
+        let under = |hits: &EntityHashMap<HitData>| {
+            hits.keys()
+                .any(|&hit| test(hit) || self.parents.iter_ancestors(hit).any(&test))
+        };
+        pointer.map_or_else(
+            || self.hover_map.values().any(under),
+            |id| {
+                self.hover_map
+                    .get(&id)
+                    .or_else(|| self.previous.get(&id))
+                    .is_some_and(under)
+            },
+        )
+    }
+
+    /// Whether `pointer` (any pointer for `None`) is on `entity`.
+    pub(crate) fn over(&self, pointer: Option<PointerId>, entity: Entity) -> bool {
+        self.hit(pointer, |hit| hit == entity)
+    }
+
+    /// Whether `pointer` (any pointer for `None`) is on the scroll bar of `list`, which counts
+    /// as inside its popup.
+    pub(crate) fn over_scroll_bar(&self, pointer: Option<PointerId>, list: Entity) -> bool {
+        self.hit(pointer, |hit| {
+            self.bars.get(hit).is_ok_and(|bar| bar.list() == list)
+        })
+    }
+
+    /// Whether a pointer that has its primary button or finger down is on `entity`.
+    pub(crate) fn pressed_over(&self, entity: Entity) -> bool {
+        self.pressing
+            .iter()
+            .any(|(&id, press)| press.is_primary_pressed() && self.over(Some(id), entity))
+    }
+}
+
+/// Whether a release of the primary button the popup: it is open and the pointer is on
+/// neither the button nor the part of the popup that counts as inside, for the pointer that
+/// lifted, a mouse or a finger.
 ///
 /// What counts as inside differs: a `Combo`'s list only for a selection of many items, a
 /// `ColorPaletteCombo`'s float always.
