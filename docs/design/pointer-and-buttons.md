@@ -57,7 +57,7 @@ a lift, slide off or cancel no hover look stays. Picking's `Hovered` follows
 `PointerId::Mouse` only, so a system that reads it never sees a finger. A tap
 activates once, a disabled button ignores it and a finger that slides off before
 lifting activates nothing (`push_button_touch_*.ron` (looks, disabled, slide-off, cancel, toggle, compact, no default hover), `icon_button_touch_tap.ron`, `icon_button_touch_looks.ron`,
-`breadcrumbs_touch_tap_trims.ron`, `breadcrumbs_touch_slide_off_and_disabled.ron`, `breadcrumbs_touch_looks.ron`, `panel_touch_close.ron`, `panel_touch_slide_off.ron`, `link_touch.ron`, `color_push_button_touch.ron`; the `TouchTaps` resource counts the `Activate`s of `compact button` and `no hover button` (end of the `Buttons` screen) and of `ButtonNames`' link and colour button, and the `IconButtons` screen ends with a `disabled toggle button`; the other widgets' touch
+`breadcrumbs_touch_tap_trims.ron`, `breadcrumbs_touch_slide_off_and_disabled.ron`, `breadcrumbs_touch_looks.ron`, `panel_touch_close.ron`, `panel_touch_slide_off.ron`, `link_touch.ron`, `color_push_button_touch.ron`; the list widgets' `list_touch_*.ron`, `virtual_list_touch_*.ron` and `color_palette_touch_taps_pick.ron` (a tap picks as a click does, a custom row reads `Hovered`, which a finger never sets); the `TouchTaps` resource counts the `Activate`s of `compact button` and `no hover button` (end of the `Buttons` screen) and of `ButtonNames`' link and colour button, and the `IconButtons` screen ends with a `disabled toggle button`; the other widgets' touch
 work is the rest of epic #793).
 
 ## "Is the pointer on it?" is picking's `Hovered`

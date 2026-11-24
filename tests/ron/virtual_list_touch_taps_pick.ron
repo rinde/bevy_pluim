@@ -1,0 +1,40 @@
+// A touch tap on a virtual list row picks its item, as a click does, and makes no hover
+// look stay behind. After a scroll hands a row to another item, a tap on that row picks the
+// item it shows now. A finger that slides off a row picks nothing.
+(
+    format_version: 3,
+    name: "a touch tap picks a virtual list row, also one handed to another item by a scroll",
+    setup: App(VirtualList),
+    steps: [
+        Wait(3),
+        TouchTap(Within(Name("virtual list"), Role(role: ListItem, label: "Row 3"))),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 3"]))),
+        Check(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 3")))),
+        // Slide off Row 4: nothing changes.
+        TouchDown(at: Within(Name("virtual list"), Role(role: ListItem, label: "Row 4")), finger: 0),
+        TouchMove(to: Screen((1100.0, 700.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 3"]))),
+        // Scroll to the bottom: the same thirteen rows now show the last items.
+        MoveTo(Within(Name("virtual list"), Role(role: ListItem, label: "Row 2"))),
+        Wheel(x: 0.0, y: -1000000.0),
+        Wait(3),
+        Check(Count(with: ["VirtualListRow"], is: Eq(13))),
+        Check(Not(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000"))))),
+        TouchTap(Within(Name("virtual list"), Role(role: ListItem, label: "Row 9999"))),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 9999"]))),
+        Check(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 9999")))),
+        Check(Not(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 10000"))))),
+        // Back at the top, the row that showed Row 3 shows an unselected item again.
+        Wheel(x: 0.0, y: 1000000.0),
+        Wait(3),
+        Check(Not(Selected(Within(Name("virtual list"), Role(role: ListItem, label: "Row 3"))))),
+        TouchTap(Within(Name("virtual list"), Role(role: ListItem, label: "Row 3"))),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 3"]))),
+    ],
+    expect: [App(Selected(of: Name("virtual list"), items: ["Row 3"]))],
+)
