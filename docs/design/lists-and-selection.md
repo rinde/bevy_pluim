@@ -49,7 +49,7 @@ on the first selected row, like Enter or Space on an active row that is already
 deselects it as far as the selection allows (`One` keeps its item) and the `ListBox`'s
 events are the only path: no `MouseEvent::Released` deselects, or a click on the first
 selected row would toggle twice (`list_click_deselects_once.ron`,
-`list_keyboard_deselects.ron`, `color_palette_keyboard_deselects.ron`). Both ignore a row
+`list_keyboard_deselects.ron`, `color_palette_keyboard_deselects.ron`). A tap is a click here: the same path picks and deselects once by touch (`list_touch_taps_pick.ron`, `list_touch_looks.ron`, `list_touch_custom_views.ron`, `virtual_list_touch_taps_pick.ron`, `virtual_list_touch_separated.ron`, `color_palette_touch_taps_pick.ron`), and a tap on a nested button, list, combo or filter combo in a custom row is not the row's. Both ignore a row
 whose `ItemView::list_ref` is not the event's source list: a nested list (a combo's popup
 in a custom view) reports the row of the list around it, because `listbox_on_row_click`
 searches above the popup when the click's target is the popup itself. Hover and

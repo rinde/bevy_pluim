@@ -1,0 +1,42 @@
+// A tap on a row picks it exactly as a click does, once: a `One` list keeps its pick, a
+// `ZeroOrOne` list deselects a tapped selected row, and the first selected row of a
+// multiple selection is deselected once (the `ListBox`'s `ReselectListRow`, not twice).
+(
+    format_version: 3,
+    name: "a touch tap on a list row picks it as a click does",
+    setup: App(Lists),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Portugal"]))),
+        TouchTap(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands"))),
+        Wait(1),
+        Check(App(Selected(of: Name("one-or-more list"), items: ["Portugal"]))),
+        Check(Not(Selected(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands"))))),
+        // A `ZeroOrOne` list: pick, replace, deselect, pick again.
+        TouchTap(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Canada"))),
+        Check(App(Selected(of: Name("zero-or-one list"), items: ["Canada"]))),
+        TouchTap(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Indonesia"))),
+        Check(App(Selected(of: Name("zero-or-one list"), items: ["Indonesia"]))),
+        TouchTap(Within(Name("zero-or-one list"), Role(role: ListItem, label: "Indonesia"))),
+        Check(App(Selected(of: Name("zero-or-one list"), items: []))),
+        // A `One` list never deselects.
+        TouchTap(Within(Name("one list"), Role(role: ListItem, label: "CA"))),
+        Check(App(Selected(of: Name("one list"), items: ["CA"]))),
+        TouchTap(Within(Name("one list"), Role(role: ListItem, label: "CA"))),
+        Check(App(Selected(of: Name("one list"), items: ["CA"]))),
+        // A zero-or-more grid list toggles freely.
+        TouchTap(Within(Name("zero-or-more grid list"), Role(role: ListItem, label: "Canada"))),
+        TouchTap(Within(Name("zero-or-more grid list"), Role(role: ListItem, label: "Indonesia"))),
+        Check(App(Selected(of: Name("zero-or-more grid list"), items: ["Canada", "Indonesia"]))),
+        TouchTap(Within(Name("zero-or-more grid list"), Role(role: ListItem, label: "Canada"))),
+        Check(App(Selected(of: Name("zero-or-more grid list"), items: ["Indonesia"]))),
+        // The separated list.
+        TouchTap(Within(Name("separated list"), Role(role: ListItem, label: "ID"))),
+        Check(App(Selected(of: Name("separated list"), items: ["ID"]))),
+    ],
+    expect: [
+        App(Selected(of: Name("one-or-more list"), items: ["Portugal"])),
+        App(Selected(of: Name("separated list"), items: ["ID"])),
+    ],
+)

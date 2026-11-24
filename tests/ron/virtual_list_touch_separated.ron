@@ -1,0 +1,18 @@
+// A touch tap picks a row of a separated virtual list, which then shows the selection ring.
+(
+    format_version: 3,
+    name: "a touch tap picks a row of a separated virtual list",
+    setup: App(SeparatedVirtualList),
+    steps: [
+        Wait(3),
+        TouchTap(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2"))),
+        Wait(1),
+        Check(App(Selected(of: Name("separated virtual list"), items: ["Row 2"]))),
+        Check(Selected(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2")))),
+        TouchTap(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 3"))),
+        Wait(1),
+        Check(App(Selected(of: Name("separated virtual list"), items: ["Row 3"]))),
+        Check(Not(Selected(Within(Name("separated virtual list"), Role(role: ListItem, label: "Row 2"))))),
+    ],
+    expect: [App(Selected(of: Name("separated virtual list"), items: ["Row 3"]))],
+)
