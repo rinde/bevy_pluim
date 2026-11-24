@@ -12,6 +12,11 @@
         Wait(2),
         Check(Component(target: Within(Name("list scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Gt(0.0))),
         Check(App(Selected(of: Name("scrolling list"), items: ["Row 1"]))),
+        // The pan ran on after the lift (#801); the wheel stops it and scrolls back to the top.
+        MoveTo(Name("list scroll area")),
+        Wheel(x: 0.0, y: 100000.0),
+        Wheel(x: 0.0, y: -60.0),
+        Wait(1),
         TouchTap(Within(Name("list scroll area"), Role(role: ListItem, label: "Row 3"))),
         Wait(1),
         Check(App(Selected(of: Name("scrolling list"), items: ["Row 3"]))),

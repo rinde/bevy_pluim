@@ -1,0 +1,29 @@
+// A fling into the start of the area stops at the start without overshoot. A quick pan scrolls
+// the area down into its end at 220, then a quick pan the other way flings back past what is left to the top.
+(
+    format_version: 3,
+    name: "a fling stops at the start of the vertical scroll area",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((340.0, 200.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 185.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 170.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 155.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 140.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 125.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(240),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Eq(220.0))),
+        TouchDown(at: Screen((340.0, 40.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 65.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 90.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 115.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 140.0)), finger: 0),
+        TouchMove(to: Screen((340.0, 165.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(240),
+        Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Eq(0.0))),
+    ],
+    expect: [],
+)

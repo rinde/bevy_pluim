@@ -68,6 +68,15 @@ does not start on a `Slider`, `NumericStepper` or `ScrollBar`. A press that move
 `MouseKind::Click` that would follow and the combos ignore its lift, so nothing it started on
 is activated, picked or closed.
 
+A pan that lifts while moving flings (#801): the velocity of the last 100 ms per axis, if at
+least 100 px a second, becomes a crate-private `Fling` on the area, and `step_flings` decays it
+by 0.998 per millisecond of elapsed time (exact integration, so the distance does not depend on
+the frame rate) until it is under 30 px a second, clamping per axis through `scroll_by`. A new
+touch, a wheel turn, a scroll-bar drag or any other change of the `ScrollPosition` stops it; a
+touch that stops it is not a tap. A step that moves the position closes an open combo in the
+area, like the wheel; one that does not writes nothing. Non-goal: no rubber band or bounce past
+the limits, the fling stops at `[0, max]`.
+
 ## A scroll area scrolls a focused row into view
 
 `scroll_into_view` in

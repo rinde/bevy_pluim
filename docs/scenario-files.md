@@ -322,6 +322,10 @@ that Page Down starts where Arrow Down does.
 
 ### Targets on the `ScrollAreas` screen
 
+Touch flings (#801): the eased `TouchDrag` cannot make one (it ends slowing down, so the last
+100 ms are slow), so `scroll_area_touch_fling*.ron` step with `TouchMove` a few pixels a frame
+and lift at once. The vertical area's `ScrollPosition.y` maximum is 220.
+
 Four 200 by 200 areas side by side
 (they and "Change theme" fit the default 1280 by 720 window, which every
 scenario runs in), each with a `Name`: `two-way scroll area`, `vertical

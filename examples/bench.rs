@@ -165,6 +165,70 @@ fn hold_scrub_drag(app: &mut App, index: usize) {
     });
 }
 
+/// A finger presses, pans quickly and lifts on every scroll area, one step a frame from `start`,
+/// so each area is left flinging. Frames in the bench are short, so the pan is fast enough to
+/// outlast the run.
+fn fling_every_area(app: &mut App, step: usize) {
+    use bevy::camera::NormalizedRenderTarget;
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::{PointerClick, PointerDrag, PointerPress, PointerRelease};
+    use bevy::picking::pointer::{Location, PointerButton, PointerId};
+    let world = app.world_mut();
+    // The tall node inside each area: a touch starts on it, as on any content of the area.
+    let mut query = world.query_filtered::<&Children, With<ScrollContents>>();
+    let targets: Vec<Entity> = query
+        .iter(world)
+        .filter_map(|children| children.first().copied())
+        .collect();
+    let pointer = || {
+        Pointer::new(
+            PointerId::Touch(1),
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 1,
+                    height: 1,
+                },
+                position: Vec2::ZERO,
+            },
+        )
+    };
+    let hit = || HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    for entity in targets {
+        match step {
+            0 => world.trigger(PointerPress {
+                entity,
+                pointer: pointer(),
+                count: 1,
+                button: PointerButton::Primary,
+                hit: hit(),
+            }),
+            1..=4 => world.trigger(PointerDrag {
+                entity,
+                pointer: pointer(),
+                button: PointerButton::Primary,
+                distance: Vec2::new(0.0, -2_000.0 * step as f32),
+                delta: Vec2::new(0.0, -2_000.0),
+            }),
+            _ => {
+                world.trigger(PointerClick {
+                    entity,
+                    pointer: pointer(),
+                    count: 1,
+                    button: PointerButton::Primary,
+                    hit: hit(),
+                    duration: Duration::ZERO,
+                });
+                world.trigger(PointerRelease {
+                    entity,
+                    pointer: pointer(),
+                    button: PointerButton::Primary,
+                    hit: hit(),
+                });
+            }
+        }
+    }
+}
+
 /// What is spawned and what happens each frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Workload {
@@ -301,6 +365,11 @@ enum Workload {
     WheelDeep,
     /// The same tree and hover map with no wheel input: the floor `wheel-deep` is read against.
     WheelDeepIdle,
+    /// Many tall scroll areas, none flinging: the floor `scroll-flings-active` is read against (#801).
+    ScrollFlingsIdle,
+    /// The same areas, each lifted from a fast touch pan in the first frame, so every area flings
+    /// for the frames that follow (#801).
+    ScrollFlingsActive,
     /// Many `Slider`s, idle.
     SlidersIdle,
     /// The same sliders; one is pressed and the one before it released every frame.
@@ -321,7 +390,7 @@ enum Workload {
 }
 
 impl Workload {
-    const ALL: [Self; 65] = [
+    const ALL: [Self; 67] = [
         Self::BevyTexts,
         Self::BevyTextChildren,
         Self::PushButtons,
@@ -379,6 +448,8 @@ impl Workload {
         Self::RovingGroupsIdle,
         Self::WheelDeep,
         Self::WheelDeepIdle,
+        Self::ScrollFlingsIdle,
+        Self::ScrollFlingsActive,
         Self::SlidersIdle,
         Self::SlidersPressing,
         Self::TicksFilterIdle,
@@ -448,6 +519,8 @@ impl Workload {
             Self::RovingGroupsIdle => "roving-groups-idle",
             Self::WheelDeep => "wheel-deep",
             Self::WheelDeepIdle => "wheel-deep-idle",
+            Self::ScrollFlingsIdle => "scroll-flings-idle",
+            Self::ScrollFlingsActive => "scroll-flings-active",
             Self::SlidersIdle => "sliders-idle",
             Self::SlidersPressing => "sliders-pressing",
             Self::TicksFilterIdle => "ticks-filter-idle",
@@ -479,6 +552,8 @@ impl Workload {
             Self::FilterChipsEditing
             | Self::ToolbarEditing
             | Self::GalleryEditing
+            | Self::ScrollFlingsIdle
+            | Self::ScrollFlingsActive
             | Self::WheelDeep
             | Self::WheelDeepIdle => 200,
             Self::FilterChipsOneChanging
@@ -923,6 +998,9 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             world.spawn((Item::new(format!("Added {index}")), ItemOf(control)));
         }
     }
+    if workload == Workload::ScrollFlingsActive && (5..=10).contains(&index) {
+        fling_every_area(app, index - 5);
+    }
     if workload == Workload::WheelDeep {
         for event in 0..WHEEL_EVENTS {
             let sign = if (index + event).is_multiple_of(2) {
@@ -1353,6 +1431,28 @@ fn spawn(world: &mut World, run: Run) {
             }
             Workload::WheelDeep | Workload::WheelDeepIdle => {
                 wheel_tree(root, run.size);
+            }
+            Workload::ScrollFlingsIdle | Workload::ScrollFlingsActive => {
+                for _ in 0..run.size {
+                    root.spawn((
+                        Node {
+                            width: px(100),
+                            height: px(100),
+                            ..default()
+                        },
+                        ScrollArea::bundle(
+                            |area: &mut ChildSpawner| {
+                                area.spawn(Node {
+                                    width: px(100),
+                                    height: px(1_000_000),
+                                    ..default()
+                                });
+                            },
+                            true,
+                            false,
+                        ),
+                    ));
+                }
             }
             Workload::VirtualLists => {
                 for _ in 0..run.size {
