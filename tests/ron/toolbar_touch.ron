@@ -19,6 +19,7 @@
         TouchTap(Within(Name("filled toolbar"), Role(role: Button, label: "Build"))),
         Wait(2),
         Check(App(Selected(of: Name("filled toolbar"), items: ["Build"]))),
+        Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Build"))))),
         Check(Component(target: Within(Name("filled toolbar"), Role(role: Button, label: "Select")), path: "BackgroundColor.0", is: Eq(Captured("resting background")))),
         TouchTap(Within(Name("filled toolbar"), Role(role: Button, label: "Select"))),
         Wait(2),

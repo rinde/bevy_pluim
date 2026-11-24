@@ -19,6 +19,7 @@
         Wait(2),
         Check(App(Selected(of: Role(role: Tab, label: "Panel B"), items: ["Panel B"]))),
         Check(Selected(Role(role: Tab, label: "Panel B"))),
+        Check(App(Focused(of: Role(role: Tab, label: "Panel B")))),
         Check(Visible(Within(Name("Stack"), Text("Panel B")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
         Check(Component(target: Within(Component("TabBar"), Name("TabIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Gt(Captured(name: "from x", plus: 1.0)))),
