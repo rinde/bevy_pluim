@@ -1646,11 +1646,11 @@ fn toolbar(world: &mut World) {
         };
         root.spawn((
             Toolbar::new(ToolbarStyle::Filled),
-            Selection::builder()
-                .zero_or_one()
-                .build_with_items(["Pan", "Zoom"].map(|label| Item {
-                    data: Tool::new(Handle::default(), label),
-                })),
+            Selection::builder().zero_or_one().build_with_items(
+                [("Pan", Tone::Neutral), ("Zoom", Tone::Warning)].map(|(label, tone)| Item {
+                    data: Tool::new(Handle::default(), label).with_tone(tone),
+                }),
+            ),
             absolute(150),
             Name::new("optional toolbar"),
         ));

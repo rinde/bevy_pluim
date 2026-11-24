@@ -1,0 +1,17 @@
+// A tap on another segment slides the indicator to it, as a click does.
+(
+    format_version: 3,
+    name: "a touch tap slides the segmented control indicator to the segment",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(10),
+        Capture(name: "from x", value: Component(target: Within(Name("own segmented control"), Role(role: Button, label: "Auto")), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        Capture(name: "to x", value: Component(target: Within(Name("own segmented control"), Role(role: Button, label: "Manual")), path: "UiGlobalTransform.0.translation.x", unit: Logical)),
+        TouchTap(Within(Name("own segmented control"), Role(role: Button, label: "Manual"))),
+        Wait(2),
+        Check(Component(target: Within(Name("own segmented control"), Name("SegmentIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Gt(Captured(name: "from x", plus: 1.0)))),
+        Check(Component(target: Within(Name("own segmented control"), Name("SegmentIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Lt(Captured(name: "to x", plus: -1.0)))),
+        Wait(60),
+        Check(Component(target: Within(Name("own segmented control"), Name("SegmentIndicator")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Between(Captured(name: "to x", plus: -1.0), Captured(name: "to x", plus: 1.0)))),
+    ],
+)

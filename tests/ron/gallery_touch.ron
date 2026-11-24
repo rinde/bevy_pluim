@@ -1,0 +1,28 @@
+// A touch tap on a card picks it as a click does; a finger that slides off before lifting
+// picks nothing, and no hover background stays on a card after the finger lifts.
+(
+    format_version: 3,
+    name: "a touch tap on a gallery card picks it and leaves no hover look",
+    setup: App(Gallery),
+    steps: [
+        Wait(2),
+        Capture(name: "resting background", value: Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BackgroundColor.0")),
+        Capture(name: "picked border", value: Component(target: Within(Name("gallery"), Role(role: Button, label: "Steam")), path: "BorderColor.top")),
+        TouchDown(at: Within(Name("gallery"), Role(role: Button, label: "Diesel")), finger: 0),
+        TouchMove(to: Screen((900.0, 500.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(App(Selected(of: Name("gallery"), items: ["Steam"]))),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BackgroundColor.0", is: Eq(Captured("resting background")))),
+        TouchTap(Within(Name("gallery"), Role(role: Button, label: "Diesel"))),
+        Wait(2),
+        Check(App(Selected(of: Name("gallery"), items: ["Diesel"]))),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BorderColor.top", is: Eq(Captured("picked border")))),
+        TouchTap(Within(Name("gallery"), Role(role: Button, label: "Steam"))),
+        Wait(2),
+        Check(App(Selected(of: Name("gallery"), items: ["Steam"]))),
+        Check(Component(target: Within(Name("gallery"), Role(role: Button, label: "Diesel")), path: "BackgroundColor.0", is: Eq(Captured("resting background")))),
+        Check(App(Focused(of: Within(Name("gallery"), Role(role: Button, label: "Steam"))))),
+    ],
+    expect: [],
+)
