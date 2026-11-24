@@ -228,13 +228,13 @@ of them (`just example gallery -- --run-all stack link`).
   hover: **`MouseEvent::hovered()` is the one place that tells touch from mouse**
   (false for a touch `Over`, and for `Out` and `Cancel`), `pressed()` is true for a
   `Pressed`, and the shared look functions (`background_for`, `item_background`,
-  `popup.rs`'s `button_look(kind, touch, open)`, the link, thumb and swatch handlers) use
+  `popup.rs`'s `button_look(kind, hovered, open)`, which `Combo`, `FilterCombo` and `ColorPaletteCombo` call with `event.hovered()`, and the link, thumb and swatch handlers) use
   them, never a per-widget `touch` test. So a finger down shows the pressed look, and after
   a lift, slide off or cancel no hover look stays. Picking's `Hovered` follows
   `PointerId::Mouse` only, so a system that reads it never sees a finger. A tap
   activates once, a disabled button ignores it and a finger that slides off before
-  lifting activates nothing (`push_button_touch_*.ron`, `icon_button_touch_tap.ron`,
-  `breadcrumbs_touch_tap_trims.ron`, `panel_touch_close.ron`; the other widgets' touch
+  lifting activates nothing (`push_button_touch_*.ron` (looks, disabled, slide-off, cancel, toggle, compact, no default hover), `icon_button_touch_tap.ron`, `icon_button_touch_looks.ron`,
+  `breadcrumbs_touch_tap_trims.ron`, `breadcrumbs_touch_slide_off_and_disabled.ron`, `breadcrumbs_touch_looks.ron`, `panel_touch_close.ron`, `panel_touch_slide_off.ron`, `link_touch.ron`, `color_push_button_touch.ron`; the `TouchTaps` resource counts the `Activate`s of `compact button` and `no hover button` (end of the `Buttons` screen) and of `ButtonNames`' link and colour button, and the `IconButtons` screen ends with a `disabled toggle button`; the other widgets' touch
   work is the rest of epic #793).
 - **"Is the pointer on it?" is picking's `Hovered`.** A system that asks where
   the pointer is now, outside a `MouseEvent`, reads `bevy::picking::hover::Hovered`

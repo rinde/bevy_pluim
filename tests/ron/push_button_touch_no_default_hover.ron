@@ -1,0 +1,20 @@
+// A push button with NoDefaultHover takes a tap and activates once; its
+// colours stay its owner's, so the default pressed look does not apply.
+(
+    format_version: 3,
+    name: "a touch tap activates a push button with no default hover",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Name("no hover button"), finger: 0),
+        TouchMove(to: Role(role: Button, label: "Add"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Resource(path: "TouchTaps.no_hover", is: Eq(0))),
+        TouchTap(Name("no hover button")),
+        Check(Resource(path: "TouchTaps.no_hover", is: Eq(1))),
+        Wait(2),
+        Check(Component(target: Name("no hover button"), path: "BackgroundColor.0", is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))))),
+    ],
+    expect: [Resource(path: "TouchTaps.no_hover", is: Eq(1))],
+)

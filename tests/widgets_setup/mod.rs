@@ -46,7 +46,7 @@ use bevy_pluim::link::Link;
 use bevy_pluim::list::{CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueError, ValueRef};
 use bevy_pluim::panel::{Panel, PanelClosed, PanelRefs};
-use bevy_pluim::push_button::PushButton;
+use bevy_pluim::push_button::{ButtonSize, NoDefaultHover, PushButton};
 use bevy_pluim::scroll_area::{ClearOfCorners, ScrollArea};
 use bevy_pluim::segmented_control::{ItemIcon, SegmentLabels, SegmentedControl};
 use bevy_pluim::select::{
@@ -276,6 +276,22 @@ pub struct CurrentScreen(pub WidgetsSetup);
 #[reflect(Resource)]
 pub struct Clicks(pub u32);
 
+/// The `Activate`s of the extra buttons of the [`WidgetsSetup::Buttons`]
+/// (`compact`, `no_hover`) and [`WidgetsSetup::ButtonNames`] (`link`,
+/// `colour`) screens, which the touch scenarios read.
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct TouchTaps {
+    /// Activations of the `link`.
+    pub link: u32,
+    /// Activations of the `colour button`.
+    pub colour: u32,
+    /// Activations of the `compact button`.
+    pub compact: u32,
+    /// Activations of the `no hover button`.
+    pub no_hover: u32,
+}
+
 /// The `ValueChange<f32>`s the `stepped slider` of the [`WidgetsSetup::Slider`]
 /// screen sent: the value of the last one and how many were final (the end of
 /// a drag or a key).
@@ -346,6 +362,7 @@ const fn see_through() -> Pickable {
 
 fn buttons(world: &mut World) {
     world.init_resource::<Clicks>();
+    world.init_resource::<TouchTaps>();
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn(PushButton::from_label("Add"))
@@ -355,6 +372,18 @@ fn buttons(world: &mut World) {
         spawn_theme_button(root);
         // Spawned last so the tab order of the others stays.
         root.spawn((PushButton::from_label("Toggle"), ToggleState(false)));
+        root.spawn((
+            PushButton::from_label("Compact"),
+            ButtonSize::Compact,
+            Name::new("compact button"),
+        ))
+        .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.compact += 1);
+        root.spawn((
+            PushButton::from_label("No hover"),
+            NoDefaultHover,
+            Name::new("no hover button"),
+        ))
+        .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.no_hover += 1);
     });
 }
 
@@ -1865,6 +1894,13 @@ fn icon_buttons(world: &mut World) {
             Name::new("danger button"),
         ));
         spawn_theme_button(root);
+        // Spawned last so the tab order stays.
+        root.spawn((
+            IconButton::new(Handle::default(), "Locked", IconButtonSize::Regular),
+            ToggleState(false),
+            InteractionDisabled,
+            Name::new("disabled toggle button"),
+        ));
     });
 }
 
@@ -1955,12 +1991,15 @@ fn text_fields(world: &mut World) {
 }
 
 fn button_names(world: &mut World) {
+    world.init_resource::<TouchTaps>();
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((Name::new("plain button"), PushButton::from_label("Add")));
         root.spawn((Name::new("icon push button"), PushButton::new("Save", "+")));
-        root.spawn((Name::new("colour button"), ColorPushButton));
-        root.spawn((Name::new("link"), Link::new("Docs")));
+        root.spawn((Name::new("colour button"), ColorPushButton))
+            .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.colour += 1);
+        root.spawn((Name::new("link"), Link::new("Docs")))
+            .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.link += 1);
         spawn_theme_button(root);
     });
     world.flush();

@@ -907,7 +907,7 @@ fn handle_button_mouse_events(
     };
     if let Some(look) = popup::button_look(
         trigger.event().kind,
-        trigger.event().touch,
+        trigger.event().hovered(),
         *state == ComboState::Open,
     ) {
         popup::apply_look(look, &theme, &mut background, &mut border);
