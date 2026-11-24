@@ -161,9 +161,11 @@ not reachable from the build container):
   toolbar, gallery, chips and `LightDarkToggle`, supports many-selections and
   a `Selection` that keeps the last word; the headless group would be a second
   model for the same keys with no code or measured overhead saved.
-- `ScrollArea`: not adopted, see the wheel handling in `AGENTS.md`.
+- `ScrollArea`: not adopted, see the wheel handling in
+  [`design/scrolling.md`](design/scrolling.md#a-scroll-areas-scroll-position-is-kept-in-range).
 - Popover, menu and dialog: not adopted; changing `Float` is the separate
-  ticket described in `AGENTS.md`.
+  ticket described in
+  [`design/popups.md`](design/popups.md#a-float-stays-in-its-window-investigation-506-not-built).
 
 ## Idle virtual lists (#655)
 
