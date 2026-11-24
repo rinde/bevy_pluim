@@ -151,7 +151,7 @@ impl PopupPointers<'_, '_> {
     }
 }
 
-/// Whether a release of the primary button the popup: it is open and the pointer is on
+/// Whether a release of the primary button closes the popup: it is open and the pointer is on
 /// neither the button nor the part of the popup that counts as inside, for the pointer that
 /// lifted, a mouse or a finger.
 ///

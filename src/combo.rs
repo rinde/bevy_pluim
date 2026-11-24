@@ -88,7 +88,6 @@ impl Plugin for ComboPlugin {
 pub struct Combo;
 
 /// Marks the button of a [`Combo`].
-///
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("ComboButton"))]
@@ -135,7 +134,6 @@ impl ComboRefs {
 }
 
 /// Marks the list inside the popup of a [`Combo`].
-///
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("ComboList"), Hovered)]
