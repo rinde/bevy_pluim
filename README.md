@@ -78,7 +78,7 @@ just example overview
 
 or `cargo run --example overview`. `overview` shows every standalone widget on
 its own page (the theme editor too), `hud` composes a game-style HUD, and `gallery` is the scenario
-tester's window. The full list is in [AGENTS.md](AGENTS.md).
+tester's window. The full list is in [docs/examples.md](docs/examples.md).
 
 ## Contributing
 

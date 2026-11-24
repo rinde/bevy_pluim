@@ -1,0 +1,11 @@
+# `push_button.rs`
+
+`PushButton`: a label and optional icon; the reference widget to copy.
+
+Read this before changing `src/push_button.rs`. When the module's behaviour changes, update this file in the same PR.
+
+Cross-cutting design: [pointer, touch and buttons](../design/pointer-and-buttons.md).
+
+## Details
+
+`PushButton` with label and optional icon; **the reference widget to copy**. `ButtonSize::Compact` (insert it with the button or later) makes it 28 px high with 10 px side padding, a 6 px radius, a semibold 12 px label and no shadow (`Theme::compact_button_*`, `font_size_small`); `Regular` is the default. `IconPlacement::{Left, Right (default), Top, Bottom}` (insert it with the button or later) says where the icon sits relative to the label, by the `Node`'s flex direction (children are not respawned). Merging with `IconButton` was investigated (#377) and not done: `PushButton` takes a text glyph, `IconButton` an image `Handle`, a name and `ToggleState`; they stay two widgets. Its accessible label is its text, not the icon (a combo's button is a combo box and has none). Inserting a `PushButton` again changes a live button (`on_insert`, like `IconButton`): the label `Text` is set in place, an icon child is updated, spawned or despawned (`PushButtonRefs` follows), and the observers are registered once (`inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_in_step`, `a_push_button_gains_and_loses_its_icon_when_inserted_again`). `NoDefaultHover` may be inserted or removed at any time: `handle_hover` is always registered and ignores a button that has it, and the button restyles when the marker changes. An optional immutable `ToggleState(bool)` (`icon_button.rs`'s, the same type and its `toggle_on_activate` observer) makes it an on/off toggle: `Activate` inserts the flipped value, an on button has the `accent_subtle` background (`hovered_selected_item` hovered) and `accent_subtle_text` text, and its `AccessibilityNode` is `toggled` with it (none without a `ToggleState`); no new theme slot (`push_button_toggle.ron` on the `Buttons` screen, whose "Toggle" button is spawned last so the tab order stays). `ButtonNames` is the scenario screen for button labels.
