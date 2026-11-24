@@ -538,6 +538,23 @@ fn combos(world: &mut World) {
                 .zero_or_one()
                 .build_with_items(countries()),
         ));
+        // A combo over a selection of many, out of the flow and last: a pick leaves its list
+        // open (`combo_touch_many_stays_open`).
+        root.spawn((
+            Combo,
+            Name::new("many combo"),
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Column,
+                width: px(200),
+                top: px(400),
+                left: px(500),
+                ..default()
+            },
+            Selection::builder()
+                .zero_or_more()
+                .build_with_items(countries()),
+        ));
         // A combo with far more options than fit under it, low in the window and last: its list
         // opens above the button, capped to the room there
         // (`combo_list_opening_upward_stays_below_the_top_margin`).

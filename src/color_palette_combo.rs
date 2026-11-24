@@ -4,6 +4,7 @@ use bevy::a11y::AccessibilityNode;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
+use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use itertools::Either;
@@ -13,7 +14,7 @@ use crate::color_push_button::{ColorPushButton, ColorSquare, ColorSquareRef};
 use crate::float::{Float, UiViewport, fit_vertically, keep_in_window_x};
 use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::list::{ItemView, ListLayout};
-use crate::popup::{self, ButtonLook};
+use crate::popup::{self, ButtonLook, PopupPointers};
 use crate::push_button::NoDefaultHover;
 use crate::scroll_area::ScrollArea;
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
@@ -81,17 +82,13 @@ pub struct ColorPaletteCombo;
 
 /// Marks the button of a [`ColorPaletteCombo`].
 ///
-/// Its [`Hovered`] says whether the pointer is on the combo, for the outside click. A
-/// [`ColorPushButton`] is named after its colour; this one is not, since its value says the
+/// A [`ColorPushButton`] is named after its colour; this one is not, since its value says the
 /// colour.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(Hovered)]
 pub struct ColorPaletteComboButton;
 
 /// Marks the popup of a [`ColorPaletteCombo`].
-///
-/// Its [`Hovered`] says whether the pointer is on the popup, for the outside click.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Hovered)]
@@ -250,7 +247,7 @@ fn close_on_focus_lost(
     lost: On<FocusLost>,
     sub_refs: Query<&SubRefs>,
     states: Query<&ColorPaletteComboState>,
-    hovered: Query<&Hovered, With<ColorPaletteComboFloat>>,
+    pointers: PopupPointers,
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
@@ -264,7 +261,11 @@ fn close_on_focus_lost(
     if sub_refs.palette != lost.event().entity {
         return;
     }
-    let popup_hovered = hovered.get(sub_refs.float_id).is_ok_and(Hovered::get);
+    // A finger or button held down on the combo's button is not leaving: the release toggles.
+    if state == ColorPaletteComboState::Open && pointers.pressed_over(sub_refs.button) {
+        return;
+    }
+    let popup_hovered = pointers.over(None, sub_refs.float_id);
     if popup_focus_lost(
         &mut focus,
         state == ColorPaletteComboState::Open,
@@ -601,38 +602,36 @@ fn sync_accessibility(
     }
 }
 
-/// Closes an open combo when the left button is released outside of it.
+/// Closes an open combo when a pointer lifts its primary button, or a finger, outside of it.
 ///
 /// Inside is the combo's button, which opens and closes the popup itself on
 /// [`Activate`], and its popup, whatever the selection: a release on the popup's
 /// scroll bar or between its swatches leaves it open, and a pick closes it on its own,
-/// see [`close_on_swatch_click`]. Whether the pointer is on them is their [`Hovered`],
-/// which comes from picking and so works whatever the camera renders to, a window or
-/// an image.
+/// see [`close_on_swatch_click`]. Whether the pointer that lifted is on them is picking's
+/// hover map for that pointer, so a finger counts as well as the mouse, and it works
+/// whatever the camera renders to, a window or an image.
 fn close_combos_on_outside_click(
-    mouse_button: Res<ButtonInput<MouseButton>>,
+    mut inputs: MessageReader<PointerInput>,
+    pointers: PopupPointers,
     combos: Query<(Entity, &ColorPaletteComboState, &SubRefs), With<ColorPaletteCombo>>,
     mut combo_buttons: Query<
-        (&Hovered, &mut BackgroundColor, &mut BorderColor),
+        (&mut BackgroundColor, &mut BorderColor),
         With<ColorPaletteComboButton>,
     >,
-    floats: Query<&Hovered, With<ColorPaletteComboFloat>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    if mouse_button.just_released(MouseButton::Left) {
+    for pointer in popup::primary_releases(&mut inputs) {
         for (combo_id, &combo_state, subs) in combos.iter() {
-            let Ok((over_button, mut background_color, mut border_color)) =
-                combo_buttons.get_mut(subs.button)
+            let Ok((mut background_color, mut border_color)) = combo_buttons.get_mut(subs.button)
             else {
                 continue;
             };
-            let over_float = floats.get(subs.float_id).is_ok_and(Hovered::get);
             // Inside the float counts as inside whatever the selection.
             if popup::closes_on_outside_release(
                 combo_state == ColorPaletteComboState::Open,
-                over_button.get(),
-                over_float,
+                pointers.over(Some(pointer), subs.button),
+                pointers.over(Some(pointer), subs.float_id),
             ) {
                 close(
                     combo_id,

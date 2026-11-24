@@ -1,0 +1,22 @@
+// A tap on an open combo's popup takes the finger from whatever lies under it. The middle of
+// "Canada" in the popup of "first combo" is over the "Underneath" button, which is not
+// pressed while the finger is down and is not pressed when it lifts.
+(
+    format_version: 3,
+    name: "a tap on a combo's popup item does not reach the button under it",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("first combo"), Component("ComboButton"))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        TouchDown(at: Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
+        Check(Not(Pressed(Role(role: Button, label: "Underneath")))),
+        // The popup is still open while the finger is down on it.
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        TouchUp(),
+        Check(Not(Pressed(Role(role: Button, label: "Underneath")))),
+        Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+    ],
+    expect: [App(Selected(of: Name("first combo"), items: ["Canada"]))],
+)

@@ -1,0 +1,22 @@
+// A tap on an option of a combo over many items picks it and leaves the popup open, so the
+// next one can be picked; a tap outside closes it and the picks stay.
+(
+    format_version: 3,
+    name: "taps on a combo's options over many items keep the popup open",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("many combo"), Component("ComboButton"))),
+        Check(Component(target: Name("many combo"), path: "ComboState", is: Eq(Open))),
+        TouchTap(Within(Name("many combo"), Role(role: ListItem, label: "Canada"))),
+        Check(App(Selected(of: Name("many combo"), items: ["Canada"]))),
+        Check(Component(target: Name("many combo"), path: "ComboState", is: Eq(Open))),
+        TouchTap(Within(Name("many combo"), Role(role: ListItem, label: "Portugal"))),
+        Check(App(Selected(of: Name("many combo"), items: ["Canada", "Portugal"]))),
+        Check(Component(target: Name("many combo"), path: "ComboState", is: Eq(Open))),
+        TouchTap(Screen((900.0, 500.0))),
+        Check(Component(target: Name("many combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("many combo"), items: ["Canada", "Portugal"]))),
+    ],
+    expect: [App(Selected(of: Name("many combo"), items: ["Canada", "Portugal"]))],
+)

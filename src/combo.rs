@@ -10,6 +10,7 @@ use bevy::ecs::world::DeferredWorld;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusLost, FocusedInput, InputFocus};
 use bevy::picking::hover::Hovered;
+use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiSystems};
@@ -22,11 +23,9 @@ use crate::focus::{AccessibilitySync, popup_focus_lost, popup_key_closes};
 use crate::glyph_images::{GlyphKey, shared};
 use crate::icon::Icon;
 use crate::list::{List, NoDefaultItems};
-use crate::popup::{self, ButtonLook};
+use crate::popup::{self, ButtonLook, PopupPointers};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
-use crate::scroll_area::{
-    PopupScrollBar, popup_scroll_bar, popup_scroll_bar_hovered, update_scroll_position,
-};
+use crate::scroll_area::{popup_scroll_bar, update_scroll_position};
 use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
@@ -89,11 +88,9 @@ impl Plugin for ComboPlugin {
 pub struct Combo;
 
 /// Marks the button of a [`Combo`].
-///
-/// Its [`Hovered`] says whether the pointer is on the combo, for the outside click.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
-#[require(Name::new("ComboButton"), Hovered)]
+#[require(Name::new("ComboButton"))]
 pub struct ComboButton;
 
 /// The text a [`Combo`]'s button shows while nothing is selected, "Select.." by default.
@@ -137,8 +134,6 @@ impl ComboRefs {
 }
 
 /// Marks the list inside the popup of a [`Combo`].
-///
-/// Its [`Hovered`] says whether the pointer is on the popup, for the outside click.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("ComboList"), Hovered)]
@@ -301,14 +296,9 @@ fn close_on_key(
 /// An observer for the popup's list that closes the combo when the focus leaves the list.
 fn close_on_focus_lost(
     combo_id: Entity,
-) -> impl Fn(
-    On<FocusLost>,
-    Query<(&ComboState, &ComboRefs)>,
-    Query<&Hovered, With<ComboList>>,
-    ResMut<InputFocus>,
-    Commands,
-) {
-    move |lost, states, hovered, mut focus, mut commands| {
+) -> impl Fn(On<FocusLost>, Query<(&ComboState, &ComboRefs)>, PopupPointers, ResMut<InputFocus>, Commands)
+{
+    move |lost, states, pointers, mut focus, mut commands| {
         let Ok((&state, sub_refs)) = states.get(combo_id) else {
             return;
         };
@@ -316,7 +306,12 @@ fn close_on_focus_lost(
         if lost.event().entity != sub_refs.list_id {
             return;
         }
-        let popup_hovered = hovered.get(sub_refs.list_id).is_ok_and(Hovered::get);
+        // A finger or button held down on the combo's button is not leaving either: the tap
+        // toggles the popup on its release, and the mouse does the same.
+        if state == ComboState::Open && pointers.pressed_over(sub_refs.button_id) {
+            return;
+        }
+        let popup_hovered = pointers.over(None, sub_refs.list_id);
         if popup_focus_lost(
             &mut focus,
             state == ComboState::Open,
@@ -537,40 +532,39 @@ fn sync_accessibility(
     }
 }
 
-/// Closes an open combo when the left button is released outside of it.
+/// Closes an open combo when a pointer lifts its primary button, or a finger, outside of it.
 ///
 /// Inside is the combo's button, which opens and closes the popup itself on
 /// [`Activate`], and, for a selection that may hold several items, its list, so
-/// that a pick there keeps the popup open. Whether the pointer is on them is their
-/// [`Hovered`], which comes from picking and so works whatever the camera renders
-/// to, a window or an image.
+/// that a pick there keeps the popup open. Whether the pointer that lifted is on them is
+/// picking's hover map for that pointer, so a finger counts as well as the mouse, and it
+/// works whatever the camera renders to, a window or an image.
 fn close_combos_on_outside_click(
-    mouse_button: Res<ButtonInput<MouseButton>>,
+    mut inputs: MessageReader<PointerInput>,
+    pointers: PopupPointers,
     combos: Query<(Entity, &ComboState, &ComboRefs), With<Combo>>,
     selections: SelectionParam,
-    mut combo_buttons: Query<(&Hovered, &mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
-    combo_lists: Query<&Hovered, With<ComboList>>,
-    scroll_bars: Query<(&PopupScrollBar, &Hovered)>,
+    mut combo_buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboButton>>,
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    if mouse_button.just_released(MouseButton::Left) {
+    for pointer in popup::primary_releases(&mut inputs) {
         for (combo_ref, &combo_state, subs) in combos.iter() {
             let Some(selection_value) = selections.get(combo_ref) else {
                 continue;
             };
-            let Ok((over_button, mut background_color, mut border_color)) =
+            let Ok((mut background_color, mut border_color)) =
                 combo_buttons.get_mut(subs.button_id)
             else {
                 continue;
             };
-            let over_list = combo_lists.get(subs.list_id).is_ok_and(Hovered::get);
+            let over_list = pointers.over(Some(pointer), subs.list_id);
             // A pick in the list of a selection of many keeps the popup open.
             if popup::closes_on_outside_release(
                 combo_state == ComboState::Open,
-                over_button.get(),
+                pointers.over(Some(pointer), subs.button_id),
                 (selection_value.allow_multiple() && over_list)
-                    || popup_scroll_bar_hovered(&scroll_bars, subs.list_id),
+                    || pointers.over_scroll_bar(Some(pointer), subs.list_id),
             ) {
                 popup::apply_look(
                     ButtonLook::Resting,

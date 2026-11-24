@@ -18,7 +18,7 @@ row, or leaves a selected one, and the popup is done; a selection of many stays 
 and `FocusLost` closes it when the focus leaves the list (Tab away, a click on
 something else). A click on the button or in the popup also takes the focus off the
 list (nothing in them is focusable), but that is not leaving: the pointer being on
-either (their `Hovered`) makes the observer ignore it (and put the focus back on the
+either (any pointer, a finger too, in the hover map: `PopupPointers::over`) makes the observer ignore it (and put the focus back on the
 list for a click in the popup). On a close by losing the focus the focus goes back to the
 button only if nothing took it. `ComboState` / `ColorPaletteComboState` stay the one source of truth. The
 `combo_keyboard_*` and `color_palette_combo_keyboard_*` files cover it.
@@ -31,8 +31,9 @@ the combo toggles its `ComboState` (the palette combo its `ColorPaletteComboStat
 `Activate`, so on release and on Enter / Space for a focused button, and a
 press alone opens nothing. Hover and press colours stay `MouseEvent`, observed
 on the combo, which gets the pointer because the button has `should_block_lower:
-false`. The outside-click systems read `ButtonInput<MouseButton>` and the
-`Hovered` of the button and the popup, not `Activate`, and a click on the
+false`. The outside-click systems read the primary-button releases of `PointerInput`
+(a mouse click or a tap) and the hover map of the pointer that released
+(`PopupPointers`), not `Activate` or `Hovered`, which follows the mouse only, and a click on the
 button is inside the combo, so they never close what the same click opens. A
 release on a palette combo's popup is inside as well, whatever the selection:
 its scroll bar, or a drag of its thumb, leaves it open. The popup closes on a
@@ -86,7 +87,7 @@ popup in another window needs its own `Window`, a `Camera2d` with
 `UiTargetCamera`, a node that has no parent. `UiRoot` already leaves such a root alone
 (a `UiTargetCamera` in the bundle means no `UiRoot`, as the tester's cursor overlay shows).
 What that breaks, and why it is a design of its own rather than a change to `Float`:
-- the popup is no longer a descendant of its widget, so `Hovered` (the outside-click
+- the popup is no longer a descendant of its widget, so the hover-map test (the outside-click
   systems of `Combo` and `ColorPaletteCombo` rely on "the popup is a descendant"),
   visibility and `Display::None` inheritance (a popup of a hidden `Stack` panel), the
   `Within(..)` reach of the scenarios, the closing of the popup with its widget and event

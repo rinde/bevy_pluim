@@ -1,0 +1,23 @@
+// A tap elsewhere closes the popup without picking, and a tap inside the popup, on the search
+// box, does not.
+(
+    format_version: 3,
+    name: "a tap outside a filter combo closes it without picking, a tap on its search box does not",
+    setup: App(FilterCombos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("filter combo"), Component("ComboButton"))),
+        Wait(3),
+        Type(text: "utr"),
+        Wait(2),
+        TouchTap(Within(Name("filter combo"), Component("TextInput"))),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Open))),
+        TouchTap(Screen((900.0, 500.0))),
+        Wait(2),
+        Check(Component(target: Name("filter combo"), path: "ComboState", is: Eq(Closed))),
+        Check(App(Selected(of: Name("filter combo"), items: []))),
+        Check(App(Focused(of: Within(Name("filter combo"), Component("ComboButton"))))),
+    ],
+    expect: [],
+)

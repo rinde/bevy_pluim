@@ -380,7 +380,7 @@ in the open list would scroll it were `scroll_into_view` not to stop at a `Fixed
 (`combo_in_scroll_area_keyboard_does_not_scroll_the_area`). `right edge combo` (x 1200,
 y 100, 100 wide) and `bottom edge combo` (x 500, y 660) and `long combo` (80 options, x 200, y 300) are absolutely placed and spawned
 last too; their lists stay inside the window (`combo_keeps_list_inside_window`).
-`upward combo` (80 options, x 800, y 600, 200 wide; absolute, spawned last) has no room under it, so its list opens above the button, capped to the room there, and its top is the window's 10 px margin: `Node.top.0` is between 10 and 12 and the pointer is on the list at row 12 and not at row 9 (`combo_list_opening_upward_stays_below_the_top_margin`).
+`many combo` (countries over `zero_or_more`, x 500, y 400, 200 wide; absolute) keeps its list open after a pick (`combo_touch_many_stays_open`). `upward combo` (80 options, x 800, y 600, 200 wide; absolute, spawned last) has no room under it, so its list opens above the button, capped to the room there, and its top is the window's 10 px margin: `Node.top.0` is between 10 and 12 and the pointer is on the list at row 12 and not at row 9 (`combo_list_opening_upward_stays_below_the_top_margin`).
 
 ### Targets on the `BreadCrumbs` and `Tabs` screens
 

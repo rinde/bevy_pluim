@@ -774,6 +774,13 @@ pub(crate) struct PopupScrollBar {
     list: Entity,
 }
 
+impl PopupScrollBar {
+    /// The list this bar scrolls.
+    pub(crate) const fn list(self) -> Entity {
+        self.list
+    }
+}
+
 /// The bundle of a [`PopupScrollBar`] for `list`, a child of it.
 pub(crate) fn popup_scroll_bar(list: Entity) -> impl Bundle {
     (
@@ -789,15 +796,6 @@ pub(crate) fn popup_scroll_bar(list: Entity) -> impl Bundle {
         Visibility::Hidden,
         ChildOf(list),
     )
-}
-
-/// Whether the pointer is on the scroll bar of `list`, which counts as inside its popup.
-pub(crate) fn popup_scroll_bar_hovered(
-    bars: &Query<(&PopupScrollBar, &Hovered)>,
-    list: Entity,
-) -> bool {
-    bars.iter()
-        .any(|(bar, hovered)| bar.list == list && hovered.get())
 }
 
 /// Puts each popup bar at the right edge of the visible part of its list and shows it only

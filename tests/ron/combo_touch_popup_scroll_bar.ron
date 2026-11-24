@@ -1,0 +1,16 @@
+// A finger on a capped popup's scroll bar is inside the popup, so it stays open.
+(
+    format_version: 3,
+    name: "a tap on a combo popup's scroll bar leaves it open",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("long combo"), Component("ComboButton"))),
+        Wait(3),
+        Check(Component(target: Within(Name("long combo"), Name("ScrollBar")), path: "Visibility", is: Eq(Inherited))),
+        TouchTap(Within(Name("long combo"), Name("ScrollBar"))),
+        Wait(2),
+        Check(Component(target: Name("long combo"), path: "ComboState", is: Eq(Open))),
+    ],
+    expect: [],
+)

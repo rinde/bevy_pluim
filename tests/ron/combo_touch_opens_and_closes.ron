@@ -1,0 +1,21 @@
+// A tap on a combo's button opens its popup and a second tap on it closes it again, as a
+// click does; the finger is not a hover, so the button is back at rest after each tap.
+(
+    format_version: 3,
+    name: "a tap on a combo's button opens the popup and a second tap closes it",
+    setup: App(Combos),
+    steps: [
+        Wait(2),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        TouchTap(Within(Name("first combo"), Component("ComboButton"))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+        Check(Visible(Within(Name("first combo"), Component("ComboList")))),
+        TouchTap(Within(Name("first combo"), Component("ComboButton"))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
+        Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
+        // And once more: nothing is left over from the first round.
+        TouchTap(Within(Name("first combo"), Component("ComboButton"))),
+        Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
+    ],
+    expect: [Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))],
+)
