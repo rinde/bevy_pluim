@@ -57,7 +57,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 | [`docs/design/keyboard-focus.md`](docs/design/keyboard-focus.md) | tab stops, the focus ring, arrow keys in composite widgets, directional navigation, hidden nodes |
 | [`docs/design/lists-and-selection.md`](docs/design/lists-and-selection.md) | `ListBox` and `Selection`, custom item views, shared selections and items |
 | [`docs/design/popups.md`](docs/design/popups.md) | combo popups: focus, opening and closing, placement, why a `Float` stays in its window |
-| [`docs/design/scrolling.md`](docs/design/scrolling.md) | scroll areas: wheel, clamping, focus-ring room, scroll-into-view |
+| [`docs/design/scrolling.md`](docs/design/scrolling.md) | scroll areas: wheel, finger pan, clamping, focus-ring room, scroll-into-view |
 | [`docs/examples.md`](docs/examples.md) | the examples, building trees with `bsn!`, the scenario gallery |
 | [`docs/testing.md`](docs/testing.md) | test targets, headless tests, writing a scenario, determinism, recording |
 | [`docs/scenario-files.md`](docs/scenario-files.md) | the `tests/ron/` format and checks, and what each `WidgetsSetup` screen holds |
@@ -115,7 +115,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 
 **Containers and display**
 
-- [`scroll_area.rs`](docs/modules/scroll_area.md): `ScrollArea`: scrolling contents with themed scroll bars, the wheel handler and scroll-into-view.
+- [`scroll_area.rs`](docs/modules/scroll_area.md): `ScrollArea`: scrolling contents with themed scroll bars, the wheel handler, a finger's pan and scroll-into-view.
 - [`card.rs`](docs/modules/card.md): `Card`: themed background, border, radius and shadow; the smallest theming example.
 - [`panel.rs`](docs/modules/panel.md): `Panel`: a card with a header, optional close button, strip, scrolling body and footer.
 - [`setting_row.rs`](docs/modules/setting_row.md): `SettingRow` and `SettingRows`: a title, description and control slot, divided rows.

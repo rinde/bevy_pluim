@@ -622,6 +622,9 @@ fn close_combos_on_outside_click(
     mut commands: Commands,
 ) {
     for pointer in popup::primary_releases(&mut inputs) {
+        if pointers.panned(pointer) {
+            continue;
+        }
         for (combo_id, &combo_state, subs) in combos.iter() {
             let Ok((mut background_color, mut border_color)) = combo_buttons.get_mut(subs.button)
             else {

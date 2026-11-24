@@ -19164,3 +19164,115 @@ fn a_virtual_list_over_items_that_are_gone_shows_nothing_and_recovers() {
         },
     );
 }
+
+/// What a finger does on `target`: down, `moves` (the distance since the press, as picking
+/// reports it) and up, the click picking sends first and then the release.
+fn touch_gesture(app: &mut App, target: Entity, moves: &[Vec2]) {
+    let pointer = || Pointer::new(PointerId::Touch(1), pointer_location());
+    let hit = || HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    app.world_mut().trigger(PointerPress {
+        entity: target,
+        pointer: pointer(),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: hit(),
+    });
+    app.update();
+    let mut last = Vec2::ZERO;
+    for &distance in moves {
+        app.world_mut().trigger(PointerDrag {
+            entity: target,
+            pointer: pointer(),
+            button: PointerButton::Primary,
+            distance,
+            delta: distance - last,
+        });
+        last = distance;
+        app.update();
+    }
+    app.world_mut().trigger(PointerClick {
+        entity: target,
+        pointer: pointer(),
+        count: 1,
+        button: PointerButton::Primary,
+        hit: hit(),
+        duration: std::time::Duration::ZERO,
+    });
+    app.world_mut().trigger(PointerRelease {
+        entity: target,
+        pointer: pointer(),
+        button: PointerButton::Primary,
+        hit: hit(),
+    });
+    app.update();
+}
+
+#[derive(Resource, Default)]
+struct PanActivations(usize);
+
+#[test]
+fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_that_does_not_taps() {
+    let mut app = wheel_app();
+    app.init_resource::<PanActivations>();
+    app.init_resource::<ScrollChanges>();
+    app.add_systems(Last, count_scroll_changes);
+    let area = scrolling_contents(&mut app, None, Overflow::scroll_y(), Vec2::ZERO, 1.0);
+    let button = app
+        .world_mut()
+        .spawn((PushButton::from_label("tap me"), ChildOf(area)))
+        .observe(|_: On<Activate>, mut count: ResMut<PanActivations>| count.0 += 1)
+        .id();
+    app.update();
+    app.update();
+
+    // Within the threshold: a tap, the button activates and nothing scrolls.
+    touch_gesture(&mut app, button, &[Vec2::new(0.0, -2.0)]);
+    assert_eq!(
+        app.world().get_resource::<PanActivations>().unwrap().0,
+        1,
+        "a tap"
+    );
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+
+    // Past it: a pan. The content follows the finger, the button is not pressed any more and
+    // does not activate when the finger lifts.
+    app.world_mut()
+        .get_resource_mut::<ScrollChanges>()
+        .unwrap()
+        .0 = 0;
+    touch_gesture(
+        &mut app,
+        button,
+        &[Vec2::new(0.0, -10.0), Vec2::new(0.0, -50.0)],
+    );
+    assert_eq!(
+        app.world().get_resource::<PanActivations>().unwrap().0,
+        1,
+        "a pan"
+    );
+    assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 50.0));
+    assert!(!app.world().entity(button).contains::<Pressed>());
+
+    // The next press is a tap again.
+    touch_gesture(&mut app, button, &[]);
+    assert_eq!(
+        app.world().get_resource::<PanActivations>().unwrap().0,
+        2,
+        "a tap again"
+    );
+
+    // A pan with nothing to move (down at the top) does not mark the position changed.
+    touch_gesture(&mut app, button, &[Vec2::new(0.0, 100.0)]);
+    assert_eq!(scroll_of(&app, area), Vec2::ZERO);
+    app.world_mut()
+        .get_resource_mut::<ScrollChanges>()
+        .unwrap()
+        .0 = 0;
+    touch_gesture(&mut app, button, &[Vec2::new(0.0, 30.0)]);
+    assert_eq!(app.world().get_resource::<ScrollChanges>().unwrap().0, 0);
+    assert_eq!(
+        app.world().get_resource::<PanActivations>().unwrap().0,
+        2,
+        "a pan"
+    );
+}

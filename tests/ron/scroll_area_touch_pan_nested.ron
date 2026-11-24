@@ -1,0 +1,30 @@
+// The innermost scrollable area under the finger pans alone and passes nothing on at its limit:
+// a pan in the nested horizontal area (about x 3..203, y 303..500) scrolls it, and past its
+// start leaves the outer area where it is. Beside the nested area the outer one pans.
+(
+    format_version: 3,
+    name: "a finger pan in a nested scroll area scrolls only the innermost one",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((100.0, 450.0)), finger: 0),
+        TouchMove(to: Screen((40.0, 450.0)), finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("nested horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((60.0, 0.0)))),
+        Check(Component(target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
+        // Far past the start of the nested area: it stops, the outer area gets nothing.
+        TouchMove(to: Screen((190.0, 400.0)), finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("nested horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
+        Check(Component(target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
+        TouchUp(finger: 0),
+        // Beside the nested area the outer one pans.
+        TouchDown(at: Screen((212.0, 450.0)), finger: 0),
+        TouchMove(to: Screen((212.0, 390.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(1),
+        Check(Component(target: Nth(0, Within(Name("outer scroll area"), Component("ScrollContents"))), path: "ScrollPosition.0", is: Eq((0.0, 60.0)))),
+        Check(Component(target: Within(Name("nested horizontal scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
+    ],
+    expect: [],
+)

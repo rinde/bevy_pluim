@@ -1,6 +1,6 @@
 # Scrolling
 
-Scroll areas: focus-ring room, natural content size, the wheel and scroll-into-view.
+Scroll areas: focus-ring room, natural content size, the wheel, a finger's pan and scroll-into-view.
 
 When the behaviour described here changes, update this file in the same PR.
 
@@ -57,6 +57,16 @@ the area, and an `ItemView`, its `List` and the `ScrollContents` are all
 hovered (`should_block_lower: false`), so one turn would scroll two or three
 times; it also scrolls by `MouseScrollPixelsPerLine` (100 px a line, not our
 21) and has no Ctrl axis swap.
+
+A one-finger pan (`pan_with_finger`, #800) moves the same `ScrollPosition` through
+the same `scroll_by`, so it is clamped to `[0, max]` per scrolling axis alike and writes
+only a position that moves. It goes to the nearest scrollable ancestor of the node the finger
+went down on (found on the press, a `FixedNode` ending the search), never past a limit, and
+does not start on a `Slider`, `NumericStepper` or `ScrollBar`. A press that moves more than
+`DRAG_THRESHOLD` becomes a pan and ends there: the buttons it went down on lose `Pressed`, a
+`Cancel` restores their look, and `TouchPans` makes the producer in `lib.rs` drop the
+`MouseKind::Click` that would follow and the combos ignore its lift, so nothing it started on
+is activated, picked or closed.
 
 ## A scroll area scrolls a focused row into view
 

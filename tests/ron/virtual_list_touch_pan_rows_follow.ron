@@ -1,0 +1,24 @@
+// A finger pan over a virtual list scrolls its area, the pooled rows follow (the same thirteen
+// show other items) and the row it went down on is not picked. The area spans x 20..260,
+// y 20..220.
+(
+    format_version: 3,
+    name: "a touch pan scrolls a virtual list, its rows follow and nothing is picked",
+    setup: App(VirtualList),
+    steps: [
+        Wait(3),
+        TouchDown(at: Screen((120.0, 180.0)), finger: 0),
+        TouchMove(to: Screen((120.0, 80.0)), finger: 0),
+        TouchUp(finger: 0),
+        Wait(3),
+        Check(Component(target: Within(Name("virtual list scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Eq(100.0))),
+        Check(Count(with: ["VirtualListRow"], is: Eq(13))),
+        Check(Not(Exists(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
+        Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 6")))),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 1"]))),
+        TouchTap(Within(Name("virtual list"), Role(role: ListItem, label: "Row 6"))),
+        Wait(1),
+        Check(App(Selected(of: Name("virtual list"), items: ["Row 6"]))),
+    ],
+    expect: [],
+)

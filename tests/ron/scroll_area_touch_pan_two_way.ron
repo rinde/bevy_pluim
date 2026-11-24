@@ -1,0 +1,19 @@
+// A diagonal pan on the two-way area scrolls both axes (x 20..220, y 20..220), clamped at the
+// start of each.
+(
+    format_version: 3,
+    name: "a finger pan scrolls the two-way scroll area along both axes",
+    setup: App(ScrollAreas),
+    steps: [
+        Wait(2),
+        TouchDown(at: Screen((150.0, 150.0)), finger: 0),
+        TouchMove(to: Screen((100.0, 110.0)), finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("two-way scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((50.0, 40.0)))),
+        TouchMove(to: Screen((200.0, 110.0)), finger: 0),
+        Wait(1),
+        Check(Component(target: Within(Name("two-way scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 40.0)))),
+        TouchUp(finger: 0),
+    ],
+    expect: [],
+)
