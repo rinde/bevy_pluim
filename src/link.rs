@@ -205,8 +205,8 @@ fn handle_hover(
         theme.colors(),
         LinkLook {
             disabled: false,
-            pressed: matches!(kind, MouseKind::Pressed),
-            hovered: !matches!(kind, MouseKind::Out),
+            pressed: trigger.event().pressed(),
+            hovered: trigger.event().hovered(),
         },
     );
     let Ok((mut link_bg, children)) = links.get_mut(trigger.event().event_target()) else {

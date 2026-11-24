@@ -905,7 +905,11 @@ fn handle_button_mouse_events(
     let Ok((mut background, mut border)) = buttons.get_mut(refs.button) else {
         return;
     };
-    if let Some(look) = popup::button_look(trigger.event().kind, *state == ComboState::Open) {
+    if let Some(look) = popup::button_look(
+        trigger.event().kind,
+        trigger.event().touch,
+        *state == ComboState::Open,
+    ) {
         popup::apply_look(look, &theme, &mut background, &mut border);
     }
 }

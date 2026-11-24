@@ -1,0 +1,21 @@
+// A touch tap activates an icon button once and flips a toggle button; a
+// finger that slides off before lifting activates nothing.
+(
+    format_version: 3,
+    name: "a touch tap activates an icon button and flips a toggle",
+    setup: App(IconButtons),
+    steps: [
+        Wait(2),
+        TouchTap(Name("regular button")),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        TouchDown(at: Name("regular button"), finger: 0),
+        TouchMove(to: Name("large button"), finger: 0),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+        Check(Component(target: Name("toggle button"), path: "ToggleState.0", is: Eq(false))),
+        TouchTap(Name("toggle button")),
+        Check(Component(target: Name("toggle button"), path: "ToggleState.0", is: Eq(true))),
+    ],
+    expect: [],
+)

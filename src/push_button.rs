@@ -388,9 +388,10 @@ fn handle_hover(
     if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
-    // The pointer is on the button for every event but `Out`, a release included.
-    let pressed = matches!(kind, MouseKind::Pressed);
-    let hovered = !matches!(kind, MouseKind::Out);
+    // A mouse is on the button for every event but `Out` and `Cancel`, a release included; a
+    // finger never hovers.
+    let pressed = trigger.event().pressed();
+    let hovered = trigger.event().hovered();
     if let Ok((mut background, toggle)) = query.get_mut(trigger.event().event_target()) {
         let on = toggle.is_some_and(|t| t.0);
         *background = BackgroundColor(background_for(

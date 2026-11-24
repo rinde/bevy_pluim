@@ -1,0 +1,20 @@
+// A cancelled touch ends the press like a release away from the button:
+// nothing is activated and the button is back at rest.
+(
+    format_version: 3,
+    name: "a cancelled touch on a push button activates nothing and rests",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        TouchDown(at: Role(role: Button, label: "Add"), finger: 0),
+        TouchCancel(finger: 0),
+        Wait(2),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        Check(Component(
+            target: Role(role: Button, label: "Add"),
+            path: "BackgroundColor.0",
+            is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
+        )),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(0))],
+)

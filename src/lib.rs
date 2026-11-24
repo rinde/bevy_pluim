@@ -55,6 +55,7 @@ use bevy::input_focus::tab_navigation::{TabGroup, TabNavigationPlugin};
 use bevy::input_focus::{InputDispatchPlugin, InputFocusPlugin};
 use bevy::picking::cursor::CursorIconPlugin;
 use bevy::picking::events::{PointerEvent, PointerTraversal};
+use bevy::picking::pointer::PointerId;
 use bevy::prelude::*;
 use bevy::ui_widgets::{
     ButtonPlugin, ListBoxPlugin, ScrollbarPlugin, SliderPlugin as HeadlessSliderPlugin, TabPlugin,
@@ -161,7 +162,8 @@ impl Plugin for WidgetsPlugin {
             .add_observer(observer_transformer::<PointerRelease>)
             .add_observer(observer_transformer::<PointerClick>)
             .add_observer(observer_transformer::<PointerDrag>)
-            .add_observer(observer_transformer::<PointerOut>);
+            .add_observer(observer_transformer::<PointerOut>)
+            .add_observer(observer_transformer::<PointerCancel>);
     }
 
     /// `DefaultPlugins` and the tester's `HeadlessPlugins` bring Bevy's
@@ -254,6 +256,17 @@ enum MouseKind {
     /// The pointer moved while a button was held down on the widget.
     Drag,
     Out,
+    /// The system took the pointer away (a touch interrupted): a press ends as if released
+    /// away from the widget, and nothing is hovered afterwards.
+    Cancel,
+}
+
+impl MouseKind {
+    /// Whether a widget shows its pressed look after this event: only while the button or
+    /// finger is down on it.
+    const fn pressed(self) -> bool {
+        matches!(self, Self::Pressed)
+    }
 }
 
 /// A pointer interaction with `entity`, re-triggered from Bevy's pointer events
@@ -268,6 +281,22 @@ struct MouseEvent {
     /// The button of a press, release, click or drag; `None` for a pointer moving over or out.
     /// A touch counts as [`PointerButton::Primary`].
     button: Option<PointerButton>,
+    /// Whether the pointer is a finger ([`PointerId::Touch`]). A finger does not hover.
+    touch: bool,
+}
+
+impl MouseEvent {
+    /// Whether a widget shows its hover look after this event. This is the one place that
+    /// tells a touch from a mouse: a mouse is hovering until it goes `Out` (or is cancelled),
+    /// a finger never hovers, so a touch `Over` or a lift leaves no hover look behind.
+    const fn hovered(&self) -> bool {
+        !self.touch && !matches!(self.kind, MouseKind::Out | MouseKind::Cancel)
+    }
+
+    /// Whether a widget shows its pressed look after this event.
+    const fn pressed(&self) -> bool {
+        self.kind.pressed()
+    }
 }
 
 trait ToMouseEvent {
@@ -340,6 +369,12 @@ impl ToMouseEvent for PointerOut {
     }
 }
 
+impl ToMouseEvent for PointerCancel {
+    fn to_mouse_kind(&self) -> MouseKind {
+        MouseKind::Cancel
+    }
+}
+
 /// Whether a drag holds the pointer: while set, `MouseKind::Over` is not sent, so no control
 /// highlights as the pointer passes over it.
 #[derive(Resource, Debug, Default)]
@@ -374,6 +409,40 @@ where
             kind,
             distance: trigger.event().distance(),
             button: trigger.event().button(),
+            touch: matches!(trigger.event().pointer().id, PointerId::Touch(_)),
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const fn event(kind: MouseKind, touch: bool) -> MouseEvent {
+        MouseEvent {
+            entity: Entity::PLACEHOLDER,
+            kind,
+            distance: Vec2::ZERO,
+            button: None,
+            touch,
+        }
+    }
+
+    #[test]
+    fn a_mouse_hovers_until_it_goes_out_or_is_cancelled() {
+        assert!(event(MouseKind::Over, false).hovered());
+        assert!(event(MouseKind::Released, false).hovered());
+        assert!(!event(MouseKind::Out, false).hovered());
+        assert!(!event(MouseKind::Cancel, false).hovered());
+    }
+
+    #[test]
+    fn a_finger_never_hovers_but_presses() {
+        for kind in [MouseKind::Over, MouseKind::Pressed, MouseKind::Released] {
+            assert!(!event(kind, true).hovered());
+        }
+        assert!(event(MouseKind::Pressed, true).pressed());
+        assert!(!event(MouseKind::Cancel, true).pressed());
+        assert!(!event(MouseKind::Released, true).pressed());
     }
 }

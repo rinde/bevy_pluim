@@ -1,0 +1,13 @@
+// A touch tap on a panel's close button closes it.
+(
+    format_version: 3,
+    name: "a touch tap on a panel's close button closes it",
+    setup: App(Panel),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("closable panel"), Component("IconButton"))),
+        Wait(2),
+        Check(Not(Exists(Name("closable panel")))),
+    ],
+    expect: [],
+)

@@ -1,0 +1,14 @@
+// A touch tap on a disabled push button does nothing (the tester refuses an
+// actionable-less tap, so the tap is forced).
+(
+    format_version: 3,
+    name: "a touch tap on a disabled push button does nothing",
+    setup: App(Buttons),
+    steps: [
+        Wait(2),
+        Force(TouchTap(Role(role: Button, label: "Disabled"))),
+        Wait(2),
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(0))],
+)
