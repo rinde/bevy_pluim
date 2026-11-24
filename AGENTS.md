@@ -320,6 +320,19 @@ per `target/`. To debug into a dependency, turn it back on for one invocation:
 `cargo --config 'profile.dev.package."*".debug=true' test ...` (that rebuilds
 the dependencies again, and again when you drop the flag).
 
+**Keep output short.** Build and test logs fill an agent's context fast, so
+ask for the part you need:
+
+- Run one test by name, not the whole suite: `just test NAME` (the name is a
+  filter passed to `cargo nextest`), or `cargo test -q --test headless NAME`.
+  Run the full `just test` once, before you call it done.
+- Use quiet output (`cargo test -q`, `cargo build -q`) and cut what comes back:
+  `... 2>&1 | tail -n 50`, or `... 2>&1 | grep -E 'FAILED|error|panicked'` to
+  see only what broke.
+- Read large files in parts (an offset and a line limit, or `sed -n '120,200p'`)
+  after finding the place with `grep -n`; `tests/headless.rs` (19k lines) and
+  `tests/scenarios.rs` are too long to read whole.
+
 `just bevy-lint` exists but is deliberately **not** part of `just ci`: it
 needs a pinned nightly and trails Bevy releases.
 
