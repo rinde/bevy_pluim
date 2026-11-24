@@ -88,7 +88,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 - [`filter_combo.rs`](docs/modules/filter_combo.md): `FilterCombo`: a `Combo` whose popup has a search box that filters the options.
 - [`popup.rs`](docs/modules/popup.md): Crate-private parts the combo popups share: button look, outside click, open/close side effects, combo-box accessibility.
 - [`float.rs`](docs/modules/float.md): `Float`: the viewport-placed popup layer, and the helpers that keep popups inside the window.
-- [`tooltip.rs`](docs/modules/tooltip.md): `Tooltip`: a popup shown after the pointer rests on a node.
+- [`tooltip.rs`](docs/modules/tooltip.md): `Tooltip`: a popup shown after the pointer rests on a node, or a finger is held on it (a long press: no `Activate` on lift).
 - [`toast.rs`](docs/modules/toast.md): `Toast`: a short-lived message stacked along the bottom of its parent.
 
 **Buttons and inputs**
@@ -191,6 +191,12 @@ which doc to open, and each doc links on to the design notes it relies on.
   pointer keeps the hover colour. The state is read from `Hovered` and `Pressed`,
   not tracked by hand; a `PushButton` with `NoDefaultHover` rests at
   `background_primary` for its owner to colour.
+- **A long press on a `Tooltip` node cancels its press.** When the touch popup shows,
+  `tooltip.rs` removes `Pressed` from the pressed node up to the tooltip node and triggers a
+  `MouseKind::Cancel`, so the look rests and Bevy's `Button` fires no `Activate` on the lift.
+  Every `Activate` widget (`IconButton`, `Toolbar`, `SegmentedControl`, an app's button) is
+  covered without code of its own; a widget that picks on `MouseKind::Click` or `Released` would
+  not be. The drag threshold is the shared `crate::DRAG_THRESHOLD`.
 - **Corner radius is a `Node` field.** Since Bevy 0.18 `BorderRadius` is
   `Node::border_radius`, not a component; set it on the node. Since Bevy 0.20
   its corners are `CornerRadius`es and its constructors (`BorderRadius::all`,

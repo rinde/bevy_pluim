@@ -1,0 +1,56 @@
+// A finger held on a tooltip node for half a second without moving shows the popup; the lift
+// hides it and activates nothing, and the button's pressed look is gone once the popup shows.
+// A short tap shows no popup and activates once; a finger that moves before the delay shows
+// none. The delay is time, not frames, so the checks wait with `Within` (#381). The underlined
+// toolbar's button shows its label above it and the long press does not pick the tool.
+(
+    format_version: 3,
+    name: "a long touch press shows the tooltip, hides on lift and activates nothing",
+    setup: App(Tooltip),
+    steps: [
+        Wait(2),
+        Capture(name: "resting background", value: Component(target: Name("tooltip anchor"), path: "BackgroundColor.0")),
+        TouchDown(at: Name("tooltip anchor"), finger: 0),
+        Wait(10),
+        Check(Not(Exists(Text("Anchor tip")))),
+        Check(Within(600, Visible(Text("Anchor tip")))),
+        // The popup is a child of the node and shows below it here: there is no room above.
+        Check(Component(target: Name("tooltip anchor"), path: "BackgroundColor.0", is: Eq(Captured("resting background")))),
+        Wait(10),
+        Check(Visible(Text("Anchor tip"))),
+        TouchUp(finger: 0),
+        Wait(3),
+        Check(Not(Exists(Text("Anchor tip")))),
+        Check(Resource(path: "TouchTaps.tooltip", is: Eq(0))),
+        // A short tap shows nothing and activates once.
+        TouchTap(Name("tooltip anchor")),
+        Wait(40),
+        Check(Not(Exists(Text("Anchor tip")))),
+        Check(Resource(path: "TouchTaps.tooltip", is: Eq(1))),
+        // A finger that moves past the threshold before the delay shows nothing.
+        TouchDown(at: Name("tooltip anchor"), finger: 0),
+        TouchMove(to: Screen((900.0, 500.0)), finger: 0),
+        Wait(45),
+        Check(Not(Exists(Text("Anchor tip")))),
+        TouchUp(finger: 0),
+        Wait(2),
+        Check(Resource(path: "TouchTaps.tooltip", is: Eq(1))),
+        // An icon button's long press flips no toggle; a tap does.
+        TouchDown(at: Name("pin toggle"), finger: 0),
+        Check(Within(600, Visible(Text("Pin")))),
+        TouchUp(finger: 0),
+        Wait(3),
+        Check(Not(Exists(Text("Pin")))),
+        Check(Component(target: Name("pin toggle"), path: "ToggleState.0", is: Eq(false))),
+        TouchTap(Name("pin toggle")),
+        Check(Component(target: Name("pin toggle"), path: "ToggleState.0", is: Eq(true))),
+        // A cancelled long press hides the popup too.
+        TouchDown(at: Name("tooltip anchor"), finger: 0),
+        Check(Within(600, Visible(Text("Anchor tip")))),
+        TouchCancel(finger: 0),
+        Wait(3),
+        Check(Not(Exists(Text("Anchor tip")))),
+        Check(Resource(path: "TouchTaps.tooltip", is: Eq(1))),
+    ],
+    expect: [],
+)

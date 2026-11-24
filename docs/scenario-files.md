@@ -169,7 +169,10 @@ stepper) and `last row` (a button), whose dividers are `Nth(i, Within(Name
 the pill is a `Name("Badge")` child with the count as its text. `Tooltip` has
 `tooltip anchor` (tip "Anchor tip") and `help button` (an icon button, tip
 "Help"); the popup's text exists only while it shows, so `Exists(Text(..))`
-says whether it does, after `Wait(40)` frames (0.5 s at 60 per second).
+says whether it does, after `Wait(40)` frames (0.5 s at 60 per second). The screen ends with
+`pin toggle` (an icon button with a `ToggleState`); `TouchTaps.tooltip` counts the `Activate`s of
+`tooltip anchor` (`tooltip_touch_long_press.ron`, with the sibling `_toolbar` and
+`_segmented_control` files on their screens).
 
 ### The `Gallery` and `Toolbar` screens
 

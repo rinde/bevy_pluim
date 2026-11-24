@@ -1,0 +1,23 @@
+// An icon-only segment's text is its tooltip: a finger held on a segment shows it and the lift
+// picks nothing; a tap picks the segment and shows no popup.
+(
+    format_version: 3,
+    name: "a long touch press on an icon-only segment shows its text and picks nothing",
+    setup: App(SegmentedControls),
+    steps: [
+        Wait(2),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Map"]))),
+        TouchDown(at: Within(Name("icon only segmented control"), Role(role: Button, label: "Table")), finger: 0),
+        Check(Within(600, Visible(Within(Name("Tooltip popup"), Text("Table"))))),
+        Wait(10),
+        TouchUp(finger: 0),
+        Wait(3),
+        Check(Not(Exists(Name("Tooltip popup")))),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Map"]))),
+        TouchTap(Within(Name("icon only segmented control"), Role(role: Button, label: "Table"))),
+        Wait(40),
+        Check(Not(Exists(Name("Tooltip popup")))),
+        Check(App(Selected(of: Name("icon only segmented control"), items: ["Table"]))),
+    ],
+    expect: [],
+)
