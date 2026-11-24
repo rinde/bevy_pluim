@@ -1,0 +1,31 @@
+// A scrub holds the hover lock (nothing highlights while it goes) and a finger
+// that lifts, or a touch the system cancels, lets it go: the mouse hovers the
+// "-" button again afterwards. The "+" button's resting colour is captured
+// first; hovering it must differ.
+(
+    format_version: 3,
+    name: "a lift or a cancelled touch ends a numeric stepper scrub and its hover lock",
+    setup: App(NumericStepper),
+    steps: [
+        Wait(2),
+        Capture(name: "rest_inc", value: Component(target: Within(Name("default stepper"), Name("Increase")), path: "BackgroundColor.0")),
+        Capture(name: "rest", value: Component(target: Within(Name("default stepper"), Name("Decrease")), path: "BackgroundColor.0")),
+        TouchDrag(from: Within(Name("default stepper"), Name("Increase")), to: Within(Name("second mirror stepper"), Name("Increase")), frames: 5),
+        Check(TextOf(Name("default stepper"), Exact("10"))),
+        MoveTo(Within(Name("default stepper"), Name("Decrease"))),
+        Check(Not(Component(target: Within(Name("default stepper"), Name("Decrease")), path: "BackgroundColor.0", is: Eq(Captured("rest"))))),
+        MoveTo(Screen((900.0, 500.0))),
+        TouchDown(at: Within(Name("default stepper"), Name("Decrease")), finger: 0),
+        TouchMove(to: Screen((0.0, 70.0)), finger: 0),
+        Check(Not(TextOf(Name("default stepper"), Exact("10")))),
+        Wait(2),
+        TouchCancel(finger: 0),
+        Wait(2),
+        MoveTo(Within(Name("default stepper"), Name("Increase"))),
+        Check(Not(Component(target: Within(Name("default stepper"), Name("Increase")), path: "BackgroundColor.0", is: Eq(Captured("rest_inc"))))),
+        // The scrub is over: a click on "+" steps.
+        Click(Left),
+        Check(TextOf(Name("default stepper"), Exact("8"))),
+    ],
+    expect: [],
+)

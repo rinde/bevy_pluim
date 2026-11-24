@@ -60,6 +60,8 @@ lifting activates nothing (`push_button_touch_*.ron` (looks, disabled, slide-off
 `breadcrumbs_touch_tap_trims.ron`, `breadcrumbs_touch_slide_off_and_disabled.ron`, `breadcrumbs_touch_looks.ron`, `panel_touch_close.ron`, `panel_touch_slide_off.ron`, `link_touch.ron`, `color_push_button_touch.ron`; the list widgets' `list_touch_*.ron`, `virtual_list_touch_*.ron` and `color_palette_touch_taps_pick.ron` (a tap picks as a click does, a custom row reads `Hovered`, which a finger never sets); the `TouchTaps` resource counts the `Activate`s of `compact button` and `no hover button` (end of the `Buttons` screen) and of `ButtonNames`' link and colour button, and the `IconButtons` screen ends with a `disabled toggle button`; the other widgets' touch
 work is the rest of epic #793).
 
+**Drag controls (#799).** `MouseEvent.pointer` says which pointer (the mouse or one finger) sent an event. A `NumericStepper` scrubs with the pointer that went down first (`Scrub.pointer`); a second finger's press and drag are ignored, so it neither starts another scrub nor moves or ends the first. `end_scrub` reads `Touches`, so a lift or a cancel of the last finger releases `HoverLock` and the cursor. The headless `Slider` ignores `PointerCancel`, so the library's `end_cancelled_presses` clears its `Pressed` and drag state when `Touches` reports a cancelled finger. Scenarios: `slider_touch_*.ron`, `numeric_stepper_touch_*.ron` (scrub, tap, second finger, releases hover lock), `scroll_area_touch_thumb_*.ron`. The scenario tester's `TouchCancel` despawns the pointer (an `Out`), it sends no `PointerCancel`.
+
 ## "Is the pointer on it?" is picking's `Hovered`
 
 A system that asks where

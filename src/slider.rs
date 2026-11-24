@@ -36,6 +36,7 @@ impl Plugin for SliderPlugin {
                 Update,
                 (
                     restyle_sliders,
+                    end_cancelled_presses.run_if(a_touch_was_cancelled),
                     (|| None::<Entity>)
                         .pipe(theme_sliders)
                         .run_if(resource_changed::<Theme>),
@@ -682,6 +683,29 @@ fn on_value_change(
     change.event_mut().value = value;
     if current.0.to_bits() != value.to_bits() {
         commands.entity(source).insert(SliderValue(value));
+    }
+}
+
+/// Whether the system cancelled a finger this frame.
+fn a_touch_was_cancelled(touches: Option<Res<Touches>>) -> bool {
+    touches.is_some_and(|touches| touches.iter_just_canceled().next().is_some())
+}
+
+/// Ends the press or drag of the sliders when a touch is cancelled. Bevy's headless slider
+/// removes [`Pressed`] and clears the drag on a release only, so a cancelled touch would
+/// leave the thumb looking held. Every held slider is let go: the cancel names no slider, and
+/// a slider is held by one pointer at a time.
+fn end_cancelled_presses(
+    mut sliders: Query<(Entity, &mut SliderDragState, Has<Pressed>), With<HeadlessSlider>>,
+    mut commands: Commands,
+) {
+    for (slider, mut drag, pressed) in &mut sliders {
+        if drag.dragging {
+            drag.dragging = false;
+        }
+        if pressed {
+            commands.entity(slider).remove::<Pressed>();
+        }
     }
 }
 
