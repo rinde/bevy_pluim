@@ -1,0 +1,14 @@
+// A touch tap reaches a push button the way a click does: the touch pointer
+// presses and releases "Add", which triggers `Activate` once (the Buttons
+// screen counts the activations of "Add" in `Clicks`).
+(
+    format_version: 3,
+    name: "a touch tap on a push button activates it once",
+    setup: App(Buttons),
+    steps: [
+        Check(Resource(path: "Clicks.0", is: Eq(0))),
+        TouchTap(Role(role: Button, label: "Add")),
+        Check(Resource(path: "Clicks.0", is: Eq(1))),
+    ],
+    expect: [Resource(path: "Clicks.0", is: Eq(1))],
+)

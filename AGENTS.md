@@ -917,6 +917,16 @@ person would see after using the UI.
   `press`, `release`) takes one frame and a `Step::check` none, so a check right
   after the step sees its effect, `MouseEvent` observers included; add
   `Step::wait(n)` only for something that needs more frames.
+- **Touch.** The tester's touch steps (`TouchDown(at: T, finger: n)`,
+  `TouchMove`, `TouchUp`, `TouchCancel`, `TouchTap(T)`, `TouchDrag(from, to,
+  frames)`) write Bevy `TouchInput` messages and a `PointerInput` for
+  `PointerId::Touch(finger)`, so the widgets see a touch pointer from the
+  finger going down until it lifts. `TouchTap` takes two frames (down, then up
+  on the next), because Bevy clicks only an entity the pointer hovered the
+  frame before; a check right after it sees the result. `push_button_touch_tap.ron`
+  (a `TouchTap` on "Add" counts one `Activate` in `Clicks`) is the smoke
+  scenario that the steps reach the widgets; the touch epic (#793) adds the
+  per-widget touch files. See the tester's README ("Touch").
 - **Start from a screen.** `.app_setup(WidgetsSetup::Buttons)` (or `setup:
   App(Buttons)` in a file) instead of a `.setup(..)` closure, when a screen of
   `tests/widgets_setup/mod.rs` has the widgets the scenario needs. `mod
