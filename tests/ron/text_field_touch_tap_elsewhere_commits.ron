@@ -17,6 +17,7 @@
         Check(Resource(path: "FieldEvents.commits", is: Eq(1))),
         Check(Resource(path: "FieldEvents.committed", is: Eq("Alpha1"))),
         TouchTap(Within(Name("seed field"), Component("TextInput"))),
+        Wait(2),
         Type(text: "7", into: Within(Name("seed field"), Component("TextInput"))),
         Wait(2),
         TouchTap(Role(role: Button, label: "Other")),
