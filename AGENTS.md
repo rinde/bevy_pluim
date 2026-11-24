@@ -191,6 +191,19 @@ which doc to open, and each doc links on to the design notes it relies on.
   pointer keeps the hover colour. The state is read from `Hovered` and `Pressed`,
   not tracked by hand; a `PushButton` with `NoDefaultHover` rests at
   `background_primary` for its owner to colour.
+- **Touch.** A finger is its own pointer (`PointerId::Touch`) and every widget works with it
+  (#793). A tap is a press and a release on the same node, so it activates and picks as a
+  click does; a finger that slides off before lifting, or is cancelled, activates nothing. A
+  finger does not hover: `MouseEvent::hovered()` is the one place that tells touch from mouse
+  (false for a touch `Over`), so no widget tests for touch itself and a custom row reads
+  `Hovered`, which a finger never sets. A pan on a scroll area or list scrolls it and picks
+  nothing; a slider and a stepper scrub follow the first finger only; a popup closes on a tap
+  outside and a tap on it does not reach what lies beneath. A long press on a `Tooltip` shows
+  it (next bullet). A fling after a pan is not built (#801). Details:
+  [`docs/design/pointer-and-buttons.md`](docs/design/pointer-and-buttons.md#touch-793-795).
+  Every interactive group of the gallery's `GROUPS` has a `*_touch*.ron` scenario;
+  `every_interactive_gallery_group_has_a_touch_scenario` in `tests/scenarios.rs` fails
+  for one that has none, and a display-only group is listed there as exempt.
 - **A long press on a `Tooltip` node cancels its press.** When the touch popup shows,
   `tooltip.rs` removes `Pressed` from the pressed node up to the tooltip node and triggers a
   `MouseKind::Cancel`, so the look rests and Bevy's `Button` fires no `Activate` on the lift.
