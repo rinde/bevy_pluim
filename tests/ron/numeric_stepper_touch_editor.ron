@@ -1,0 +1,22 @@
+// A tap on the value opens the number editor with the focus in it; a tap elsewhere commits
+// the typed number and closes the editor.
+(
+    format_version: 3,
+    name: "a tap opens a numeric stepper's editor and a tap elsewhere commits it",
+    setup: App(NumericStepper),
+    steps: [
+        Wait(2),
+        TouchTap(Within(Name("default stepper"), Text("1"))),
+        Wait(2),
+        Check(Exists(Within(Name("default stepper"), Component("TextInput")))),
+        Check(App(Focused(of: Within(Name("default stepper"), Component("TextInput"))))),
+        Check(Count(with: ["Outline"], is: Eq(1))),
+        Type(text: "5", into: Within(Name("default stepper"), Component("TextInput"))),
+        Wait(2),
+        TouchTap(Screen((900.0, 500.0))),
+        Wait(3),
+        Check(Not(Exists(Within(Name("default stepper"), Component("TextInput"))))),
+        Check(TextOf(Name("default stepper"), Exact("5"))),
+    ],
+    expect: [],
+)
