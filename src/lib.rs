@@ -377,6 +377,10 @@ impl ToMouseEvent for PointerCancel {
     }
 }
 
+/// How far a pointer has to move, in logical pixels, before a press is a drag: the
+/// `NumericStepper` scrubs from it and a long press on a `Tooltip` node stops counting past it.
+pub(crate) const DRAG_THRESHOLD: f32 = 3.0;
+
 /// Whether a drag holds the pointer: while set, `MouseKind::Over` is not sent, so no control
 /// highlights as the pointer passes over it.
 #[derive(Resource, Debug, Default)]

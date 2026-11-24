@@ -290,6 +290,8 @@ pub struct TouchTaps {
     pub compact: u32,
     /// Activations of the `no hover button`.
     pub no_hover: u32,
+    /// Activations of the `tooltip anchor` of the [`WidgetsSetup::Tooltip`] screen.
+    pub tooltip: u32,
 }
 
 /// The `ValueChange<f32>`s the `stepped slider` of the [`WidgetsSetup::Slider`]
@@ -1905,13 +1907,15 @@ fn icon_buttons(world: &mut World) {
 }
 
 fn tooltip(world: &mut World) {
+    world.init_resource::<TouchTaps>();
     let root = row_root(world);
     world.entity_mut(root).with_children(|root| {
         root.spawn((
             PushButton::from_label("Anchor"),
             Tooltip::new("Anchor tip"),
             Name::new("tooltip anchor"),
-        ));
+        ))
+        .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.tooltip += 1);
         root.spawn(IconButton::new(
             Handle::default(),
             "Help",
@@ -1919,6 +1923,12 @@ fn tooltip(world: &mut World) {
         ))
         .insert(Name::new("help button"));
         spawn_theme_button(root);
+        // Spawned last so the tab order stays.
+        root.spawn((
+            IconButton::new(Handle::default(), "Pin", IconButtonSize::Regular),
+            ToggleState(false),
+            Name::new("pin toggle"),
+        ));
     });
 }
 

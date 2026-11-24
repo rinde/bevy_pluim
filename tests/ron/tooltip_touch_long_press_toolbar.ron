@@ -1,0 +1,25 @@
+// The underlined toolbar's buttons show only an underline, so their label is the tooltip: a
+// finger held on one shows it above the button (there is room) and the lift picks nothing; a tap
+// still picks the tool and shows no popup.
+(
+    format_version: 3,
+    name: "a long touch press on an underlined toolbar button shows its label and picks nothing",
+    setup: App(Toolbar),
+    steps: [
+        Wait(2),
+        Capture(name: "button y", value: Component(target: Nth(1, Within(Name("underlined toolbar"), Name("ToolbarButton"))), path: "UiGlobalTransform.0.translation.y", unit: Logical)),
+        TouchDown(at: Nth(1, Within(Name("underlined toolbar"), Name("ToolbarButton"))), finger: 0),
+        Check(Within(600, Visible(Text("Stops")))),
+        Check(Component(target: Name("Tooltip popup"), path: "UiGlobalTransform.0.translation.y", unit: Logical, is: Lt(Captured("button y")))),
+        Wait(10),
+        TouchUp(finger: 0),
+        Wait(3),
+        Check(Not(Exists(Text("Stops")))),
+        Check(App(Selected(of: Name("underlined toolbar"), items: ["Trains"]))),
+        TouchTap(Nth(1, Within(Name("underlined toolbar"), Name("ToolbarButton")))),
+        Wait(40),
+        Check(Not(Exists(Text("Stops")))),
+        Check(App(Selected(of: Name("underlined toolbar"), items: ["Stops"]))),
+    ],
+    expect: [],
+)

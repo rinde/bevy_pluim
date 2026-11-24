@@ -778,9 +778,7 @@ struct NumericStepperLabel(Entity);
 
 /// How opaque the fill behind the value is over the stepper's own background.
 const FILL_ALPHA: f32 = 0.25;
-/// How far the pointer has to move, in logical pixels, before a press is a drag.
 const SCRUB_CURSOR: EntityCursor = EntityCursor::System(SystemCursorIcon::ColResize);
-const DRAG_THRESHOLD: f32 = 3.0;
 /// The width of the small icon buttons at the ends of the stepper, in logical pixels.
 const BUTTON_WIDTH_PX: f32 = 30.0;
 
@@ -1017,7 +1015,7 @@ fn on_mouse(
             if scrub.pointer != Some(event.pointer) {
                 return;
             }
-            if !scrub.dragged && event.distance.x.abs() < DRAG_THRESHOLD {
+            if !scrub.dragged && event.distance.x.abs() < crate::DRAG_THRESHOLD {
                 return;
             }
             if !scrub.dragged {
