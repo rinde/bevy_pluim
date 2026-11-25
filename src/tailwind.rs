@@ -1,4 +1,4 @@
-//! All Tailwind colours, for colour pickers.
+//! All Tailwind colors, for color pickers.
 //!
 //! The theme itself uses [`bevy::color::palettes::tailwind`] directly.
 
@@ -35,9 +35,8 @@ use bevy::color::palettes::tailwind::{
 };
 use bevy::prelude::*;
 
-/// All 242 Tailwind colours: 22 classes with 11 variants each.
+/// All 242 Tailwind colors: 22 classes with 11 variants each.
 pub const COLORS: [TailwindColor; 242] = [
-    // slate
     TailwindColor {
         class: Class::Slate,
         variant: Variant::V50,
@@ -93,7 +92,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(SLATE_950),
     },
-    // gray
     TailwindColor {
         class: Class::Gray,
         variant: Variant::V50,
@@ -149,7 +147,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(GRAY_950),
     },
-    // zinc
     TailwindColor {
         class: Class::Zinc,
         variant: Variant::V50,
@@ -205,7 +202,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(ZINC_950),
     },
-    // neutral
     TailwindColor {
         class: Class::Neutral,
         variant: Variant::V50,
@@ -261,7 +257,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(NEUTRAL_950),
     },
-    // stone
     TailwindColor {
         class: Class::Stone,
         variant: Variant::V50,
@@ -317,7 +312,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(STONE_950),
     },
-    // red
     TailwindColor {
         class: Class::Red,
         variant: Variant::V50,
@@ -373,7 +367,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(RED_950),
     },
-    // orange
     TailwindColor {
         class: Class::Orange,
         variant: Variant::V50,
@@ -429,7 +422,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(ORANGE_950),
     },
-    // amber
     TailwindColor {
         class: Class::Amber,
         variant: Variant::V50,
@@ -485,7 +477,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(AMBER_950),
     },
-    // yellow
     TailwindColor {
         class: Class::Yellow,
         variant: Variant::V50,
@@ -541,7 +532,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(YELLOW_950),
     },
-    // lime
     TailwindColor {
         class: Class::Lime,
         variant: Variant::V50,
@@ -597,7 +587,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(LIME_950),
     },
-    // green
     TailwindColor {
         class: Class::Green,
         variant: Variant::V50,
@@ -653,7 +642,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(GREEN_950),
     },
-    // emerald
     TailwindColor {
         class: Class::Emerald,
         variant: Variant::V50,
@@ -709,7 +697,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(EMERALD_950),
     },
-    // teal
     TailwindColor {
         class: Class::Teal,
         variant: Variant::V50,
@@ -765,7 +752,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(TEAL_950),
     },
-    // cyan
     TailwindColor {
         class: Class::Cyan,
         variant: Variant::V50,
@@ -821,7 +807,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(CYAN_950),
     },
-    // sky
     TailwindColor {
         class: Class::Sky,
         variant: Variant::V50,
@@ -877,7 +862,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(SKY_950),
     },
-    // blue
     TailwindColor {
         class: Class::Blue,
         variant: Variant::V50,
@@ -933,7 +917,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(BLUE_950),
     },
-    // indigo
     TailwindColor {
         class: Class::Indigo,
         variant: Variant::V50,
@@ -989,7 +972,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(INDIGO_950),
     },
-    // violet
     TailwindColor {
         class: Class::Violet,
         variant: Variant::V50,
@@ -1045,7 +1027,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(VIOLET_950),
     },
-    // purple
     TailwindColor {
         class: Class::Purple,
         variant: Variant::V50,
@@ -1101,7 +1082,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(PURPLE_950),
     },
-    // fuchsia
     TailwindColor {
         class: Class::Fuchsia,
         variant: Variant::V50,
@@ -1157,7 +1137,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(FUCHSIA_950),
     },
-    // pink
     TailwindColor {
         class: Class::Pink,
         variant: Variant::V50,
@@ -1213,7 +1192,6 @@ pub const COLORS: [TailwindColor; 242] = [
         variant: Variant::V950,
         color: Color::Srgba(PINK_950),
     },
-    // rose
     TailwindColor {
         class: Class::Rose,
         variant: Variant::V50,
@@ -1271,17 +1249,17 @@ pub const COLORS: [TailwindColor; 242] = [
     },
 ];
 
-/// One Tailwind colour.
+/// One Tailwind color.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct TailwindColor {
     /// The hue, such as `Blue`.
     pub class: Class,
     /// The shade, from 50 (lightest) to 950 (darkest).
     pub variant: Variant,
-    /// The colour itself.
+    /// The color itself.
     pub color: Color,
 }
-/// The hue of a Tailwind colour.
+/// The hue of a Tailwind color.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Class {
     /// Tailwind `slate`.
@@ -1329,7 +1307,7 @@ pub enum Class {
     /// Tailwind `rose`.
     Rose,
 }
-/// The shade of a Tailwind colour.
+/// The shade of a Tailwind color.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Variant {
     /// Shade 50.
@@ -1356,9 +1334,7 @@ pub enum Variant {
     V950,
 }
 
-/// The accessible name of a colour: its Tailwind name (`blue-500`) when it is
-/// one of [`COLORS`], else its sRGB hex (`#3b82f6`, with the alpha appended
-/// only when it is not 1).
+/// The accessible name of a color: its Tailwind name (`blue-500`), else its sRGB hex.
 #[must_use]
 pub fn color_name(color: Color) -> String {
     COLORS
@@ -1445,7 +1421,7 @@ mod tests {
         );
     }
 
-    /// Tailwind's `zinc-50` and `neutral-50` are the same colour (#fafafa), so
+    /// Tailwind's `zinc-50` and `neutral-50` are the same color (#fafafa), so
     /// `color_name` gives both the name of the one that comes first.
     fn name_of_colour_at(index: usize) -> String {
         if expected_name(index) == "neutral-50" {

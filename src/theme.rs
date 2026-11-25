@@ -1,4 +1,4 @@
-//! The [`Theme`] resource that styles every widget, and its default light and dark colours.
+//! The [`Theme`] resource that styles every widget, and its default light and dark colors.
 
 use bevy::color::palettes::tailwind::{
     BLUE_200, BLUE_400, BLUE_500, BLUE_600, BLUE_700, BLUE_800, BLUE_900, GRAY_50, GRAY_100,
@@ -8,9 +8,7 @@ use bevy::prelude::*;
 use bevy::text::DEFAULT_REM_SIZE_PX;
 use educe::Educe;
 
-/// Registers the systems and observers of the [`Theme`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
+/// Registers the systems of the [`Theme`].
 #[derive(Debug, Copy, Clone)]
 pub struct ThemePlugin;
 
@@ -24,13 +22,9 @@ fn update_theme(mut clear_color: ResMut<ClearColor>, theme: Res<Theme>) {
     clear_color.0 = theme.colors().background_primary;
 }
 
-/// How every widget looks.
+/// How every widget looks; changing it restyles them all and sets [`ClearColor`].
 ///
-/// Changing the resource restyles all widgets, and keeps [`ClearColor`] in step with the background.
-///
-/// The `font_size_*` fields are the type scale in logical pixels at Bevy's default rem size. The
-/// widgets turn them into rem with [`Theme::font_size`], so their text follows the
-/// [`RemSize`] resource.
+/// The `font_size_*` fields are logical pixels at Bevy's default rem size; see [`Theme::font_size`].
 #[derive(Resource, Clone, Debug, Educe, Reflect)]
 #[reflect(Resource)]
 #[educe(Default)]
@@ -45,21 +39,14 @@ pub struct Theme {
     #[educe(Default = Val::Px(1.0))]
     pub border_thickness: Val,
 
-    /// The colours in use: the light or the dark set, as [`mode`](Self::mode) says.
-    ///
-    /// Private so that it cannot fall out of step with the mode: read it with
-    /// [`colors`](Self::colors) and change it with [`set_mode`](Self::set_mode),
-    /// [`light_dark_toggle`](Self::light_dark_toggle) or [`set_colors`](Self::set_colors).
-    /// Reflection still reaches it (`Theme.colors`), as an inspection facility, not an
-    /// invariant boundary.
+    /// The colors in use, per [`mode`](Self::mode). Private to stay in step with it: use [`colors`](Self::colors).
     colors: ThemeColors,
-    /// The colours of the light mode.
+    /// The colors of the light mode.
     #[educe(Default = DEFAULT_LIGHT_THEME_COLORS)]
     light_colors: ThemeColors,
-    /// The colours of the dark mode.
+    /// The colors of the dark mode.
     #[educe(Default = DEFAULT_DARK_THEME_COLORS)]
     dark_colors: ThemeColors,
-    /// Which of the two sets is in use.
     mode: ThemeMode,
 
     /// The width of a scroll bar.
@@ -67,19 +54,14 @@ pub struct Theme {
     pub scroll_bar_width: Val,
 
     /// The font of body text: buttons, labels, links and list items.
-    ///
-    /// Defaults to Bevy's default font; the application loads its own and sets the handle.
     pub body_font: Handle<Font>,
     /// The font of titles, such as [`Label::Title`](crate::label::Label::Title).
-    ///
-    /// Defaults to Bevy's default font; the application loads its own and sets the handle.
     pub display_font: Handle<Font>,
 
-    /// The size of a title, in the display font (the redesign's display size: 22 px, up from 18).
+    /// The size of a title, in the display font.
     #[educe(Default = 22.0)]
     pub font_size_title: f32,
-    /// The size of body text, also of a [`Link`](crate::link::Link) (the redesign's body size:
-    /// 15 px, down from 18 for links).
+    /// The size of body text, also of a [`Link`](crate::link::Link).
     #[educe(Default = 15.0)]
     pub font_size_body: f32,
     /// The size of secondary text: buttons, labels and list items.
@@ -121,7 +103,7 @@ pub struct Theme {
     #[educe(Default = Val::Px(6.0))]
     pub compact_button_radius: Val,
 
-    /// The padding inside a colour push button.
+    /// The padding inside a color push button.
     #[educe(Default = UiRect::axes(Val::Px(6.0), Val::Px(4.0)))]
     pub color_button_padding: UiRect,
 }
@@ -142,20 +124,11 @@ impl Theme {
         s
     }
 
-    /// The font size of a value of the type scale (one of the `font_size_*` fields, or a widget's
-    /// own size), given in logical pixels at the default rem size.
+    /// The [`FontSize::Rem`] for `px` logical pixels at [`DEFAULT_REM_SIZE_PX`], so text follows [`RemSize`].
     ///
-    /// It is a [`FontSize::Rem`], so the text follows the [`RemSize`]
-    /// resource: at Bevy's default of [`DEFAULT_REM_SIZE_PX`] (20 px) it is `px` logical pixels,
-    /// and an application that raises `RemSize` scales every widget's text with it.
-    ///
-    /// The `font_size_*` fields are public, so a value that cannot be a text size (NaN, an
-    /// infinity, zero or a negative number) can reach this function. It is the boundary to text
-    /// layout, so it returns [`FALLBACK_FONT_SIZE_PX`] (the body size, 15 px) instead of passing
-    /// the value on.
+    /// A value that is not a positive finite number gives [`FALLBACK_FONT_SIZE_PX`].
     #[must_use]
     pub const fn font_size(px: f32) -> FontSize {
-        // `px > 0.0` is false for NaN and zero; the upper bound excludes infinity.
         let px = if px > 0.0 && px < f32::INFINITY {
             px
         } else {
@@ -164,14 +137,7 @@ impl Theme {
         FontSize::Rem(px / DEFAULT_REM_SIZE_PX)
     }
 
-    /// The colours in use: the light or the dark set, as [`mode`](Self::mode) says.
-    ///
-    /// Widgets read their colours here. There is no mutable access: change the set with
-    /// [`set_mode`](Self::set_mode), [`light_dark_toggle`](Self::light_dark_toggle) or
-    /// [`set_colors`](Self::set_colors), and pick the pair with
-    /// [`with_colors`](Self::with_colors).
-    ///
-    /// The field itself is private; assigning to it does not compile:
+    /// The colors in use, per [`mode`](Self::mode). Assigning to the field does not compile:
     ///
     /// ```compile_fail
     /// use bevy_pluim::theme::{DEFAULT_DARK_THEME_COLORS, Theme};
@@ -184,18 +150,16 @@ impl Theme {
         &self.colors
     }
 
-    /// The geometry and colour of the shadow of popups and cards, which [`large_shadow`](Self::large_shadow)
-    /// and [`small_shadow`](Self::small_shadow) take the colour of the active set into.
+    /// The shadow geometry that [`large_shadow`](Self::large_shadow) and [`small_shadow`](Self::small_shadow) color.
     pub(crate) const fn shadow_style(&self) -> ShadowStyle {
         self.shadow_style
     }
 
-    /// Mutable access to [`shadow_style`](Self::shadow_style), for the theme editor.
     pub(crate) const fn shadow_style_mut(&mut self) -> &mut ShadowStyle {
         &mut self.shadow_style
     }
 
-    /// A light-mode theme with the given pair of colour sets, everything else default.
+    /// A theme with the given light and dark color sets, everything else default.
     #[must_use]
     pub fn with_colors(light: ThemeColors, dark: ThemeColors) -> Self {
         Self {
@@ -206,13 +170,13 @@ impl Theme {
         }
     }
 
-    /// Which of the light and dark colour sets is in use.
+    /// Which of the light and dark color sets is in use.
     #[must_use]
     pub const fn mode(&self) -> ThemeMode {
         self.mode
     }
 
-    /// Uses the light or the dark colour set.
+    /// Uses the light or the dark color set.
     pub const fn set_mode(&mut self, mode: ThemeMode) {
         self.mode = mode;
         self.colors = match mode {
@@ -221,7 +185,7 @@ impl Theme {
         };
     }
 
-    /// The colour set of `mode`, whether or not it is the one in use.
+    /// The color set of `mode`, whether or not it is in use.
     #[must_use]
     pub const fn colors_of(&self, mode: ThemeMode) -> ThemeColors {
         match mode {
@@ -230,8 +194,7 @@ impl Theme {
         }
     }
 
-    /// Replaces the colour set of `mode`; [`colors`](Self::colors) follows when it is the mode
-    /// in use. This is how a theme editor changes one half of the pair live.
+    /// Replaces the color set of `mode`; [`colors`](Self::colors) follows when it is in use.
     pub const fn set_colors(&mut self, mode: ThemeMode, colors: ThemeColors) {
         match mode {
             ThemeMode::Light => self.light_colors = colors,
@@ -245,7 +208,7 @@ impl Theme {
         }
     }
 
-    /// Switches between the light and the dark mode, keeping the application's own colour pair.
+    /// Switches between the light and the dark mode.
     pub const fn light_dark_toggle(&mut self) {
         self.set_mode(match self.mode {
             ThemeMode::Light => ThemeMode::Dark,
@@ -254,21 +217,20 @@ impl Theme {
     }
 }
 
-/// The text size in logical pixels that [`Theme::font_size`] uses for a value that is not a
-/// positive finite number: the body size.
+/// The text size [`Theme::font_size`] uses for a value that is not a positive finite number.
 pub const FALLBACK_FONT_SIZE_PX: f32 = 15.0;
 
-/// Whether a [`Theme`] uses its light or its dark colours.
+/// Whether a [`Theme`] uses its light or its dark colors.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum ThemeMode {
-    /// The light colours.
+    /// The light colors.
     #[default]
     Light,
-    /// The dark colours.
+    /// The dark colors.
     Dark,
 }
 
-/// The colour slots of a [`Theme`].
+/// The color slots of a [`Theme`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub struct ThemeColors {
     /// The background of widgets and the window.
@@ -281,31 +243,31 @@ pub struct ThemeColors {
     pub hovered_item: Color,
     /// The background of a selected item that is hovered.
     pub selected_hovered_item: Color,
-    /// The colour of borders.
+    /// The color of borders.
     pub border: Color,
-    /// The colour of the border of a selected or hovered widget.
+    /// The color of the border of a selected or hovered widget.
     pub border_highlight: Color,
-    /// The colour of text.
+    /// The color of text.
     pub text_primary: Color,
-    /// The colour of the text of a disabled widget.
+    /// The color of the text of a disabled widget.
     pub text_disabled: Color,
-    /// The colour of a link.
+    /// The color of a link.
     pub link: Color,
-    /// The colour of a link while it is pressed.
+    /// The color of a link while it is pressed.
     pub link_selected: Color,
-    /// The colour of the large shadow, under floating panels and popups.
+    /// The color of the large shadow, under floating panels and popups.
     pub large_shadow: Color,
-    /// The colour of the small shadow, under buttons and other controls.
+    /// The color of the small shadow, under buttons and other controls.
     pub small_shadow: Color,
-    /// The colour of the ring around the widget that has keyboard focus.
+    /// The color of the ring around the widget that has keyboard focus.
     pub focus_ring: Color,
-    /// The colour of a scroll bar thumb.
+    /// The color of a scroll bar thumb.
     pub scroll_thumb_background: Color,
     /// Secondary text, such as descriptions and counts.
     pub text_secondary: Color,
     /// Tertiary text, such as captions.
     pub text_tertiary: Color,
-    /// The colour of divider lines.
+    /// The color of divider lines.
     pub divider: Color,
     /// The fill of the active tool in a filled toolbar, the design's accent.
     pub accent: Color,
@@ -341,8 +303,7 @@ pub struct ThemeColors {
     pub wait_background: Color,
     /// The text of a waiting status.
     pub wait_text: Color,
-    /// The background of a neutral pill or badge. A `Pill` and a `Badge` share the neutral
-    /// pill slots on purpose: the design gives them one neutral look.
+    /// The background of a neutral pill or badge.
     pub pill_background: Color,
     /// The text of a neutral pill or badge, on [`pill_background`](Self::pill_background).
     pub pill_text: Color,
@@ -372,7 +333,7 @@ impl Default for ThemeColors {
     }
 }
 
-/// The default colours of the light theme.
+/// The default colors of the light theme.
 pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::Srgba(GRAY_50),
     background_secondary: Color::Srgba(GRAY_200),
@@ -421,7 +382,7 @@ pub const DEFAULT_LIGHT_THEME_COLORS: ThemeColors = ThemeColors {
     slider_track: Color::srgb_u8(0xD3, 0xCE, 0xC2),
     slider_fill: Color::srgb_u8(0xAE, 0x6E, 0x14),
 };
-/// The default colours of the dark theme.
+/// The default colors of the dark theme.
 pub const DEFAULT_DARK_THEME_COLORS: ThemeColors = ThemeColors {
     background_primary: Color::Srgba(GRAY_950),
     background_secondary: Color::Srgba(GRAY_800),
@@ -480,20 +441,15 @@ pub const SHADOW_LG: Color = Color::srgba(0.0, 0.0, 0.0, 0.15);
 /// An extra large shadow.
 pub const SHADOW_XL: Color = Color::srgba(0.0, 0.0, 0.0, 0.25);
 
-/// A small shadow on a dark background: black, like the large one, so neither
-/// default theme glows.
-///
-/// The shadow constants set colour only. Offset, blur and spread stay with the
-/// widgets, because Bevy's `ShadowStyle` already carries the offsets they use;
-/// the design's CSS geometry is not applied.
+/// A small shadow on a dark background.
 pub const SHADOW_SM_DARK_MODE: Color = Color::srgba(0.0, 0.0, 0.0, 0.2);
-/// A large shadow on a dark background: black, and heavy enough to show.
+/// A large shadow on a dark background.
 pub const SHADOW_LG_DARK_MODE: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
-/// The large shadow on a light background: a warm dark.
+/// The large shadow on a light background.
 pub const SHADOW_LG_LIGHT_MODE: Color =
     Color::srgba(60.0 / 255.0, 50.0 / 255.0, 30.0 / 255.0, 0.14);
 
-/// The WCAG 2.x relative luminance of a colour in sRGB.
+/// The WCAG 2.x relative luminance of a color in sRGB.
 fn relative_luminance(color: Color) -> f32 {
     let c = color.to_srgba();
     let linear = |v: f32| {
@@ -509,7 +465,7 @@ fn relative_luminance(color: Color) -> f32 {
     )
 }
 
-/// The WCAG 2.x contrast ratio of two colours, from 1 to 21.
+/// The WCAG 2.x contrast ratio of two colors, from 1 to 21.
 pub(crate) fn contrast_ratio(a: Color, b: Color) -> f32 {
     let (la, lb) = (relative_luminance(a), relative_luminance(b));
     let (light, dark) = if la > lb { (la, lb) } else { (lb, la) };
@@ -628,14 +584,12 @@ mod tests {
         let mut theme = Theme::with_colors(light, dark);
         let mut edited = dark;
         edited.border = Color::WHITE;
-        // The mode in use is not the edited one: `colors` stays, the dark half changes.
         theme.set_colors(ThemeMode::Dark, edited);
         assert_eq!(*theme.colors(), light);
         assert_eq!(theme.colors_of(ThemeMode::Dark), edited);
         assert_eq!(theme.colors_of(ThemeMode::Light), light);
         theme.light_dark_toggle();
         assert_eq!(*theme.colors(), edited);
-        // The mode in use is the edited one: `colors` follows at once.
         let mut edited_again = edited;
         edited_again.border = Color::BLACK;
         theme.set_colors(ThemeMode::Dark, edited_again);
@@ -717,12 +671,8 @@ mod tests {
         assert!((contrast_ratio(Color::WHITE, Color::WHITE) - 1.0).abs() < 0.001);
     }
 
-    /// Exempt from the checks below, by WCAG 1.4.3: `text_disabled` (inactive
-    /// components are exempt) and `text_tertiary` (placeholder and caption
-    /// text the redesign allows to be quieter). Decorative colours (`border`,
-    /// `divider`, `chip_border`, `warning_border`, the `accent_subtle_bar`,
-    /// `slider_track`, beside which the `slider_fill` shows the value) are not
-    /// read as information and are exempt as well.
+    /// Exempt: `text_disabled`, `text_tertiary` and the decorative colors (`border`, `divider`,
+    /// `chip_border`, `warning_border`, `accent_subtle_bar`, `slider_track`).
     #[test]
     fn the_default_themes_meet_wcag_aa_contrast() {
         let mut failures = Vec::new();
@@ -730,7 +680,6 @@ mod tests {
             ("light", DEFAULT_LIGHT_THEME_COLORS),
             ("dark", DEFAULT_DARK_THEME_COLORS),
         ] {
-            // Normal text, 4.5:1.
             let text = [
                 (
                     "text_primary on background_primary",
@@ -883,7 +832,6 @@ mod tests {
                     failures.push(format!("{theme}: {name} is {ratio:.2}, needs 4.5"));
                 }
             }
-            // Non-text, 3:1.
             let non_text = [
                 (
                     "focus_ring on background_primary",
