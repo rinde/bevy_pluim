@@ -1,6 +1,3 @@
-// The open list of a combo in a scroll area is a `FixedNode`, so the arrow keys moving its
-// active row must not scroll the area (`scroll_into_view` stops at a `FixedNode`). The area's
-// contents overflow it, so it could scroll, and the list reaches below the area.
 (
     format_version: 3,
     name: "arrowing down a combo list in a scroll area does not scroll the area",

@@ -1,5 +1,3 @@
-// The arrow keys only move the focus of a toolbar; Enter and Space on the focused tool pick it,
-// like a click, and on the open tool of a `ZeroOrOne` toolbar clear the selection.
 (
     format_version: 3,
     name: "Enter and Space pick the focused tool of a toolbar, and close an open ZeroOrOne tool",
@@ -18,10 +16,8 @@
         Tap(key: Space),
         Check(App(Selected(of: Name("filled toolbar"), items: ["Bulldoze"]))),
         Check(App(Focused(of: Within(Name("filled toolbar"), Role(role: Button, label: "Bulldoze"))))),
-        // Enter on the active tool of a One toolbar keeps it.
         Tap(key: Enter),
         Check(App(Selected(of: Name("filled toolbar"), items: ["Bulldoze"]))),
-        // The next Tab leaves the toolbar, one more reaches the optional toolbar's first tool.
         Tap(key: Tab),
         Check(App(Focused(of: Role(role: Button, label: "Change theme")))),
         Tap(key: Tab),

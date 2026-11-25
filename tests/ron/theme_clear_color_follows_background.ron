@@ -1,7 +1,3 @@
-// ClearColor, the colour of the window behind the UI, follows the theme's
-// background_primary (gray-50 in the light theme, gray-950 in the dark one),
-// through update_theme, which runs when the Theme changes. It is set from the
-// light theme as soon as the app starts, then follows each toggle.
 (
     format_version: 3,
     name: "the clear colour follows the background of the theme",

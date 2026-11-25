@@ -1,8 +1,3 @@
-// A stepper's value is secondary text, 0.7 rem, so it follows Bevy's `RemSize`.
-// `ron_scenarios` also plays this file with the rem size at 1.5 times the
-// default (`[text 1.5x]`): the steppers still fit the window, and the value
-// label keeps its minimum width (54 px) from "10.0" to "10.5", so the buttons
-// do not move while the value changes.
 (
     format_version: 3,
     name: "a stepper sizes its value in rem and its buttons stay put at any text size",

@@ -1,4 +1,3 @@
-// A touch tap on a crumb trims the trail back to it, as a click does.
 (
     format_version: 3,
     name: "a touch tap on a crumb trims the selection",

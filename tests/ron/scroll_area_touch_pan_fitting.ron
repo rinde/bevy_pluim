@@ -1,4 +1,3 @@
-// A pan over an area whose contents fit scrolls nothing (x 680..880, y 20..220).
 (
     format_version: 3,
     name: "a finger pan over a fitting scroll area moves nothing",

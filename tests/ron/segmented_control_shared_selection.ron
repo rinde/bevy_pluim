@@ -1,5 +1,3 @@
-// `first` and `second shared segmented control` point to one selection: a click on a segment of
-// either selects it in both.
 (
     format_version: 3,
     name: "segmented controls sharing a selection follow each other",

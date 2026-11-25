@@ -1,4 +1,3 @@
-// A finger on a capped popup's scroll bar is inside the popup, so it stays open.
 (
     format_version: 3,
     name: "a tap on a combo popup's scroll bar leaves it open",

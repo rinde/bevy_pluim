@@ -1,7 +1,3 @@
-// The ScrollAreas screen fits the default window: the pointer can move to the
-// middle of every scroll area and to "Change theme", which the tester only
-// allows for a widget that is not outside the window (the screen once had its
-// button below it).
 (
     format_version: 3,
     name: "every scroll area and the theme button are inside the window",

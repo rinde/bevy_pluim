@@ -1,6 +1,3 @@
-// A mouse wheel turns vertically only, so over an area that scrolls sideways
-// alone (the horizontal scroll area) a vertical turn scrolls the contents
-// sideways, and back; it never moves ScrollPosition.y.
 (
     format_version: 3,
     name: "a vertical wheel turn scrolls a horizontal scroll area sideways",

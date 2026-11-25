@@ -1,5 +1,3 @@
-// A push button with NoDefaultHover takes a tap and activates once; its
-// colours stay its owner's, so the default pressed look does not apply.
 (
     format_version: 3,
     name: "a touch tap activates a push button with no default hover",

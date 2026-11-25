@@ -1,7 +1,3 @@
-// A slider's value is secondary text, 0.7 rem, so it follows Bevy's `RemSize`.
-// `ron_scenarios` also plays this file with the rem size at 1.5 times the
-// default (`[text 1.5x]`): the label grows to hold its text, the track keeps
-// its size and the sliders still fit the window.
 (
     format_version: 3,
     name: "a slider sizes its value in rem and its track stays put at any text size",
@@ -15,7 +11,7 @@
         MoveTo(Name("continuous slider")),
         MoveTo(Name("stepped slider")),
         MoveTo(Name("formatted slider")),
-        // The label lets the pointer through, so it is checked by position.
+        // The label lets the pointer through, so check it by position.
         Check(Visible(Within(Name("formatted slider"), Name("SliderLabel")))),
         Check(Component(target: Within(Name("formatted slider"), Name("SliderLabel")), path: "UiGlobalTransform.0.translation.x", unit: Logical, is: Le(1200.0))),
         MoveTo(Name("disabled slider")),

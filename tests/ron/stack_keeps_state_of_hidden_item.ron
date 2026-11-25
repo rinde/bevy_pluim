@@ -1,11 +1,3 @@
-// A `Stack` hides a deselected child and shows the very same one when it is
-// selected again: nothing is despawned and made anew. Panel B holds a list of
-// numbers with a selection of its own, which starts on "1". Choosing "3" there
-// and leaving Panel B by way of the other tabs would reset that selection
-// if the panel were created again; it survives. A second copy of the panel
-// would also make the "3" locator inside `Stack` ambiguous (two matches), which
-// fails the scenario at the first step that uses it, so no count of item views
-// is needed (and one would break whenever the `Tabs` screen changes).
 (
     format_version: 3,
     name: "a deselected stack item keeps its state when it is shown again",
@@ -18,7 +10,6 @@
         MoveTo(Within(Name("Stack"), Role(role: ListItem, label: "3"))), Click(Left),
         Check(App(Selected(of: Within(Name("Stack"), Role(role: ListItem, label: "3")), items: ["3"]))),
 
-        // Away to the cards, and to Panel A, and back.
         MoveTo(Role(role: Tab, label: "Card demo")), Click(Left),
         Wait(2),
         Check(Not(Visible(Within(Name("Stack"), Role(role: ListItem, label: "3"))))),

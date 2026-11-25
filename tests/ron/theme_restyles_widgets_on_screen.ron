@@ -1,21 +1,9 @@
-// Widgets that are already on screen restyle when the theme changes: each
-// widget's theme_* system runs when the Theme resource does. A PushButton, a
-// Card and a List, which has the first item selected, are read in the light
-// theme, in the dark one after "Change theme", and in the light theme again
-// after a second click, which restores every colour. The slots read are
-// background_primary, border, text_primary, selected_item, border_highlight,
-// small_shadow and large_shadow (a dark shadow in both themes) of DEFAULT_LIGHT_THEME_COLORS (Tailwind
-// gray-50, gray-200, gray-900, blue-500, blue-400) and of
-// DEFAULT_DARK_THEME_COLORS (gray-950, gray-700, gray-100, blue-800, blue-800).
-// The pointer rests on "Change theme", which is none of the widgets read, so
-// no hover colour shows.
 (
     format_version: 3,
     name: "widgets on screen restyle when the theme is toggled",
     setup: App(Themed),
     steps: [
         Wait(2),
-        // The light theme.
         Check(Component(
             target: Name("themed button"),
             path: "BackgroundColor.0",
@@ -86,7 +74,6 @@
             path: "BorderColor.top",
             is: Eq(Srgba((red:0.8980392,green:0.90588236,blue:0.92156863,alpha:1.0))),
         )),
-        // The dark theme: every widget has restyled.
         MoveTo(Role(role: Button, label: "Change theme")),
         Click(Left),
         Wait(2),
@@ -160,7 +147,6 @@
             path: "BorderColor.top",
             is: Eq(Srgba((red:0.21568628,green:0.25490198,blue:0.31764707,alpha:1.0))),
         )),
-        // The light theme again.
         Click(Left),
         Wait(2),
         Check(Component(

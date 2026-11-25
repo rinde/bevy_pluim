@@ -1,6 +1,3 @@
-// A combo is usable from the keyboard: Tab focuses its button, Enter opens the popup and puts
-// the focus on its list, the arrow keys move through the entries and Enter picks one, which
-// closes the popup again.
 (
     format_version: 3,
     name: "Tab, Enter and the arrow keys open a combo, move in its list and pick",
@@ -22,7 +19,6 @@
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
         Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
         Check(Not(App(Selected(of: Name("first combo"), items: [])))),
-        // The focus is not left on the hidden list.
         Check(Not(App(Focused(of: Within(Name("first combo"), Component("ComboList")))))),
     ],
     expect: [],

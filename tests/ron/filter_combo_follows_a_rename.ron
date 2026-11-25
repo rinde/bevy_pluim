@@ -1,6 +1,3 @@
-// Renaming an item in place shows the new text at once everywhere the item is shown: in the filter
-// combo's button, in the rows of its popup and of the `ordinary combo`, and in the `city list`
-// that shares the items, and the new text is what the open popup filters by.
 (
     format_version: 3,
     name: "renaming an item in place updates the filter combo's button, rows and matches",

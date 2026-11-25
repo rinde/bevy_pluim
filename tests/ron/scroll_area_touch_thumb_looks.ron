@@ -1,7 +1,3 @@
-// A finger on the scroll thumb shows the held colour (selected_hovered_item,
-// blue-400) while down, never the hover colour (a finger does not hover), and
-// the thumb is back at rest (gray-400) after the lift, after a cancel and after
-// a drag that ends away from the thumb.
 (
     format_version: 3,
     name: "the scroll thumb is held only while a finger is on it",

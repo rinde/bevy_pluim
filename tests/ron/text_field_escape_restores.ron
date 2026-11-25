@@ -1,5 +1,3 @@
-// `Escape` puts back the text a field had when it took the focus and gives the focus up,
-// without a commit. The placeholder shows while the field is empty.
 (
     format_version: 3,
     name: "Escape puts back the text of a text field and lets go without committing",

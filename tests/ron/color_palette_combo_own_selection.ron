@@ -1,7 +1,3 @@
-// A palette combo with a selection of its own picks a colour without moving
-// the other combos or the palette: the combos choose from the same colours
-// but select separately. The own combo's popup is "own palette combo popup".
-// Index 60 is red-500. Only the own popup's swatch is `Selected`.
 (
     format_version: 3,
     name: "a combo with its own selection leaves the others alone",

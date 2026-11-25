@@ -1,4 +1,3 @@
-// A touch tap on a panel's close button closes it.
 (
     format_version: 3,
     name: "a touch tap on a panel's close button closes it",

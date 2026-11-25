@@ -1,5 +1,3 @@
-// A tap anywhere else takes the focus off a text field and commits its text, on empty space
-// as on another widget, as a click does.
 (
     format_version: 3,
     name: "a tap elsewhere takes the focus off a text field and commits it",

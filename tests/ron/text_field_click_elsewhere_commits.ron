@@ -1,5 +1,3 @@
-// A press anywhere else takes the focus off a text field, on empty space as on another
-// widget, and commits its text.
 (
     format_version: 3,
     name: "a click elsewhere takes the focus off a text field and commits it",

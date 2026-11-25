@@ -1,7 +1,3 @@
-// A toast shows its text, stacks with others, does not repeat a text that is showing, and is
-// gone after its duration (1 s for the screen's toasts). The duration is time, not frames, and
-// the gallery's frames are as long as the display makes them, so the checks that a toast has
-// gone wait with `Within` instead of a number of frames (#399).
 (
     format_version: 3,
     name: "a toast shows, stacks, restarts on the same text and goes after its duration",
@@ -19,14 +15,11 @@
         Check(Visible(Text("Saved"))),
         Check(Visible(Text("Deleted 3 pieces"))),
         Check(Count(with: ["Toast"], is: Eq(2))),
-        // The same text does not stack, it restarts the timer.
         Wait(30),
         MoveTo(Role(role: Button, label: "Save again")),
         Click(Left),
         Wait(2),
         Check(Count(with: ["Toast"], is: Eq(2))),
-        // "Deleted" was raised some time before "Saved" restarted, so it goes first,
-        // and "Saved" is still showing the moment it has gone.
         Check(Within(600, Not(Exists(Text("Deleted 3 pieces"))))),
         Check(Visible(Text("Saved"))),
         Check(Within(600, Not(Exists(Text("Saved"))))),

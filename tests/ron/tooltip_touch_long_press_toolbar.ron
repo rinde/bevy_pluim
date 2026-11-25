@@ -1,6 +1,3 @@
-// The underlined toolbar's buttons show only an underline, so their label is the tooltip: a
-// finger held on one shows it above the button (there is room) and the lift picks nothing; a tap
-// still picks the tool and shows no popup.
 (
     format_version: 3,
     name: "a long touch press on an underlined toolbar button shows its label and picks nothing",

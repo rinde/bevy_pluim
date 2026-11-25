@@ -1,5 +1,3 @@
-// The options are one tab stop that enters at the current preference (System): the arrows move
-// the focus and pick, Enter on the focused option keeps it.
 (
     format_version: 3,
     name: "a light dark toggle is driven from the keyboard",

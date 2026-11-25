@@ -1,8 +1,3 @@
-// An open combo's popup takes the pointer from whatever lies under it. The middle
-// of "Canada" in the popup of "first combo" is over the "Underneath" button, so
-// the button is not hovered there, is not pressed while the mouse button is held
-// and is not pressed when it is let go (a press on the item must not also be a
-// press on the button). The click only picks the item and closes the popup.
 (
     format_version: 3,
     name: "a click on a combo's popup item does not reach the button under it",

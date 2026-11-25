@@ -1,8 +1,3 @@
-// A slider's thumb rests at `card_surface`, is `accent_subtle` with the pointer
-// on the slider and `accent` while its track is pressed, and rests at `card_surface` again
-// once the pointer leaves. After a theme change it rests at the new theme's
-// `card_surface`. Its shadow is the theme's small shadow throughout, set by the
-// theme and kept through hover and press.
 (
     format_version: 3,
     name: "a slider's thumb shows hover and press colours and follows the theme",
@@ -17,7 +12,6 @@
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("light surface")))),
         MoveTo(Within(Name("stepped slider"), Name("SliderThumb"))),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("hover")))),
-        // A press on the track, not on the thumb, holds the slider pressed.
         MoveTo(Name("stepped slider")),
         Press(Left),
         Check(Component(target: Within(Name("stepped slider"), Name("SliderThumb")), path: "BackgroundColor.0", is: Eq(Captured("pressed")))),

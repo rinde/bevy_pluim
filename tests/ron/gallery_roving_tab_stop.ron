@@ -1,6 +1,3 @@
-// A gallery is one tab stop: Tab enters at the picked card and the next Tab leaves. The arrows
-// move through the cards in the order shown, on into the next group and round, picking each
-// card they land on.
 (
     format_version: 3,
     name: "a gallery is one tab stop with arrow keys through its cards in order",

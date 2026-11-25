@@ -1,7 +1,3 @@
-// A scrub holds the hover lock (nothing highlights while it goes) and a finger
-// that lifts, or a touch the system cancels, lets it go: the mouse hovers the
-// "-" button again afterwards. The "+" button's resting colour is captured
-// first; hovering it must differ.
 (
     format_version: 3,
     name: "a lift or a cancelled touch ends a numeric stepper scrub and its hover lock",
@@ -23,7 +19,6 @@
         Wait(2),
         MoveTo(Within(Name("default stepper"), Name("Increase"))),
         Check(Not(Component(target: Within(Name("default stepper"), Name("Increase")), path: "BackgroundColor.0", is: Eq(Captured("rest_inc"))))),
-        // The scrub is over: a click on "+" steps.
         Click(Left),
         Check(TextOf(Name("default stepper"), Exact("8"))),
     ],

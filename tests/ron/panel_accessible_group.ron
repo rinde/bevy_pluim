@@ -1,6 +1,3 @@
-// A `Panel` is a group to assistive technology, labelled by its title (`labelled_by`,
-// checked in `tests/headless.rs`, so the group has no label of its own); its
-// close button keeps its own name.
 (
     format_version: 3,
     name: "a panel is a group labelled with its title",

@@ -1,6 +1,3 @@
-// A tap on the 1 px border of a text field's box gives the field the keyboard focus, as a
-// click does, and a tap on its text focuses it too. The focus ring (an `Outline` on the
-// box) follows the focus: on after a tap on the border or the text, gone after a tap elsewhere.
 (
     format_version: 3,
     name: "a tap on the border or the text of a text field gives it the focus",

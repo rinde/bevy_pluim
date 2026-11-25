@@ -1,5 +1,3 @@
-// A finger that slides off a crumb before lifting trims nothing, and a tap on
-// the current (disabled) crumb does nothing either.
 (
     format_version: 3,
     name: "a finger sliding off a crumb or tapping the current one trims nothing",

@@ -1,8 +1,3 @@
-// What the accessibility tree says about push buttons today, read with the
-// test app's own `App(Accessible(..))` check (tests/widgets_check/mod.rs): a
-// `PushButton` is a `Button`, and one with `InteractionDisabled` is `Disabled`.
-//
-// Its label is its text (see button_names_are_their_text.ron).
 (
     format_version: 3,
     name: "push buttons are buttons, disabled when disabled",

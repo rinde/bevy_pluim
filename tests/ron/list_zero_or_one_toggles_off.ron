@@ -1,7 +1,3 @@
-// A list over a `ZeroOrOne` selection starts with nothing selected. Clicking an
-// item selects it, clicking another one replaces it, and clicking the selected
-// one deselects it. It draws from the items the "one-or-more list" shows, but
-// its selection is its own.
 (
     format_version: 3,
     name: "clicking the selected item of a list over ZeroOrOne deselects it",
@@ -15,10 +11,8 @@
         Check(App(Selected(of: Name("zero-or-one list"), items: ["Indonesia"]))),
         Click(Left),
         Check(App(Selected(of: Name("zero-or-one list"), items: []))),
-        // Selecting again after deselecting works.
         Click(Left),
         Check(App(Selected(of: Name("zero-or-one list"), items: ["Indonesia"]))),
-        // The lists drawing from the same items are not affected.
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
         Check(App(Selected(of: Name("zero-or-more list"), items: []))),
     ],

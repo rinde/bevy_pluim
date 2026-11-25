@@ -1,4 +1,3 @@
-// A `Card` is a group to assistive technology, without a label.
 (
     format_version: 3,
     name: "a card is a group",

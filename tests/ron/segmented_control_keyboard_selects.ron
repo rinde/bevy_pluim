@@ -1,6 +1,3 @@
-// A segmented control is one tab stop, at its selected segment: Tab reaches "Auto" and the next
-// Tab leaves the control for the next one. The arrow keys move the focus between segments and
-// pick the one they land on; Enter or Space on a focused segment keeps it picked.
 (
     format_version: 3,
     name: "Tab enters a segmented control once and the arrow keys then move and pick",
@@ -14,8 +11,6 @@
         Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
         Tap(key: Enter),
         Check(App(Selected(of: Name("own segmented control"), items: ["Manual"]))),
-        // One Tab leaves the control for the first shared control, at its selected segment "Dark";
-        // the right arrow moves to "Light" and picks it for both shared controls.
         Tap(key: Tab),
         Check(App(Focused(of: Within(Name("first shared segmented control"), Role(role: Button, label: "Dark"))))),
         Tap(key: ArrowRight),

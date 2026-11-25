@@ -1,5 +1,3 @@
-// Taps on the swatches of a palette combo over many colours pick them and keep the popup open;
-// a tap outside closes it and the picks stay.
 (
     format_version: 3,
     name: "taps on a palette combo's swatches over many keep the popup open",

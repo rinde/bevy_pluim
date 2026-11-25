@@ -1,7 +1,3 @@
-// A finger on a slider acts like the mouse: a tap on the track jumps the thumb
-// there (to a step where the slider has them), a drag of the thumb moves it and
-// stops at the ends however far the finger goes. A disabled slider ignores it
-// (forced, as the tester will not touch a disabled widget).
 (
     format_version: 3,
     name: "a finger taps and drags a slider",

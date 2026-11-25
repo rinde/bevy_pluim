@@ -1,5 +1,3 @@
-// A tap activates a link once, a finger that slides off activates nothing,
-// and the pressed text colour shows only while the finger is down.
 (
     format_version: 3,
     name: "a touch tap activates a link and a slide-off does not",

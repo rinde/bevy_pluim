@@ -1,5 +1,3 @@
-// A `ScrollArea` is a scroll view to assistive technology, whether or not its
-// contents overflow.
 (
     format_version: 3,
     name: "a scroll area is a scroll view",

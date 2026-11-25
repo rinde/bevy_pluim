@@ -1,7 +1,3 @@
-// The popup of the palette combo is capped to the 260 pixel window (see
-// `color_palette_combo_taller_than_window_stays_inside_window`) and scrolls itself. Arrowing
-// down moves the active swatch past the bottom of the view, so the popup scrolls to keep it in
-// view (`scroll_into_view` scrolls a scrolling `FixedNode` popup); Home returns to the top.
 (
     format_version: 3,
     name: "arrow keys scroll a palette combo popup taller than the window to the active swatch",

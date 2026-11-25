@@ -1,5 +1,3 @@
-// The list items of a closed combo are hidden from the accessibility tree;
-// opening the combo shows them.
 (
     format_version: 3,
     name: "the items of a closed combo are hidden from the accessibility tree",

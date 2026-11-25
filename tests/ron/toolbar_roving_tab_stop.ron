@@ -1,6 +1,3 @@
-// A toolbar is one tab stop: Tab enters at its first tool, the next Tab leaves, and Shift+Tab
-// comes back to the tool that had the focus last. Left and right move the focus and wrap, Home
-// and End go to the ends; moving picks nothing, Enter does.
 (
     format_version: 3,
     name: "a toolbar is one tab stop with arrow keys that move the focus only",

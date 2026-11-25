@@ -1,5 +1,3 @@
-// A finger that slides off a push button before lifting activates nothing and
-// leaves no pressed or hover look behind.
 (
     format_version: 3,
     name: "a finger that slides off a push button activates nothing",

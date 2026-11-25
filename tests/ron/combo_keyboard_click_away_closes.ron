@@ -1,5 +1,3 @@
-// A combo opened from the keyboard closes on a click on empty space, as any outside click does,
-// and the focus, which the click took off the list, goes back to the button.
 (
     format_version: 3,
     name: "a click elsewhere closes a combo opened from the keyboard and returns the focus",

@@ -1,6 +1,3 @@
-// The Lists screen fits the default 1280 by 720 window: the tester only moves
-// the pointer to a widget that is inside the window, so every list and button
-// the other scenarios click can be reached.
 (
     format_version: 3,
     name: "every list and button of the lists screen is inside the window",

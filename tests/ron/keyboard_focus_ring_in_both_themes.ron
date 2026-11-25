@@ -1,6 +1,3 @@
-// Tab to "Change theme" and press Enter, so the focus ring can be looked at in
-// the recording on the light theme before and the dark theme after. The checks
-// are on the focus and the theme only; the ring itself is judged by eye.
 (
     format_version: 3,
     name: "the focus ring stays on the focused button across a theme change",

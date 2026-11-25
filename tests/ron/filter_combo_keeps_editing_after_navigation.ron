@@ -1,5 +1,3 @@
-// Typing goes on after the arrow keys: the search box keeps the focus, the query grows, and the
-// active option stays on its row while that row still matches.
 (
     format_version: 3,
     name: "a filter combo keeps editing its query after the arrow keys",

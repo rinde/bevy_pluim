@@ -1,6 +1,3 @@
-// Page Down and Page Up move a virtual list's active row by as many rows as fit in the view
-// (seven of 28 pixels in 200), scrolling it into view and stopping at the first and last row
-// rather than wrapping. The focus ring is on the active row the frame it moves.
 (
     format_version: 3,
     name: "page down and page up move a virtual list's active row by a view of rows",
@@ -8,11 +5,9 @@
     steps: [
         Wait(3),
         Tap(key: Tab),
-        // The row a newly focused list makes active is named and ringed the same frame.
         Check(App(Focused(of: Name("virtual list")))),
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
         Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),
-        // The ring follows an arrow the same frame.
         Tap(key: ArrowDown),
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 2"))))),
         Check(Count(with: ["Outline", "VirtualListRow"], is: Eq(1))),
@@ -27,13 +22,11 @@
         Tap(key: PageUp),
         Wait(2),
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 9"))))),
-        // Page Up near the top stops at the first row.
         Tap(key: PageUp),
         Tap(key: PageUp),
         Wait(2),
         Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 1")))),
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 1"))))),
-        // Page Down at the bottom stays on the last row.
         Tap(key: End),
         Wait(3),
         Tap(key: PageDown),
@@ -44,7 +37,6 @@
         Wait(2),
         Check(Visible(Within(Name("virtual list"), Role(role: ListItem, label: "Row 9993")))),
         Check(App(Active(of: Name("virtual list"), is: Within(Name("virtual list"), Role(role: ListItem, label: "Row 9993"))))),
-        // Paging does not select.
         Check(App(Selected(of: Name("virtual list"), items: ["Row 1"]))),
         Check(Count(with: ["VirtualListRow"], is: Eq(13))),
     ],

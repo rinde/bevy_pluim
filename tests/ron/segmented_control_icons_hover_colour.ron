@@ -1,6 +1,3 @@
-// The icon of a resting segment ("List") turns `text_primary` with the pointer on the segment,
-// like its text, in the light theme and again after "Change theme" in the dark one, and goes
-// back to `text_secondary` when the pointer leaves.
 (
     format_version: 3,
     name: "a hovered unselected segment's icon is text_primary in both themes",

@@ -1,6 +1,3 @@
-// To a screen reader the button is a combo box with the selection as its value, and the
-// search box a combo box that controls the list, with the query as its value; excluded options
-// leave the accessibility tree, and the closed popup is out of it.
 (
     format_version: 3,
     name: "a filter combo is a pair of combo boxes whose state follows the popup",

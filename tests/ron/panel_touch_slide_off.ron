@@ -1,5 +1,3 @@
-// A finger that slides off a panel's close button before lifting does not
-// close the panel.
 (
     format_version: 3,
     name: "a finger sliding off a panel's close button leaves the panel open",

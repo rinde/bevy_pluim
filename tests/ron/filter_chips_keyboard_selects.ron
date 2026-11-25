@@ -1,6 +1,3 @@
-// Filter chips are one tab stop, at the active chip: Tab reaches "All 4" and the arrow keys
-// move the focus between chips and pick the one they land on; Enter or Space on a focused chip
-// keeps it picked.
 (
     format_version: 3,
     name: "Tab enters the chips once and the arrow keys then move and pick",

@@ -1,7 +1,3 @@
-// The body of a panel grows with its content up to its maximum height and then
-// scrolls. The tall panel's body is limited to 100 pixels and holds twelve
-// lines, so the wheel over it scrolls its contents, while the closable panel's
-// three lines fit and never scroll. A positive wheel y is "up".
 (
     format_version: 3,
     name: "a panel body taller than its maximum scrolls and a short one does not",

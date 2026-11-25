@@ -1,6 +1,3 @@
-// A panel shows its title, subtitle and a close button. The button triggers
-// PanelClosed on the panel and the screen's observer despawns that panel; the
-// other panel stays, and so does the screen.
 (
     format_version: 3,
     name: "a panel's close button closes the panel and only that one",

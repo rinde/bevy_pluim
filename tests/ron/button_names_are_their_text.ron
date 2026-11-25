@@ -1,8 +1,3 @@
-// A push button, a push button with an icon, a link and a colour button each
-// carry their visible text as accessible label (Bevy leaves a
-// `bevy::ui_widgets::Button` unlabelled): the text of the button only, with no
-// "button" added and without an icon's text. A colour button is named after
-// its colour.
 (
     format_version: 3,
     name: "push buttons, links and colour buttons are named after their text",

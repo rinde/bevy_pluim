@@ -1,6 +1,3 @@
-// A tap on the vertical scroll area's bar, beside the thumb, pages the contents
-// by one visible length towards the tap, kept inside what overflows (see
-// scroll_area_track_click_pages.ron for the geometry).
 (
     format_version: 3,
     name: "a tap on the scroll bar beside the thumb pages the contents",

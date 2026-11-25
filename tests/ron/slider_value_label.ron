@@ -1,6 +1,3 @@
-// A slider with a format shows its value beside the track in a label at least
-// 54 px wide, so the track does not move when the text grows. A disabled
-// slider shows its label in the theme's disabled text colour.
 (
     format_version: 3,
     name: "a slider shows its formatted value beside its track",

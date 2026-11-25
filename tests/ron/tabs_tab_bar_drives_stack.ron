@@ -1,8 +1,3 @@
-// A `TabBar` drives a `Stack`: the stack's `selection_ref` is the bar's own
-// selection, so choosing a tab shows its panel and hides the others. The panels
-// are created the first time their tab is chosen: Panel A is the selected tab at
-// the start, so Panel B and "Card demo" do not exist until they are clicked. The
-// tabs are `bevy_ui_widgets` `Tab`s of the bar's `TabList`.
 (
     format_version: 3,
     name: "choosing a tab in a tab bar shows its panel in the stack",
@@ -15,7 +10,6 @@
         Check(Not(Exists(Within(Name("Stack"), Text("Panel B"))))),
         Check(Not(Exists(Within(Name("Stack"), Text("Card demo"))))),
 
-        // Panel B is created on its first click.
         MoveTo(Role(role: Tab, label: "Panel B")), Click(Left),
         Wait(2),
         Check(App(Selected(of: Role(role: Tab, label: "Panel B"), items: ["Panel B"]))),
@@ -25,7 +19,6 @@
         Check(Not(Visible(Within(Name("Stack"), Text("Panel A"))))),
         Check(Not(Exists(Within(Name("Stack"), Text("Card demo"))))),
 
-        // So are the cards.
         MoveTo(Role(role: Tab, label: "Card demo")), Click(Left),
         Wait(2),
         Check(App(Selected(of: Role(role: Tab, label: "Card demo"), items: ["Card demo"]))),
@@ -43,7 +36,6 @@
                     - text "11"
         "#)),
 
-        // Back to the first tab, which is shown again, and to Panel B.
         MoveTo(Role(role: Tab, label: "Panel A")), Click(Left),
         Wait(2),
         Check(App(Selected(of: Role(role: Tab, label: "Panel A"), items: ["Panel A"]))),

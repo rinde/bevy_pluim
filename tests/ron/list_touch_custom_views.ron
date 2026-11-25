@@ -1,6 +1,3 @@
-// A tap on a custom-view row picks it and leaves no hover look. A tap on the combo in a row
-// opens that combo and does not pick the row; picking an option of it by touch picks the
-// combo's item and leaves the outer list unselected.
 (
     format_version: 3,
     name: "a touch tap on a custom row picks it but not through a nested combo",
@@ -8,8 +5,6 @@
     steps: [
         Wait(2),
         Check(App(Selected(of: Name("row list"), items: []))),
-        // The row's own text is the row. Row b's view is the fifth `ItemView` (row a's
-        // combo holds three of its own after row a).
         TouchTap(Within(Name("row list"), Text("b"))),
         Wait(2),
         Check(App(Selected(of: Name("row list"), items: ["b"]))),
@@ -18,7 +13,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
         )),
-        // Tapped again: deselected, and at rest, not hovered.
         TouchTap(Within(Name("row list"), Text("b"))),
         Wait(2),
         Check(App(Selected(of: Name("row list"), items: []))),
@@ -27,7 +21,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
-        // A tap on a nested combo and on its option is the combo's, not the row's.
         TouchTap(Within(Name("combo in row a"), Component("ComboButton"))),
         Check(Visible(Within(Name("combo in row a"), Component("ComboList")))),
         Check(App(Selected(of: Name("row list"), items: []))),

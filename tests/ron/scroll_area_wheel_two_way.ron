@@ -1,8 +1,3 @@
-// The wheel over the two-way scroll area scrolls its contents along both
-// axes at once.
-// The scroll position read is the value that was set
-// (ScrollPosition.0, logical pixels), clamped to what overflows (the ScrollPosition component is kept in that range
-// too, but the layout shows it a pass later).
 (
     format_version: 3,
     name: "the wheel scrolls a two-way scroll area along both axes",

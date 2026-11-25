@@ -1,5 +1,3 @@
-// A finger on a crumb makes its text the pressed link colour while down and
-// leaves no hover background after it lifts (a finger never hovers).
 (
     format_version: 3,
     name: "a finger shows the pressed crumb look and no hover look after",

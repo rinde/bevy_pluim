@@ -1,8 +1,3 @@
-// Each stepper of the NumericStepper screen moves by its own step: 1 for the
-// default, u16 and u32 steppers, 0.5 for the f32 one and 2 for the u8 one. The
-// shown text is the stepper's "-", value and "+" labels, read with TextOf. The
-// pointer moves to the button before every click because a wider value moves
-// the buttons.
 (
     format_version: 3,
     name: "clicking plus and minus moves a numeric stepper by its step",

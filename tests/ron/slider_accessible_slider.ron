@@ -1,5 +1,3 @@
-// A slider is one `Slider` node: its `name` is the label and, when it has a
-// format, the text it shows is the value, which follows the slider.
 (
     format_version: 3,
     name: "a slider is a slider node with a label and its shown value",

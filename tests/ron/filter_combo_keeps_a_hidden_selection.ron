@@ -1,5 +1,3 @@
-// Filtering never changes the selection: the selected option stays selected, and shared with
-// the other widgets, while its row is hidden.
 (
     format_version: 3,
     name: "a filter combo keeps a selected option that its query hides",
