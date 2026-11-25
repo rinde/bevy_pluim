@@ -1,4 +1,4 @@
-//! `Toast`: a transient status message at the bottom centre of the window.
+//! `Toast`: a transient status message at the bottom center of the window.
 
 use accesskit::{Live, Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
