@@ -1,9 +1,4 @@
 //! `Stack`: shows the one child that matches the current selection.
-//!
-//! Children are created lazily by a registered system and hidden, not despawned,
-//! when they are deselected.
-//!
-//! A [`Stack`] is immutable: replace it to point it at another selection.
 
 use bevy::ecs::system::SystemId;
 use bevy::platform::collections::HashMap;
@@ -30,10 +25,7 @@ impl Plugin for StackPlugin {
 
 /// Shows the one [`StackItem`] child that matches the selection on `selection_ref`.
 ///
-/// Immutable: `selection_ref` is read when the component is inserted, so build the value,
-/// editing it before it is inserted, and insert a new one to change it. Replacing a live stack
-/// shows the child of the new selection and hides the children of the former one; they are kept
-/// and shown again if the stack points back at that selection. It cannot be queried mutably:
+/// Immutable: insert a new value to point it at another selection.
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -54,9 +46,7 @@ pub struct Stack {
 
 /// The children one [`Stack`] has made, by the item whose creator made each.
 ///
-/// Every stack has its own, so stacks sharing a selection and its items each get a child of
-/// their own, and despawning a stack takes its children and this record with it. An entry whose
-/// child is no longer a child of the stack is ignored and made again.
+/// An entry whose child is no longer a child of the stack is ignored and made again.
 #[derive(Component, Debug, Default)]
 struct StackChildren(HashMap<Entity, Entity>);
 
@@ -75,10 +65,7 @@ fn on_insert_stack(t: On<Insert<Stack>>, stacks: Query<&Stack>, mut commands: Co
     commands.run_system_cached_with(switch_view, (stack_ref, stack));
 }
 
-/// Switches every live stack showing the selection that was just inserted: one whose
-/// `selection_ref` is that entity, or a `Selection::Ref` pointing to it (one hop, as everywhere).
-///
-/// One global observer, so a despawned stack leaves nothing behind that reacts to the selection.
+/// Switches every live stack showing the selection that was just inserted.
 fn on_selection_insert(
     t: On<Insert<Selection>>,
     stacks: Query<(Entity, &Stack)>,
@@ -144,12 +131,10 @@ fn switch_view(
     };
 
     let Some(selection) = selections.get(stack.selection_ref) else {
-        // No selection (yet) to show: nothing of a former source stays visible.
         show(None);
         return;
     };
 
-    // The child this stack made for `creator_item`, if it is still one of its children.
     let cached_child = |creator_item: Entity| {
         let child = caches.get(stack_ref).ok()?.0.get(&creator_item).copied()?;
         children
@@ -165,7 +150,6 @@ fn switch_view(
             return Some(Action::HideAll);
         };
         let selected_stack_item = items.get(selected_item_ref).ok()?;
-        // The item whose creator makes the child, and the child this stack already has for it.
         let (creator_item, create) = match selected_stack_item.source {
             StackSource::Creator { create, .. } => (selected_item_ref, create),
             StackSource::Reference { id } => {
@@ -219,21 +203,19 @@ fn switch_view(
 /// The system that spawns the child of a [`StackItem`], through the [`StackChildSpawner`] it is given.
 pub type StackChildCreator = SystemId<In<StackChildSpawner>>;
 
-/// Where a [`StackItem`]'s child comes from: its own creator, or another item's.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum StackSource {
-    /// A creator, with an `id` that [`StackSource::Reference`]s can reuse it by.
     Creator {
         create: StackChildCreator,
         id: Option<usize>,
     },
-    /// The creator of the item that has this `id`.
-    Reference { id: usize },
+    Reference {
+        id: usize,
+    },
 }
 
 impl StackSource {
-    /// What reflection builds a `StackItem` with: a creator cannot be reflected, so it is a
-    /// reference no item has the id of, which shows nothing and logs an error when selected.
+    /// What reflection builds: a reference no item has the id of.
     const fn unreflected() -> Self {
         Self::Reference { id: usize::MAX }
     }
@@ -241,10 +223,8 @@ impl StackSource {
 
 /// An item that a [`Stack`] can show; its child is created lazily by its creator.
 ///
-/// An item has either a creator ([`StackItem::new`], [`StackItem::new_with_reference`]) or a
-/// reference to the creator of another item ([`StackItem::new_reference`]); there is no item
-/// with neither. Selecting a reference whose id no item with a creator has logs an error and
-/// hides the stack's current child.
+/// Selecting a reference whose id no item with a creator has logs an error and hides the stack's
+/// current child.
 #[derive(Component, Copy, Clone, Debug, Reflect)]
 #[reflect(Component)]
 pub struct StackItem {
@@ -261,9 +241,7 @@ impl StackItem {
         }
     }
 
-    /// Create a new `StackItem` with a reference such that it's create function
-    /// can be reused by other `StackItem`s created with
-    /// [`StackItem::new_reference`].
+    /// An item whose creator other items reuse by `id` through [`StackItem::new_reference`].
     #[must_use]
     pub const fn new_with_reference(id: usize, create: StackChildCreator) -> Self {
         Self {
@@ -282,8 +260,7 @@ impl StackItem {
         }
     }
 
-    /// The system that spawns this item's child, or `None` for a reference
-    /// ([`StackItem::new_reference`]), which uses the creator of another item.
+    /// The system that spawns this item's child, or `None` for a reference.
     #[must_use]
     pub const fn creator(&self) -> Option<StackChildCreator> {
         match self.source {
@@ -292,9 +269,7 @@ impl StackItem {
         }
     }
 
-    /// The id other items refer to this item's creator by (`Some` for
-    /// [`StackItem::new_with_reference`]), or the id this item refers to (`Some` for
-    /// [`StackItem::new_reference`]); `None` for an item made with [`StackItem::new`].
+    /// The id of the creator this item defines or refers to; `None` for [`StackItem::new`].
     #[must_use]
     pub const fn reference_id(&self) -> Option<usize> {
         match self.source {
@@ -323,10 +298,7 @@ impl StackChildSpawner {
 
     /// Spawns `scene` as the child of the stack: the scene's root is the child.
     ///
-    /// Like [`StackChildSpawner::spawn`] otherwise: the default `Node` is added only once the
-    /// scene has been applied (bevy's `Ready`), and only if the scene's root still has none, so a
-    /// root that requires its own `Node` (a `Panel`) keeps it, and a `Node` in the scene is used
-    /// as written.
+    /// The default `Node` is added only if the root has none once the scene has been applied.
     pub fn spawn_scene(self, commands: &mut Commands, scene: impl Scene) {
         let mut child = commands.spawn((Name::new("StackItem"), ChildOf(self.parent)));
         let id = child.id();
@@ -343,7 +315,6 @@ fn update_stack_item(
 ) {
     let (stack, creator_item, child) = *input;
     if let Ok(mut cache) = caches.get_mut(stack) {
-        // Forget children that were despawned or moved out of this stack.
         cache
             .0
             .retain(|_, c| parents.get(*c).is_ok_and(|p| p.parent() == stack));
@@ -351,8 +322,7 @@ fn update_stack_item(
     }
 }
 
-/// Like [`add_node_if_absent`], for a scene child: runs when its scene has been applied, which
-/// bevy does later than the command queue, so a `Node` the scene's root requires is already there.
+/// Like [`add_node_if_absent`], once the scene has been applied.
 fn add_node_when_scene_is_ready(
     ready: On<Ready>,
     nodes: Query<(), With<Node>>,
@@ -364,8 +334,7 @@ fn add_node_when_scene_is_ready(
     }
 }
 
-/// Gives the stack child a default `Node` when neither it nor its required components brought
-/// one, so the child's own required `Node` (a `Panel`'s width) is never overridden.
+/// Gives the stack child a default `Node` unless it or its required components bring one.
 fn add_node_if_absent(commands: &mut Commands, child: Entity) {
     commands.queue(move |world: &mut World| {
         if let Ok(mut entity) = world.get_entity_mut(child)
