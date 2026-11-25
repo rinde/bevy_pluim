@@ -18,8 +18,6 @@ use crate::scroll_area::ScrollArea;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`Panel`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct PanelPlugin;
 
@@ -37,27 +35,16 @@ pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 
 /// A card with a header, a body that scrolls past a maximum height, and a footer.
 ///
-/// The header holds a title, an optional subtitle beside it and an optional
-/// close button, with an optional strip under it and a divider. The body grows
-/// with its content up to [`Panel::max_body_height()`] and then scrolls; an
-/// optional footer sits above a divider.
-///
 /// The app spawns the contents of the body, the strip and the footer as
-/// children of the entities in [`PanelRefs`]; a strip or footer without
-/// children is not shown. The close button triggers [`PanelClosed`] on the
-/// panel; the panel does not remove itself, the app decides what closing means.
+/// children of the entities in [`PanelRefs`]. The close button triggers
+/// [`PanelClosed`] on the panel; the panel does not remove itself.
 ///
-/// A `Panel` is an immutable component: insert a new one to change the title, the
-/// subtitle, the close button (icon and name) or the maximum height of a live panel.
-/// The parts are updated in place, the children the app put in the strip, body and
-/// footer stay, and [`PanelClosed`] still arrives once per activation. Nothing watches
-/// `Changed<Panel>`.
+/// Immutable: insert a new value to change a live panel.
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
 /// use bevy_pluim::panel::Panel;
 ///
-/// // A panel cannot be edited in place: `&mut Panel` is not a valid query.
 /// fn edit(mut panels: Query<&mut Panel>) {}
 /// ```
 ///
@@ -69,8 +56,6 @@ pub const DEFAULT_MAX_BODY_HEIGHT_PX: f32 = 620.0;
 ///     let _ = world.entity_mut(panel).get_mut::<Panel>();
 /// }
 /// ```
-///
-/// To assistive technology it is a group, as a [`Card`] is, labelled with its title.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(immutable, on_insert = Self::on_insert)]
@@ -90,9 +75,7 @@ pub struct Panel {
     pub subtitle: Option<String>,
     /// The icon of the close button; with `None` the panel has no close button.
     pub close_icon: Option<Handle<Image>>,
-    /// The accessible name (and tooltip) of the close button, `"Close"` by default;
-    /// an app passes its translation. It does not decide whether the button is shown,
-    /// [`Panel::close_icon`] does.
+    /// The accessible name (and tooltip) of the close button, `"Close"` by default.
     pub close_name: String,
     /// The height, in logical pixels, up to which the body grows before it scrolls;
     /// always finite and above zero (see [`Panel::with_max_body_height`]).
@@ -129,14 +112,12 @@ fn validate_max_body_height(height: f32) -> core::result::Result<f32, PanelHeigh
 
 /// The entities of a [`Panel`], set when the panel is spawned.
 ///
-/// Read-only: only the widget builds it, and it is an immutable component, so an app
-/// reads the entities through the getters and adds its content as their children.
+/// Read-only: an app reads the entities through the getters.
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
 /// use bevy_pluim::panel::PanelRefs;
 ///
-/// // The fields are private: use `PanelRefs::body()`.
 /// fn body(refs: &PanelRefs) -> Entity {
 ///     refs.body
 /// }
@@ -340,8 +321,7 @@ impl Panel {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let panel = context.entity;
         let mut commands = world.commands();
-        // Whether the parts exist is decided when the command runs, so two inserts before a
-        // flush build them once.
+        // Test for existing parts inside the command: two inserts before a flush build them once.
         commands.run_system_cached_with(spawn_missing_parts, panel);
         commands.run_system_cached_with(sync_panel, panel);
     }
@@ -361,7 +341,6 @@ fn spawn_missing_parts(
 }
 
 fn spawn_parts(commands: &mut Commands, panel: Entity) {
-    // The body is reserved now so the scroll area's closure can name it.
     let body = commands.spawn_empty().id();
     let header = commands
         .spawn((
@@ -440,8 +419,7 @@ fn spawn_parts(commands: &mut Commands, panel: Entity) {
                             flex_shrink: 0.0,
                             ..default()
                         },
-                        // The wheel scrolls the node it hits, so the body (which covers the
-                        // contents) lets the pointer through to them.
+                        // The wheel scrolls the node it hits, so let it reach the contents.
                         Pickable {
                             should_block_lower: false,
                             ..default()
@@ -498,7 +476,6 @@ fn sync_panel(
         return;
     };
     if let Some(mut accessibility_node) = accessibility_node {
-        // The title is read from its own text, so the group does not repeat it as a label.
         clear_label(&mut accessibility_node);
         sync_labelled_by(&mut accessibility_node, refs.title);
     }
@@ -532,10 +509,6 @@ struct PanelSection(Entity);
 
 /// Shows the strip and the footer (and the divider above it) only while they
 /// have children, and keeps the body's bottom margin and maximum height.
-///
-/// Looks only at the panels a change concerns: a new or re-inserted [`Panel`], a strip or
-/// footer whose children changed (or lost their last), and every panel when the [`Theme`]
-/// changes. A quiet frame reads no panel.
 fn sync_optional_sections(
     theme: Res<Theme>,
     changed_panels: Query<Entity, Or<(Changed<Panel>, Changed<PanelRefs>)>>,
@@ -580,9 +553,8 @@ fn sync_optional_sections(
                 }
             }
         }
-        // A scroll area clips to a rectangle, which cannot follow the panel's rounded corners,
-        // so with no footer to hold them the body stops a corner radius short of the bottom edge
-        // (#384).
+        // The clip is rectangular: without a footer the body stops a corner radius short of
+        // the rounded bottom edge.
         let has_footer = children.get(refs.footer).is_ok_and(|c| !c.is_empty());
         let margin = if has_footer {
             Val::ZERO

@@ -9,8 +9,6 @@ use itertools::Either;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`Divider`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct DividerPlugin;
 
@@ -25,11 +23,7 @@ impl Plugin for DividerPlugin {
     }
 }
 
-/// A 1 px rule in the theme's divider colour.
-///
-/// Spawn [`Divider::horizontal`] or [`Divider::vertical`]. It stretches along
-/// the other axis by default; set the `Node`'s `width` or `height` to give it a
-/// length.
+/// A 1 px rule in the theme's divider color.
 #[derive(Component, Copy, Clone, Debug, Reflect, FromTemplate)]
 #[reflect(Component)]
 #[require(Node::default(), BackgroundColor::default(), Name::new("Divider"))]

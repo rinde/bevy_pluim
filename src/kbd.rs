@@ -10,8 +10,6 @@ use itertools::Either;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`Kbd`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct KbdPlugin;
 
@@ -28,14 +26,7 @@ impl Plugin for KbdPlugin {
 
 /// A key cap: a small bordered box around the name of a key. Display only.
 ///
-/// The border is the theme's `border` colour, the text its `text_secondary`
-/// colour, in the caption size. For a screen reader it is a label with the key as its value. It reuses those two slots and has none of its own.
-///
-/// Insert a new `Kbd` to change the key. Empty text keeps the empty box (at its minimum width)
-/// and an empty value; it is not hidden.
-///
-/// The component is immutable: build or clone a value, edit it outside the world and insert it
-/// again to update a live widget. It cannot be queried mutably:
+/// Immutable: insert a new value to change the key. It cannot be queried mutably:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
