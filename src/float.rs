@@ -10,9 +10,7 @@ use itertools::Either;
 
 use crate::theme::Theme;
 
-/// Registers the systems and observers of [`Float`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
+/// Registers the systems of [`Float`].
 #[derive(Copy, Clone, Debug)]
 pub struct FloatPlugin;
 
@@ -27,14 +25,7 @@ impl Plugin for FloatPlugin {
     }
 }
 
-/// Component that modifies the position and appearance of a node to create a
-/// floating effect.
-///
-/// A `Float` is a [`FixedNode`]: it is a child of its widget, but placed by its `left` and
-/// `top` in the viewport, in logical pixels, and it takes no layout, clipping or transform
-/// from its ancestors, so a scroll area or card around the widget neither clips it nor
-/// makes room for it. It draws over the rest of the UI ([`GlobalZIndex`] 1000), and its
-/// visibility still follows its ancestors'.
+/// A popup layer placed by `left` and `top` in the viewport, outside its ancestors' layout and clipping.
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[require(FixedNode, GlobalZIndex(1000), BoxShadow::default())]
@@ -42,7 +33,7 @@ impl Plugin for FloatPlugin {
 pub struct Float;
 
 impl Float {
-    /// Component hook: positions the node absolutely and gives it the large theme shadow.
+    /// Component hook: styles the node from the theme.
     pub fn on_insert(mut world: DeferredWorld, context: HookContext) {
         world
             .commands()
@@ -67,14 +58,7 @@ fn theme_float(
     }
 }
 
-/// The size, in logical pixels, of the UI target a node is drawn to: its camera's viewport
-/// divided by the target's scale factor (with `UiScale`), which is the space `left`, `top` and
-/// `UiGlobalTransform` of a [`FixedNode`] are in.
-///
-/// `target` is the physical viewport size and scale factor Bevy computed for the node, `window`
-/// the primary window's logical size. An unusable target (no camera, an empty viewport, a
-/// scale that is not positive and finite) falls back to the primary window, and with neither
-/// there is no size: the caller leaves the popup where it is.
+/// The logical size of the UI target, falling back to `window` when `target` is unusable.
 pub(crate) fn target_size(target: Option<(UVec2, f32)>, window: Option<Vec2>) -> Option<Vec2> {
     target
         .filter(|(size, scale)| size.x > 0 && size.y > 0 && scale.is_finite() && *scale > 0.0)
@@ -82,7 +66,7 @@ pub(crate) fn target_size(target: Option<(UVec2, f32)>, window: Option<Vec2>) ->
         .or(window)
 }
 
-/// Looks up the UI target size of a node for placing its popup, see [`target_size`].
+/// Looks up the UI target size of a node, see [`target_size`].
 #[derive(SystemParam)]
 pub(crate) struct UiViewport<'w, 's> {
     targets: Query<'w, 's, &'static ComputedUiRenderTargetInfo>,
@@ -90,8 +74,6 @@ pub(crate) struct UiViewport<'w, 's> {
 }
 
 impl UiViewport<'_, '_> {
-    /// The logical size of the UI target `node` is drawn to, or of the primary window when the
-    /// node has no usable target data, or `None` with neither.
     pub(crate) fn size_of(&self, node: Entity) -> Option<Vec2> {
         let target = self
             .targets
@@ -108,37 +90,26 @@ impl UiViewport<'_, '_> {
     }
 }
 
-/// The distance a popup keeps from the window's edges, in logical pixels.
 pub(crate) const WINDOW_MARGIN: f32 = 10.0;
 
-/// The `left` of a popup `width` wide that wants its left edge at `left`, moved in until it is
-/// [`WINDOW_MARGIN`] from the window's left and right edges. A popup wider than the window
-/// keeps its left edge on the margin.
+/// `left` moved in until a popup `width` wide is [`WINDOW_MARGIN`] from both window edges.
 pub(crate) fn keep_in_window_x(left: f32, width: f32, window_width: f32) -> f32 {
     left.min(window_width - WINDOW_MARGIN - width)
         .max(WINDOW_MARGIN)
 }
 
-/// The least height a popup keeps when the window leaves it less room, in logical pixels.
 pub(crate) const MIN_POPUP_HEIGHT: f32 = 100.0;
 
-/// Where a popup goes vertically: its `top` and the `max_height` it may grow to.
+/// A popup's `top` and `max_height`.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) struct VerticalFit {
-    /// The popup's `top`, in the viewport.
     pub top: f32,
-    /// The popup's `max_height`: all the room on its side of the button, never less than
-    /// [`MIN_POPUP_HEIGHT`] (or the window less its margins, when that is smaller).
     pub max_height: f32,
 }
 
-/// Places a popup `height` high for a button spanning `button_top` to `button_bottom`: `gap`
-/// under the button, or `gap` above it when it would come within [`WINDOW_MARGIN`] of the
-/// window's bottom and fits above. When it fits on neither side it goes on the side with more
-/// room and its `max_height` is that room, at least [`MIN_POPUP_HEIGHT`], so it stays inside
-/// the window's top and bottom margins (and so it needs to scroll, as a [`ScrollPosition`]
-/// node does). The `max_height` is always the room of the chosen side, so applying it does not
-/// change which side the next frame's measured height picks.
+/// Places a popup `height` high below or above the button.
+///
+/// `max_height` is always the room of the chosen side, so applying it never flips the side.
 pub(crate) fn fit_vertically(
     button_top: f32,
     button_bottom: f32,

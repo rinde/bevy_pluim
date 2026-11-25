@@ -1,7 +1,4 @@
 //! `Combo`: a button that opens a [`List`] in a [`Float`].
-//!
-//! The popup closes again on a click outside of it. From the keyboard, opening it puts the
-//! focus on its list and Escape closes it again.
 
 use bevy::a11y::AccessibilityNode;
 use bevy::asset::RenderAssetUsages;
@@ -30,8 +27,6 @@ use crate::select::{Item, Selection, SelectionParam, SelectionValue};
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`Combo`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct ComboPlugin;
 
@@ -65,16 +60,7 @@ impl Plugin for ComboPlugin {
 
 /// A button that opens a [`List`] in a [`Float`].
 ///
-/// The popup closes again on a click outside of it or when an ancestor scrolls. The button toggles it when
-/// it is [`Activate`]d (a click, or Enter or Space on a focused button).
-///
-/// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a
-/// label: its value is the text of the selected items joined with ", " (empty for none),
-/// it is expanded while the popup is open, and it controls the popup's list.
-///
-/// Opening the popup moves the keyboard focus to its list, so the arrow keys, Enter and
-/// Space work on it. Escape closes it, as does the focus leaving the list (Tab away, a click
-/// elsewhere); the focus then goes back to the button, unless it moved to another widget.
+/// The popup closes on an outside click, Escape, lost focus or an ancestor scrolling.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 #[component(on_add=Self::on_add)]
@@ -97,10 +83,7 @@ pub struct ComboButton;
 
 /// The text a [`Combo`]'s button shows while nothing is selected, "Select.." by default.
 ///
-/// Put it on the combo, with it or later; inserting it again changes the text of a live
-/// combo. To a screen reader a combo with no selection still has an empty value, not this
-/// text. Removing it does not change the button; insert `ComboPlaceholder::default()` to
-/// restore the default.
+/// Removing it leaves the button as is; insert `ComboPlaceholder::default()` to restore the default.
 #[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
@@ -112,7 +95,7 @@ impl Default for ComboPlaceholder {
     }
 }
 
-/// The parts of a [`Combo`], on the combo itself. Only the widget builds it.
+/// The parts of a [`Combo`]. Only the widget builds it.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
@@ -122,20 +105,20 @@ pub struct ComboRefs {
 }
 
 impl ComboRefs {
-    /// The button that opens and closes the popup.
+    /// The button.
     #[must_use]
     pub const fn button(&self) -> Entity {
         self.button_id
     }
 
-    /// The list inside the popup.
+    /// The popup list.
     #[must_use]
     pub const fn list(&self) -> Entity {
         self.list_id
     }
 }
 
-/// Marks the list inside the popup of a [`Combo`].
+/// Marks the popup list of a [`Combo`].
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("ComboList"), Hovered)]
@@ -164,7 +147,6 @@ impl ComboState {
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = world.entity(context.entity);
-        // Not a live `Combo` (no `ComboRefs`): there is no popup to show or hide.
         let (Some(&state), Some(&ComboRefs { list_id, button_id })) =
             (entity.get::<Self>(), entity.get::<ComboRefs>())
         else {
@@ -184,10 +166,8 @@ impl ComboState {
 
 pub(crate) const PLACEHOLDER_TEXT: &str = "Select..";
 
-/// The side of the chevron image, in logical pixels.
 pub(crate) const CHEVRON_SIZE: f32 = 16.0;
 
-/// A white-on-transparent 16 px triangle pointing down, tinted by its [`Icon`].
 pub(crate) fn chevron() -> Image {
     const SIZE: u32 = 16;
     let mut data = vec![0u8; (SIZE * SIZE * 4) as usize];
@@ -227,7 +207,6 @@ impl Combo {
                     PushButton::from_label(placeholder),
                     ComboButton,
                     NoDefaultHover,
-                    // allow mouse events to pass through to parent
                     Pickable {
                         should_block_lower: false,
                         ..default()
@@ -247,9 +226,7 @@ impl Combo {
                     .spawn((
                         List,
                         Float,
-                        // A popup floats over what is below it, so it takes the pointer from
-                        // there: a `List` lets it through, and a click on an item would
-                        // click the item beneath it as well.
+                        // `List` ignores the pointer; without this a click would reach what lies below.
                         Pickable::default(),
                         Visibility::Hidden,
                         ComboList,
@@ -258,7 +235,6 @@ impl Combo {
             });
         });
 
-        // The list scrolls itself when it is capped to the window: it gets a bar.
         world.commands().spawn(popup_scroll_bar(list_id));
 
         let combo_id = context.entity;
@@ -282,7 +258,6 @@ impl Combo {
     }
 }
 
-/// An observer for the popup's list that closes the combo on the keyboard.
 fn close_on_key(
     combo_id: Entity,
 ) -> impl Fn(On<FocusedInput<KeyboardInput>>, Query<&ComboState>, SelectionParam, Commands) {
@@ -295,7 +270,6 @@ fn close_on_key(
     }
 }
 
-/// An observer for the popup's list that closes the combo when the focus leaves the list.
 fn close_on_focus_lost(
     combo_id: Entity,
 ) -> impl Fn(On<FocusLost>, Query<(&ComboState, &ComboRefs)>, PopupPointers, ResMut<InputFocus>, Commands)
@@ -308,8 +282,7 @@ fn close_on_focus_lost(
         if lost.event().entity != sub_refs.list_id {
             return;
         }
-        // A finger or button held down on the combo's button is not leaving either: the tap
-        // toggles the popup on its release, and the mouse does the same.
+        // The release on the button toggles the popup; closing here would reopen it.
         if state == ComboState::Open && pointers.pressed_over(sub_refs.button_id) {
             return;
         }
@@ -326,14 +299,6 @@ fn close_on_focus_lost(
     }
 }
 
-/// Puts the list of each open combo right under its button, its left edge on the button's.
-///
-/// The list is moved in until it is 10 pixels from the window's left and right edges, and goes
-/// above the button when it would run off the bottom, as a palette combo's popup does.
-///
-/// The list is a [`Float`], placed in the viewport, so it is moved here from the button's
-/// last laid-out position, in logical pixels, and follows the button while open (a scroll area
-/// around the combo scrolling, say).
 fn close_on_ancestor_scroll(
     combos: Query<(Entity, &ComboState), With<Combo>>,
     parents: Query<&ChildOf>,
@@ -372,7 +337,6 @@ fn place_open_lists(
         };
         let scale = button_computed.inverse_scale_factor();
         let button_size = button_computed.size() * scale;
-        // `UiGlobalTransform` holds the centre of the node.
         let button_center = button_transform.translation * scale;
         let list_size = list_computed.size() * list_computed.inverse_scale_factor();
         let left = Val::Px(keep_in_window_x(
@@ -396,7 +360,6 @@ fn place_open_lists(
         {
             node.left = left;
             node.top = top;
-            // A list taller than the window scrolls with the wheel instead of running off it.
             node.max_height = max_height;
             node.overflow.y = OverflowAxis::Scroll;
         }
@@ -442,7 +405,6 @@ fn selection_change(
     }
 }
 
-/// Shows a renamed selected item on the button of the combos that have it selected.
 fn item_text_change(
     renamed: Query<Entity, Changed<Item<String>>>,
     combos: Query<Entity, (With<Combo>, Without<NoDefaultItems>)>,
@@ -483,7 +445,6 @@ fn update_selection(
         .get_ref(sub_refs.list_id)
         .is_none_or(|existing_ref| existing_ref != selection_ref)
     {
-        // Selection id has changed -> propagate to the List
         commands
             .entity(sub_refs.list_id)
             .insert(Selection::reference(selection_ref));
@@ -505,7 +466,6 @@ fn update_selection(
     text.0 = label;
 }
 
-/// The text of the items in `selection`, joined with ", ".
 pub(crate) fn selected_text(selection: &SelectionValue, items: &Query<&Item<String>>) -> String {
     selection
         .iter()
@@ -513,10 +473,7 @@ pub(crate) fn selected_text(selection: &SelectionValue, items: &Query<&Item<Stri
         .join(", ")
 }
 
-/// Keeps the button of each combo a combo box to assistive technology, with the text of the
-/// selected items as its value and the popup's list as what it controls. Neither the chevron
-/// nor the placeholder is part of it: with nothing selected the value is empty. Bevy makes a
-/// node a button again when its `Button` changes, so this runs after it.
+/// Must run after Bevy resets the node to a button.
 fn sync_accessibility(
     combos: Query<(Entity, &ComboRefs), With<Combo>>,
     selections: SelectionParam,
@@ -534,13 +491,8 @@ fn sync_accessibility(
     }
 }
 
-/// Closes an open combo when a pointer lifts its primary button, or a finger, outside of it.
-///
-/// Inside is the combo's button, which opens and closes the popup itself on
-/// [`Activate`], and, for a selection that may hold several items, its list, so
-/// that a pick there keeps the popup open. Whether the pointer that lifted is on them is
-/// picking's hover map for that pointer, so a finger counts as well as the mouse, and it
-/// works whatever the camera renders to, a window or an image.
+/// Closes an open combo on a primary release outside it. The list counts as inside for a
+/// selection of many items.
 fn close_combos_on_outside_click(
     mut inputs: MessageReader<PointerInput>,
     pointers: PopupPointers,
@@ -564,7 +516,6 @@ fn close_combos_on_outside_click(
                 continue;
             };
             let over_list = pointers.over(Some(pointer), subs.list_id);
-            // A pick in the list of a selection of many keeps the popup open.
             if popup::closes_on_outside_release(
                 combo_state == ComboState::Open,
                 pointers.over(Some(pointer), subs.button_id),
