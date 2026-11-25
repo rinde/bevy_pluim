@@ -285,7 +285,6 @@ fn selected_labels(world: &World, holder: Entity) -> Result<Vec<String>, String>
     Ok(value.iter().map(|item| label_of(world, item)).collect())
 }
 
-/// What an item shows: its text, label, or the name of its colour.
 fn label_of(world: &World, item: Entity) -> String {
     if let Some(Item { data }) = world.get::<Item<String>>(item) {
         return data.clone();
