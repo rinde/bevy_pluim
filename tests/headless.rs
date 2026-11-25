@@ -101,18 +101,11 @@ mod hud_ui;
 #[expect(dead_code, reason = "the example's own `main` is not run by the test")]
 mod overview;
 
-/// `Theme`'s `update_theme` system needs a `ClearColor` resource, and
-/// `combo.rs`/`list.rs` need pointer input and picking resources; all
-/// normally inserted by the render/window plugins that this headless setup
-/// skips. `focus.rs` reads `InheritedVisibility`, which `VisibilityPlugin`
-/// propagates; its bounds systems need the mesh assets. The `bevy_ui_widgets`
-/// `Scrollbar` of `scroll_area.rs` reads `UiScale` on every press, which `UiPlugin`
-/// would insert.
+/// Inserts the resources the render, window and UI plugins would; the headless app has none of them.
 fn headless_app() -> App {
     headless_app_with(|_| {})
 }
 
-/// [`headless_app`] with `extra` run on the app before it is finished.
 fn headless_app_with(extra: impl FnOnce(&mut App)) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
@@ -253,7 +246,6 @@ fn a_stack_child_can_be_spawned_from_a_scene() {
     let stack_children = app.world().entity(stack).get::<Children>().unwrap();
     assert!(stack_children.contains(&panel));
     assert_eq!(node_display(&app, panel), Display::Flex);
-    // The scene's own children are below the stack child.
     let panel_b = single_entity_with::<PanelB>(&mut app);
     assert!(
         app.world()
@@ -481,13 +473,11 @@ fn a_stack_reference_reuses_the_creator_and_the_child_of_its_item() {
     let panel_b = single_entity_with::<PanelB>(&mut app);
     assert_eq!(node_display(&app, panel_a), Display::None);
 
-    // The reference shows the child its creator's item already made; nothing new is spawned.
     select_one(&mut app, selection_ref, items[2]);
     assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
     assert_eq!(node_display(&app, panel_a), Display::Flex);
     assert_eq!(node_display(&app, panel_b), Display::None);
 
-    // And back to the item itself: still the one child.
     select_one(&mut app, selection_ref, items[1]);
     select_one(&mut app, selection_ref, items[0]);
     assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
@@ -545,7 +535,6 @@ fn a_stack_reference_without_a_matching_creator_hides_the_current_child() {
     select_one(&mut app, selection_ref, items[1]);
     assert_eq!(node_display(&app, panel_a), Display::None, "no stale panel");
 
-    // The stack still works afterwards.
     select_one(&mut app, selection_ref, items[0]);
     assert_eq!(node_display(&app, panel_a), Display::Flex);
     assert_eq!(count_entities_with::<PanelA>(&mut app), 1);
@@ -593,7 +582,6 @@ fn a_bread_crumb_trail_marks_the_last_crumb_current_when_an_item_without_text_is
                 .build_with_items([(Item::new("a"),), (Item::new("b"),)]),
         )
         .id();
-    // A third item has no text, so it gets no crumb.
     let no_text = app
         .world_mut()
         .spawn(Item::<Color> { data: Color::WHITE })
@@ -678,15 +666,12 @@ fn bread_crumbs_follow_a_reordered_selection_and_trim_from_the_new_order() {
     app.update();
     assert_eq!(crumb_texts(&app, crumbs), ["a", "b", "c"]);
 
-    // The same items in another order are a change: the trail follows it.
     assert!(set(&mut app, vec![c, a, b]));
     app.update();
     app.update();
     assert_eq!(crumb_texts(&app, crumbs), ["c", "a", "b"]);
-    // Setting the same order again is no change.
     assert!(!set(&mut app, vec![c, a, b]));
 
-    // Trimming (what a click on a crumb does) keeps the first of the new order.
     app.world_mut()
         .run_system_once(move |mut selections: SelectionParam| {
             selections.update_selection(selection, |s| s.trim_to_length(2))
@@ -736,28 +721,24 @@ fn bread_crumbs_follow_item_text_changes_and_trim_to_the_current_position() {
     }
     assert_eq!(crumb_texts(&app, crumbs), ["a", "b", "c"]);
 
-    // Editing the text of a selected item alone updates its crumb.
     app.world_mut().get_mut::<Item<String>>(b).unwrap().data = "B".into();
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(crumb_texts(&app, crumbs), ["a", "B", "c"]);
 
-    // Removing the text drops the crumb; the later crumb still trims to its position.
     app.world_mut().entity_mut(b).remove::<Item<String>>();
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(crumb_texts(&app, crumbs), ["a", "c"]);
 
-    // A formerly unlabelled item gaining text gets a crumb again, in its place.
     app.world_mut().entity_mut(b).insert(Item::new("again"));
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(crumb_texts(&app, crumbs), ["a", "again", "c"]);
 
-    // Exactly the last crumb is current, and clicking "again" trims to its position (2).
     let world = app.world_mut();
     let mut links = world.query::<(Entity, &Link, Has<InteractionDisabled>)>();
     let found = links
@@ -793,7 +774,6 @@ fn bread_crumbs_follow_item_text_changes_and_trim_to_the_current_position() {
     assert_eq!(sel, [a, b]);
 }
 
-/// The texts of the crumbs of a trail, in the order shown (separators left out).
 fn crumb_texts(app: &App, crumbs: Entity) -> Vec<String> {
     fn collect(world: &World, entity: Entity, out: &mut Vec<String>) {
         if let Some(text) = world.get::<Text>(entity)
@@ -885,8 +865,6 @@ fn a_selection_ref_shared_by_bread_crumbs_and_a_stack_stays_in_sync() {
     app.update();
     app.update();
 
-    // The selection starts out with only "a" selected: one crumb, and the
-    // stack shows the matching panel.
     assert_eq!(
         app.world()
             .entity(bread_crumbs)
@@ -898,8 +876,6 @@ fn a_selection_ref_shared_by_bread_crumbs_and_a_stack_stays_in_sync() {
     let panel_a = single_entity_with::<PanelA>(&mut app);
     assert_eq!(node_display(&app, panel_a), Display::Flex);
 
-    // Pushing "b" onto the shared selection grows the crumb trail and
-    // switches the stack to show "b" as the most recently selected item.
     app.world_mut()
         .entity_mut(selection_ref)
         .insert(Selection::Value(SelectionValue::OneOrMore(
@@ -921,8 +897,6 @@ fn a_selection_ref_shared_by_bread_crumbs_and_a_stack_stays_in_sync() {
     assert_eq!(node_display(&app, panel_a), Display::None);
     assert_eq!(node_display(&app, panel_b), Display::Flex);
 
-    // Trimming the crumb trail back to "a" (as clicking that crumb would)
-    // shrinks the trail and switches the stack back.
     app.world_mut()
         .entity_mut(selection_ref)
         .insert(Selection::Value(SelectionValue::OneOrMore(
@@ -1177,13 +1151,11 @@ fn activating_a_toggle_icon_button_flips_its_state_and_restyles_it() {
     assert_eq!(background(&app, toggle), colors.background_primary);
     assert_eq!(bar_display(&app, toggle), Display::None);
 
-    // Set from outside.
     app.world_mut().entity_mut(toggle).insert(ToggleState(true));
     app.update();
     app.update();
     assert_eq!(background(&app, toggle), colors.accent_subtle);
 
-    // A button without a ToggleState stays momentary.
     app.world_mut().trigger(Activate { entity: plain });
     app.update();
     app.update();
@@ -1237,7 +1209,6 @@ fn activating_a_toggle_push_button_flips_its_state_restyles_it_and_sets_its_togg
     assert_eq!(background(&app, toggle), colors.background_primary);
     assert_eq!(toggled(&app, toggle), Some(accesskit::Toggled::False));
 
-    // A button without a ToggleState stays momentary.
     app.world_mut().trigger(Activate { entity: plain });
     app.update();
     app.update();
@@ -1245,7 +1216,6 @@ fn activating_a_toggle_push_button_flips_its_state_restyles_it_and_sets_its_togg
     assert_eq!(background(&app, plain), colors.background_primary);
 }
 
-/// Says the pointer moves onto (`over`) or off `target`, as picking would.
 fn pointer_over_or_out(app: &mut App, target: Entity, over: bool) {
     let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
     if over {
@@ -1383,7 +1353,6 @@ fn a_press_on_a_link_restyles_it() {
     assert_eq!(after.0, expected);
 }
 
-/// A link in a root node, after two updates.
 fn spawn_link(app: &mut App, disabled: bool) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
@@ -1398,7 +1367,6 @@ fn spawn_link(app: &mut App, disabled: bool) -> Entity {
     link
 }
 
-/// The text colour of a link.
 fn link_text_color(app: &App, link: Entity) -> Color {
     let text = app.world().entity(link).get::<Children>().unwrap()[0];
     app.world().entity(text).get::<TextColor>().unwrap().0
@@ -1454,7 +1422,6 @@ fn a_disabled_link_the_pointer_is_on_stays_at_rest_in_a_new_theme() {
     assert_eq!(link_text_color(&app, link), dark.text_primary);
 }
 
-/// The text colour of a link whose own text is found by marker, not position.
 fn link_label_color(app: &App, link: Entity) -> Color {
     let children = app.world().entity(link).get::<Children>().unwrap();
     children
@@ -1481,7 +1448,6 @@ fn a_link_with_an_app_child_before_its_text_still_themes_hovers_and_disables() {
         extra
     );
 
-    // Hover: the label takes the link colour on the background of a hover.
     app.world_mut().trigger(PointerOver {
         entity: link,
         pointer: Pointer::new(PointerId::Mouse, pointer_location()),
@@ -1493,7 +1459,6 @@ fn a_link_with_an_app_child_before_its_text_still_themes_hovers_and_disables() {
         DEFAULT_LIGHT_THEME_COLORS.background_secondary
     );
 
-    // Press changes the label colour, which is only reachable through the owned child.
     app.world_mut().trigger(PointerPress {
         entity: link,
         pointer: Pointer::new(PointerId::Mouse, pointer_location()),
@@ -1507,7 +1472,6 @@ fn a_link_with_an_app_child_before_its_text_still_themes_hovers_and_disables() {
         DEFAULT_LIGHT_THEME_COLORS.link_selected
     );
 
-    // Disabled: plain text colour.
     app.world_mut().entity_mut(link).insert(InteractionDisabled);
     app.update();
     assert_eq!(
@@ -1515,7 +1479,6 @@ fn a_link_with_an_app_child_before_its_text_still_themes_hovers_and_disables() {
         DEFAULT_LIGHT_THEME_COLORS.text_primary
     );
 
-    // Theme change restyles the label, and the app child is kept.
     app.world_mut()
         .entity_mut(link)
         .remove::<InteractionDisabled>();
@@ -1633,11 +1596,9 @@ fn a_link_enabled_again_reacts_to_the_pointer_again() {
     assert_eq!(link_text_color(&app, link), colors.link_selected);
 }
 
-/// The `Activate`s of the button that [`spawn_push_button`] spawned.
 #[derive(Resource, Default)]
 struct Activations(u32);
 
-/// A push button in a root node, counting its [`Activate`]s in [`Activations`].
 fn spawn_push_button(app: &mut App) -> Entity {
     app.init_resource::<Activations>();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -1754,8 +1715,6 @@ fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
     );
 }
 
-/// Says the pointer is on `entity`, and changes the theme to the other one under it.
-///
 /// Only `Update` runs: `PreUpdate`'s `update_is_hovered` would put the `Hovered` of
 /// the headless app, which has no pointer over anything, back to false first.
 fn hover_and_toggle_theme(app: &mut App, entity: Entity) {
@@ -1881,7 +1840,6 @@ fn a_push_button_puts_its_icon_where_its_icon_placement_says() {
             .unwrap()
             .flex_direction
     };
-    // The default keeps the icon after the label, as before.
     assert_eq!(direction(&app), FlexDirection::Row);
     for (placement, expected) in [
         (IconPlacement::Left, FlexDirection::RowReverse),
@@ -1940,7 +1898,6 @@ fn a_compact_push_button_is_small_and_keeps_it_after_a_theme_change() {
     app.update();
     check(&app);
 
-    // Back to the regular size.
     app.world_mut()
         .entity_mut(button)
         .insert(ButtonSize::Regular);
@@ -2020,7 +1977,6 @@ fn a_disabled_color_push_button_shows_the_disabled_border_and_does_not_activate(
     assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
 }
 
-/// Whether `entity` has a focus ring, an [`Outline`].
 fn has_focus_ring(app: &App, entity: Entity) -> bool {
     app.world().entity(entity).contains::<Outline>()
 }
@@ -2044,7 +2000,6 @@ fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
     assert_eq!(ring.offset, Val::Px(1.0));
     assert!(!has_focus_ring(&app, other));
 
-    // A click hides the ring, Tab shows it again.
     app.world_mut().insert_resource(InputFocusVisible(false));
     app.update();
     app.update();
@@ -2054,7 +2009,6 @@ fn the_focused_tab_stop_gets_a_focus_ring_and_an_unfocused_one_does_not() {
     app.update();
     assert!(has_focus_ring(&app, focused));
 
-    // The focus moves, and the ring with it.
     app.world_mut()
         .insert_resource(InputFocus::from_entity(other));
     app.update();
@@ -2191,7 +2145,6 @@ fn a_widget_under_a_display_none_grandparent_is_hidden_then_shown_again_and_foll
     assert_eq!(index(&app, button), 0);
     assert!(!hidden(&app, button));
 
-    // Only the grandparent changes; nothing on the button or its parent does.
     set_display(&mut app, outer, Display::None);
     assert_eq!(index(&app, button), -1);
     assert!(hidden(&app, button));
@@ -2200,7 +2153,6 @@ fn a_widget_under_a_display_none_grandparent_is_hidden_then_shown_again_and_foll
     assert_eq!(index(&app, button), 0);
     assert!(!hidden(&app, button));
 
-    // Moved under a hidden parent, then back out.
     set_display(&mut app, other, Display::None);
     app.world_mut().entity_mut(inner).insert(ChildOf(other));
     app.update();
@@ -2233,7 +2185,6 @@ fn overlapping_display_flips_and_a_reparent_in_one_frame_reach_every_consumer_of
             .display = display;
     };
 
-    // A chain of twenty nodes with a button at the bottom, and a spare parent.
     let mut chain = Vec::new();
     let mut parent = app.world_mut().spawn(Node::default()).id();
     for _ in 0..20 {
@@ -2252,7 +2203,6 @@ fn overlapping_display_flips_and_a_reparent_in_one_frame_reach_every_consumer_of
     app.update();
     assert_eq!(index(&app, button), 0);
 
-    // Two nested roots flip in one frame, so their subtrees overlap.
     display(&mut app, chain[2], Display::None);
     display(&mut app, chain[10], Display::None);
     app.update();
@@ -2260,14 +2210,12 @@ fn overlapping_display_flips_and_a_reparent_in_one_frame_reach_every_consumer_of
     assert_eq!(index(&app, button), -1);
     assert!(hidden(&app, button));
 
-    // The outer one is shown again: the inner one still hides the button.
     display(&mut app, chain[2], Display::Flex);
     app.update();
     app.update();
     assert_eq!(index(&app, button), -1);
     assert!(hidden(&app, button));
 
-    // The inner flips back and the chain is moved under a spare parent in the same frame.
     display(&mut app, chain[10], Display::Flex);
     app.world_mut().entity_mut(chain[0]).insert(ChildOf(spare));
     app.update();
@@ -2275,7 +2223,6 @@ fn overlapping_display_flips_and_a_reparent_in_one_frame_reach_every_consumer_of
     assert_eq!(index(&app, button), 0);
     assert!(!hidden(&app, button));
 
-    // Hiding the spare parent and removing a middle node's `Node` in one frame.
     display(&mut app, spare, Display::None);
     app.update();
     app.update();
@@ -2291,13 +2238,11 @@ fn a_tab_stop_in_a_hidden_stack_panel_or_hidden_popup_is_not_reached_by_tab() {
     let mut app = headless_app();
     let index = |app: &App, e: Entity| app.world().entity(e).get::<TabIndex>().unwrap().0;
 
-    // A button in a node that is `Display::None`, as a `Stack` hides its panels.
     let panel = app.world_mut().spawn(Node::default()).id();
     let in_panel = app
         .world_mut()
         .spawn((PushButton::from_label("in panel"), ChildOf(panel)))
         .id();
-    // A button in a popup that is `Visibility::Hidden`.
     let popup = app.world_mut().spawn(Node::default()).id();
     let in_popup = app
         .world_mut()
@@ -2333,7 +2278,6 @@ fn a_tab_stop_in_a_hidden_stack_panel_or_hidden_popup_is_not_reached_by_tab() {
     assert_eq!(index(&app, in_popup), 0);
 }
 
-/// Whether the [`AccessibilityNode`] of `entity` says `aria-expanded`, or nothing.
 fn expanded(app: &App, entity: Entity) -> Option<bool> {
     app.world()
         .entity(entity)
@@ -2342,13 +2286,11 @@ fn expanded(app: &App, entity: Entity) -> Option<bool> {
         .is_expanded()
 }
 
-/// A press, then the release that makes it a click.
 fn click(app: &mut App, target: Entity) {
     press(app, target);
     click_and_release(app, target);
 }
 
-/// A combo over two items in a root node, returning it and its button.
 fn spawn_combo(app: &mut App) -> (Entity, Entity) {
     let root = app.world_mut().spawn(Node::default()).id();
     let combo = app
@@ -2399,7 +2341,6 @@ fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
     );
     assert_eq!(list_index(&app), 0, "an open popup is a tab stop");
 
-    // No click or focus change: only the ancestor is hidden, as a `Stack` does.
     app.world_mut()
         .entity_mut(panel)
         .get_mut::<Node>()
@@ -2415,7 +2356,6 @@ fn hiding_the_panel_of_an_open_combo_hides_its_popup_without_closing_it() {
     assert_eq!(list_index(&app), -1);
 }
 
-/// A colour palette combo over two colours in a root node, returning it and its button.
 fn spawn_palette_combo(app: &mut App) -> (Entity, Entity) {
     let root = app.world_mut().spawn(Node::default()).id();
     let combo = app
@@ -2442,7 +2382,6 @@ fn the_root_refs_of_a_combo_point_at_its_live_parts() {
     assert!(app.world().entity(button).contains::<ComboButton>());
     assert!(app.world().entity(refs.list()).contains::<ComboList>());
 
-    // Inserting the component again keeps one parts tree.
     app.world_mut().entity_mut(combo).insert(Combo);
     app.update();
     assert_eq!(
@@ -2478,7 +2417,6 @@ fn the_root_refs_of_a_palette_combo_point_at_its_live_parts() {
     );
     assert!(world.entity(refs.palette()).contains::<ColorPalette>());
 
-    // Inserting the component again keeps one parts tree.
     app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
     app.update();
     let again = *app.world().get::<ColorPaletteComboRefs>(combo).unwrap();
@@ -2560,7 +2498,6 @@ fn a_color_palette_combo_button_says_whether_its_popup_is_open() {
     assert_eq!(expanded(&app, button), Some(false));
 }
 
-/// The node ids the accessibility node of `entity` says it controls.
 fn controls(app: &App, entity: Entity) -> Vec<u64> {
     app.world()
         .get::<AccessibilityNode>(entity)
@@ -2593,7 +2530,6 @@ fn a_combo_button_shows_a_chevron_image_after_its_label_not_text() {
     assert!(app.world().get::<ImageNode>(chevron).is_some());
 }
 
-/// The tick at which the [`AccessibilityNode`] of `entity` last changed.
 fn accessibility_changed_at(app: &App, entity: Entity) -> bevy::ecs::change_detection::Tick {
     app.world()
         .entity(entity)
@@ -2676,14 +2612,12 @@ fn a_color_push_button_outside_a_combo_is_named_after_its_colour() {
     assert_eq!(node.label(), Some("red-500"));
 }
 
-/// A colour palette combo's selection over two colours.
 fn two_color_selection() -> impl Bundle {
     Selection::builder()
         .zero_or_one()
         .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data }))
 }
 
-/// The entities named `entity_name`.
 fn entities_named(app: &mut App, entity_name: &str) -> Vec<Entity> {
     let world = app.world_mut();
     let mut query = world.query::<(Entity, &Name)>();
@@ -2694,7 +2628,6 @@ fn entities_named(app: &mut App, entity_name: &str) -> Vec<Entity> {
         .collect()
 }
 
-/// The popups of palette combos that kept their default name.
 fn palette_combo_floats(app: &mut App) -> Vec<Entity> {
     entities_named(app, "ColorPaletteCombo popup")
 }
@@ -2732,7 +2665,6 @@ fn a_color_palette_combo_popup_border_is_the_themes_highlight_when_spawned_and_a
     let root = app.world_mut().spawn(Node::default()).id();
     app.world_mut()
         .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
-    // No update since the spawn: the popup is themed when it is spawned.
     assert_popup_borders_are_highlight(&mut app, 1);
 
     app.world_mut()
@@ -2743,13 +2675,11 @@ fn a_color_palette_combo_popup_border_is_the_themes_highlight_when_spawned_and_a
     app.update();
     assert_popup_borders_are_highlight(&mut app, 1);
 
-    // A combo spawned after the theme changed is themed as well.
     app.world_mut()
         .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)));
     assert_popup_borders_are_highlight(&mut app, 2);
 }
 
-/// Every palette combo popup has the active theme's `border_highlight` border.
 fn assert_popup_borders_are_highlight(app: &mut App, count: usize) {
     let expected = BorderColor::all(
         app.world()
@@ -2841,7 +2771,6 @@ fn a_color_palette_combo_without_a_parent_gets_its_popup() {
     assert_eq!(palette_combo_floats(&mut app).len(), 1);
 }
 
-/// The selection of the only [`ColorPalette`] of the app.
 fn only_palette_selection(app: &mut App) -> Option<Selection> {
     let palette = single_entity_with::<ColorPalette>(app);
     app.world().entity(palette).get::<Selection>().cloned()
@@ -2851,8 +2780,6 @@ fn only_palette_selection(app: &mut App) -> Option<Selection> {
 fn a_color_palette_combo_popup_refers_to_the_combos_selection_as_soon_as_it_is_spawned() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
-    // No update after the spawn: nothing has changed since, so the reference was wired
-    // when the popup was spawned, not by a system that reacts to a change.
     let combo = app
         .world_mut()
         .spawn((ColorPaletteCombo, two_color_selection(), ChildOf(root)))
@@ -2977,7 +2904,6 @@ fn the_popup_swatches_of_a_color_palette_combo_show_the_selection_the_combo_refe
     assert_eq!(selected_colors(&app, palette), [GREEN]);
 }
 
-/// The two colours the palette combos below choose from.
 fn white_and_black() -> Vec<Item<Color>> {
     [Color::WHITE, Color::BLACK]
         .into_iter()
@@ -2985,8 +2911,6 @@ fn white_and_black() -> Vec<Item<Color>> {
         .collect()
 }
 
-/// A colour palette combo over `selection` (two colours), opened: the combo, its popup's
-/// palette and the palette's swatches.
 fn open_palette_combo_over(app: &mut App, selection: impl Bundle) -> (Entity, Entity, Vec<Entity>) {
     app.world_mut().spawn((Window::default(), PrimaryWindow));
     let root = app.world_mut().spawn(Node::default()).id();
@@ -3059,7 +2983,6 @@ fn a_click_on_the_selected_swatch_closes_the_popup_of_a_one_palette_combo_and_ke
     click_row(&mut app, swatches[0]);
 
     assert_eq!(palette_combo_state(&app, combo), PaletteComboState::Closed);
-    // The closed popup holds no swatches, so reopen it to read the kept selection.
     let button = single_entity_with::<ColorPushButton>(&mut app);
     click(&mut app, button);
     assert_eq!(selected_colors(&app, palette), [Color::WHITE]);
@@ -3142,8 +3065,6 @@ fn a_disabled_combo_button_does_not_open_its_popup() {
     assert_eq!(expanded(&app, button), Some(false));
 }
 
-/// A stepper over a `u8` from 0 to 3, starting at `initial`, returning it and its
-/// decrease and increase buttons.
 fn spawn_stepper(app: &mut App, initial: u8) -> (Entity, Entity, Entity) {
     let root = app.world_mut().spawn(Node::default()).id();
     let stepper = app
@@ -3311,7 +3232,6 @@ fn a_numeric_stepper_shows_its_custom_format_and_updates_it_on_a_change() {
     assert!(is_disabled(&app, children[1]));
 }
 
-/// The parts of a stepper: fill, decrease, label, increase (child order: track, "-", label, "+").
 fn stepper_label(app: &App, stepper: Entity) -> String {
     let children: Vec<Entity> = app
         .world()
@@ -3507,7 +3427,6 @@ fn one_arrow_key_steps_a_reinserted_numeric_stepper_once() {
     assert_eq!(stepper_value(&app, stepper), 1);
 }
 
-/// Names of the children of `entity`, in order.
 fn child_names(app: &App, entity: Entity) -> Vec<String> {
     app.world()
         .entity(entity)
@@ -3545,7 +3464,6 @@ fn inserting_a_numeric_stepper_keeps_app_children_at_first_and_every_later_inser
     assert_eq!(first.len(), 5);
     assert!(first.contains(&"Mine".to_owned()));
 
-    // Repeated inserts, also several before the commands run, never duplicate or drop.
     for _ in 0..3 {
         app.world_mut()
             .entity_mut(stepper)
@@ -3667,10 +3585,6 @@ fn no_entity_with<T: Component>(app: &mut App) -> bool {
     query.iter(world).next().is_none()
 }
 
-// ---- List ----
-
-/// A list over a selection of its own on `labels`, in a root node: the list, its
-/// item views in the order of the labels, and the selection.
 fn spawn_list(
     app: &mut App,
     selection: SelectionBuilderWithValue,
@@ -3687,7 +3601,6 @@ fn spawn_list(
     (list, views, selection_ref)
 }
 
-/// A list sharing the selection of `selection_ref`.
 fn spawn_list_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
     let list = app
         .world_mut()
@@ -3785,7 +3698,6 @@ fn a_list_keeps_the_node_fields_the_app_gave_it() {
         .id();
     app.update();
     app.update();
-    // Inserting the zero-sized `List` again must not reset the node either.
     app.world_mut().entity_mut(list).insert(List);
     app.update();
     app.update();
@@ -3938,7 +3850,6 @@ fn item_label(app: &App, item: Entity) -> String {
         .clone()
 }
 
-/// What the views of `list` that carry [`Selected`] show, in the order of the list.
 fn selected_labels(app: &App, list: Entity) -> Vec<String> {
     item_views(app, list)
         .into_iter()
@@ -3950,7 +3861,6 @@ fn selected_labels(app: &App, list: Entity) -> Vec<String> {
         .collect()
 }
 
-/// The items that `selection_ref` selects, as their labels.
 fn selection_labels(app: &App, selection_ref: Entity) -> Vec<String> {
     let Selection::Value(selection) = app
         .world()
@@ -3963,8 +3873,6 @@ fn selection_labels(app: &App, selection_ref: Entity) -> Vec<String> {
     selection.iter().map(|item| item_label(app, item)).collect()
 }
 
-/// What the `ListBox` sends when it picks `row`: a click on a row that is not
-/// `Selected`, or Enter on the active row.
 fn list_box_picks(app: &mut App, list: Entity, row: Entity) {
     app.world_mut().trigger(ValueChange::<Entity> {
         source: list,
@@ -3974,7 +3882,6 @@ fn list_box_picks(app: &mut App, list: Entity, row: Entity) {
     app.update();
 }
 
-/// A click on `row` as the picking sends it: `Click`, then `Release`.
 fn click_row(app: &mut App, row: Entity) {
     click_and_release(app, row);
     app.update();
@@ -3999,7 +3906,6 @@ fn the_items_of_the_selection_are_selected_and_the_others_are_not() {
         spawn_list(&mut app, Selection::builder().one(), &["a", "b", "c"]);
     assert_eq!(selected_labels(&app, list), ["a"]);
 
-    // Selected follows the selection when something else changes it as well.
     let c = app
         .world()
         .entity(views[2])
@@ -4059,7 +3965,6 @@ fn clicking_an_item_selects_it_and_replaces_the_selection_of_a_one_list() {
     assert_eq!(selection_labels(&app, selection_ref), ["b"]);
     assert_eq!(selected_labels(&app, list), ["b"]);
 
-    // The selected item cannot be deselected.
     click_row(&mut app, views[1]);
 
     assert_eq!(selection_labels(&app, selection_ref), ["b"]);
@@ -4126,7 +4031,6 @@ fn the_last_selected_item_of_a_one_or_more_list_stays_selected() {
 
 #[test]
 fn what_the_list_box_picks_is_selected_as_far_as_the_selection_allows() {
-    // Enter or Space on the active row sends the same change as a click.
     let mut app = headless_app();
     let (list, views, selection_ref) =
         spawn_list(&mut app, Selection::builder().one_or_more(), &["a", "b"]);
@@ -4136,7 +4040,6 @@ fn what_the_list_box_picks_is_selected_as_far_as_the_selection_allows() {
     assert_eq!(selection_labels(&app, selection_ref), ["a", "b"]);
     assert_eq!(selected_labels(&app, list), ["a", "b"]);
 
-    // A change for a row that is not an item of the list is ignored.
     let stranger = app.world_mut().spawn_empty().id();
     list_box_picks(&mut app, list, stranger);
 
@@ -4150,7 +4053,6 @@ fn a_view_for_a_new_item_starts_unselected_unless_the_item_is_in_the_selection()
         spawn_list(&mut app, Selection::builder().zero_or_more(), &["a"]);
     assert_eq!(item_views(&app, list).len(), 1);
 
-    // A new item that is not in the selection gets a view without `Selected`.
     app.world_mut()
         .spawn((Item::new("b"), ItemOf(selection_ref)));
     app.update();
@@ -4159,7 +4061,6 @@ fn a_view_for_a_new_item_starts_unselected_unless_the_item_is_in_the_selection()
     assert_eq!(item_views(&app, list).len(), 2);
     assert!(selected_labels(&app, list).is_empty());
 
-    // A new item that the selection already holds gets a view with `Selected`.
     let item_c = app
         .world_mut()
         .spawn((Item::new("c"), ItemOf(selection_ref)))
@@ -4176,14 +4077,10 @@ fn a_view_for_a_new_item_starts_unselected_unless_the_item_is_in_the_selection()
     assert_eq!(selected_labels(&app, list), ["c"]);
 }
 
-// ---- `ColorPalette`: swatches are `ListItem`s, and `Selected` follows the selection ----
-
 const RED: Color = Color::srgb(1.0, 0.0, 0.0);
 const GREEN: Color = Color::srgb(0.0, 1.0, 0.0);
 const BLUE: Color = Color::srgb(0.0, 0.0, 1.0);
 
-/// A palette of red, green and blue swatches over a selection of its own, as
-/// `(palette, swatches, selection)`.
 fn spawn_palette(
     app: &mut App,
     selection: SelectionBuilderWithValue,
@@ -4202,7 +4099,6 @@ fn spawn_palette(
     (palette, swatches, selection_ref)
 }
 
-/// A palette sharing the selection of `selection_ref`.
 fn spawn_palette_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entity {
     let palette = app
         .world_mut()
@@ -4217,7 +4113,6 @@ fn spawn_palette_on(app: &mut App, root: Entity, selection_ref: Entity) -> Entit
     palette
 }
 
-/// The colour of a swatch.
 fn swatch_color(app: &App, swatch: Entity) -> Color {
     let item_ref = app
         .world()
@@ -4232,7 +4127,6 @@ fn swatch_color(app: &App, swatch: Entity) -> Color {
         .data
 }
 
-/// The colours of the swatches of `palette` that carry [`Selected`], in the order of the palette.
 fn selected_colors(app: &App, palette: Entity) -> Vec<Color> {
     item_views(app, palette)
         .into_iter()
@@ -4241,7 +4135,6 @@ fn selected_colors(app: &App, palette: Entity) -> Vec<Color> {
         .collect()
 }
 
-/// The colours that `selection_ref` selects.
 fn selection_colors(app: &App, selection_ref: Entity) -> Vec<Color> {
     let Selection::Value(selection) = app
         .world()
@@ -4276,7 +4169,6 @@ fn the_swatches_of_the_selection_are_selected_and_the_others_are_not() {
         spawn_palette(&mut app, Selection::builder().zero_or_one());
     assert!(selected_colors(&app, palette).is_empty());
 
-    // Selected follows the selection when something else changes it as well.
     let blue = app
         .world()
         .entity(swatches[2])
@@ -4365,7 +4257,6 @@ fn the_selection_rules_decide_what_a_swatch_click_does() {
     let (palette, swatches, selection_ref) = spawn_palette(&mut app, Selection::builder().one());
     assert_eq!(selected_colors(&app, palette), [RED]);
 
-    // A `One` selection replaces its swatch and cannot be emptied.
     click_row(&mut app, swatches[1]);
     assert_eq!(selected_colors(&app, palette), [GREEN]);
     click_row(&mut app, swatches[1]);
@@ -4432,7 +4323,6 @@ fn changing_the_theme_under_a_hovered_selected_list_item_keeps_it_selected_and_h
     );
 }
 
-/// The borders of a swatch and of the colour square in it, which carry its highlight.
 fn swatch_border(app: &App, swatch: Entity) -> (Color, Color) {
     let outer = app.world().entity(swatch).get::<BorderColor>().unwrap().top;
     let square = app.world().entity(swatch).get::<Children>().unwrap()[0];
@@ -4440,10 +4330,8 @@ fn swatch_border(app: &App, swatch: Entity) -> (Color, Color) {
     (outer, inner)
 }
 
-/// The border of `swatch` in the dark theme with the pointer off it, whatever it was.
 fn resting_dark_border(app: &mut App, swatch: Entity) -> (Color, Color) {
     app.world_mut().entity_mut(swatch).insert(Hovered(false));
-    // Light, then dark again, both with the pointer off the swatch.
     toggle_theme(app);
     app.world_mut().run_schedule(Update);
     toggle_theme(app);
@@ -4626,7 +4514,6 @@ struct RowButton;
 #[derive(Component)]
 struct RowText;
 
-/// A creator of custom item views: a text and a nested button.
 fn spawn_row(
     spawner: In<ItemViewSpawner>,
     mut commands: Commands,
@@ -4662,7 +4549,6 @@ fn spawn_custom_list(app: &mut App, selection: SelectionBuilderWithValue) -> (En
     (list, selection_ref)
 }
 
-/// The text and the button inside a custom view.
 fn nested(app: &App, view: Entity) -> (Entity, Entity) {
     let children = app.world().entity(view).get::<Children>().unwrap();
     let text = children
@@ -4695,7 +4581,6 @@ fn a_custom_view_creator_runs_once_per_item_and_fills_the_view() {
         assert!(!app.world().entity(view).contains::<Text>());
         nested(&app, view);
     }
-    // Further updates do not run it again.
     app.update();
     assert_eq!(
         app.world().get_resource::<CreatedViews>().unwrap().0.len(),
@@ -4793,7 +4678,6 @@ fn releasing_on_a_selected_custom_view_in_a_zero_or_one_list_deselects_it() {
     assert!(selection_labels(&app, selection_ref).is_empty());
 }
 
-/// The segments of a control, in order.
 fn segments_of(app: &App, control: Entity) -> Vec<Entity> {
     app.world()
         .entity(control)
@@ -4804,13 +4688,11 @@ fn segments_of(app: &App, control: Entity) -> Vec<Entity> {
         .collect()
 }
 
-/// The text of a segment.
 fn segment_text(app: &App, segment: Entity) -> String {
     let label = app.world().entity(segment).get::<Children>().unwrap()[0];
     app.world().entity(label).get::<Text>().unwrap().0.clone()
 }
 
-/// The text of the segments that carry `Selected`.
 fn selected_segments(app: &App, control: Entity) -> Vec<String> {
     segments_of(app, control)
         .into_iter()
@@ -4819,7 +4701,6 @@ fn selected_segments(app: &App, control: Entity) -> Vec<String> {
         .collect()
 }
 
-/// The sliding indicator behind the segments of a control.
 fn indicator_of(app: &App, control: Entity) -> Entity {
     app.world()
         .entity(control)
@@ -4830,7 +4711,6 @@ fn indicator_of(app: &App, control: Entity) -> Entity {
         .unwrap()
 }
 
-/// The child of `parent` named `name`, such as the indicator of a tab bar.
 fn child_named(app: &App, parent: Entity, name: &str) -> Entity {
     app.world()
         .entity(parent)
@@ -4863,7 +4743,6 @@ fn spawn_segmented_control(app: &mut App) -> Entity {
     control
 }
 
-/// Selects the item with the given text through the system param.
 fn select_by_text(app: &mut App, selection: Entity, text: &'static str) {
     app.world_mut()
         .run_system_once(
@@ -4904,7 +4783,6 @@ fn clicking_a_segment_selects_it() {
     assert_eq!(background(&app, segments[0]), Color::NONE);
     assert_eq!(background(&app, segments[1]), Color::NONE);
 
-    // The selected segment stays selected when it is used again.
     activate(&mut app, segments[1]);
     assert_eq!(selected_segments(&app, control), ["Manual"]);
 }
@@ -4953,14 +4831,12 @@ fn a_segmented_control_follows_a_selection_it_refers_to() {
     }
     assert_eq!(selected_segments(&app, control), ["Dark"]);
 
-    // Clicking writes to the referenced selection ...
     let segments = segments_of(&app, control);
     activate(&mut app, segments[1]);
     assert_eq!(selected_segments(&app, control), ["Light"]);
     let value = app.world().entity(selection).get::<Selection>().unwrap();
     assert!(matches!(value, Selection::Value(SelectionValue::One(_))));
 
-    // ... and a change made to it from elsewhere restyles the control.
     select_by_text(&mut app, selection, "Dark");
     assert_eq!(selected_segments(&app, control), ["Dark"]);
     assert_eq!(background(&app, segments[0]), Color::NONE);
@@ -5039,7 +4915,6 @@ fn adding_and_removing_items_adds_and_removes_segments() {
     let control = spawn_segmented_control(&mut app);
     let removed = app.world().entity(segments_of(&app, control)[1]);
     let removed_item = removed.get::<Segment>().unwrap().item();
-    // The control's own selection holds its items.
     let items_ref = control;
 
     app.world_mut().entity_mut(removed_item).despawn();
@@ -5054,16 +4929,12 @@ fn adding_and_removing_items_adds_and_removes_segments() {
         .collect();
     assert_eq!(texts, ["Auto", "Off", "New"]);
     assert_eq!(selected_segments(&app, control), ["Auto"]);
-    // The new segment is styled and works.
     let segments = segments_of(&app, control);
     assert_eq!(background(&app, segments[2]), Color::NONE);
     activate(&mut app, segments[2]);
     assert_eq!(selected_segments(&app, control), ["New"]);
 }
 
-// ---- Tab bars ----
-
-/// The tabs of a bar, in order.
 fn tabs_of(app: &App, bar: Entity) -> Vec<Entity> {
     app.world()
         .entity(bar)
@@ -5074,7 +4945,6 @@ fn tabs_of(app: &App, bar: Entity) -> Vec<Entity> {
         .collect()
 }
 
-/// The text of the tabs that carry `Selected`.
 fn selected_tabs(app: &App, bar: Entity) -> Vec<String> {
     tabs_of(app, bar)
         .into_iter()
@@ -5083,12 +4953,10 @@ fn selected_tabs(app: &App, bar: Entity) -> Vec<String> {
         .collect()
 }
 
-/// The tab the bar's `SelectedTab` names.
 fn selected_tab(app: &App, bar: Entity) -> Option<Entity> {
     app.world().entity(bar).get::<SelectedTab>().unwrap().0
 }
 
-/// Asks the bar's tab list for `tab`, as a click or Enter on it does.
 fn request_tab(app: &mut App, bar: Entity, tab: Entity) {
     app.world_mut().trigger(ValueChange::<Option<Entity>> {
         source: bar,
@@ -5133,7 +5001,6 @@ fn a_tab_bar_shows_a_tab_per_item_with_the_first_selected() {
     assert_eq!(selected_tabs(&app, bar), ["General"]);
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     assert_eq!(background(&app, bar), colors.segmented_track);
-    // The selected look is the sliding indicator's; the tabs themselves are transparent.
     assert_eq!(
         background(&app, child_named(&app, bar, "TabIndicator")),
         colors.segmented_selected
@@ -5182,12 +5049,10 @@ fn a_tab_bar_follows_a_selection_it_refers_to() {
     let tabs = tabs_of(&app, bar);
     assert_eq!(selected_tabs(&app, bar), ["Dark"]);
 
-    // A tab asked for writes to the referenced selection ...
     request_tab(&mut app, bar, tabs[1]);
     assert_eq!(selection_labels(&app, selection), ["Light"]);
     assert_eq!(selected_tabs(&app, bar), ["Light"]);
 
-    // ... and a change made to it from elsewhere moves the selected tab.
     select_by_text(&mut app, selection, "Dark");
     assert_eq!(selected_tab(&app, bar), Some(tabs[0]));
     assert_eq!(selected_tabs(&app, bar), ["Dark"]);
@@ -5242,16 +5107,13 @@ fn a_hidden_tab_bar_gives_its_tabs_tab_index_minus_one_until_shown() {
     };
     assert_eq!(indices(&app), [0, -1, -1]);
 
-    // Its panel hidden by `Display::None`, as a `Stack` hides its panels.
     set_display(&mut app, Display::None);
     assert_eq!(indices(&app), [-1, -1, -1]);
-    // A selection made while hidden is the tab Tab reaches once it shows.
     request_tab(&mut app, bar, tabs[1]);
     assert_eq!(indices(&app), [-1, -1, -1]);
     set_display(&mut app, Display::Flex);
     assert_eq!(indices(&app), [-1, 0, -1]);
 
-    // The bar itself hidden by its visibility.
     app.world_mut().entity_mut(bar).insert(Visibility::Hidden);
     app.update();
     app.update();
@@ -5287,7 +5149,6 @@ fn a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is() {
     app.update();
     assert_eq!(index(&app, tabs[2]), 0, "an idle bar was looked at");
 
-    // A move of the focus onto a tab brings the bar back in step.
     app.world_mut()
         .insert_resource(InputFocus::from_entity(tabs[1]));
     app.update();
@@ -5297,7 +5158,6 @@ fn a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is() {
         [-1, 0, -1]
     );
 
-    // Focus gone: back to the selected tab.
     app.world_mut().insert_resource(InputFocus::default());
     app.update();
     app.update();
@@ -5306,7 +5166,6 @@ fn a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is() {
         [0, -1, -1]
     );
 
-    // Disabling the roving tab moves the stop to the next enabled one; enabling restores it.
     app.world_mut()
         .entity_mut(tabs[0])
         .insert(InteractionDisabled);
@@ -5327,9 +5186,6 @@ fn a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is() {
     );
 }
 
-// ---- Separated lists ----
-
-/// A `CornerStyle::Separated` list over a `One` selection of `labels`.
 fn spawn_separated_list(app: &mut App, labels: &[&str]) -> (Entity, Vec<Entity>) {
     let root = app.world_mut().spawn(Node::default()).id();
     let items: Vec<_> = labels.iter().map(|label| Item::new(*label)).collect();
@@ -5511,7 +5367,6 @@ fn chip_views(app: &App, chips: Entity) -> Vec<Entity> {
         })
 }
 
-/// The label and the count text of a chip.
 fn chip_texts(app: &App, view: Entity) -> (String, String) {
     let refs = app.world().entity(view).get::<ChipRefs>().unwrap();
     let text = |e: Entity| app.world().entity(e).get::<Text>().unwrap().0.clone();
@@ -5571,7 +5426,6 @@ fn activating_a_chip_selects_it_and_fills_it() {
     assert_eq!(background(&app, views[1]), colors.chip_on);
     assert_eq!(background(&app, views[0]), Color::NONE);
 
-    // The active chip stays active when it is activated again.
     activate(&mut app, views[1]);
     assert_eq!(background(&app, views[1]), colors.chip_on);
 }
@@ -5980,7 +5834,6 @@ fn inserting_a_panel_again_sets_the_body_maximum_height_and_keeps_the_corner_mar
     };
     assert_eq!(area(&app), (Val::Px(620.0 + radius_px), radius));
 
-    // A new maximum reaches the scroll area, with the margin of the corners added to it.
     app.world_mut()
         .entity_mut(panel)
         .insert(Panel::new("Trains").with_max_body_height(150.0).unwrap());
@@ -5988,7 +5841,6 @@ fn inserting_a_panel_again_sets_the_body_maximum_height_and_keeps_the_corner_mar
     app.update();
     assert_eq!(area(&app), (Val::Px(150.0 + radius_px), radius));
 
-    // With a footer holding the corners there is no margin to add.
     let footer_text = app
         .world_mut()
         .spawn((Label::caption("Pick a train."), ChildOf(refs.footer())))
@@ -6002,7 +5854,6 @@ fn inserting_a_panel_again_sets_the_body_maximum_height_and_keeps_the_corner_mar
     app.update();
     assert_eq!(area(&app), (Val::Px(90.0), Val::ZERO));
 
-    // Without the footer again, a re-insert does not drop the margin.
     app.world_mut().despawn(footer_text);
     app.update();
     app.world_mut()
@@ -6106,7 +5957,6 @@ fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
         colors.text_secondary
     );
 
-    // The app spawns its control into the slot.
     let control = app
         .world_mut()
         .spawn((Label::regular("control"), ChildOf(refs.control_slot)))
@@ -6231,7 +6081,6 @@ fn of_three_setting_rows_only_the_first_two_show_a_divider() {
     let displays: Vec<Display> = spawned.iter().map(|row| display(&app, *row)).collect();
     assert_eq!(displays, [Display::Flex, Display::Flex, Display::None]);
 
-    // Adding a fourth row moves the missing divider to it.
     let fourth = app
         .world_mut()
         .spawn((SettingRow::new("D", "description"), ChildOf(rows)))
@@ -6360,7 +6209,6 @@ fn a_quiet_frame_leaves_setting_row_dividers_alone_and_a_change_touches_only_its
     let (second, second_rows) = spawn_setting_rows(&mut app, &["C", "D"]);
     let divider =
         |app: &App, row: Entity| app.world().get::<SettingRowRefs>(row).unwrap().divider_id;
-    // Someone else's change to a divider is not undone by a quiet frame.
     let first_divider = divider(&app, first_rows[0]);
     app.world_mut()
         .get_mut::<Node>(first_divider)
@@ -6371,7 +6219,6 @@ fn a_quiet_frame_leaves_setting_row_dividers_alone_and_a_change_touches_only_its
         app.world().get::<Node>(first_divider).unwrap().display,
         Display::None
     );
-    // A change in the second column does not look at the first.
     app.world_mut().entity_mut(second_rows[1]).despawn();
     app.update();
     assert_eq!(
@@ -6538,7 +6385,6 @@ fn clicking_a_tool_of_a_one_toolbar_selects_it_and_fills_it() {
     assert_eq!(background(&app, buttons[2]), colors.accent);
     assert_eq!(background(&app, buttons[0]), Color::NONE);
 
-    // The active tool stays active when it is activated again.
     activate(&mut app, buttons[2]);
     assert_eq!(selected_label(&app, toolbar).as_deref(), Some("Signal"));
     assert_eq!(background(&app, buttons[2]), colors.accent);
@@ -6720,7 +6566,6 @@ fn children_of(app: &App, entity: Entity) -> Vec<Entity> {
         .map_or_default(|children| children.iter().collect())
 }
 
-/// The heading and the cards of each group of a gallery.
 fn gallery_groups(app: &App, gallery: Entity) -> Vec<(String, Vec<Entity>)> {
     children_of(app, gallery)
         .into_iter()
@@ -6759,7 +6604,6 @@ fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
             ChildOf(root),
         ))
         .id();
-    // Present before the first build.
     let mine = app
         .world_mut()
         .spawn((AppOwnedChild, Node::default(), ChildOf(gallery)))
@@ -6770,7 +6614,6 @@ fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
     assert!(app.world().entity(mine).contains::<AppOwnedChild>());
     assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 1);
 
-    // Adding an item in a new group rebuilds the groups.
     let new_item = app
         .world_mut()
         .spawn((card("Passenger", "Wagons"), ItemOf(gallery)))
@@ -6782,7 +6625,6 @@ fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
     assert!(app.world().entity(mine).contains::<AppOwnedChild>());
     assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 2);
 
-    // Changing a group rebuilds again.
     app.world_mut()
         .entity_mut(new_item)
         .get_mut::<Item<GalleryCard>>()
@@ -6796,7 +6638,6 @@ fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
     assert_eq!(gallery_groups_skipping(&app, gallery, mine).len(), 1);
     assert!(children_of(&app, gallery).contains(&mine));
 
-    // A child added after a build is kept through a later rebuild too.
     let later = app
         .world_mut()
         .spawn((AppOwnedChild, Node::default(), ChildOf(gallery)))
@@ -6817,7 +6658,6 @@ fn a_gallery_keeps_children_of_the_app_through_the_first_build_and_rebuilds() {
     assert_eq!(children[0], mine);
 }
 
-/// Like [`gallery_groups`], leaving out the app's own child.
 fn gallery_groups_skipping(app: &App, gallery: Entity, skip: Entity) -> Vec<(String, Vec<Entity>)> {
     let mut app_children = Vec::new();
     let world = app.world();
@@ -6886,7 +6726,6 @@ fn a_gallery_creates_a_card_per_item_under_the_heading_of_its_group() {
             ),
         ]
     );
-    // One vertical divider sits between the two groups.
     let children = children_of(&app, gallery);
     assert_eq!(children.len(), 3);
     assert!(app.world().entity(children[1]).contains::<Divider>());
@@ -7021,7 +6860,6 @@ fn hiding_the_tool_labels_shrinks_the_buttons_and_showing_them_restores_it() {
     app.update();
     app.update();
     assert_eq!(state(&app), (Val::Px(56.0), Val::Px(52.0), Display::None));
-    // The buttons were laid out again, not respawned.
     assert_eq!(toolbar_buttons(&app, toolbar), buttons);
 
     app.world_mut()
@@ -7042,7 +6880,6 @@ fn tick(app: &mut App) {
     app.world_mut().run_schedule(Update);
 }
 
-/// An icon button under a root.
 fn tooltip_app() -> (App, Entity) {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -7141,8 +6978,6 @@ fn a_tooltip_popup_is_a_fixed_child_of_its_node() {
     assert_eq!(popups, [(Some(button), true)]);
 }
 
-/// A tooltip app with a primary window of `window` logical pixels and a laid-out node centred at
-/// `center`, `size` big: the headless app has no layout, so the sizes are set by hand.
 fn placement_app(window: (u32, u32), center: Vec2, size: Vec2) -> (App, Entity) {
     let mut app = headless_app();
     app.world_mut().spawn((
@@ -7172,7 +7007,6 @@ fn placement_app(window: (u32, u32), center: Vec2, size: Vec2) -> (App, Entity) 
     (app, node)
 }
 
-/// Gives the popup a laid-out size of `popup`, places it and returns its `left` and `top`.
 fn placed_popup(app: &mut App, popup_size: Vec2) -> (f32, f32) {
     let popup = {
         let world = app.world_mut();
@@ -7195,8 +7029,6 @@ fn placed_popup(app: &mut App, popup_size: Vec2) -> (f32, f32) {
     (px(node.left).unwrap(), px(node.top).unwrap())
 }
 
-/// Gives `node` the target data Bevy would propagate from its camera: a viewport of `physical`
-/// pixels on a target with `scale_factor` (the headless app has no camera to compute it).
 fn set_render_target(app: &mut App, node: Entity, physical: UVec2, scale_factor: f32) {
     let mut info = ComputedUiRenderTargetInfo::default();
     info.field_mut("physical_size").unwrap().apply(&physical);
@@ -7207,10 +7039,8 @@ fn set_render_target(app: &mut App, node: Entity, physical: UVec2, scale_factor:
 #[test]
 fn a_tooltip_popup_stays_inside_a_restricted_viewport_not_the_primary_window() {
     let popup = Vec2::new(100.0, 20.0);
-    // Without target data the primary window (800 wide) is the space: centred on 390.
     let (mut app, _) = placement_app((800, 600), Vec2::new(390.0, 100.0), Vec2::new(20.0, 20.0));
     assert!((placed_popup(&mut app, popup).0 - 340.0).abs() < 0.01);
-    // A 400 x 300 logical viewport (800 x 600 physical at scale 2) pushes it in from its edge.
     let (mut app, node) = placement_app((800, 600), Vec2::new(390.0, 100.0), Vec2::new(20.0, 20.0));
     set_render_target(&mut app, node, UVec2::new(800, 600), 2.0);
     let (left, _) = placed_popup(&mut app, popup);
@@ -7218,7 +7048,6 @@ fn a_tooltip_popup_stays_inside_a_restricted_viewport_not_the_primary_window() {
         (left + popup.x - (400.0 - 6.0)).abs() < 0.01,
         "left {left} does not keep 6 px from the viewport's right edge"
     );
-    // An empty viewport is unusable data and falls back to the primary window.
     let (mut app, node) = placement_app((800, 600), Vec2::new(390.0, 100.0), Vec2::new(20.0, 20.0));
     set_render_target(&mut app, node, UVec2::ZERO, 1.0);
     assert!((placed_popup(&mut app, popup).0 - 340.0).abs() < 0.01);
@@ -7260,12 +7089,9 @@ fn a_combo_list_stays_inside_the_ui_target_of_its_button_and_falls_back_to_the_w
         };
         left
     };
-    // The button's left edge, 370, fits the window.
     assert!((list_left(None) - 370.0).abs() < 0.01);
-    // A 400 wide viewport keeps the 100 wide list 10 px inside its right edge.
     assert!((list_left(Some((UVec2::new(400, 300), 1.0))) - 290.0).abs() < 0.01);
     assert!((list_left(Some((UVec2::new(800, 600), 2.0))) - 290.0).abs() < 0.01);
-    // Unusable target data falls back to the primary window.
     assert!((list_left(Some((UVec2::ZERO, 1.0))) - 370.0).abs() < 0.01);
 }
 
@@ -7291,10 +7117,8 @@ fn a_tooltip_popup_keeps_six_pixels_from_the_left_and_right_window_edges() {
 fn a_tooltip_popup_is_below_its_node_or_above_it_when_it_would_run_off_the_bottom() {
     let popup = Vec2::new(100.0, 20.0);
     let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
-    // Below: the node's bottom (110) and the 6 px gap.
     assert!((placed_popup(&mut app, popup).1 - 116.0).abs() < 0.01);
     let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 580.0), Vec2::new(20.0, 20.0));
-    // Above: the node's top (570), the gap and the popup's height.
     assert!((placed_popup(&mut app, popup).1 - 544.0).abs() < 0.01);
 }
 
@@ -7375,7 +7199,6 @@ fn a_tooltip_inserted_on_a_node_the_pointer_already_rests_on_shows_after_the_del
     app.world_mut().entity_mut(button).insert(Hovered(true));
     tick(&mut app);
     tick(&mut app);
-    // Removed and inserted again while the pointer stays: `Hovered` does not change.
     app.world_mut().entity_mut(button).remove::<Tooltip>();
     tick(&mut app);
     app.world_mut()
@@ -7395,7 +7218,6 @@ fn a_tooltip_inserted_on_a_node_the_pointer_already_rests_on_shows_after_the_del
 #[test]
 fn a_tooltip_that_was_left_starts_its_delay_again_on_the_next_hover() {
     let (mut app, button) = tooltip_app();
-    // Rest for less than the delay, leave, return: the earlier time must not count.
     app.world_mut().entity_mut(button).insert(Hovered(true));
     tick(&mut app);
     tick(&mut app);
@@ -7466,7 +7288,6 @@ fn a_tooltip_the_app_put_on_an_underlined_toolbar_button_is_kept() {
     );
 }
 
-/// The badge node under `host`, with its text, if there is one.
 fn badge_under(app: &App, host: Entity) -> Option<(Entity, String)> {
     let children = app.world().entity(host).get::<Children>()?;
     children.iter().find_map(|c| {
@@ -7633,7 +7454,6 @@ fn replacing_a_badge_on_a_toolbar_item_updates_its_button_without_a_second_pill(
         colors.pill_background
     );
 
-    // A replacement with another text and tone updates the same pill.
     app.world_mut()
         .entity_mut(item)
         .insert(Badge::new("9+").with_tone(BadgeTone::Warning));
@@ -7647,7 +7467,6 @@ fn replacing_a_badge_on_a_toolbar_item_updates_its_button_without_a_second_pill(
     );
     assert_eq!(description(&app).as_deref(), Some("9+"));
 
-    // An empty replacement removes the overlay and the description.
     app.world_mut().entity_mut(item).insert(Badge::new(""));
     settle(&mut app);
     assert_eq!(pills(&app), 0);
@@ -7704,7 +7523,6 @@ fn a_theme_change_recolours_a_badge_that_did_not_change() {
         ))
         .id();
     settle(&mut app);
-    // Quiet frames change nothing.
     settle(&mut app);
     let (badge, _) = badge_under(&app, button).unwrap();
     assert_eq!(
@@ -7761,7 +7579,6 @@ fn a_panel_keeps_its_sections_and_corner_margin_across_theme_changes_and_quiet_f
         Val::Px(640.0)
     );
 
-    // A new maximum height is applied through a new Panel.
     app.world_mut()
         .entity_mut(panel)
         .insert(Panel::new("Trains").with_max_body_height(100.0).unwrap());
@@ -7811,7 +7628,6 @@ fn a_warning_icon_button_has_the_warning_colours_at_rest_hovered_and_on() {
         light.large_shadow
     );
 
-    // Hovered, under the dark theme.
     let dark = DEFAULT_DARK_THEME_COLORS;
     hover_and_toggle_theme(&mut app, button);
     app.update();
@@ -7821,7 +7637,6 @@ fn a_warning_icon_button_has_the_warning_colours_at_rest_hovered_and_on() {
     assert_eq!(border_top(&app, button), dark.warning_border);
     assert_eq!(icon_tint(&app, button), dark.warning_text);
 
-    // On: a 3 px bar in the border colour.
     app.world_mut().entity_mut(button).insert(ToggleState(true));
     app.update();
     app.update();
@@ -7924,7 +7739,6 @@ fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
         app.update();
         assert_eq!(background(&app, bulldoze), light.danger);
         assert_eq!(tint(&app, bulldoze), light.danger_text);
-        // The neutral tool next to it is untouched.
         assert_eq!(background(&app, buttons[0]), Color::NONE);
     }
 }
@@ -7992,13 +7806,9 @@ fn the_hud_example_builds_and_runs() {
     }
     assert_eq!(ui_root_count(&mut app), 1);
     let world = app.world_mut();
-    // The Trains panel is open at the start, with a row for each of the four trains,
-    // and the Warnings panel is made hidden.
     assert_eq!(world.query::<&Panel>().iter(world).count(), 2);
     assert_eq!(world.query::<&ItemView>().iter(world).count(), 4);
-    // The run-state card has the simulation speed slider.
     assert_eq!(world.query::<&Slider>().iter(world).count(), 1);
-    // Four panel tools and five dock tools.
     assert_eq!(world.query::<&ToolbarButton>().iter(world).count(), 9);
 }
 
@@ -8105,8 +7915,6 @@ fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     }
 }
 
-/// Picks the colour at index 60 of the palette (red-500) for the "accent" row of the theme
-/// editor and returns it.
 fn pick_accent_in_the_theme_editor(app: &mut App) -> Color {
     let combo = {
         let world = app.world_mut();
@@ -8292,8 +8100,6 @@ fn the_overview_example_builds_and_every_page_runs() {
     }
     assert_eq!(ui_root_count(&mut app), 1);
     let bar = single_entity_with::<TabBar>(&mut app);
-    // Showing each page in turn builds it: none of them panics or logs a missing widget, and the
-    // page has its header (the same text as its tab, so a shown page makes two of them).
     let pages = [
         "Buttons",
         "Icon buttons",
@@ -8379,7 +8185,6 @@ fn widgets_with_handles_and_scene_constructors_are_written_directly_in_a_scene()
         app.update();
     }
     let world = app.world_mut();
-    // The panel's close button is an `IconButton` too.
     let button = world
         .query::<&IconButton>()
         .iter(world)
@@ -8390,12 +8195,10 @@ fn widgets_with_handles_and_scene_constructors_are_written_directly_in_a_scene()
     assert_eq!(button.size, IconButtonSize::Large);
     let panel = world.query::<&Panel>().single(world).unwrap();
     assert_eq!(panel.close_icon.as_ref(), Some(&icon));
-    // What is not written is as `Panel::new` has it.
     assert!((panel.max_body_height() - Panel::new("").max_body_height()).abs() < f32::EPSILON);
     let stepper = world.query::<&NumericStepper>().single(world).unwrap();
     assert_eq!(stepper.decrease_name, "Lower");
     assert_eq!(stepper.increase_name, "Increase");
-    // The panel has two dividers of its own; the scene's is the vertical one.
     assert_eq!(
         world
             .query::<(&Divider, &Node)>()
@@ -8483,7 +8286,6 @@ fn scene_app() -> App {
     app
 }
 
-/// Each area's contents entity with the entities below it, and the targets of its scroll bars.
 fn scroll_areas_of(world: &mut World) -> Vec<(Entity, Vec<Entity>, Vec<Entity>)> {
     let areas: Vec<Entity> = world
         .query_filtered::<Entity, With<ScrollArea>>()
@@ -8577,7 +8379,6 @@ fn a_cached_scroll_area_scene_builds_fresh_contents_each_time_it_is_spawned() {
                 .unwrap(),
         )
         .unwrap();
-    // One resolved scene, applied twice: the contents are made again for each.
     patch.spawn(app.world_mut()).unwrap();
     patch.spawn(app.world_mut()).unwrap();
     for _ in 0..4 {
@@ -8711,7 +8512,6 @@ fn a_numeric_stepper_is_a_spin_button_with_numeric_bounds_and_step() {
     assert_eq!(node.value(), Some("2"));
 }
 
-/// A stepper over `value`, returning it and its decrease and increase buttons.
 fn spawn_stepper_of(app: &mut App, value: Value) -> (Entity, Entity, Entity) {
     let stepper = app
         .world_mut()
@@ -8829,7 +8629,6 @@ fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     assert_eq!(stepped_node.value(), Some("2 km"));
     assert_eq!(stepped_node.label(), Some("Distance"));
 
-    // A continuous slider steps by a hundredth of its range.
     let continuous_node = node(&app, continuous);
     assert_eq!(continuous_node.role(), accesskit::Role::Slider);
     assert_eq!(continuous_node.numeric_value(), Some(25.0));
@@ -8848,7 +8647,6 @@ fn a_slider_is_a_slider_node_with_its_value_bounds_and_step() {
     assert_eq!(stepped_node.numeric_value(), Some(7.0));
     assert_eq!(stepped_node.value(), Some("7 km"));
 
-    // Inserted again without a format, it has no value text left.
     app.world_mut()
         .entity_mut(stepped)
         .insert(Slider::new(7.0, 0.0, 10.0).unwrap().with_step(1.0).unwrap());
@@ -8985,8 +8783,6 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
     app.update();
     assert_eq!(radius(&app), BorderRadius::all(Val::Px(3.0)));
 
-    // A value change restyles the thumb but does not write its radius: a radius
-    // the theme would not give is still there after it.
     let own_radius = BorderRadius::all(Val::Px(9.0));
     app.world_mut()
         .entity_mut(thumb)
@@ -8998,7 +8794,6 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
         change: SliderValueChange::Absolute(7.0),
     });
     app.update();
-    // The thumb moved, so the slider was restyled.
     assert_eq!(
         app.world().entity(thumb).get::<Node>().unwrap().left,
         Val::Percent(70.0)
@@ -9006,7 +8801,6 @@ fn a_slider_thumb_takes_the_themes_control_radius_and_keeps_it_while_used() {
     assert_eq!(radius(&app), own_radius);
 }
 
-/// A slider of the headless app, settled, with its thumb and track fill.
 fn settled_slider() -> (App, Entity, Entity, Entity) {
     let mut app = headless_app();
     let world = app.world_mut();
@@ -9114,7 +8908,6 @@ fn a_theme_change_restyles_a_pressed_slider_and_idle_frames_leave_it_alone() {
     let dark = *app.world().get_resource::<Theme>().unwrap().colors();
     assert_eq!(background(&app, thumb), dark.accent);
 
-    // An idle frame does not restyle: a colour set by hand stays.
     let own = Color::srgb(0.1, 0.2, 0.3);
     app.world_mut()
         .entity_mut(thumb)
@@ -9184,7 +8977,6 @@ fn a_list_row_shows_its_items_note_and_follows_changes_to_it() {
     assert_eq!(texts(&mut app, utrecht), ["Utrecht"]);
     assert_eq!(name(&app, utrecht).as_deref(), Some("Utrecht"));
 
-    // Changing a note, adding one and removing one update the rows in place.
     let item_of = |app: &App, view: Entity| app.world().get::<ItemView>(view).unwrap().item_ref;
     let (delft_item, utrecht_item) = (item_of(&app, delft), item_of(&app, utrecht));
     app.world_mut()
@@ -9226,7 +9018,6 @@ fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_the
     };
     let first = spawn_list(world, "First");
     let second = spawn_list(world, "Second");
-    // A third list draws from the first one's items, so one note shows in two lists.
     let sharing = world
         .spawn((
             Node::default(),
@@ -9238,7 +9029,6 @@ fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_the
         app.update();
     }
 
-    // The note text of each row of a list, found through its views.
     let notes_of = |app: &mut App, list: Entity| -> Vec<Entity> {
         let world = app.world_mut();
         let mut views = world.query::<(Entity, &ItemView)>();
@@ -9271,7 +9061,6 @@ fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_the
         (1, 1, 1)
     );
 
-    // Mark every note text so a row that is looked at again shows.
     for note in [first_notes[0], second_notes[0], shared_notes[0]] {
         app.world_mut().get_mut::<Text>(note).unwrap().0 = "stale".to_string();
     }
@@ -9299,7 +9088,6 @@ fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_the
         "an unrelated list is not looked at"
     );
 
-    // Emptying and removing a note still takes the text from the shared rows.
     app.world_mut()
         .entity_mut(first_item)
         .insert(ItemNote::new(""));
@@ -9310,7 +9098,6 @@ fn a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_the
     assert!(app.world().get_entity(shared_notes[0]).is_err());
     assert_eq!(text(&app, second_notes[0]), "stale");
 
-    // A theme change restyles every row.
     app.world_mut()
         .get_resource_mut::<Theme>()
         .unwrap()
@@ -9390,7 +9177,6 @@ fn toasts_with_unusual_durations_do_not_panic_and_the_zero_ones_go_after_a_tick(
     for toast in long {
         assert!(app.world().get_entity(toast).is_ok(), "a capped toast went");
     }
-    // Re-inserting a huge duration on a live entity must not panic either.
     let again = app
         .world_mut()
         .spawn((Toast::new("again"), ChildOf(root)))
@@ -9403,7 +9189,6 @@ fn toasts_with_unusual_durations_do_not_panic_and_the_zero_ones_go_after_a_tick(
     app.update();
 }
 
-/// The option of the toggle that sets `preference`.
 fn light_dark_option(app: &mut App, preference: ThemePreference) -> Entity {
     let world = app.world_mut();
     world
@@ -9414,7 +9199,6 @@ fn light_dark_option(app: &mut App, preference: ThemePreference) -> Entity {
         .unwrap()
 }
 
-/// Tell the app that the system theme became `theme`.
 fn system_theme_changes(app: &mut App, theme: WindowTheme) {
     let window = app
         .world_mut()
@@ -9641,8 +9425,6 @@ fn a_replacement_primary_window_given_the_fixed_theme_before_it_is_read_is_not_t
     app.update();
     app.world_mut().entity_mut(first).despawn();
     app.update();
-    // The replacement appears after `PreUpdate` of its frame, so `Update` writes the fixed theme
-    // before the system theme is first read from it.
     app.world_mut().run_schedule(PreUpdate);
     let second = app
         .world_mut()
@@ -9857,13 +9639,11 @@ fn reinserting_the_scroll_bar_marker_keeps_exactly_one_thumb() {
     let mut app = headless_app();
     let (vertical, _) = two_axis_scroll_area(&mut app);
 
-    // Across frames.
     app.world_mut().entity_mut(vertical).insert(ScrollBar);
     app.update();
     app.update();
     assert_eq!(thumbs_of(&mut app, vertical), 1);
 
-    // Twice before the commands are applied.
     app.world_mut()
         .entity_mut(vertical)
         .insert(ScrollBar)
@@ -9946,7 +9726,6 @@ fn a_scroll_area_gives_its_bottom_margin_back_when_it_stops_being_clear_of_corne
     assert_eq!(margin(&app), Val::ZERO);
 }
 
-/// A control over "Grid" (given an icon) and "List" (without one).
 fn spawn_mixed_icon_control(app: &mut App) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let control = app
@@ -9972,7 +9751,6 @@ fn spawn_mixed_icon_control(app: &mut App) -> Entity {
     control
 }
 
-/// The icon child of a segment, if any.
 fn icon_of(app: &App, segment: Entity) -> Option<Entity> {
     app.world().entity(segment).get::<Children>().and_then(|c| {
         c.iter()
@@ -9980,7 +9758,6 @@ fn icon_of(app: &App, segment: Entity) -> Option<Entity> {
     })
 }
 
-/// The display of the text child of a segment.
 fn label_display(app: &App, segment: Entity) -> Display {
     let label = app
         .world()
@@ -9993,7 +9770,6 @@ fn label_display(app: &App, segment: Entity) -> Display {
     app.world().entity(label).get::<Node>().unwrap().display
 }
 
-/// The entity of the item with the given text.
 fn item_with_text(app: &mut App, text: &'static str) -> Entity {
     app.world_mut()
         .run_system_once(move |items: Query<(Entity, &Item<String>)>| {
@@ -10383,7 +10159,6 @@ fn a_one_and_a_one_or_more_selection_are_repaired_when_their_items_arrive_later(
     );
 }
 
-/// A `Selection::Ref` that points to a holder of a value is followed.
 #[test]
 fn a_selection_ref_to_a_value_resolves_to_its_holder() {
     let mut app = headless_app();
@@ -10393,7 +10168,6 @@ fn a_selection_ref_to_a_value_resolves_to_its_holder() {
         .id();
     let reference = app.world_mut().spawn(Selection::Ref(holder)).id();
     app.update();
-    // `SelectionParam<Entity>` filters on `Entity`, which matches both.
     let got = app
         .world_mut()
         .run_system_once(move |param: SelectionParam| {
@@ -10406,7 +10180,6 @@ fn a_selection_ref_to_a_value_resolves_to_its_holder() {
     assert_eq!(got, (Some(holder), Some(holder)));
 }
 
-/// A `Ref` to an entity without a `Selection` resolves to nothing.
 #[test]
 fn a_selection_ref_to_an_entity_without_a_selection_resolves_to_nothing() {
     let mut app = headless_app();
@@ -10419,7 +10192,6 @@ fn a_selection_ref_to_an_entity_without_a_selection_resolves_to_nothing() {
     );
 }
 
-/// A `Ref` to a despawned entity resolves to nothing.
 #[test]
 fn a_selection_ref_to_a_despawned_entity_resolves_to_nothing() {
     let mut app = headless_app();
@@ -10433,7 +10205,6 @@ fn a_selection_ref_to_a_despawned_entity_resolves_to_nothing() {
     );
 }
 
-/// A `Ref` to its own entity resolves to nothing.
 #[test]
 fn a_selection_ref_to_itself_resolves_to_nothing() {
     let mut app = headless_app();
@@ -10448,7 +10219,6 @@ fn a_selection_ref_to_itself_resolves_to_nothing() {
     );
 }
 
-/// A two-hop chain is not followed: the first `Ref` points to a `Ref`.
 #[test]
 fn a_selection_ref_chain_is_not_followed() {
     let mut app = headless_app();
@@ -10460,7 +10230,6 @@ fn a_selection_ref_chain_is_not_followed() {
     let first = app.world_mut().spawn((Selection::Ref(middle), Marker)).id();
     app.update();
     assert_eq!(resolve_marked(&mut app, first), (None, false, None, false));
-    // One hop still works for the middle `Ref`.
     let middle_ref = app
         .world_mut()
         .run_system_once(move |param: SelectionParam| param.get_ref(middle))
@@ -10468,7 +10237,6 @@ fn a_selection_ref_chain_is_not_followed() {
     assert_eq!(middle_ref, Some(holder));
 }
 
-/// Marks the one `Ref` entity that `resolve_marked` looks at.
 #[derive(Component)]
 struct Marker;
 
@@ -10486,7 +10254,6 @@ fn resolve_marked(app: &mut App, entity: Entity) -> (Option<Entity>, bool, Optio
         .unwrap()
 }
 
-/// An icon button in a root node, counting its [`Activate`]s in [`Activations`].
 fn spawn_counting_icon_button(app: &mut App, tone: Tone, toggle: Option<bool>) -> Entity {
     app.init_resource::<Activations>();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -10520,7 +10287,6 @@ fn a_disabled_icon_button_rests_dimmed_ignores_the_pointer_and_does_not_toggle()
     assert_eq!(background(&app, button), light.background_primary);
     assert_eq!(icon_tint(&app, button), light.text_disabled);
 
-    // Neither hover nor press changes the colours.
     pointer_over_or_out(&mut app, button, true);
     assert_eq!(background(&app, button), light.background_primary);
     assert_eq!(icon_tint(&app, button), light.text_disabled);
@@ -10530,7 +10296,6 @@ fn a_disabled_icon_button_rests_dimmed_ignores_the_pointer_and_does_not_toggle()
     click_and_release(&mut app, button);
     assert_eq!(background(&app, button), light.background_primary);
 
-    // An Activate does not flip the toggle.
     app.world_mut().trigger(Activate { entity: button });
     app.update();
     assert_eq!(
@@ -10538,7 +10303,6 @@ fn a_disabled_icon_button_rests_dimmed_ignores_the_pointer_and_does_not_toggle()
         Some(&ToggleState(false))
     );
 
-    // Once enabled, the button is restyled and toggles again.
     app.world_mut()
         .entity_mut(button)
         .remove::<InteractionDisabled>();
@@ -10619,19 +10383,16 @@ fn a_push_button_with_no_default_hover_rests_at_the_primary_background() {
     assert_eq!(background(&app, owned), light.background_primary);
     assert_eq!(background(&app, plain), light.selected_hovered_item);
 
-    // A theme change under the pointer keeps the owned button at rest too.
     app.world_mut().entity_mut(plain).insert(Hovered(true));
     hover_and_toggle_theme(&mut app, owned);
     assert_eq!(background(&app, owned), dark.background_primary);
     assert_eq!(background(&app, plain), dark.selected_hovered_item);
 }
 
-/// The string of the `Text` on `entity`.
 fn text_of(app: &App, entity: Entity) -> String {
     app.world().entity(entity).get::<Text>().unwrap().0.clone()
 }
 
-/// The accessible label of `entity`.
 fn accessible_label(app: &App, entity: Entity) -> Option<String> {
     app.world()
         .entity(entity)
@@ -10663,7 +10424,6 @@ fn inserting_a_push_button_again_changes_its_text_in_place_and_keeps_its_label_i
         "no second label"
     );
 
-    // The observers were not registered twice.
     app.world_mut().trigger(Activate { entity: button });
     app.update();
     assert_eq!(app.world().get_resource::<Activations>().unwrap().0, 1);
@@ -10797,8 +10557,6 @@ fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
     assert_eq!(background(&app, button), colors.selected_hovered_item);
 }
 
-// ---- Re-pointing a `Selection::Ref` stops the list following the old items ----
-
 #[test]
 fn a_list_pointed_at_other_items_ignores_changes_to_the_old_ones() {
     let mut app = headless_app();
@@ -10854,7 +10612,6 @@ fn a_list_pointed_at_other_items_ignores_changes_to_the_old_ones() {
     app.update();
     assert_eq!(labels(&app), ["x", "y", "z", "w"]);
 
-    // Back to the old items: still one set of views, no duplicate observer effects.
     app.world_mut()
         .entity_mut(list)
         .insert(Selection::reference(old));
@@ -10907,7 +10664,6 @@ fn a_palette_pointed_at_other_items_ignores_changes_to_the_old_ones() {
     assert_eq!(item_views(&app, palette).len(), 5);
 }
 
-/// How many buttons, popups and palettes are descendants of the combo.
 fn palette_combo_parts(app: &mut App, combo: Entity) -> (usize, usize, usize) {
     let world = app.world_mut();
     let entities: Vec<Entity> = world.query::<Entity>().iter(world).collect();
@@ -10924,7 +10680,6 @@ fn palette_combo_parts(app: &mut App, combo: Entity) -> (usize, usize, usize) {
     )
 }
 
-/// Whether `entity` is a descendant of `ancestor`.
 fn is_below(world: &World, entity: Entity, ancestor: Entity) -> bool {
     let mut current = entity;
     while let Some(child_of) = world.entity(current).get::<ChildOf>() {
@@ -10981,7 +10736,6 @@ fn removing_a_color_palette_combo_removes_its_button_popup_and_palette() {
         .is_some_and(|c| !c.is_empty());
     assert!(!has_children, "no children left");
 
-    // And it can be inserted again.
     app.world_mut().entity_mut(combo).insert(ColorPaletteCombo);
     app.update();
     app.update();
@@ -11097,7 +10851,6 @@ fn despawning_a_segmented_control_or_tab_bar_leaves_no_items_observer_on_shared_
     }
     assert_eq!(observers_of(&mut app, selection), before + 2);
 
-    // Inserting the selection again does not add a second observer.
     app.world_mut()
         .entity_mut(control)
         .insert(Selection::reference(selection));
@@ -11128,7 +10881,6 @@ fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
     }
     assert_eq!(chip_views(&app, chips).len(), 2);
 
-    // A change to an item makes the chips look again, and they are built as they should be.
     app.world_mut()
         .get_mut::<Item<Chip>>(item)
         .unwrap()
@@ -11139,7 +10891,6 @@ fn filter_chips_do_not_look_at_their_chips_in_a_frame_without_a_change() {
     assert_eq!(chip_views(&app, chips).len(), 3);
 }
 
-/// Breaks a chips row by hand (one chip view despawned) so only a rebuild repairs it.
 fn break_chips(app: &mut App, chips: Entity) -> Entity {
     let views = chip_views(app, chips);
     let item = app.world().get::<ChipView>(views[1]).unwrap().item();
@@ -11213,7 +10964,6 @@ fn chips_sharing_a_selection_or_items_are_all_rebuilt_by_a_change_to_the_source(
     }
     assert_eq!(chip_views(&app, other).len(), 2);
 
-    // A new item of the source reaches every widget that draws from it, and only those.
     app.world_mut().spawn((
         Item {
             data: Chip::new("Extra"),
@@ -11254,7 +11004,6 @@ fn replacing_the_items_ref_moves_the_chips_to_the_new_source_and_removals_are_se
     settle(&mut app);
     assert_eq!(texts(&app), ["X", "Y", "Z"]);
 
-    // A removal in the old source no longer reaches it; one in the new source does.
     let old_item = app
         .world()
         .get::<ChipView>(chip_views(&app, first)[0])
@@ -11275,7 +11024,6 @@ fn replacing_the_items_ref_moves_the_chips_to_the_new_source_and_removals_are_se
     assert_eq!(texts(&app), ["X", "Y"]);
     assert_eq!(chip_views(&app, second).len(), 2);
 
-    // An item that stays under its owner but stops being a chip.
     let kept = app
         .world()
         .get::<ChipView>(chip_views(&app, second)[0])
@@ -11387,7 +11135,6 @@ fn a_tab_bar_follows_only_the_selection_it_draws_from() {
         "the independent bar is not looked at"
     );
 
-    // Its own selection change does reach it.
     let own = tab_item(&app, second, 1);
     app.world_mut()
         .entity_mut(second)
@@ -11432,7 +11179,6 @@ fn a_segmented_control_follows_only_the_selection_it_draws_from() {
         "the independent control is not looked at"
     );
 
-    // Its own selection change does reach it.
     let own = item_of(&app, second, 1);
     app.world_mut()
         .entity_mut(second)
@@ -11443,7 +11189,7 @@ fn a_segmented_control_follows_only_the_selection_it_draws_from() {
 
 #[test]
 fn reinserting_a_segmented_controls_selection_does_not_change_any_node() {
-    // A write to a `Node`, even of equal values, makes Bevy lay the tree out again (#782).
+    // A write to a `Node`, even of equal values, makes Bevy lay the tree out again.
     let mut app = headless_app();
     let control = spawn_segmented_control(&mut app);
     settle(&mut app);
@@ -11458,7 +11204,6 @@ fn reinserting_a_segmented_controls_selection_does_not_change_any_node() {
         .entity_mut(control)
         .insert(Selection::Value(SelectionValue::One(item)));
     settle(&mut app);
-    // The same selection again: the restyle runs but styles what is already there.
     let nodes: Vec<Entity> = segments_of(&app, control)
         .into_iter()
         .chain([control, indicator_of(&app, control)])
@@ -11530,7 +11275,6 @@ fn replacing_one_controls_selection_restyles_only_that_control() {
         red,
         "the other control's label is not restyled"
     );
-    // The control that changed is themed as usual.
     let colors = DEFAULT_LIGHT_THEME_COLORS;
     assert_eq!(background(&app, first), colors.segmented_track);
     let first_label = app
@@ -11548,7 +11292,6 @@ fn replacing_one_controls_selection_restyles_only_that_control() {
     );
 }
 
-/// The label text colour of a chip.
 fn chip_label_color(app: &App, view: Entity) -> Color {
     let label = app.world().get::<ChipRefs>(view).unwrap().label;
     app.world().get::<TextColor>(label).unwrap().0
@@ -11598,7 +11341,6 @@ fn filter_chips_restyle_only_the_rows_whose_selection_changed() {
         "the independent row is not restyled"
     );
 
-    // Its own selection change does reach it.
     let own = item_of(&app, second, 1);
     app.world_mut()
         .entity_mut(second)
@@ -11634,9 +11376,7 @@ fn a_hover_and_an_item_edit_are_restyled_in_a_frame_where_a_selection_changed() 
         .entity_mut(second_views[0])
         .insert(BackgroundColor(wrong));
 
-    // In one frame: the selection of the first row changes, the pointer reaches a chip of the
-    // second row and an item of the second row is edited. Only `Update` runs, as
-    // `PreUpdate` would put `Hovered` back to false in an app with no pointer.
+    // Only `Update` runs: `PreUpdate` would put `Hovered` back to false in an app with no pointer.
     app.world_mut()
         .entity_mut(first)
         .insert(Selection::Value(SelectionValue::One(wanted)));
@@ -11683,8 +11423,6 @@ fn an_item_edit_restyles_only_the_chips_of_rows_drawing_from_its_items() {
             .item()
     };
     let edited = item(&app, first, 2);
-    // A chip of the edited row that shows another item, the shared row's chip of the edited
-    // item and the other row's chips are knocked out of step.
     let first_views = chip_views(&app, first);
     let shared_views = chip_views(&app, shared);
     let second_views = chip_views(&app, second);
@@ -11752,7 +11490,6 @@ fn a_gallery_does_not_look_at_its_items_in_a_frame_without_a_change() {
     }
     assert_eq!(gallery_groups(&app, gallery), groups);
 
-    // A change to an item makes the gallery look again, and the groups are built as they should be.
     app.world_mut()
         .get_mut::<Item<GalleryCard>>(item)
         .unwrap()
@@ -11772,7 +11509,6 @@ fn a_gallery_still_rebuilds_its_groups_when_the_group_of_an_item_changes() {
     let card = groups[1].1[1];
     let item = app.world().get::<GalleryCardView>(card).unwrap().item();
 
-    // The last card moves to a group of its own; quiet frames before and after change nothing.
     for _ in 0..3 {
         app.update();
     }
@@ -11788,7 +11524,6 @@ fn a_gallery_still_rebuilds_its_groups_when_the_group_of_an_item_changes() {
     assert_eq!(gallery_groups(&app, gallery).len(), 3);
 }
 
-/// An entity with the given items, to draw a selection from through `ItemsRef`.
 fn spawn_item_source(app: &mut App, texts: &[&'static str]) -> Entity {
     let source = app.world_mut().spawn_empty().id();
     for text in texts {
@@ -11839,7 +11574,6 @@ fn reinserting_item_of_moves_an_item_between_item_values() {
     assert_eq!(source_texts(&app, old), ["b"]);
     assert_eq!(source_texts(&app, new), ["c", "a"]);
 
-    // The last item leaving removes the collection, as Bevy's relationships do.
     let last = item_entities_of(&app, old)[0];
     app.world_mut().entity_mut(last).insert(ItemOf(new));
     app.update();
@@ -11889,13 +11623,11 @@ fn replacing_items_ref_refreshes_the_selection_and_the_widget() {
     assert_eq!(selection_labels(&app, control), ["c"]);
     assert_eq!(selected_segments(&app, control), ["c"]);
 
-    // Items of the former source no longer touch the control.
     app.world_mut().spawn((Item::new("e"), ItemOf(old)));
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(segment_texts(&app, control), ["c", "d"]);
-    // And items of the new one do.
     app.world_mut().spawn((Item::new("f"), ItemOf(new)));
     for _ in 0..3 {
         app.update();
@@ -11914,7 +11646,6 @@ fn replacing_items_ref_with_a_source_whose_items_arrive_later_selects_the_first_
     for _ in 0..3 {
         app.update();
     }
-    // Nothing is selected while the source has no items (the selection waits for its first).
     assert!(selection_labels(&app, control).is_empty());
     assert!(selected_segments(&app, control).is_empty());
 
@@ -11977,7 +11708,6 @@ fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the
     assert_eq!(node_display(&app, panel_a), Display::None);
     assert_eq!(node_display(&app, panel_b), Display::Flex);
 
-    // The former source no longer switches the stack.
     let item_a = item_entities_of(&app, first)[0];
     app.world_mut()
         .entity_mut(first)
@@ -11986,7 +11716,6 @@ fn replacing_a_live_stacks_selection_ref_shows_the_new_selection_and_ignores_the
     assert_eq!(node_display(&app, panel_a), Display::None);
     assert_eq!(node_display(&app, panel_b), Display::Flex);
 
-    // Pointing back shows the kept child again, without creating another.
     app.world_mut().entity_mut(stack).insert(Stack {
         selection_ref: first,
     });
@@ -12026,7 +11755,6 @@ fn two_stacks_sharing_a_selection_each_get_a_child_of_their_own() {
     let first = stack_over(&mut app, selection_ref);
     let second = stack_over(&mut app, selection_ref);
 
-    // Both stacks show the selected item, each with a child parented to itself.
     let a_first = children_with::<PanelA>(&mut app, first);
     let a_second = children_with::<PanelA>(&mut app, second);
     assert_eq!((a_first.len(), a_second.len()), (1, 1));
@@ -12034,13 +11762,11 @@ fn two_stacks_sharing_a_selection_each_get_a_child_of_their_own() {
     assert_eq!(node_display(&app, a_first[0]), Display::Flex);
     assert_eq!(node_display(&app, a_second[0]), Display::Flex);
 
-    // Switching shows the matching child in both; nothing is created lazily before it is picked.
     select_one(&mut app, selection_ref, items[2]);
     assert_eq!(count_entities_with::<PanelB>(&mut app), 2);
     assert_eq!(node_display(&app, a_first[0]), Display::None);
     assert_eq!(node_display(&app, a_second[0]), Display::None);
 
-    // A reference reuses the creator's child of each stack, not the other stack's.
     select_one(&mut app, selection_ref, items[1]);
     assert_eq!(children_with::<PanelA>(&mut app, first), a_first);
     assert_eq!(children_with::<PanelA>(&mut app, second), a_second);
@@ -12086,7 +11812,6 @@ fn two_stacks_sharing_a_selection_each_build_their_own_scene_child() {
     for stack in stacks {
         assert_eq!(children_with::<PanelA>(&mut app, stack).len(), 1);
     }
-    // Switching away and back reuses each stack's scene root.
     select_one(&mut app, selection_ref, items[1]);
     select_one(&mut app, selection_ref, items[0]);
     for stack in stacks {
@@ -12123,7 +11848,6 @@ fn despawning_a_stack_leaves_the_other_one_and_a_recreated_stack_gets_new_childr
     assert_eq!(children_with::<PanelA>(&mut app, second), [kept]);
     assert_eq!(node_display(&app, kept), Display::Flex);
 
-    // A new stack over the same items makes its own children; the old stack's are not reused.
     let third = stack_over(&mut app, selection_ref);
     let fresh = children_with::<PanelA>(&mut app, third);
     assert_eq!(fresh.len(), 1);
@@ -12160,7 +11884,6 @@ fn a_stack_over_a_selection_ref_follows_the_selection_it_refers_to() {
     assert_eq!(node_display(&app, panel_a), Display::None);
     assert_eq!(node_display(&app, panel_b), Display::Flex);
 
-    // Despawning the stack leaves nothing that reacts to the selection.
     app.world_mut().entity_mut(stack).despawn();
     select_one(&mut app, source, items[0]);
     for _ in 0..3 {
@@ -12194,9 +11917,6 @@ fn replacing_a_stacks_selection_ref_with_an_entity_without_a_selection_hides_the
     assert_eq!(node_display(&app, panel_a), Display::None);
 }
 
-// ---- ColorPaletteCombo over a selection of many ----
-
-/// Red, blue and green, in that order.
 fn three_colors() -> Vec<Item<Color>> {
     use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
     [RED_500, BLUE_500, GREEN_500]
@@ -12205,7 +11925,6 @@ fn three_colors() -> Vec<Item<Color>> {
         .collect()
 }
 
-/// The items of the selection entity `selection_ref`, in order.
 fn items_of(app: &App, selection_ref: Entity) -> Vec<Entity> {
     app.world()
         .entity(selection_ref)
@@ -12215,13 +11934,11 @@ fn items_of(app: &App, selection_ref: Entity) -> Vec<Entity> {
         .collect()
 }
 
-/// The colour of the square in the palette combo's button.
 fn combo_square(app: &App, button: Entity) -> Color {
     let square = app.world().get::<ColorSquareRef>(button).unwrap().entity();
     app.world().get::<BackgroundColor>(square).unwrap().0
 }
 
-/// The value the palette combo's button tells a screen reader.
 fn combo_value(app: &App, button: Entity) -> String {
     app.world()
         .get::<AccessibilityNode>(button)
@@ -12368,7 +12085,6 @@ fn a_color_palette_combo_with_a_mandatory_selection_that_is_pending_is_transpare
         );
         assert_eq!(combo_value(&app, button), "", "{name}");
 
-        // The first item arrives and the pending selection takes it.
         app.world_mut().spawn((
             Item {
                 data: Color::from(bevy::color::palettes::tailwind::RED_500),
@@ -12430,7 +12146,6 @@ fn a_swatch_click_leaves_the_popup_of_a_palette_combo_over_many_open() {
     }
 }
 
-/// Presses `key_code` once with `list` focused, as a keyboard would.
 fn press_key_on(app: &mut App, key_code: KeyCode) {
     use bevy::input::ButtonState;
     use bevy::input::keyboard::{Key, KeyboardInput};
@@ -12452,8 +12167,6 @@ fn press_key_on(app: &mut App, key_code: KeyCode) {
     app.update();
 }
 
-/// A focused `VirtualList` of three rows over a selection built by `selection`, with the
-/// first row active, and the rows' items.
 fn focused_virtual_list(
     selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
 ) -> (App, Entity, Vec<Entity>) {
@@ -12486,7 +12199,6 @@ fn focused_virtual_list(
     (app, list, items)
 }
 
-/// The items the selection of `list` holds.
 fn selected_items(app: &App, list: Entity) -> Vec<Entity> {
     match app.world().get::<Selection>(list) {
         Some(Selection::Value(value)) => value.iter().collect(),
@@ -12534,7 +12246,6 @@ fn enter_or_space_on_a_selected_virtual_list_row_deselects_it_as_far_as_the_sele
     }
 }
 
-/// The pool row of `list` that shows `item`.
 fn virtual_row_of(app: &mut App, item: Entity) -> Entity {
     let mut rows = app.world_mut().query::<(Entity, &VirtualListRow)>();
     rows.iter(app.world())
@@ -12577,7 +12288,6 @@ fn only_a_primary_click_or_touch_picks_a_virtual_list_row() {
     );
 }
 
-/// What the events of a [`TextField`] and the keys that bubbled past it came to.
 #[derive(Resource, Default)]
 struct TextFieldLog {
     changes: Vec<String>,
@@ -12585,8 +12295,6 @@ struct TextFieldLog {
     bubbled_keys: Vec<KeyCode>,
 }
 
-/// An app with a primary window, a root and one [`TextField`] holding `value`, which logs its
-/// events into [`TextFieldLog`]. The root counts the keys that reach it.
 fn text_field_app(value: &str) -> (App, Entity, Entity, Entity) {
     let mut app = headless_app_with(|app| {
         app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
@@ -12754,7 +12462,6 @@ fn escape_puts_the_text_back_without_a_commit_and_stops_like_enter() {
     );
 }
 
-/// A `u8` stepper from 0 to 9 at `initial` in a text-capable app, with its value label.
 fn scrub_stepper_app(initial: u8) -> (App, Entity, Entity, Entity) {
     let mut app = headless_app_with(|app| {
         app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
@@ -12787,7 +12494,6 @@ fn scrub_stepper_app(initial: u8) -> (App, Entity, Entity, Entity) {
     (app, window, stepper, label)
 }
 
-/// The input of the number editor of `stepper`, if one is open.
 fn scrub_editor_input(app: &App, stepper: Entity) -> Option<Entity> {
     app.world()
         .entity(stepper)
@@ -12801,7 +12507,6 @@ fn scrub_editor_input(app: &App, stepper: Entity) -> Option<Entity> {
         })
 }
 
-/// Opens the number editor with a click on the value and types `text` into it.
 fn open_scrub_editor_and_type(app: &mut App, stepper: Entity, label: Entity, text: &str) -> Entity {
     click_and_release(app, label);
     for _ in 0..3 {
@@ -12860,7 +12565,6 @@ fn text_that_is_not_a_number_changes_nothing_and_closes_the_editor() {
     assert!(scrub_editor_input(&app, stepper).is_none());
 }
 
-/// Gives `stepper` a laid-out width of 100 logical pixels, which a scrub measures against.
 fn give_width(app: &mut App, stepper: Entity) {
     app.world_mut().entity_mut(stepper).insert(ComputedNode {
         size: Vec2::new(100.0, 20.0),
@@ -12869,7 +12573,6 @@ fn give_width(app: &mut App, stepper: Entity) {
     });
 }
 
-/// A press of `button` on `target` followed by a drag of `dx` logical pixels.
 fn press_and_drag(app: &mut App, target: Entity, button: PointerButton, dx: f32) {
     app.world_mut().trigger(PointerPress {
         entity: target,
@@ -12888,7 +12591,6 @@ fn press_and_drag(app: &mut App, target: Entity, button: PointerButton, dx: f32)
     app.update();
 }
 
-/// The width of the `ScrubFill` under `stepper`, as a percentage.
 fn fill_percent(app: &App, stepper: Entity) -> f32 {
     let track = app.world().entity(stepper).get::<Children>().unwrap()[0];
     let fill = app
@@ -13008,9 +12710,6 @@ fn a_slider_gives_the_label_margin_back_when_inserted_again_without_a_format() {
     assert_eq!(margin(&app), Val::Px(0.0));
 }
 
-/// A scroll-contents node for `scroll_into_view`: 100 by 100 logical pixels at the window's top
-/// left, its content 400 by 400, scrolling along the axes given, drawn at `scale`. The headless
-/// app has no layout, so the sizes and places are set by hand.
 fn scrolling_contents(
     app: &mut App,
     parent: Option<Entity>,
@@ -13039,8 +12738,6 @@ fn scrolling_contents(
     area.id()
 }
 
-/// A 20 by 20 logical pixel target in `parent`, whose top left the layout last put at `visible`
-/// logical pixels from the window's top left (already shifted by the scroll position).
 fn target_at(app: &mut App, parent: Option<Entity>, visible: Vec2, scale: f32) -> Entity {
     let mut target = app.world_mut().spawn((
         Node::default(),
@@ -13074,12 +12771,10 @@ const SCROLL_X: Overflow = Overflow {
 
 #[test]
 fn a_horizontal_area_scrolls_a_target_sideways_and_leaves_the_vertical_axis_alone() {
-    // Past the right and the bottom edge: only x moves, as y does not scroll.
     let mut app = headless_app();
     let area = scrolling_contents(&mut app, None, SCROLL_X, Vec2::ZERO, 1.0);
     let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
     scroll_to(&mut app, target);
-    // Right edge at 170 plus the 3 px ring, in a 100 px view.
     assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 0.0));
 }
 
@@ -13098,13 +12793,11 @@ fn a_two_way_area_scrolls_both_axes_to_show_a_target_with_its_ring() {
     let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
     let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 1.0);
     scroll_to(&mut app, target);
-    // The target ends 3 px from the view's right and bottom edges, not touching them.
     assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 73.0));
 }
 
 #[test]
 fn a_target_scrolled_in_from_before_the_start_clamps_to_zero_not_below() {
-    // The target lies 1 px into the contents, so with its ring it starts at -2.
     let mut app = headless_app();
     let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(200.0), 1.0);
     let target = target_at(&mut app, Some(area), Vec2::splat(-199.0), 1.0);
@@ -13114,7 +12807,6 @@ fn a_target_scrolled_in_from_before_the_start_clamps_to_zero_not_below() {
 
 #[test]
 fn a_target_before_the_view_scrolls_back_to_show_its_ring() {
-    // The target is at 50 in the contents, the view starts at 200: the ring starts at 47.
     let mut app = headless_app();
     let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::splat(200.0), 1.0);
     let target = target_at(&mut app, Some(area), Vec2::splat(-150.0), 1.0);
@@ -13138,7 +12830,6 @@ fn a_horizontal_area_scrolls_the_same_logical_distance_at_scale_factor_two() {
     let target = target_at(&mut app, Some(area), Vec2::new(150.0, 150.0), 2.0);
     scroll_to(&mut app, target);
     assert_eq!(scroll_of(&app, area), Vec2::new(73.0, 0.0));
-    // And back to the start, clamped to 0.
     let back = target_at(&mut app, Some(area), Vec2::new(-72.0, 0.0), 2.0);
     scroll_to(&mut app, back);
     assert_eq!(scroll_of(&app, area), Vec2::ZERO);
@@ -13147,10 +12838,8 @@ fn a_horizontal_area_scrolls_the_same_logical_distance_at_scale_factor_two() {
 #[test]
 fn a_target_outside_any_scroll_area_is_left_alone_without_a_panic() {
     let mut app = headless_app();
-    // No parent at all.
     let loose = target_at(&mut app, None, Vec2::splat(500.0), 1.0);
     scroll_to(&mut app, loose);
-    // A parent that scrolls but is not a `ScrollContents`.
     let parent = app
         .world_mut()
         .spawn((
@@ -13213,7 +12902,6 @@ fn a_target_at_the_end_of_the_contents_stops_at_the_last_scroll_position_at_any_
     }
 }
 
-/// The accessible value of `entity`.
 fn accessible_value(app: &App, entity: Entity) -> Option<String> {
     app.world()
         .get::<AccessibilityNode>(entity)
@@ -13222,7 +12910,6 @@ fn accessible_value(app: &App, entity: Entity) -> Option<String> {
         .map(str::to_string)
 }
 
-/// The text of a combo button's label.
 fn combo_label(app: &App, button: Entity) -> String {
     let label = app.world().get::<PushButtonRefs>(button).unwrap().label();
     app.world().get::<Text>(label).unwrap().0.clone()
@@ -13254,7 +12941,6 @@ fn a_combo_shows_its_placeholder_while_nothing_is_selected_and_the_selection_aft
     assert_eq!(combo_label(&app, button), "Pick a country");
     assert_eq!(accessible_value(&app, button), Some(String::new()));
 
-    // Select the first item through the open popup.
     click(&mut app, button);
     app.update();
     let list = app.world().get::<ComboRefs>(combo).unwrap().list();
@@ -13284,8 +12970,6 @@ fn inserting_a_placeholder_changes_the_text_of_a_live_combo() {
     assert_eq!(accessible_value(&app, button), Some(String::new()));
 }
 
-/// The `ScrollContents` of the area `two_axis_scroll_area` spawned, given a laid-out `size` and
-/// `content_size` (headless apps have no layout).
 fn lay_out_scroll_contents(app: &mut App, size: Vec2, content_size: Vec2) {
     let contents = {
         let world = app.world_mut();
@@ -13310,14 +12994,12 @@ fn bar_visibility(app: &App, bar: Entity) -> Visibility {
 fn changing_the_headless_orientation_shows_or_hides_the_bar_by_its_new_axis() {
     let mut app = headless_app();
     let (vertical, horizontal) = two_axis_scroll_area(&mut app);
-    // Taller than the area, no wider than it.
     lay_out_scroll_contents(&mut app, Vec2::new(100.0, 100.0), Vec2::new(100.0, 300.0));
     app.update();
     app.update();
     assert_eq!(bar_visibility(&app, vertical), Visibility::Inherited);
     assert_eq!(bar_visibility(&app, horizontal), Visibility::Hidden);
 
-    // Swap the axes of the two bars without the contents changing at all.
     app.world_mut()
         .get_mut::<Scrollbar>(vertical)
         .unwrap()
@@ -13382,7 +13064,6 @@ fn an_app_owned_child_of_a_scroll_bar_survives_theming_and_reinserting_the_marke
         );
     };
 
-    // A theme change restyles the bar and its thumb, not the app's child.
     let mode = app.world().get_resource::<Theme>().unwrap().mode();
     let other = if mode == ThemeMode::Light {
         ThemeMode::Dark
@@ -13398,7 +13079,6 @@ fn an_app_owned_child_of_a_scroll_bar_survives_theming_and_reinserting_the_marke
     unchanged(&app);
     assert_eq!(thumbs_of(&mut app, vertical), 1);
 
-    // So does inserting the marker again.
     app.world_mut().entity_mut(vertical).insert(ScrollBar);
     app.update();
     app.update();
@@ -13466,7 +13146,6 @@ fn reinserting_a_numeric_stepper_updates_every_setting_without_duplicating_its_p
     assert_eq!(node.label(), Some("Level"));
     assert_eq!(node.value(), Some("Ground"));
 
-    // The new buttons step the value once each, through one observer.
     activate(&mut app, children[3]);
     assert_eq!(stepper_value(&app, stepper), 1);
     assert_eq!(app.world().get::<Text>(children[2]).unwrap().0, "+1");
@@ -13624,8 +13303,6 @@ fn two_roots_each_get_their_own_toast_stack() {
         .spawn((Toast::new("Saved"), ChildOf(first)))
         .id();
     app.update();
-    // The second root's toast has the same text and must not join (or be
-    // dropped for) the first root's stack.
     let b = app
         .world_mut()
         .spawn((Toast::new("Saved"), ChildOf(second)))
@@ -13659,7 +13336,6 @@ fn same_frame_duplicate_toasts_restart_the_kept_one_with_the_latest_duration() {
             .spawn((Toast::new("Saved").with_duration(duration), ChildOf(root)))
             .id()
     };
-    // One update: three duplicates under one parent, one under another.
     let kept = spawn(&mut app, first_root, 0.5);
     let dup_a = spawn(&mut app, first_root, 1.0);
     let dup_b = spawn(&mut app, first_root, 3.0);
@@ -13676,8 +13352,6 @@ fn same_frame_duplicate_toasts_restart_the_kept_one_with_the_latest_duration() {
         app.world().get_entity(other).is_ok(),
         "another parent's toast was dropped"
     );
-    // After about 2 s the kept toast (restarted to 3 s by the last duplicate)
-    // lives, and the other parent's 0.5 s toast is gone.
     for _ in 0..7 {
         app.update();
     }
@@ -13698,7 +13372,6 @@ fn same_frame_duplicate_toasts_restart_the_kept_one_with_the_latest_duration() {
     );
 }
 
-/// A headless app with a root node, for the toast tests below.
 fn toast_app() -> (App, Entity) {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
@@ -13740,7 +13413,6 @@ fn the_toast_stack_sits_at_the_placement_bottom_and_follows_a_change_of_it() {
     app.update();
     assert_eq!(bottom(&app), Val::Px(90.0), "the existing stack moved");
 
-    // A stack made later starts at the new distance.
     let other = app.world_mut().spawn(Node::default()).id();
     app.world_mut().spawn((Toast::new("Other"), ChildOf(other)));
     for _ in 0..3 {
@@ -13765,7 +13437,6 @@ fn a_stack_made_after_idle_frames_gets_a_placement_set_before_it_and_left_unchan
         .get_resource_mut::<ToastPlacement>()
         .unwrap()
         .bottom = Val::Px(70.0);
-    // Idle frames: no toast, no stack, placement unchanged.
     for _ in 0..5 {
         app.update();
     }
@@ -13798,7 +13469,6 @@ fn bursts_of_toasts_under_many_parents_keep_one_stack_each_across_idle_frames() 
         parents
             .iter()
             .flat_map(|parent| {
-                // Two same-text toasts per parent: the second is a duplicate.
                 [0, 1].map(|_| {
                     app.world_mut()
                         .spawn((Toast::new(text).with_duration(1000.0), ChildOf(*parent)))
@@ -13819,7 +13489,6 @@ fn bursts_of_toasts_under_many_parents_keep_one_stack_each_across_idle_frames() 
             .count()
     };
     assert_eq!(alive(&app, &first), 20, "duplicates are dropped per parent");
-    // Idle frames, then a second burst with the same and with a new text.
     for _ in 0..10 {
         app.update();
     }
@@ -13951,7 +13620,6 @@ fn the_toast_stack_is_absolute_above_everything_and_ignores_the_pointer() {
     assert_eq!(app.world().get::<Pickable>(toast), Some(&Pickable::IGNORE));
 }
 
-/// The accessibility node of `entity`: role, label, value and description.
 fn access_of(
     app: &App,
     entity: Entity,
@@ -14011,7 +13679,6 @@ fn replacing_a_kbd_pill_and_label_updates_text_and_accessibility_and_empty_text_
         DEFAULT_LIGHT_THEME_COLORS.text_secondary
     );
 
-    // Empty text keeps the entity, its container layout and its accessibility node.
     app.world_mut().entity_mut(kbd).insert(Kbd::new(""));
     app.world_mut().entity_mut(pill).insert(Pill::new(""));
     app.world_mut().entity_mut(label).insert(Label::regular(""));
@@ -14105,8 +13772,6 @@ fn replacing_a_toast_updates_its_text_and_label_and_keeps_one_entity_in_its_plac
         app.update();
     }
 
-    // Replacing the older toast changes it in place and restarts its timer; it is not
-    // re-stacked.
     app.world_mut()
         .entity_mut(first)
         .insert(Toast::new("Uno").with_duration(2.0));
@@ -14125,7 +13790,6 @@ fn replacing_a_toast_updates_its_text_and_label_and_keeps_one_entity_in_its_plac
     assert!(app.world().get_entity(first).is_err());
     assert!(app.world().get_entity(second).is_ok());
 
-    // Empty text keeps the card and the normal lifetime, and nonempty text comes back.
     app.world_mut()
         .entity_mut(second)
         .insert(Toast::new("").with_duration(1.0));
@@ -14164,7 +13828,6 @@ fn a_badge_on_a_host_without_an_accessibility_node_describes_it_once_the_node_ap
     settle(&mut app);
     assert_eq!(access_of(&app, host).3.as_deref(), Some("5"));
 
-    // An empty badge then clears the description again.
     app.world_mut().entity_mut(host).insert(Badge::new(""));
     settle(&mut app);
     assert_eq!(access_of(&app, host).3, None);
@@ -14223,7 +13886,6 @@ fn replacing_a_label_with_an_overline_uppercases_it_and_spaces_its_letters_and_b
     );
 }
 
-/// The `Entity` in the reflected field `name` of the component `C` on `entity`.
 fn reflected_entity<C: Component + Struct>(
     app: &App,
     entity: Entity,
@@ -14320,12 +13982,8 @@ fn the_item_and_owner_of_a_selection_view_are_read_by_getters_and_by_reflection(
     assert_eq!(button_ref.owner(), toolbar);
 }
 
-// ---- FilterCombo ----
-
 const CITIES: [&str; 4] = ["Amsterdam", "Delft", "Den Haag", "Utrecht"];
 
-/// A [`FilterCombo`] over [`CITIES`] (or other names) with its parts, in an app with a window
-/// and a text input.
 struct FilterApp {
     app: App,
     window: Entity,
@@ -14457,7 +14115,6 @@ impl FilterApp {
         self.key_with(key_code, key, text, false);
     }
 
-    /// Types `text` one character at a time.
     fn type_text(&mut self, text: &str) {
         for character in text.chars() {
             let s = character.to_string();
@@ -14494,7 +14151,6 @@ impl FilterApp {
         self.settle();
     }
 
-    /// Pastes `text` into the search box as one edit.
     fn paste(&mut self, text: &str) {
         let input = self.refs.input();
         self.app
@@ -14510,7 +14166,6 @@ impl FilterApp {
         input_text(&self.app, self.refs.input())
     }
 
-    /// The labels of the rows that show, in order.
     fn shown(&self) -> Vec<String> {
         self.rows()
             .into_iter()
@@ -14567,7 +14222,6 @@ impl FilterApp {
             .item_ref
     }
 
-    /// The label of the row marked active, if any.
     fn active(&mut self) -> Option<String> {
         let world = self.app.world_mut();
         let mut query = world.query::<(Entity, &ItemView, &Outline)>();
@@ -14660,7 +14314,6 @@ fn typing_filters_the_options_by_case_insensitive_substring_in_source_order() {
     fa.backspace();
     assert_eq!(fa.shown(), CITIES);
     fa.type_text("e");
-    // Amst(e)rdam, D(e)lft, D(e)n Haag, Utr(e)cht.
     assert_eq!(fa.shown(), CITIES);
     fa.type_text("n");
     assert_eq!(fa.shown(), ["Den Haag"]);
@@ -14713,7 +14366,6 @@ fn a_query_with_no_match_shows_the_empty_line_and_enter_does_nothing() {
     assert_eq!(fa.state(), ComboState::Open);
     assert!(fa.selected().is_empty());
     assert_eq!(fa.focus(), Some(fa.refs.input()));
-    // Clearing the query brings every option back.
     for _ in 0..3 {
         fa.backspace();
     }
@@ -14726,9 +14378,7 @@ fn arrow_keys_move_the_active_option_through_the_matches_only_and_wrap() {
     let mut fa = filter_app();
     fa.open();
     fa.type_text("e");
-    // All four match "e"; narrow to Delft, Den Haag with "de".
     fa.type_text("d");
-    // "ed" matches nothing; replace it.
     fa.backspace();
     fa.backspace();
     fa.type_text("de");
@@ -14740,7 +14390,6 @@ fn arrow_keys_move_the_active_option_through_the_matches_only_and_wrap() {
     assert_eq!(fa.active().as_deref(), Some("Delft"));
     fa.key(KeyCode::ArrowUp);
     assert_eq!(fa.active().as_deref(), Some("Den Haag"));
-    // Navigation alone selects nothing, and typing goes on after it.
     assert!(fa.selected().is_empty());
     fa.type_text("n");
     assert_eq!(fa.query_text(), "den");
@@ -14784,7 +14433,6 @@ fn enter_picks_the_original_item_of_a_single_selection_and_closes_with_the_focus
     assert_eq!(fa.state(), ComboState::Closed);
     assert_eq!(fa.focus(), Some(fa.refs.button()));
     assert_eq!(fa.button_text(), "Utrecht");
-    // Reopening starts unfiltered, with the selected option active.
     fa.open();
     assert_eq!(fa.query_text(), "");
     assert_eq!(fa.shown(), CITIES);
@@ -14818,7 +14466,6 @@ fn a_selection_of_many_stays_open_with_its_query_after_enter() {
     fa.key(KeyCode::Enter);
     assert_eq!(fa.selected(), ["Delft", "Den Haag"]);
     assert_eq!(fa.state(), ComboState::Open);
-    // Enter on a selected option deselects it, as a click does.
     fa.key(KeyCode::Enter);
     assert_eq!(fa.selected(), ["Delft"]);
 }
@@ -14872,7 +14519,6 @@ fn filtering_never_changes_the_selection_and_a_hidden_selected_option_stays_sele
             .entity(fa.row_of("Utrecht"))
             .contains::<Selected>()
     );
-    // Arrow keys and clearing the query change nothing either.
     fa.key(KeyCode::ArrowDown);
     for _ in 0..3 {
         fa.backspace();
@@ -14914,7 +14560,6 @@ fn escape_closes_without_picking_and_reopening_starts_unfiltered() {
     fa.type_text("f");
     fa.key(KeyCode::Escape);
     assert_eq!(fa.state(), ComboState::Closed);
-    // The earlier pick stays; the unconfirmed active option was not applied.
     assert_eq!(fa.selected(), ["Delft"]);
     assert_eq!(fa.focus(), Some(fa.refs.button()));
     fa.open();
@@ -15032,7 +14677,6 @@ fn added_removed_and_renamed_items_are_filtered_while_the_popup_is_open() {
     fa.open();
     fa.type_text("de");
     assert_eq!(fa.shown(), ["Delft", "Den Haag"]);
-    // A new item that matches shows; one that does not stays hidden.
     fa.app
         .world_mut()
         .spawn((Item::new("Deventer"), ItemOf(fa.combo)));
@@ -15041,7 +14685,6 @@ fn added_removed_and_renamed_items_are_filtered_while_the_popup_is_open() {
         .spawn((Item::new("Zwolle"), ItemOf(fa.combo)));
     fa.settle();
     assert_eq!(fa.shown(), ["Delft", "Den Haag", "Deventer"]);
-    // A rename brings an item in and takes another out.
     let utrecht = fa.item_of("Utrecht");
     let delft = fa.item_of("Delft");
     fa.app
@@ -15058,7 +14701,6 @@ fn added_removed_and_renamed_items_are_filtered_while_the_popup_is_open() {
         .data = "Gouda".to_string();
     fa.settle();
     assert_eq!(fa.shown(), ["Den Haag", "Delden", "Deventer"]);
-    // The active option going away moves it to the first match.
     assert_eq!(fa.active().as_deref(), Some("Den Haag"));
     let den_haag = fa.item_of("Den Haag");
     fa.app.world_mut().entity_mut(den_haag).despawn();
@@ -15104,7 +14746,6 @@ fn renaming_an_item_of_another_source_does_not_rematch_an_open_filter_combo() {
         Display::None,
         "a rename in an unrelated source rematched the combo"
     );
-    // A rename in its own source does rematch it, keeping case-insensitive matching.
     let utrecht = fa.item_of("Utrecht");
     fa.app
         .world_mut()
@@ -15169,7 +14810,6 @@ fn a_clicked_option_picks_by_the_same_rules_and_a_click_outside_closes_without_p
     let mut fa = filter_app();
     fa.open();
     fa.type_text("utr");
-    // A release on nothing: the pointer is on neither the button nor the popup.
     fa.app
         .world_mut()
         .write_message(bevy::picking::pointer::PointerInput::new(
@@ -15190,7 +14830,6 @@ fn the_search_box_and_the_button_tell_a_screen_reader_how_they_belong_together()
     let mut fa = filter_app();
     let (button, input, list) = (fa.refs.button(), fa.refs.input(), fa.refs.list());
     let id = |e: Entity| accesskit::NodeId(e.to_bits());
-    // Closed: the button is a collapsed combo box with the selection as its value.
     assert_eq!(fa.node(button).role(), accesskit::Role::ComboBox);
     assert_eq!(fa.node(button).is_expanded(), Some(false));
     assert_eq!(fa.node(button).controls(), [id(list)]);
@@ -15217,17 +14856,14 @@ fn the_search_box_and_the_button_tell_a_screen_reader_how_they_belong_together()
         fa.node(input).active_descendant(),
         Some(id(fa.row_of("Delft")))
     );
-    // Excluded rows are out of the tree; the shown one is in it.
     assert!(fa.node(fa.row_of("Amsterdam")).is_hidden());
     assert!(!fa.node(fa.row_of("Delft")).is_hidden());
-    // Zero results: no active descendant, and a status line in the tree.
     fa.type_text("x");
     assert_eq!(fa.node(input).active_descendant(), None);
     let empty = fa.refs.empty();
     assert!(!fa.node(empty).is_hidden());
     assert_eq!(fa.node(empty).role(), accesskit::Role::Status);
     assert_eq!(fa.node(empty).label(), Some("No matching items"));
-    // Closed again: nothing points at a row.
     fa.key(KeyCode::Escape);
     assert_eq!(fa.node(input).active_descendant(), None);
     assert_eq!(fa.node(button).is_expanded(), Some(false));
@@ -15297,7 +14933,6 @@ fn despawning_a_filter_combo_leaves_nothing_behind() {
     fa.app.world_mut().entity_mut(combo).despawn();
     fa.settle();
     assert!(fa.app.world().get_entity(input).is_err());
-    // Keys with the old focus do nothing and do not panic.
     fa.key(KeyCode::ArrowDown);
     fa.key(KeyCode::Enter);
     let mut parts = fa.app.world_mut().query::<&FilterComboRefs>();
@@ -15325,7 +14960,6 @@ fn an_ordinary_combo_is_unchanged_next_to_a_filter_combo() {
         .entity_mut(combo)
         .insert(ComboState::Open);
     fa.settle();
-    // Its focus is on its own list; the filter combo's search box is untouched.
     assert_eq!(fa.focus(), Some(list));
     fa.key(KeyCode::ArrowDown);
     fa.key(KeyCode::Enter);
@@ -15365,8 +14999,6 @@ fn shift_tab_to_the_button_closes_the_popup_without_picking_but_a_press_on_it_do
     assert_eq!(fa.focus(), Some(fa.refs.button()));
 }
 
-// ---- ThemeEditor (the library widget) ----
-
 use bevy_pluim::theme_editor::{
     ThemeEditor, ThemeEditorRefs, ThemeParameterEditor, theme_parameters,
 };
@@ -15393,7 +15025,6 @@ fn every_number_of_the_theme_has_a_row_in_the_theme_editor() {
             );
         }
     }
-    // Names are unique.
     let mut sorted = names.clone();
     sorted.sort_unstable();
     sorted.dedup();
@@ -15419,7 +15050,6 @@ fn a_theme_parameter_reads_what_it_sets_and_stays_in_its_range() {
         let middle = f32::midpoint(parameter.min, parameter.max).round();
         parameter.apply(&mut theme, middle);
         assert!((parameter.value(&theme) - middle).abs() < f32::EPSILON);
-        // Only that number moved.
         let mut expected = Theme::default();
         parameter.apply(&mut expected, middle);
         assert_eq!(format!("{theme:?}"), format!("{expected:?}"));
@@ -15570,7 +15200,6 @@ fn the_theme_editor_is_a_library_widget_that_needs_no_example_code() {
         slots,
         bevy_pluim::theme_editor::editable_color_slots().len()
     );
-    // Despawning it takes everything with it, the colours it chooses from included.
     app.world_mut().entity_mut(editor).despawn();
     for _ in 0..2 {
         app.update();
@@ -15600,9 +15229,6 @@ fn the_theme_editor_example_exports_the_numbers_as_a_theme_function() {
     );
 }
 
-// ---- ThemeEditor: values the rows cannot show as they are (#611) ----
-
-/// Runs `frames` updates of `app` and returns the `warn!` messages logged meanwhile.
 fn warnings_during(app: &mut App, frames: usize) -> Vec<String> {
     use bevy::log::tracing::{self, Level, field::Visit};
     use bevy::log::tracing_subscriber::{self, layer::SubscriberExt};
@@ -15647,8 +15273,6 @@ fn warnings_during(app: &mut App, frames: usize) -> Vec<String> {
     seen.lock().unwrap().clone()
 }
 
-/// An app whose `Theme` is edited by `edit` before a `ThemeEditor` is spawned, and the warnings
-/// logged while the editor built and showed it.
 fn theme_editor_over(edit: impl FnOnce(&mut Theme)) -> (App, Vec<String>) {
     let mut app = headless_app();
     edit(&mut app.world_mut().get_resource_mut::<Theme>().unwrap());
@@ -15690,7 +15314,6 @@ fn a_theme_number_above_its_range_still_has_a_row_with_the_range_widened_to_it()
         assert_eq!(value.as_f32(), Some(shown), "{name}");
     }
 
-    // Stepping stays inside the widened range: down to 49, and 50 is still the top.
     let stepper = editor_stepper(&mut app, "control_radius");
     assert!(
         !app.world()
@@ -15711,7 +15334,6 @@ fn a_theme_number_above_its_range_still_has_a_row_with_the_range_widened_to_it()
         app.world().get_resource::<Theme>().unwrap().control_radius,
         Val::Px(49.0)
     );
-    // A later change of the theme to another out-of-range value widens the live row too.
     app.world_mut()
         .get_resource_mut::<Theme>()
         .unwrap()
@@ -15750,7 +15372,6 @@ fn a_theme_number_that_is_nan_still_has_a_row_at_its_minimum_and_a_warning_names
             "{name}: {warnings:?}"
         );
     }
-    // The theme keeps the value until a step sets it.
     assert!(
         app.world()
             .get_resource::<Theme>()
@@ -15787,14 +15408,12 @@ fn a_theme_number_that_is_not_in_pixels_shows_0_and_is_warned_about_once() {
             "{name}: {warnings:?}"
         );
     }
-    // The warning is not repeated when the theme changes again ...
     app.world_mut()
         .get_resource_mut::<Theme>()
         .unwrap()
         .panel_radius = Val::Px(12.0);
     let again = warnings_during(&mut app, 3);
     assert!(again.is_empty(), "{again:?}");
-    // ... and stepping turns the value into pixels.
     step_editor_to(&mut app, "border_thickness", 2.0);
     assert_eq!(
         app.world()
@@ -15905,7 +15524,6 @@ fn a_tooltip_stays_hidden_while_a_numeric_stepper_is_scrubbed() {
     );
 }
 
-/// Replaces the node as Bevy's own resets do (a plain button with no label), through `DerefMut`.
 fn reset_accessibility_node(app: &mut App, entity: Entity) {
     let mut node = app
         .world_mut()
@@ -16122,7 +15740,6 @@ fn a_link_and_buttons_restore_their_accessibility_nodes_after_a_reset_and_idle_f
     assert_eq!(accessibility_node_of(&app, push).toggled(), None);
 }
 
-/// Spawns `controls` icon-only segmented controls of `segments` items each, and returns them.
 fn spawn_many_icon_controls(app: &mut App, controls: usize, segments: usize) -> Vec<Entity> {
     let root = app.world_mut().spawn(Node::default()).id();
     let ids: Vec<Entity> = (0..controls)
@@ -16198,7 +15815,6 @@ fn many_icon_segmented_controls_keep_one_icon_and_hidden_label_per_segment() {
     }
 }
 
-/// How many children of `track` are named `name`: the sliding indicators of a track.
 fn indicators_named(app: &App, track: Entity, name: &str) -> Vec<Entity> {
     app.world()
         .entity(track)
@@ -16215,7 +15831,6 @@ fn indicators_named(app: &App, track: Entity, name: &str) -> Vec<Entity> {
         })
 }
 
-/// One of each track widget that has a sliding indicator, with the indicator's name.
 fn spawn_indicator_tracks(app: &mut App) -> [(Entity, &'static str); 3] {
     let root = app.world_mut().spawn(Node::default()).id();
     let items = || {
@@ -16364,7 +15979,6 @@ fn a_track_that_gains_its_widget_later_gets_one_indicator() {
     );
 }
 
-/// The labels shown by the views of `list`, in the order of the list.
 fn view_labels(app: &App, list: Entity) -> Vec<String> {
     item_views(app, list)
         .into_iter()
@@ -16484,7 +16098,6 @@ fn a_list_of_thousands_of_items_gets_one_view_each_and_marks_the_selected_one() 
     assert_eq!(selected_labels(&app, list), ["item 0"]);
 }
 
-/// A closed palette combo over `selection` (two colours): the combo and its palette.
 fn closed_palette_combo_over(app: &mut App, selection: impl Bundle) -> (Entity, Entity) {
     app.world_mut().spawn((Window::default(), PrimaryWindow));
     let root = app.world_mut().spawn(Node::default()).id();
@@ -16523,7 +16136,6 @@ fn a_reopened_color_palette_combo_shows_the_selection_changed_while_it_was_close
     let mut app = headless_app();
     let (_, palette) = closed_palette_combo_over(&mut app, two_color_selection());
     let button = single_entity_with::<ColorPushButton>(&mut app);
-    // Pick black while closed, through the palette's own selection.
     let black = {
         let world = app.world_mut();
         let mut items = world.query::<(Entity, &Item<Color>)>();
@@ -16558,7 +16170,6 @@ fn items_added_while_a_color_palette_combo_is_closed_have_swatches_once_it_opens
     click(&mut app, button);
     assert_eq!(item_views(&app, palette).len(), 3);
 
-    // And while open the palette follows further changes.
     app.world_mut().spawn((Item { data: BLUE }, ItemOf(owner)));
     app.update();
     app.update();
@@ -16605,7 +16216,6 @@ fn despawning_color_palette_combos_open_or_dormant_leaves_no_swatches_behind() {
     assert_eq!(palettes.iter(app.world()).count(), 0);
 }
 
-/// Background, outer border and colour-square border of every swatch of `palette`.
 fn swatch_looks(app: &App, palette: Entity) -> Vec<(Color, Color, Color)> {
     item_views(app, palette)
         .into_iter()
@@ -16622,14 +16232,12 @@ fn swatch_looks(app: &App, palette: Entity) -> Vec<(Color, Color, Color)> {
 
 #[test]
 fn swatches_built_after_a_theme_change_while_the_popup_was_closed_carry_the_new_theme() {
-    // The first colour is selected, so one swatch has the selection ring.
     let selection = || {
         Selection::builder()
             .one()
             .build_with_items([Color::WHITE, Color::BLACK].map(|data| Item { data }))
     };
 
-    // Reference: a popup opened under the dark theme from the start.
     let mut reference = headless_app();
     reference
         .world_mut()
@@ -16663,13 +16271,11 @@ fn swatches_built_after_a_theme_change_while_the_popup_was_closed_carry_the_new_
     for (background, ..) in &looks {
         assert_eq!(*background, dark);
     }
-    // The unselected swatch's ring is the new background, the selected one's is not.
     assert_eq!(looks[1].1, dark);
     assert_ne!(looks[0].1, dark);
     assert_ne!(looks[0].1, light);
 }
 
-/// Removes the items called `names` from `source` and adds one for each of `added`, in one frame.
 fn swap_items(app: &mut App, source: Entity, removed: &[&str], added: &[&str]) {
     let doomed: Vec<Entity> = {
         let world = app.world_mut();
@@ -16764,7 +16370,6 @@ fn thousands_of_tabs_and_segments_are_built_and_reordered_in_item_order() {
         .collect();
     assert_eq!(texts, names);
     assert_eq!(segment_texts(&app, control), names);
-    // one more item at the front: every existing child stays, in place after it
     let before = tabs_of(&app, bar);
     let first = app
         .world()
@@ -16835,9 +16440,6 @@ fn a_palette_despawns_a_second_swatch_of_one_item_and_keeps_the_others() {
     assert_eq!(after[..2], views[..]);
 }
 
-// Shared glyph images (#683).
-
-/// A headless app with an `Assets<Image>`.
 fn glyph_app() -> App {
     headless_app_with(|app| {
         app.init_resource::<Assets<Image>>();
@@ -16856,7 +16458,6 @@ fn image_count(app: &App) -> usize {
     images(app).len()
 }
 
-/// The distinct image handles the `ImageNode`s of the app show, the default handle left out.
 fn shown_images(app: &mut App) -> Vec<AssetId<Image>> {
     let mut ids: Vec<_> = app
         .world_mut()
@@ -16901,7 +16502,6 @@ fn many_widgets_share_one_image_per_generated_glyph() {
     let one = image_count(&app);
     let shown_one = shown_images(&mut app);
     spawn_glyph_widgets(&mut app, 25);
-    // Chevron, minus, plus, sun, computer and moon, whatever the number of widgets.
     assert_eq!(one, 6);
     assert_eq!(image_count(&app), 6);
     assert_eq!(shown_images(&mut app), shown_one);
@@ -16921,7 +16521,6 @@ fn a_custom_stepper_icon_is_kept_and_only_the_default_one_is_shared() {
     app.update();
     let shown = shown_images(&mut app);
     assert!(shown.contains(&custom.id()));
-    // The custom image and the shared plus; no minus was made for this stepper.
     assert_eq!(image_count(&app), 2);
     assert_eq!(shown.len(), 2);
 }
@@ -16970,7 +16569,6 @@ fn reinserting_and_despawning_widgets_reuse_the_shared_images() {
     app.update();
     assert_eq!(image_count(&app), 2);
     assert_eq!(shown_images(&mut app), before);
-    // The images outlive the widget: a new one finds them where they were.
     app.world_mut().entity_mut(stepper).despawn();
     app.update();
     spawn_glyph_widgets(&mut app, 1);
@@ -16991,7 +16589,6 @@ fn an_image_the_app_removed_is_generated_again() {
         .iter(app.world())
         .map(|node| node.image.clone())
         .collect();
-    // Despawn the widgets so only the shared resource holds the handles, then remove one image.
     let nodes: Vec<Entity> = app
         .world_mut()
         .query_filtered::<Entity, With<Node>>()
@@ -17108,7 +16705,6 @@ fn only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit() {
     let outer = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
     let inner = scrolling_contents(&mut app, Some(outer), SCROLL_BOTH, Vec2::ZERO, 1.0);
     let leaf = target_at(&mut app, Some(inner), Vec2::ZERO, 1.0);
-    // Picking reports the leaf, the inner and the outer area, as it does for a blocking area.
     hover(
         &mut app,
         &[
@@ -17117,7 +16713,6 @@ fn only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit() {
             (PointerId::Mouse, outer),
         ],
     );
-    // 400 down: the inner area stops at 300, nothing is passed on to the outer one.
     wheel(&mut app, Pixel, 0.0, -200.0);
     wheel(&mut app, Pixel, 0.0, -200.0);
     app.update();
@@ -17125,7 +16720,6 @@ fn only_the_innermost_hovered_scroll_area_takes_the_wheel_also_at_its_limit() {
     assert_eq!(scroll_of(&app, outer), Vec2::ZERO);
 }
 
-/// Counts the frames in which a `ScrollPosition` was marked changed.
 #[derive(Resource, Default)]
 struct ScrollChanges(usize);
 
@@ -17157,17 +16751,13 @@ fn a_wheel_that_cannot_move_a_scroll_area_does_not_mark_its_position_changed() {
     app.add_systems(Last, count_scroll_changes);
     let area = scrolling_contents(&mut app, None, SCROLL_BOTH, Vec2::ZERO, 1.0);
     hover(&mut app, &[(PointerId::Mouse, area)]);
-    // Up and left at the top left corner: clamped to where it is.
     assert_eq!(scroll_changes_in(&mut app, &[(30.0, 30.0)]), 0);
-    // No delta at all.
     assert_eq!(scroll_changes_in(&mut app, &[(0.0, 0.0)]), 0);
-    // A real scroll still marks it, once, however many messages.
     assert_eq!(
         scroll_changes_in(&mut app, &[(0.0, -50.0), (0.0, -50.0)]),
         1
     );
     assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 100.0));
-    // At the far limit, further turns change nothing.
     assert_eq!(scroll_changes_in(&mut app, &[(0.0, -1000.0)]), 1);
     assert_eq!(scroll_changes_in(&mut app, &[(0.0, -1000.0)]), 0);
     assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 300.0));
@@ -17193,7 +16783,6 @@ fn a_wheel_at_the_limit_leaves_an_open_combo_in_the_scroll_area_open() {
     app.world_mut().entity_mut(combo).insert(ComboState::Open);
     app.update();
     app.update();
-    // Already at the top: scrolling up moves nothing, so the combo stays open.
     wheel(
         &mut app,
         bevy::input::mouse::MouseScrollUnit::Pixel,
@@ -17205,7 +16794,6 @@ fn a_wheel_at_the_limit_leaves_an_open_combo_in_the_scroll_area_open() {
         app.world().get::<ComboState>(combo),
         Some(&ComboState::Open)
     );
-    // A scroll that moves closes it.
     wheel(
         &mut app,
         bevy::input::mouse::MouseScrollUnit::Pixel,
@@ -17293,7 +16881,6 @@ fn reinserting_a_numeric_stepper_while_its_number_editor_is_open_keeps_app_child
         app.update();
     };
 
-    // F2 opens the number editor, which takes the focus.
     app.world_mut()
         .insert_resource(InputFocus::from_entity(stepper));
     key(&mut app, KeyCode::F2, Key::F2);
@@ -17316,7 +16903,6 @@ fn reinserting_a_numeric_stepper_while_its_number_editor_is_open_keeps_app_child
         Some(input)
     );
 
-    // Replace the stepper while the editor is open and focused.
     app.world_mut()
         .entity_mut(stepper)
         .insert(NumericStepper::default());
@@ -17363,17 +16949,14 @@ fn reinserting_a_numeric_stepper_while_its_number_editor_is_open_keeps_app_child
         );
     }
 
-    // The stepper is not stuck as "editor open": the arrow keys step it again.
     app.world_mut()
         .insert_resource(InputFocus::from_entity(stepper));
     key(&mut app, KeyCode::ArrowUp, Key::ArrowUp);
     assert_eq!(stepper_value(&app, stepper), 2);
-    // And F2 opens a fresh editor.
     key(&mut app, KeyCode::F2, Key::F2);
     assert_eq!(editors(&mut app).len(), 1);
 }
 
-/// The text of the label of the row `view` (its first child with a `Text`).
 fn row_text(app: &App, view: Entity) -> String {
     app.world()
         .get::<Children>(view)
@@ -17383,7 +16966,6 @@ fn row_text(app: &App, view: Entity) -> String {
         .unwrap()
 }
 
-/// The views of `list`, in order, with their entities.
 fn views_of_list(app: &mut App, list: Entity) -> Vec<Entity> {
     let world = app.world_mut();
     let mut query = world.query::<(Entity, &ItemView)>();
@@ -17561,7 +17143,6 @@ fn renaming_the_selected_item_updates_a_combos_button_and_popup_but_not_its_plac
     let a = app.world().get::<ItemView>(views[0]).unwrap().item_ref;
     let b = app.world().get::<ItemView>(views[1]).unwrap().item_ref;
 
-    // Nothing selected: a rename shows in the popup and leaves the placeholder.
     rename(&mut app, a, "first");
     assert_eq!(combo_label(&app, button), "Select..");
     assert_eq!(row_text(&app, views[0]), "first");
@@ -17579,7 +17160,6 @@ fn renaming_the_selected_item_updates_a_combos_button_and_popup_but_not_its_plac
     assert_eq!(accessible_value(&app, button).as_deref(), Some("renamed"));
     assert_eq!(row_text(&app, views[0]), "renamed");
 
-    // An item that is not selected leaves the button alone.
     rename(&mut app, b, "other");
     assert_eq!(combo_label(&app, button), "renamed");
     assert_eq!(row_text(&app, views[1]), "other");
@@ -17601,7 +17181,6 @@ fn renaming_an_item_updates_a_filter_combos_button_rows_and_matches() {
     let delft_row = fa.row_of("Delft");
     let amsterdam_row = fa.row_of("Amsterdam");
 
-    // The selected item is renamed to match: button and row text follow, and it is shown.
     rename(&mut fa.app, delft, "Utrecht Zuid");
     assert_eq!(fa.button_text(), "Utrecht Zuid");
     assert_eq!(row_text(&fa.app, delft_row), "Utrecht Zuid");
@@ -17609,7 +17188,6 @@ fn renaming_an_item_updates_a_filter_combos_button_rows_and_matches() {
     assert_eq!(fa.row_of("Utrecht Zuid"), delft_row, "the row was rebuilt");
     assert_eq!(fa.row_of("Amsterdam"), amsterdam_row);
 
-    // And renamed away again, it is filtered out.
     rename(&mut fa.app, delft, "Delft");
     assert_eq!(fa.shown(), ["Utrecht"]);
     assert_eq!(fa.button_text(), "Delft");
@@ -17666,7 +17244,6 @@ fn editing_an_item_colour_in_place_updates_its_swatch_highlight_combo_preview_an
             .label(),
         Some("yellow-300")
     );
-    // The swatches were edited in place, not rebuilt.
     assert_eq!(item_views(&app, palette), swatches);
 }
 
@@ -17730,7 +17307,6 @@ fn a_structural_change_to_a_toolbar_keeps_its_buttons_and_regroups_the_dividers(
     app.world_mut()
         .insert_resource(InputFocus::from_entity(before[3]));
 
-    // Dropping "Rail" leaves "Signal" alone in its group: both dividers stay, order holds.
     let rail = item_of(&app, before[1]);
     app.world_mut().entity_mut(rail).despawn();
     for _ in 0..3 {
@@ -17745,7 +17321,6 @@ fn a_structural_change_to_a_toolbar_keeps_its_buttons_and_regroups_the_dividers(
         Some(before[3])
     );
 
-    // Dropping "Signal" merges nothing but removes one divider.
     let signal = item_of(&app, before[2]);
     app.world_mut().entity_mut(signal).despawn();
     for _ in 0..3 {
@@ -17824,7 +17399,6 @@ fn two_inserts_of_a_setting_row_in_one_command_batch_build_one_set_of_parts_and_
     app.update();
 
     let refs = *app.world().get::<SettingRowRefs>(row).unwrap();
-    // The app's child, the content and the divider, nothing twice.
     assert_eq!(app.world().get::<Children>(row).unwrap().len(), 3);
     assert!(
         app.world()
@@ -17871,7 +17445,6 @@ fn two_inserts_of_a_panel_in_one_command_batch_build_one_set_of_parts_and_one_cl
     app.update();
 
     let refs = *app.world().get::<PanelRefs>(panel).unwrap();
-    // The app's child, header, strip, two dividers, scroll area and footer.
     assert_eq!(app.world().get::<Children>(panel).unwrap().len(), 7);
     assert!(
         app.world()
@@ -17932,9 +17505,6 @@ fn two_inserts_of_an_icon_button_in_one_command_batch_build_one_icon_and_one_set
     );
 }
 
-// ---- A source without items clears the views drawn from it (#695) ----
-
-/// What `widget` shows, as the texts of its views, for each widget kind of the test.
 #[derive(Clone, Copy, Debug)]
 enum Drawn {
     List,
@@ -18047,7 +17617,6 @@ fn switching_to_a_source_without_items_clears_the_views_and_follows_its_first_it
                 "{context}: nothing selected"
             );
 
-            // The old source no longer reaches the widget.
             app.world_mut().spawn((Item::new("e"), ItemOf(a)));
             settle_frames(&mut app);
             assert!(
@@ -18055,7 +17624,6 @@ fn switching_to_a_source_without_items_clears_the_views_and_follows_its_first_it
                 "{context}: old source"
             );
 
-            // The first item of the new source appears, and a mandatory selection takes it.
             app.world_mut().spawn((Item::new("x"), ItemOf(b)));
             settle_frames(&mut app);
             assert_eq!(
@@ -18070,7 +17638,6 @@ fn switching_to_a_source_without_items_clears_the_views_and_follows_its_first_it
                 "{context}: selection"
             );
 
-            // And back to the first source, which has grown meanwhile.
             app.world_mut().entity_mut(widget).insert(ItemsRef(a));
             settle_frames(&mut app);
             assert_eq!(
@@ -18121,14 +17688,12 @@ fn a_virtual_list_over_a_source_without_items_has_no_active_row_and_no_items_for
     let mut rows = app.world_mut().query::<&VirtualListRow>();
     assert!(rows.iter(app.world()).all(|row| row.shown.is_none()));
 
-    // The first item of the new source shows up, and the old active row did not survive.
     app.world_mut().spawn((Item::new("x"), ItemOf(b)));
     settle_frames(&mut app);
     assert_eq!(drawn_texts(&mut app, Drawn::VirtualList, list), ["x"]);
     assert_eq!(app.world().get::<ActiveDescendant>(list).unwrap().0, None);
 }
 
-/// A source entity holding `items` as `Item<T>`s.
 fn typed_source<T: Send + Sync + 'static>(
     app: &mut App,
     items: impl IntoIterator<Item = T>,
@@ -18141,8 +17706,6 @@ fn typed_source<T: Send + Sync + 'static>(
     source
 }
 
-/// Plays the replacement of a populated source `a` by an empty one `b` and its aftermath for a
-/// widget drawn from `Item<T>`s: `shown` counts what the widget has built.
 fn replaces_a_source_by_an_empty_one<T: Send + Sync + 'static>(
     name: &str,
     spawn: impl FnOnce(&mut App, Entity) -> Entity,
@@ -18173,7 +17736,6 @@ fn replaces_a_source_by_an_empty_one<T: Send + Sync + 'static>(
     settle_frames(&mut app);
     assert!(shown(&app, widget) > 0, "{name}: first item of b appears");
 
-    // Removing the last item takes the `ItemValues` away.
     let only = app
         .world()
         .get::<ItemValues>(b)
@@ -18190,7 +17752,6 @@ fn replaces_a_source_by_an_empty_one<T: Send + Sync + 'static>(
         "{name}: cleared by the last removal"
     );
 
-    // The source is still live: a new item comes back.
     app.world_mut().spawn((Item { data: b_again }, ItemOf(b)));
     settle_frames(&mut app);
     assert!(shown(&app, widget) > 0, "{name}: b refilled");
@@ -18314,7 +17875,6 @@ fn a_dormant_palette_woken_over_an_empty_source_has_no_swatches_until_its_first_
         ))
         .id();
     settle_frames(&mut app);
-    // Replace the source while the popup is closed, then open it.
     app.world_mut().entity_mut(combo).insert(ItemsRef(b));
     settle_frames(&mut app);
     let button = single_entity_with::<ColorPushButton>(&mut app);
@@ -18361,7 +17921,6 @@ fn a_list_drops_selected_from_its_views_when_cleared_and_gives_a_one_selection_i
     assert!(app.world().entity(views[0]).contains::<Selected>());
     assert_eq!(selection_labels(&app, list), ["x"]);
 
-    // The last item goes: no view, no `Selected` anywhere.
     let only = app.world().get::<ItemValues>(b).unwrap()[0];
     app.world_mut().entity_mut(only).despawn();
     settle_frames(&mut app);
@@ -18369,7 +17928,6 @@ fn a_list_drops_selected_from_its_views_when_cleared_and_gives_a_one_selection_i
     let mut selected = app.world_mut().query_filtered::<Entity, With<Selected>>();
     assert_eq!(selected.iter(app.world()).count(), 0);
 }
-// ---- List selection sync with several changes in one frame (#671) ----
 
 #[test]
 fn simultaneous_selection_changes_update_only_the_lists_that_follow_them() {
@@ -18409,7 +17967,6 @@ fn simultaneous_selection_changes_update_only_the_lists_that_follow_them() {
         app.update();
     }
 
-    // `a`, `b` and the shared source change in one frame; `c` does not.
     app.world_mut()
         .run_system_once(
             move |mut selections: SelectionParam, items: Query<(Entity, &Item<String>)>| {
@@ -18431,7 +17988,7 @@ fn simultaneous_selection_changes_update_only_the_lists_that_follow_them() {
 }
 
 /// Counts, once per frame, the entities whose `TextFont` was written since the last frame:
-/// Bevy lays the text, and so the whole tree, out again for every one of them (#710).
+/// Bevy lays the text, and so the whole tree, out again for every one of them.
 #[derive(Resource, Default)]
 struct FontWrites(usize);
 
@@ -18446,7 +18003,6 @@ fn app_counting_font_writes() -> App {
     app
 }
 
-/// Restyles every widget with the theme as it is and returns the `TextFont`s written by it.
 fn font_writes_of_a_restyle(app: &mut App, change: impl FnOnce(&mut Theme)) -> usize {
     settle(app);
     app.world_mut().get_resource_mut::<FontWrites>().unwrap().0 = 0;
@@ -18512,11 +18068,9 @@ fn restyling_segments_tabs_and_toggle_options_with_a_changed_font_still_writes_i
     let writes = font_writes_of_a_restyle(&mut app, |theme| {
         theme.body_font = bevy::asset::uuid_handle!("7a10b3c4-5d6e-4f70-8a91-b2c3d4e5f607");
     });
-    // Three segments, two tabs and three options.
     assert!(writes >= 8, "every label takes the new font: {writes}");
 }
 
-/// One of each widget whose theme restyle sets a `TextFont` (#762).
 fn spawn_text_widgets(app: &mut App) {
     let root = app.world_mut().spawn(Node::default()).id();
     let items = || ["a", "b"].map(Item::new);
@@ -18585,7 +18139,6 @@ fn restyling_text_widgets_with_a_changed_font_still_writes_it() {
     );
 }
 
-/// Counts, once per frame, the entities whose `TextColor` was written since the last frame (#778).
 #[derive(Resource, Default)]
 struct ColorWrites(usize);
 
@@ -18600,7 +18153,6 @@ fn app_counting_text_writes() -> App {
     app
 }
 
-/// Like `font_writes_of_a_restyle`, for `TextColor`.
 fn color_writes_of_a_restyle(app: &mut App, change: impl FnOnce(&mut Theme)) -> usize {
     settle(app);
     app.world_mut().get_resource_mut::<ColorWrites>().unwrap().0 = 0;
@@ -18611,7 +18163,6 @@ fn color_writes_of_a_restyle(app: &mut App, change: impl FnOnce(&mut Theme)) -> 
     app.world().get_resource::<ColorWrites>().unwrap().0
 }
 
-/// Spawns a filled toolbar whose first tool has a key hint, so its restyle visits label and hint.
 fn spawn_hinted_toolbar(app: &mut App) -> Entity {
     let root = app.world_mut().spawn(Node::default()).id();
     let items = [
@@ -18655,7 +18206,6 @@ fn restyling_a_toolbar_with_a_changed_font_still_writes_it_to_label_and_hint() {
     let writes = font_writes_of_a_restyle(&mut app, |theme| {
         theme.body_font = bevy::asset::uuid_handle!("7a10b3c4-5d6e-4f70-8a91-b2c3d4e5f607");
     });
-    // Two labels and one hint.
     assert!(writes >= 3, "label and hint take the new font: {writes}");
 }
 
@@ -18682,7 +18232,6 @@ fn restyling_text_widgets_with_a_changed_colour_still_writes_it() {
     assert!(writes >= 8, "the text takes the new colours: {writes}");
 }
 
-/// Shows the popup of a hovered icon button and returns its text entity.
 fn showing_tooltip_text(app: &mut App, button: Entity) -> Entity {
     app.world_mut().entity_mut(button).insert(Hovered(true));
     for _ in 0..6 {
@@ -18767,10 +18316,6 @@ fn restyling_a_showing_tooltip_popup_writes_text_colour_only_for_a_colour_change
     assert!(app.world().get_resource::<ColorWrites>().unwrap().0 >= 1);
 }
 
-/// Plays the despawning of the source behind a widget's selection: the widget refers to a
-/// selection entity (`spawn` gets its entity) that holds the `ItemsRef`, so despawning the source
-/// takes that entity with it and the widget's `Selection::Ref` dangles. `shown` counts what the
-/// widget has built.
 fn despawns_the_source_of_a_widget<T: Send + Sync + 'static>(
     name: &str,
     spawn: impl FnOnce(&mut App, Entity) -> Entity,
@@ -18792,7 +18337,6 @@ fn despawns_the_source_of_a_widget<T: Send + Sync + 'static>(
     assert!(app.world().get_entity(selection).is_err());
     assert_eq!(shown(&app, widget), 0, "{name}: cleared by the despawn");
 
-    // Pointing the widget at a live source brings it back.
     let b = typed_source(&mut app, [b1]);
     let other = app
         .world_mut()
@@ -18899,7 +18443,6 @@ fn a_color_palette_is_cleared_when_the_source_behind_its_selection_is_despawned(
     );
 }
 
-/// Counts the frames in which a `Node` was written, equal value or not.
 #[derive(Resource, Default)]
 struct NodeWrites(Vec<Entity>);
 
@@ -18962,9 +18505,6 @@ fn restyling_a_light_dark_toggle_without_a_visible_change_does_not_write_any_nod
     assert!(writes.is_empty(), "nodes written again: {writes:?}");
 }
 
-/// Plays the re-pointing of a live selection's `ItemsRef` at items that are gone, and then at a
-/// live source. The widget refers to the selection (`Selection::Ref`), so it must not keep views
-/// of the old items, and shows the new ones once they exist. `shown` counts what it has built.
 fn points_a_live_selection_at_items_that_are_gone<T: Send + Sync + 'static>(
     name: &str,
     spawn: impl FnOnce(&mut App, Entity) -> Entity,
@@ -19165,8 +18705,6 @@ fn a_virtual_list_over_items_that_are_gone_shows_nothing_and_recovers() {
     );
 }
 
-/// What a finger does on `target`: down, `moves` (the distance since the press, as picking
-/// reports it) and up, the click picking sends first and then the release.
 fn touch_gesture(app: &mut App, target: Entity, moves: &[Vec2]) {
     let pointer = || Pointer::new(PointerId::Touch(1), pointer_location());
     let hit = || HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
@@ -19207,9 +18745,6 @@ fn touch_gesture(app: &mut App, target: Entity, moves: &[Vec2]) {
     app.update();
 }
 
-/// A finger pans `target` by `moves` (the distance since the press, as picking reports it) a
-/// sixtieth of a second apart, however short the frames are (`frames_per_move` of them make up
-/// that sixtieth), lifts, and the area then runs on for `settle` seconds.
 #[expect(clippy::cast_sign_loss, reason = "a settle time is not negative")]
 fn fling_gesture(app: &mut App, target: Entity, moves: &[Vec2], frames_per_move: u32, settle: f32) {
     let frame = std::time::Duration::from_secs_f64(1.0 / 60.0 / f64::from(frames_per_move));
@@ -19261,7 +18796,6 @@ fn fling_gesture(app: &mut App, target: Entity, moves: &[Vec2], frames_per_move:
     }
 }
 
-/// `count` moves of `step` logical pixels each, the finger's distance since the press.
 fn steady_moves(count: u16, step: Vec2) -> Vec<Vec2> {
     (1..=count).map(|n| step * f32::from(n)).collect()
 }
@@ -19291,11 +18825,9 @@ fn a_fast_pan_flings_on_after_the_finger_lifts_and_stops_inside_the_area() {
     );
     let lifted = scroll_of(&app, area).y;
     assert!(lifted >= 25.0, "{lifted}");
-    // 300 px a second decays to about 150 px more.
     fling_gesture_settle(&mut app, 4.0);
     let rested = scroll_of(&app, area).y;
     assert!(rested > lifted + 100.0 && rested < 300.0, "{rested}");
-    // It has stopped: nothing moves any more.
     fling_gesture_settle(&mut app, 1.0);
     assert_eq!(scroll_of(&app, area).y, rested);
 }
@@ -19395,7 +18927,6 @@ fn a_new_touch_stops_a_fling_and_taps_nothing() {
     );
     let running = scroll_of(&app, area).y;
     assert!(running > 25.0 && running < 150.0, "{running}");
-    // The finger lands on the button while the area runs on, and lifts without moving.
     touch_gesture(&mut app, button, &[]);
     let caught = scroll_of(&app, area).y;
     fling_gesture_settle(&mut app, 3.0);
@@ -19405,7 +18936,6 @@ fn a_new_touch_stops_a_fling_and_taps_nothing() {
         0,
         "no tap"
     );
-    // The next touch taps as usual.
     touch_gesture(&mut app, button, &[]);
     assert_eq!(app.world().get_resource::<PanActivations>().unwrap().0, 1);
 }
@@ -19446,7 +18976,6 @@ fn a_fling_that_moves_closes_a_combo_in_the_area_and_one_at_its_limit_marks_noth
         .id();
     app.update();
     app.update();
-    // A fling at the far end of the area has nowhere to go.
     app.world_mut().get_mut::<ScrollPosition>(area).unwrap().0 = Vec2::new(0.0, 300.0);
     app.update();
     app.world_mut().entity_mut(combo).insert(ComboState::Open);
@@ -19468,7 +18997,6 @@ fn a_fling_that_moves_closes_a_combo_in_the_area_and_one_at_its_limit_marks_noth
         app.world().get::<ComboState>(combo),
         Some(&ComboState::Open)
     );
-    // Up from there, it moves the position and closes the combo.
     app.world_mut().get_mut::<ScrollPosition>(area).unwrap().0 = Vec2::new(0.0, 150.0);
     app.update();
     app.world_mut().entity_mut(combo).insert(ComboState::Open);
@@ -19506,7 +19034,6 @@ fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_tha
     app.update();
     app.update();
 
-    // Within the threshold: a tap, the button activates and nothing scrolls.
     touch_gesture(&mut app, button, &[Vec2::new(0.0, -2.0)]);
     assert_eq!(
         app.world().get_resource::<PanActivations>().unwrap().0,
@@ -19515,13 +19042,11 @@ fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_tha
     );
     assert_eq!(scroll_of(&app, area), Vec2::ZERO);
 
-    // Past it: a pan. The content follows the finger, the button is not pressed any more and
-    // does not activate when the finger lifts.
     app.world_mut()
         .get_resource_mut::<ScrollChanges>()
         .unwrap()
         .0 = 0;
-    // The finger rests before it lifts, so the content does not run on (#801); frames are a
+    // The finger rests before it lifts, so the content does not run on; frames are a
     // sixtieth of a second, so eight of them rest longer than the velocity window.
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         std::time::Duration::from_secs_f64(1.0 / 60.0),
@@ -19537,7 +19062,6 @@ fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_tha
     assert_eq!(scroll_of(&app, area), Vec2::new(0.0, 50.0));
     assert!(!app.world().entity(button).contains::<Pressed>());
 
-    // The next press is a tap again.
     touch_gesture(&mut app, button, &[]);
     assert_eq!(
         app.world().get_resource::<PanActivations>().unwrap().0,
@@ -19545,7 +19069,6 @@ fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_tha
         "a tap again"
     );
 
-    // A pan with nothing to move (down at the top) does not mark the position changed.
     touch_gesture(&mut app, button, &[Vec2::new(0.0, 100.0)]);
     assert_eq!(scroll_of(&app, area), Vec2::ZERO);
     app.world_mut()
