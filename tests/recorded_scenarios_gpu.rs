@@ -1,12 +1,6 @@
-//! Records every scenario in `tests/ron` offscreen for review: PNGs at step
-//! boundaries, a filmstrip and a GIF per scenario, a `trace.html`, and one
-//! `index.html` for each scenario.
-//!
-//! It needs a GPU (or lavapipe: `WGPU_BACKEND=vulkan`), so it is only built
-//! with the `record` feature and its tests are ignored. `just record` checks
-//! them without artifacts; `just record --save` writes to `target/recordings`
-//! (`RECORD_DIR` overrides it). Direct test runs save unless `RECORD_CHECK_ONLY`
-//! is set.
+//! Records every scenario in `tests/ron` offscreen. Needs a GPU, so it is built
+//! only with the `record` feature; `RECORD_DIR` and `RECORD_CHECK_ONLY` steer
+//! the output.
 
 #![expect(
     clippy::unwrap_used,
@@ -15,8 +9,6 @@
     reason = "tests may abort loudly"
 )]
 
-// `widgets_setup` builds its screens with `common::spawn_camera_and_root`; the
-// recorder makes its own app, so `widgets_app` goes unused here.
 #[expect(dead_code, reason = "the recorder builds its own app")]
 mod common;
 mod widgets_check;
@@ -27,13 +19,7 @@ use std::path::{Path, PathBuf};
 use bevy_pluim::WidgetsPlugin;
 use bevy_stagecraft::{Recorder, Registry, load_ron_file};
 
-/// Scenarios that pass headless but fail in a recording, because of a bug in a
-/// widget that only shows with UI drawn to an image (#100). The Card demo
-/// scenario is listed for #103 (palette combos got no popup when the app had
-/// more than one `UiRoot`), fixed in the library but not yet seen passing in a
-/// recording. They are still recorded, and show as failures in the index. The
-/// test fails when one of them passes, so remove each name when its issue is
-/// fixed.
+/// Scenarios expected to fail only when recorded; remove a name once it passes.
 const FAILS_WHEN_RECORDED: [&str; 0] = [];
 
 include!(concat!(env!("OUT_DIR"), "/record_scenario_tests.rs"));

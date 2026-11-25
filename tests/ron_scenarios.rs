@@ -1,10 +1,4 @@
-//! Scenario files: every `.ron` file and supported variant in `tests/ron` is
-//! an individual libtest case, named after the file and variant. The files start
-//! from a screen of [`widgets_setup::WidgetsSetup`] (`setup: App(Buttons)`).
-//!
-//! `cargo test --test ron_scenarios push_button` filters individual generated
-//! tests by their file name. Build-time generation lets libtest schedule these
-//! cases in parallel.
+//! Plays every `.ron` file and variant in `tests/ron` as its own libtest case.
 
 #![expect(
     clippy::unwrap_used,

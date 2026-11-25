@@ -75,7 +75,6 @@ fn add_button() -> Target {
     Target::role(WidgetRole::Button, "Add")
 }
 
-/// The background colour of the "Add" button is this colour.
 fn background_is(color: Color) -> Check {
     Check::component::<BackgroundColor>(add_button(), ".0").eq(color)
 }
@@ -84,8 +83,6 @@ fn play(scenario: &Scenario) -> ScenarioReport {
     scenario.run_in(&mut widgets_app())
 }
 
-/// The scenario that follows the pointer over, onto, off and away from "Add",
-/// expecting `colors` to give the background at each point.
 fn hover_and_click(colors: &ThemeColors) -> Scenario {
     Scenario::new("a push button follows the theme under the pointer")
         .app_setup(WidgetsSetup::Buttons)
@@ -97,7 +94,6 @@ fn hover_and_click(colors: &ThemeColors) -> Scenario {
             Step::check(background_is(colors.selected_hovered_item)),
             Step::check(Check::resource::<Clicks>(".0").eq(0_u32)),
             Step::release(),
-            // Let go with the pointer still on the button: it is hovered, not selected.
             Step::check(background_is(colors.hovered_item)),
             Step::check(Check::resource::<Clicks>(".0").eq(1_u32)),
             Step::move_to(Target::role(WidgetRole::Button, "Other")),
@@ -114,8 +110,6 @@ fn a_push_button_follows_the_theme_under_the_pointer_and_reports_the_click() {
 
 #[test]
 fn a_scenario_expecting_the_wrong_theme_colours_fails() {
-    // The app runs the light theme, so the dark slots must not match; this
-    // proves the colour checks above are not vacuous.
     let report = play(&hover_and_click(&DEFAULT_DARK_THEME_COLORS));
     assert!(!report.passed());
     assert!(
@@ -128,8 +122,6 @@ fn a_scenario_expecting_the_wrong_theme_colours_fails() {
     );
 }
 
-/// A scenario that taps Tab `taps` times on the "Buttons" screen, with "Other" disabled
-/// when `disable_other`, and expects the focus on `expected` at the end.
 fn tab_to(taps: usize, disable_other: bool, expected: &str) -> Scenario {
     let button = |label: &str| Target::role(WidgetRole::Button, label);
     let mut steps = vec![Step::wait(2)];
@@ -168,14 +160,12 @@ fn tab_skips_a_disabled_button() {
 
 #[test]
 fn a_scenario_expecting_the_wrong_focus_fails() {
-    // The second Tab lands on "Other", so expecting "Last" there must fail.
     let report = play(&tab_to(2, false, "Last"));
     assert!(!report.passed());
 }
 
 #[test]
 fn tab_skips_a_tab_bar_in_a_hidden_stack_panel() {
-    // A `Stack` hides a panel with `Display::None`; the bar in it must not take the focus.
     let button = |label: &str| Target::role(WidgetRole::Button, label);
     let scenario = Scenario::new("Tab skips a tab bar in a hidden panel")
         .setup(|world| {
@@ -208,8 +198,6 @@ fn tab_skips_a_tab_bar_in_a_hidden_stack_panel() {
     assert!(report.passed(), "{:#?}", report.failures());
 }
 
-/// Moves the focus with the arrow keys, as an app that turns directional navigation on
-/// does: an observer on the window, so it gets only the keys no focused widget kept.
 fn navigate_with_arrow_keys(
     input: On<FocusedInput<KeyboardInput>>,
     mut navigator: AutoDirectionalNavigator,
@@ -231,9 +219,6 @@ fn navigate_with_arrow_keys(
     }
 }
 
-/// An app with directional navigation turned on: the resources of Bevy's
-/// `DirectionalNavigationPlugin` (the app is finished, so it takes no plugin), and every
-/// button taking part.
 fn directional_navigation_app() -> App {
     let mut app = widgets_app();
     app.init_resource::<DirectionalNavigationMap>()
@@ -246,9 +231,6 @@ fn directional_navigation_app() -> App {
     app
 }
 
-/// "Left" and "Right" side by side, the `nav list` (A, B, C, A selected) under them and the
-/// `nav stepper` (10, from 5 to 15) under that; the list takes part in directional
-/// navigation, and the arrow keys move the focus through [`navigate_with_arrow_keys`].
 fn directional_navigation_screen(world: &mut World) {
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
@@ -369,7 +351,6 @@ fn a_focused_stepper_button_keeps_the_arrow_keys_from_directional_navigation() {
     assert!(report.passed(), "{:#?}", report.failures());
 }
 
-/// A custom item view holding a button named after its item ("In row a").
 fn row_with_button(
     spawner: In<ItemViewSpawner>,
     items: Query<&Item<String>>,
@@ -384,9 +365,6 @@ fn row_with_button(
     });
 }
 
-/// A `row list` of custom views (a, b, c), each holding a button, with a "Beside" button to
-/// its right, the app's directional navigation turned on and the focus on the button in row
-/// a. Returns the app and the list.
 fn button_in_a_list_row_app() -> (App, Entity) {
     let mut app = directional_navigation_app();
     let create = app.world_mut().register_system(row_with_button);
@@ -434,8 +412,6 @@ fn active_row(app: &App, list: Entity) -> Option<Entity> {
         .and_then(|active| active.0)
 }
 
-/// A held arrow key's repeat on a button inside a list row is not the list's: it reaches the
-/// app's navigation.
 #[test]
 fn a_held_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
     let (mut app, _) = button_in_a_list_row_app();
@@ -446,9 +422,6 @@ fn a_held_arrow_key_moves_the_focus_out_of_a_button_inside_a_list_row() {
     assert_eq!(focus_of(&app), Some(beside));
 }
 
-/// A first press of an arrow key on a button inside a list row is not the list's either: the
-/// `ListBox` would take it as its own, so it is passed on past the list to the app's
-/// navigation.
 #[test]
 fn a_first_arrow_press_moves_the_focus_out_of_a_button_inside_a_list_row() {
     let (mut app, _) = button_in_a_list_row_app();
@@ -459,8 +432,6 @@ fn a_first_arrow_press_moves_the_focus_out_of_a_button_inside_a_list_row() {
     assert_eq!(focus_of(&app), Some(beside));
 }
 
-/// A first press of Home or End on a button inside a list row does not move the list's active
-/// row, and the focus stays on the button.
 #[test]
 fn home_and_end_on_a_button_inside_a_list_row_leave_the_active_row_alone() {
     let (mut app, list) = button_in_a_list_row_app();
@@ -476,7 +447,6 @@ fn home_and_end_on_a_button_inside_a_list_row_leave_the_active_row_alone() {
     assert_eq!(focus_of(&app), Some(in_row));
 }
 
-/// Sends `key` as the window's keyboard would, pressed (perhaps as a repeat) or released.
 fn send_key(app: &mut App, key_code: KeyCode, state: ButtonState, repeat: bool) {
     let window = app
         .world_mut()
@@ -518,8 +488,6 @@ fn a_held_arrow_key_does_not_move_the_focus_out_of_a_focused_list() {
     );
 }
 
-/// Spawns a tab bar (A, B) with a "Beside" button to its right, its tabs taking part in the
-/// app's directional navigation, and returns its tabs.
 fn tab_bar_beside_a_button(app: &mut App) -> [Entity; 2] {
     app.add_observer(|added: On<Add<Tab>>, mut commands: Commands| {
         commands
@@ -554,7 +522,6 @@ fn tab_bar_beside_a_button(app: &mut App) -> [Entity; 2] {
     app.update();
     app.update();
     let bar = named(app, "nav tab bar");
-    // The bar's children are its tabs and the sliding indicator.
     app.world()
         .entity(bar)
         .get::<Children>()
@@ -589,12 +556,6 @@ fn a_held_arrow_key_does_not_move_the_focus_out_of_a_tab_bar() {
     assert_eq!(focus_of(&app), Some(a));
 }
 
-// ---- Composite widgets: one tab stop and arrow keys ----
-
-/// A column of "Before", the `seg` segmented control (A, B, C), "Between", the `chips` (X, Y, Z),
-/// the `gallery` (P, Q in one group, R in another), the `bar` toolbar (Select, Build, Bulldoze)
-/// and "After", with the arrow keys moving the focus between widgets as an app's directional
-/// navigation would.
 fn composite_screen(world: &mut World) {
     let root = spawn_camera_and_root(world);
     world.entity_mut(root).with_children(|root| {
@@ -656,7 +617,6 @@ fn settle(app: &mut App) {
     }
 }
 
-/// The item buttons of the widget `owner`, in the order they are shown.
 fn item_buttons(app: &App, owner: Entity) -> Vec<Entity> {
     fn walk(world: &World, entity: Entity, found: &mut Vec<Entity>) {
         let Some(children) = world.get::<Children>(entity) else {
@@ -674,7 +634,6 @@ fn item_buttons(app: &App, owner: Entity) -> Vec<Entity> {
     found
 }
 
-/// The item buttons of `owner` that Tab can reach (a `TabIndex` of 0 or more).
 fn tab_stops(app: &App, owner: Entity) -> Vec<Entity> {
     let buttons = item_buttons(app, owner);
     buttons
@@ -732,14 +691,12 @@ fn each_composite_widget_is_one_tab_stop_at_its_selected_item_or_its_first_tool(
         assert_eq!(buttons.len(), 3, "{name}");
         assert_eq!(tab_stops(&app, owner), vec![buttons[selected_at]], "{name}");
     }
-    // The selected item, not the first, is the stop of a radio group.
     let seg = named(&mut app, "seg");
     let buttons = item_buttons(&app, seg);
     press_on(&mut app, buttons[2]);
     assert_eq!(tab_stops(&app, seg), vec![buttons[2]]);
 }
 
-/// Clicks `entity` as the pointer would: its `Activate`, with the focus on it.
 fn press_on(app: &mut App, entity: Entity) {
     focus_on(app, entity);
     app.world_mut().trigger(Activate { entity });
@@ -811,7 +768,6 @@ fn a_held_arrow_never_leaves_a_composite_widget_but_a_toolbars_up_and_down_reach
     let seg_buttons = item_buttons(&app, seg);
     let bar_buttons = item_buttons(&app, bar);
 
-    // A held arrow (a press, repeats, a release) stays in the control.
     focus_on(&mut app, seg_buttons[2]);
     send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, false);
     send_key(&mut app, KeyCode::ArrowDown, ButtonState::Pressed, true);
@@ -820,7 +776,6 @@ fn a_held_arrow_never_leaves_a_composite_widget_but_a_toolbars_up_and_down_reach
     assert!(seg_buttons.contains(&focus_of(&app).unwrap()));
     assert_ne!(focus_of(&app), Some(between));
 
-    // The toolbar keeps left and right, Home and End ...
     focus_on(&mut app, bar_buttons[2]);
     for key in [
         KeyCode::ArrowRight,
@@ -833,10 +788,8 @@ fn a_held_arrow_never_leaves_a_composite_widget_but_a_toolbars_up_and_down_reach
         send_key(&mut app, key, ButtonState::Released, false);
         assert!(bar_buttons.contains(&focus_of(&app).unwrap()), "{key:?}");
     }
-    // ... and focus alone: a tool is picked by Enter or Space, not by arriving.
     assert_eq!(selected_texts(&app, bar), ["Select"]);
 
-    // Up and down go to the app, whose navigation moves the focus off the toolbar.
     focus_on(&mut app, bar_buttons[2]);
     press(&mut app, KeyCode::ArrowDown);
     assert_eq!(focus_of(&app), Some(after));
@@ -858,7 +811,6 @@ fn disabled_and_hidden_items_are_skipped_and_a_group_without_an_eligible_item_ha
     press(&mut app, KeyCode::ArrowLeft);
     assert_eq!(focus_of(&app), Some(a));
 
-    // The entry item may not be the stop when it is hidden or disabled itself.
     app.world_mut().entity_mut(a).insert(InteractionDisabled);
     settle(&mut app);
     assert_eq!(
@@ -870,7 +822,6 @@ fn disabled_and_hidden_items_are_skipped_and_a_group_without_an_eligible_item_ha
     settle(&mut app);
     assert!(tab_stops(&app, seg).is_empty(), "nothing eligible, no stop");
 
-    // Hidden items: the whole toolbar under a `Display::None`.
     let bar = named(&mut app, "bar");
     assert_eq!(tab_stops(&app, bar).len(), 1);
     app.world_mut()
@@ -946,14 +897,12 @@ fn focus_on_a_removed_item_moves_to_the_next_then_the_previous_and_is_cleared_wh
     );
     assert_eq!(tab_stops(&app, seg), vec![after_first[1]]);
 
-    // The last one went: the previous takes it.
     app.world_mut().entity_mut(items[2]).despawn();
     settle(&mut app);
     let after_second = item_buttons(&app, seg);
     assert_eq!(after_second.len(), 1);
     assert_eq!(focus_of(&app), Some(after_second[0]));
 
-    // None eligible: the stale focus is cleared.
     app.world_mut()
         .entity_mut(after_second[0])
         .insert(InteractionDisabled);
@@ -1030,8 +979,6 @@ fn shared_selections_keep_one_stop_per_control_at_the_shared_selected_item() {
     assert_eq!(focus_of(&app), Some(one_buttons[1]));
 }
 
-/// Puts a `TabIndex` no group would choose on every button of `owner`, so a later look at
-/// the group (which rewrites the indices to 0 / -1) shows.
 fn plant_sentinel(app: &mut App, owner: Entity) -> Vec<Entity> {
     let buttons = item_buttons(app, owner);
     for button in &buttons {
@@ -1056,7 +1003,6 @@ fn a_selection_or_focus_change_looks_only_at_the_groups_it_concerns() {
     let chips_planted = plant_sentinel(&mut app, chips);
     let bar_planted = plant_sentinel(&mut app, bar);
 
-    // A selection change of one control leaves independent groups alone.
     let [_, b, _] = items_of(&app, seg);
     change(&mut app, seg, move |s| s.set_selection([b]));
     settle(&mut app);
@@ -1064,8 +1010,6 @@ fn a_selection_or_focus_change_looks_only_at_the_groups_it_concerns() {
     assert!(is_untouched(&app, &chips_planted));
     assert!(is_untouched(&app, &bar_planted));
 
-    // Focus moving inside a control, or from one group into another, looks at the group that
-    // had it and the one that gets it, not at the rest.
     focus_on(&mut app, seg_buttons[2]);
     assert_eq!(tab_stops(&app, seg), vec![seg_buttons[2]]);
     assert!(is_untouched(&app, &chips_planted));
@@ -1176,8 +1120,7 @@ fn a_toolbar_re_enters_at_the_tool_that_had_the_focus_last() {
 
 #[test]
 fn an_arrow_that_lands_on_the_selected_item_keeps_it_selected() {
-    // With the other segments disabled the right arrow wraps round to the item that is picked
-    // already, and a toggle would clear a `ZeroOrOne` selection (or be refused by a `One`).
+    // A toggle would clear a `ZeroOrOne` selection, so the wrap must land on the picked item.
     let mut app = directional_navigation_app();
     let root = spawn_camera_and_root(app.world_mut());
     app.world_mut().entity_mut(root).with_children(|root| {
@@ -1229,7 +1172,6 @@ fn an_arrow_that_lands_on_the_selected_item_keeps_it_selected() {
         assert_eq!(focus_of(&app), Some(one_buttons[0]), "{key:?}");
     }
 
-    // A `ZeroOrOne` chip row: pick X, disable Y, and the arrows land on X again.
     let chips = item_buttons(&app, optional);
     let items = items_of_two(&app, optional);
     app.world_mut()
@@ -1245,7 +1187,6 @@ fn an_arrow_that_lands_on_the_selected_item_keeps_it_selected() {
         assert_eq!(selected_texts(&app, optional), ["X"], "{key:?}");
     }
 
-    // A control with one item at all.
     let only = item_buttons(&app, single);
     focus_on(&mut app, only[0]);
     press(&mut app, KeyCode::ArrowRight);
@@ -1253,7 +1194,6 @@ fn an_arrow_that_lands_on_the_selected_item_keeps_it_selected() {
     assert_eq!(focus_of(&app), Some(only[0]));
 }
 
-/// The two item entities `selection` chooses from, in order.
 fn items_of_two(app: &App, selection: Entity) -> [Entity; 2] {
     let items: Vec<Entity> = app
         .world()
@@ -1264,7 +1204,6 @@ fn items_of_two(app: &App, selection: Entity) -> [Entity; 2] {
     items.try_into().unwrap()
 }
 
-/// The accessible labels of `buttons`, in order.
 fn labels_of(app: &App, buttons: &[Entity]) -> Vec<String> {
     buttons
         .iter()
@@ -1279,8 +1218,6 @@ fn labels_of(app: &App, buttons: &[Entity]) -> Vec<String> {
 
 #[test]
 fn after_a_reorder_the_one_stop_stays_valid_and_the_arrows_follow_the_new_order() {
-    // A segmented control reorders its segments in place; chips, galleries and toolbars
-    // respawn their buttons. Either way the order shown is the order the keys follow.
     let mut app = composite_app();
     for (name, expected_after) in [
         ("seg", ["C", "A", "B"]),
@@ -1358,14 +1295,12 @@ fn keys_pressed_with_the_focus_outside_a_composite_widget_are_not_taken_by_it() 
     ] {
         press(&mut app, key);
     }
-    // Home and End reach nobody; the arrows are the app's, which moves the focus about.
     assert_eq!(selected_texts(&app, seg), ["A"], "no segment was picked");
 }
 
 #[test]
 fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
-    // The screens the scenario files start from must build without a window
-    // and lay out inside it. A screen added to `WidgetsSetup` goes in here.
+    // A screen added to `WidgetsSetup` goes in here.
     let screens = [
         WidgetsSetup::Buttons,
         WidgetsSetup::Combos,
@@ -1408,8 +1343,6 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
 
 #[test]
 fn a_widgets_setup_captures_as_the_screen_it_built() {
-    // What a recording started from the app as it is writes as its setup: the
-    // screen the app was last built from, and nothing before one was built.
     let mut world = World::new();
     assert_eq!(
         WidgetsSetup::capture(&mut world, Path::new("."), "x"),
@@ -1424,25 +1357,14 @@ fn a_widgets_setup_captures_as_the_screen_it_built() {
     }
 }
 
-// ---- `WidgetsCheck::Selected` ----
-
-/// The labels of the items every list of [`selection_app`] chooses from.
 const LETTERS: [&str; 3] = ["a", "b", "c"];
 
-/// What [`selection_app`] spawned that a test changes.
 struct Selections {
-    /// The selection entity behind "ref list", "combo" and "palette".
     shared: Entity,
-    /// The selection entity behind "trail".
     trail: Entity,
-    /// The selection entity behind "palette".
     colors: Entity,
 }
 
-/// An app with one list per `SelectionValue` variant ("one", "zero or one",
-/// "one or more", "zero or more", over `a`, `b` and `c`), a "ref list" and a
-/// "combo" sharing a bare selection entity, a "trail" of breadcrumbs and a
-/// "palette" of three colours, all laid out.
 fn selection_app() -> (App, Selections) {
     let mut app = widgets_app();
     let world = app.world_mut();
@@ -1511,7 +1433,6 @@ fn selection_app() -> (App, Selections) {
     )
 }
 
-/// The entity with the name `name`.
 fn named(app: &mut App, name: &str) -> Entity {
     let mut query = app.world_mut().query::<(Entity, &Name)>();
     query
@@ -1520,7 +1441,6 @@ fn named(app: &mut App, name: &str) -> Entity {
         .unwrap()
 }
 
-/// The three item entities `selection` chooses from, in order.
 fn items_of(app: &App, selection: Entity) -> [Entity; 3] {
     let items: Vec<Entity> = app
         .world()
@@ -1531,8 +1451,6 @@ fn items_of(app: &App, selection: Entity) -> [Entity; 3] {
     items.try_into().unwrap()
 }
 
-/// Changes the selection on `entity` (following a reference) through
-/// [`SelectionParam`], as the widgets do, and lets the world settle.
 fn change(
     app: &mut App,
     entity: Entity,
@@ -1548,7 +1466,6 @@ fn change(
     app.update();
 }
 
-/// Runs `Selected { of, items }` on the app as it is.
 fn selected(app: &App, of: &str, items: &[&str]) -> CheckResult {
     WidgetsCheck::Selected {
         of: Target::name(of),
@@ -1623,7 +1540,6 @@ fn selected_follows_a_zero_or_more_selection_and_its_order() {
     change(&mut app, list, move |s| s.toggle_selected(c));
     change(&mut app, list, move |s| s.toggle_selected(a));
     assert_eq!(selected(&app, "zero or more", &["c", "a"]), Ok(()));
-    // The order is part of the claim: it is the order they were selected in.
     assert!(selected(&app, "zero or more", &["a", "c"]).is_err());
 
     change(&mut app, list, move |s| s.trim_to_length(1));
@@ -1640,13 +1556,11 @@ fn selected_follows_a_selection_ref_from_every_widget_that_shares_it() {
     assert_eq!(selected(&app, "ref list", &[]), Ok(()));
     assert_eq!(selected(&app, "combo", &[]), Ok(()));
 
-    // Through the list, which follows its reference to the bare selection.
     let list = named(&mut app, "ref list");
     change(&mut app, list, move |s| s.toggle_selected(c));
     assert_eq!(selected(&app, "ref list", &["c"]), Ok(()));
     assert_eq!(selected(&app, "combo", &["c"]), Ok(()));
 
-    // And through the selection entity itself.
     change(&mut app, shared, move |s| s.toggle_selected(a));
     assert_eq!(selected(&app, "ref list", &["c", "a"]), Ok(()));
     assert_eq!(selected(&app, "combo", &["c", "a"]), Ok(()));
@@ -1687,7 +1601,6 @@ fn selected_fails_when_the_target_is_missing_or_holds_no_selection() {
     let missing = selected(&app, "nothing of this name", &[]).unwrap_err();
     assert!(missing.contains("nothing of this name"), "{missing}");
 
-    // The root has no selection on it or above it.
     let none = selected(&app, "root", &[]).unwrap_err();
     assert!(none.contains("no selection"), "{none}");
 }
@@ -1702,9 +1615,6 @@ fn the_facts_propose_a_selected_for_every_widget_with_a_selection_and_all_hold()
     for fact in &facts {
         assert_eq!(fact.run(&probe), Ok(()), "{fact:?}");
     }
-    // The five lists come first, in the order of the UI, then the
-    // combo, the trail and the palette, each by the one target that leads
-    // back to it.
     let of_lists = |index| Target::nth(index, Target::component::<List>());
     let wanted = [
         (of_lists(0), vec!["a"]),
@@ -1743,7 +1653,6 @@ fn a_recording_suggests_selected_for_the_selection_that_changed() {
         items: vec!["a".to_owned(), "b".to_owned()],
     });
     assert!(suggested.contains(&wanted), "{suggested:#?}");
-    // The lists that did not change are not suggested.
     let unchanged = Check::app(WidgetsCheck::Selected {
         of: Target::nth(0, Target::component::<List>()),
         items: vec!["a".to_owned()],
@@ -1775,18 +1684,15 @@ fn clicking_items_changes_what_selected_reports_in_a_scenario() {
             Step::move_to(second_item_of_first_list),
             Step::click(),
             selected(first_list(), &["Netherlands", "Canada"]),
-            // The third list shares the first one's selection by reference.
             selected(
                 Target::nth(2, Target::component::<List>()),
                 &["Netherlands", "Canada"],
             ),
-            // The second list has a selection of its own.
             selected(Target::nth(1, Target::component::<List>()), &["NL"]),
         ]);
     let report = play(&scenario);
     assert!(report.passed(), "{:#?}", report.failures());
 
-    // Proves the checks are not vacuous: the wrong claim fails.
     let wrong = Scenario::new("a wrong claim fails")
         .app_setup(WidgetsSetup::Lists)
         .steps([Step::wait(2), selected(first_list(), &["Canada"])]);
@@ -1802,8 +1708,6 @@ fn clicking_items_changes_what_selected_reports_in_a_scenario() {
     );
 }
 
-/// The vertical scroll area's thumb of the [`WidgetsSetup::ScrollAreas`]
-/// screen.
 fn vertical_thumb() -> Target {
     Target::within(
         Target::name("vertical scroll area"),
@@ -1811,8 +1715,6 @@ fn vertical_thumb() -> Target {
     )
 }
 
-/// The contents of the vertical scroll area of the
-/// [`WidgetsSetup::ScrollAreas`] screen.
 fn vertical_contents() -> Target {
     Target::within(
         Target::name("vertical scroll area"),
@@ -1822,8 +1724,6 @@ fn vertical_contents() -> Target {
 
 #[test]
 fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
-    // The scenario ends with the left button held on the thumb, so what
-    // follows is a drag in progress.
     let grab = Scenario::new("grab the thumb")
         .app_setup(WidgetsSetup::ScrollAreas)
         .steps([
@@ -1843,17 +1743,14 @@ fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
     let scroll_y = |app: &App| app.world().get::<ScrollPosition>(contents).unwrap().0.y;
     let before = scroll_y(&app);
 
-    // The `bevy_ui_widgets` `Scrollbar` moves the contents by `contents / bar`
-    // times the distance the pointer dragged, `bar` being the length of the
-    // scroll bar, which runs the full height of the contents here.
+    // The scrollbar moves the contents by contents / bar times the drag distance.
     let node = app.world().get::<ComputedNode>(contents).unwrap();
     let scale = node.inverse_scale_factor();
     let bar = node.size().y * scale;
     let total = node.content_size().y * scale;
     let per_pixel = total / bar;
 
-    // Three moves in one frame, as a high-rate mouse delivers them. Each
-    // must count, not only the last.
+    // Three moves in one frame, as a high-rate mouse delivers them; each must count.
     let step = 5.0;
     let mut input = app
         .world_mut()
@@ -1872,12 +1769,6 @@ fn several_drag_moves_in_one_frame_scroll_by_the_sum_of_their_deltas() {
     );
 }
 
-// ---- `WidgetsCheck::Accessible` ----
-
-/// An app with a node named "described" whose `AccessibilityNode` has role
-/// `Unknown`, label "Answer", value "42" and is expanded, a "plain" node
-/// without an `AccessibilityNode`, and a disabled push button "Off", all laid
-/// out.
 fn accessible_app() -> App {
     let mut app = widgets_app();
     let world = app.world_mut();
@@ -1897,7 +1788,6 @@ fn accessible_app() -> App {
     app
 }
 
-/// Runs `Accessible` on `of` on the app as it is.
 fn accessible(
     app: &App,
     of: Target,
@@ -2019,8 +1909,6 @@ fn accessible_names_every_difference() {
 
 #[test]
 fn accessible_asks_a_negative_state_to_be_set() {
-    // The node can be neither selected nor toggled, so it is not `NotSelected`
-    // or `NotToggled` either.
     let app = accessible_app();
     assert_eq!(
         accessible(
@@ -2075,18 +1963,9 @@ fn accessible_fails_on_a_node_without_an_accessibility_node() {
     );
 }
 
-// ---- The UI drawn to an image (#100) ----
-
-/// The image the cameras of [`image_target_app`] draw to.
 #[derive(Resource)]
 struct TargetImage(Handle<Image>);
 
-/// A [`widgets_app`] whose cameras draw to an image instead of the window, as
-/// the recorder's do, with the pointer aimed at that image.
-///
-/// Nothing is drawn: there is no GPU. What matters is that no camera renders to
-/// a window, so Bevy's `ui_focus_system` sees no cursor, while picking still
-/// finds what is under the pointer in the image.
 fn image_target_app() -> App {
     let mut app = widgets_app();
     let (width, height) = DEFAULT_WINDOW_SIZE;
@@ -2100,8 +1979,7 @@ fn image_target_app() -> App {
         .get_resource_mut::<SyntheticInput>()
         .unwrap()
         .set_target(Some(NormalizedRenderTarget::Image(handle.clone().into())));
-    // The synthetic pointer writes its own `PointerInput`, aimed at the image;
-    // Bevy's mouse input would add one aimed at the window.
+    // The synthetic pointer writes its own `PointerInput`; Bevy's mouse input would add one aimed at the window.
     app.insert_resource(PointerInputSettings {
         is_mouse_enabled: false,
         is_touch_enabled: false,
@@ -2116,9 +1994,6 @@ fn image_target_app() -> App {
     app
 }
 
-/// Points every camera that renders to a window at the [`TargetImage`], and
-/// makes it the default UI camera, which a camera rendering to an image
-/// otherwise never is.
 fn draw_to_the_image(
     image: Res<TargetImage>,
     mut images: ResMut<Assets<Image>>,
@@ -2126,8 +2001,6 @@ fn draw_to_the_image(
     mut cameras: Query<(Entity, &mut RenderTarget), With<Camera>>,
     mut commands: Commands,
 ) {
-    // The image is as large as the window the scenario asks for (`window_size`), so popups,
-    // which are placed inside their UI target, see the same room in both variants.
     if let Some(window) = windows.iter().next() {
         let width = window.resolution.physical_width().max(1);
         let height = window.resolution.physical_height().max(1);
@@ -2148,10 +2021,7 @@ fn draw_to_the_image(
 }
 
 fn run_image_case(path: &str) {
-    // The recorder draws the UI to an image. A widget that asks the window
-    // where the cursor is (`RelativeCursorPosition`) finds nothing there, so a
-    // combo closed on the release that opened it and hovered items lost their
-    // hover colour (#100). Picking works for any render target.
+    // Picking works for any render target; `RelativeCursorPosition` finds nothing without a window camera.
     let registry = Registry::default();
     let scenario = load_ron_file(path, &registry).unwrap();
     if scenario.disabled().is_some() {
@@ -2176,9 +2046,7 @@ include!(concat!(env!("OUT_DIR"), "/image_scenario_tests.rs"));
 
 #[test]
 fn the_tooltip_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_second() {
-    // The gallery plays in a real window whose frames are as long as the display
-    // makes them, often shorter than 1/60 s, so a fixed number of frames can be
-    // less than the tooltip's half second (#381).
+    // Real-window frames can be shorter than 1/60 s, so wait on time, not a frame count.
     let registry = Registry::default();
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -2196,9 +2064,7 @@ fn the_tooltip_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_seco
 
 #[test]
 fn the_toast_scenario_passes_when_frames_are_shorter_than_a_sixtieth_of_a_second() {
-    // The gallery plays in a real window whose frames are as long as the display
-    // makes them, often shorter than 1/60 s, so a fixed number of frames can be
-    // less than a toast's second (#399).
+    // Real-window frames can be shorter than 1/60 s, so wait on time, not a frame count.
     let registry = Registry::default();
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -2226,9 +2092,6 @@ fn shuffled_schedules() -> [(&'static str, InternedScheduleLabel); 4] {
     ]
 }
 
-/// Has `schedule` run its systems in an order shuffled by `seed` wherever
-/// nothing orders them, on the single-threaded executor so the order is the
-/// seed's alone.
 fn shuffle(app: &mut App, schedule: InternedScheduleLabel, seed: u64) {
     app.edit_schedule(schedule, |schedule| {
         let mut settings = schedule.get_build_settings();
@@ -2239,9 +2102,6 @@ fn shuffle(app: &mut App, schedule: InternedScheduleLabel, seed: u64) {
 }
 
 fn run_shuffled_case(path: &str, schedule_name: &str, seed: u64) {
-    // A system that runs at the right moment only because nothing happened to
-    // run it earlier passes under one seed and fails under another. A failure
-    // names the file, the schedule and the seed, and replays from them.
     let registry = Registry::default();
     let scenario = load_ron_file(path, &registry).unwrap();
     if scenario.disabled().is_some() {
@@ -2269,8 +2129,6 @@ fn run_shuffled_case(path: &str, schedule_name: &str, seed: u64) {
 
 include!(concat!(env!("OUT_DIR"), "/shuffled_scenario_tests.rs"));
 
-/// A combo over a selection that may hold several items: picks in its list
-/// leave it open, and a click elsewhere closes it.
 fn picking_several_in_a_combo() -> Scenario {
     let combo_is =
         |state| Check::component::<ComboState>(Target::name("multi combo"), "").eq(state);
@@ -2317,9 +2175,7 @@ fn picking_several_in_a_combo() -> Scenario {
 
 #[test]
 fn a_swatch_picked_under_the_pointer_keeps_its_hover_highlight_in_a_window_and_in_an_image() {
-    // The first swatch of `palette` is slate-50, a light colour on the light
-    // theme, so its square's border is the colour darkened: by 0.8 while it is
-    // selected and hovered, by 0.6 once the pointer has left.
+    // slate-50 is light on the light theme, so the border is darkened: 0.8 while selected and hovered, 0.6 after.
     let swatch = || {
         Target::nth(
             0,
@@ -2357,10 +2213,6 @@ fn picks_in_a_combo_over_several_items_leave_it_open_in_a_window_and_in_an_image
     assert!(report.passed(), "{:#?}", report.failures());
 }
 
-// ---- Filter chips wrap ----
-
-/// The distinct vertical positions (whole pixels) of the chips of a `FilterChips` that sits in
-/// a box `width` pixels wide, i.e. how many lines the chips are on.
 fn chip_lines(width: f32) -> usize {
     let mut app = widgets_app();
     let root = spawn_camera_and_root(app.world_mut());
@@ -2426,8 +2278,6 @@ fn filter_chips_wrap_onto_more_lines_in_a_narrower_row() {
     );
 }
 
-/// The height, in logical pixels, a panel's body area is laid out at with
-/// `rows` rows of 50 px in it and a maximum of 200.
 fn panel_body_height(rows: usize) -> (f32, f32) {
     let mut app = widgets_app();
     let root = spawn_camera_and_root(app.world_mut());
@@ -2473,7 +2323,7 @@ fn panel_body_height(rows: usize) -> (f32, f32) {
 #[test]
 fn a_panel_body_grows_with_its_content_up_to_its_maximum_and_then_scrolls() {
     let (short, short_overflow) = panel_body_height(2);
-    // The content (100) plus the scroll contents' 3 px of padding on each side, for focus rings.
+    // Content 100 plus 3 px of scroll-content padding per side for focus rings.
     assert!((short - 106.0).abs() < 1.5, "grows to its content: {short}");
     assert!(short_overflow < 1.0, "nothing to scroll: {short_overflow}");
 
@@ -2556,8 +2406,6 @@ fn a_panel_body_with_control_groups_scrolls_past_its_maximum_height() {
     );
 }
 
-/// The height of a scroll area with a `max_height` of 200 around a list of `rows` rows, and how
-/// far its contents overflow it (logical pixels).
 fn list_scroll_area_height(rows: usize) -> (f32, f32) {
     let mut app = widgets_app();
     let root = spawn_camera_and_root(app.world_mut());
@@ -2609,9 +2457,6 @@ fn a_list_in_a_scroll_area_with_a_maximum_height_grows_with_its_rows_and_then_sc
     assert!(tall_overflow > 100.0, "the rest scrolls: {tall_overflow}");
 }
 
-// ---- Text widgets in the accessibility tree ----
-
-/// An app with a title, a pill, a key cap and an icon button with a badge of 3, all named.
 fn text_widgets_app() -> App {
     let mut app = widgets_app();
     let world = app.world_mut();
@@ -2727,9 +2572,6 @@ fn a_badge_describes_its_button_and_is_not_in_the_tree_itself() {
     assert_eq!(accessibility_node(&mut app, "warnings").description(), None);
 }
 
-// ---- Radio and toggle roles ----
-
-/// A step that checks the role, label and states of the accessibility node of `of`.
 fn accessible_step(
     of: Target,
     role: &str,
@@ -2895,9 +2737,6 @@ fn the_cursor_overlays_roots_get_no_ui_root() {
     assert_eq!(roots, 1, "only the app's own root is a UiRoot");
 }
 
-// ---- `VirtualList` ----
-
-/// The entity of the only `VirtualList`, and of the scroll contents around it.
 fn virtual_list_and_contents(app: &mut App) -> (Entity, Entity) {
     let world = app.world_mut();
     let list = world
@@ -2911,7 +2750,6 @@ fn virtual_list_and_contents(app: &mut App) -> (Entity, Entity) {
     (list, contents)
 }
 
-/// How many rows the `VirtualList`s have, and how many entities the world has.
 fn rows_and_entities(app: &mut App) -> (usize, usize) {
     let world = app.world_mut();
     let rows = world.query::<&VirtualListRow>().iter(world).count();
@@ -2919,7 +2757,6 @@ fn rows_and_entities(app: &mut App) -> (usize, usize) {
     (rows, entities)
 }
 
-/// The text of the rows that are shown, in the order of their items.
 fn shown_rows(app: &mut App) -> Vec<String> {
     let world = app.world_mut();
     let mut rows: Vec<(usize, String)> = world
@@ -2944,7 +2781,6 @@ fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_
     }
     let (list, contents) = virtual_list_and_contents(&mut app);
     let (rows, entities) = rows_and_entities(&mut app);
-    // 200 pixels of 28 pixel rows: 8 in view, one more for a part row and two beyond each edge.
     assert_eq!(rows, 13);
     assert_eq!(
         shown_rows(&mut app).first().map(String::as_str),
@@ -2960,13 +2796,10 @@ fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_
         }
         assert_eq!(rows_and_entities(&mut app), (rows, entities), "at {scroll}");
     }
-    // The last scroll went past the end, which the layout stops at the bottom.
     let shown = shown_rows(&mut app);
     assert_eq!(shown.last().map(String::as_str), Some("Row 10000"));
     assert_eq!(shown.len(), rows);
 
-    // A train added at the bottom: one entity more, the item, and no row.
-    // The list's selection holds its own items.
     let items = list;
     app.world_mut()
         .spawn((Item::new("Row 10001"), ItemOf(items)));
@@ -2980,8 +2813,6 @@ fn a_virtual_list_of_ten_thousand_rows_keeps_its_entities_bounded_at_any_scroll_
     );
 }
 
-/// For each shown row of the `VirtualList`s, in the order of their items: the item's index
-/// and the `position_in_set` and `size_of_set` of the row's accessibility node.
 fn shown_row_positions(app: &mut App) -> Vec<(usize, Option<usize>, Option<usize>)> {
     let world = app.world_mut();
     let mut rows: Vec<_> = world
@@ -2998,7 +2829,7 @@ fn shown_row_positions(app: &mut App) -> Vec<(usize, Option<usize>, Option<usize
 
 #[test]
 fn a_virtual_list_tells_a_screen_reader_where_each_row_is_among_all_its_items() {
-    // A screen reader reads a pooled row as item 5,001 of 10,000, not as one of 13 rows.
+    // A screen reader reads a pooled row as item 5,001 of 10,000, not one of 13 rows.
     let mut app = widgets_app();
     WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
     for _ in 0..4 {
@@ -3014,7 +2845,6 @@ fn a_virtual_list_tells_a_screen_reader_where_each_row_is_among_all_its_items() 
     let first = shown_row_positions(&mut app);
     assert_eq!(first.first(), Some(&(0, Some(1), Some(10_000))));
 
-    // Row 5001 at the top of the view.
     app.world_mut()
         .entity_mut(contents)
         .insert(ScrollPosition(Vec2::new(0.0, 5_000.0 * 28.0)));
@@ -3035,9 +2865,6 @@ fn a_virtual_list_tells_a_screen_reader_where_each_row_is_among_all_its_items() 
 
 #[test]
 fn a_separated_virtual_list_scrolled_by_gapped_rows_shows_the_rows_in_view_with_their_positions() {
-    // 44 pixel rows with 2 pixel gaps: the row at the top of the view after a scroll is found
-    // by the 46 pixel pitch (plus the 6 pixel padding), not by the row height, and a screen
-    // reader still reads its place among the items.
     let mut app = widgets_app();
     WidgetsSetup::SeparatedVirtualList
         .build(app.world_mut())
@@ -3046,8 +2873,6 @@ fn a_separated_virtual_list_scrolled_by_gapped_rows_shows_the_rows_in_view_with_
         app.update();
     }
     let (_, contents) = virtual_list_and_contents(&mut app);
-    // Item 5001 (index 5000) starts at 6 + 5000 * 46 in the list, 3 pixels more in the
-    // contents, so index 4999 is the top row in view; two more lie beyond it.
     app.world_mut()
         .entity_mut(contents)
         .insert(ScrollPosition(Vec2::new(
@@ -3071,8 +2896,7 @@ fn a_separated_virtual_list_scrolled_by_gapped_rows_shows_the_rows_in_view_with_
 
 #[test]
 fn a_virtual_list_row_that_shows_no_item_has_no_position_among_the_items() {
-    // Scrolled to the bottom, then all but three items removed: most of the pool's rows
-    // show nothing, and a screen reader must not read them as item 9,999 of 3.
+    // Most pool rows show nothing and must not read as item 9,999 of 3.
     let mut app = widgets_app();
     WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
     for _ in 0..4 {
@@ -3125,8 +2949,6 @@ fn a_virtual_list_row_that_shows_no_item_has_no_position_among_the_items() {
 
 #[test]
 fn a_first_page_down_on_a_virtual_list_without_an_active_row_lands_on_the_first_item() {
-    // Focused while it has no items, the list has no active row and nothing selected when
-    // its items arrive; Page Down then starts where Arrow Down does, on the first item.
     let mut app = widgets_app();
     let root = spawn_camera_and_root(app.world_mut());
     let mut list = Entity::PLACEHOLDER;
@@ -3173,7 +2995,6 @@ fn a_first_page_down_on_a_virtual_list_without_an_active_row_lands_on_the_first_
     );
 }
 
-/// Fills a `VirtualList` row with a button named after the row's item.
 fn virtual_row_with_button(
     spawner: In<ItemViewSpawner>,
     items: Query<&Item<String>>,
@@ -3195,8 +3016,6 @@ fn virtual_row_with_button(
     });
 }
 
-/// Spawns a `creator list` of a hundred rows (`Row 1` first selected), each filled by
-/// [`virtual_row_with_button`], in a 200 pixel high scroll area.
 fn spawn_virtual_list_with_creator(world: &mut World) {
     let create = world.register_system(virtual_row_with_button);
     let root = spawn_camera_and_root(world);
@@ -3226,8 +3045,6 @@ fn spawn_virtual_list_with_creator(world: &mut World) {
     });
 }
 
-/// For each shown row of the `VirtualList`s, in the order of their items: the item's text and
-/// the names of the row's children.
 fn shown_rows_with_children(app: &mut App) -> Vec<(String, Vec<String>)> {
     let world = app.world_mut();
     let mut rows: Vec<(usize, String, Vec<String>)> = world
@@ -3251,7 +3068,6 @@ fn shown_rows_with_children(app: &mut App) -> Vec<(String, Vec<String>)> {
         .collect()
 }
 
-/// The `shown` of every `VirtualListRow` insert an observer saw.
 #[derive(Resource, Default)]
 struct InsertedRows(Vec<Option<ShownItem>>);
 
@@ -3273,8 +3089,6 @@ fn a_virtual_list_row_shows_an_item_with_its_index_or_nothing_and_an_insert_obse
         app.update();
     }
 
-    // Every shown row holds the index and the item together, and the item is the one at
-    // that index of the list's items.
     let world = app.world_mut();
     let shown: Vec<_> = world
         .query::<&VirtualListRow>()
@@ -3287,7 +3101,6 @@ fn a_virtual_list_row_shows_an_item_with_its_index_or_nothing_and_an_insert_obse
         assert_eq!(text, format!("Row {}", index + 1));
     }
 
-    // The observer of the insert got a shown row with both, for the creator's rows.
     let seen = &app.world().get_resource::<InsertedRows>().unwrap().0;
     assert!(seen.iter().any(Option::is_some), "no insert showed an item");
     assert!(seen.iter().flatten().all(|shown| shown.index < 100));
@@ -3312,7 +3125,6 @@ fn a_virtual_list_runs_its_creator_again_for_a_row_handed_to_another_item() {
     let first = shown_rows_with_children(&mut app);
     assert_eq!(first.first().map(|(item, _)| item.as_str()), Some("Row 1"));
 
-    // Far enough down that every row is handed on.
     let contents = app
         .world_mut()
         .query_filtered::<Entity, With<ScrollContents>>()
@@ -3357,7 +3169,6 @@ fn a_click_on_a_button_in_a_virtual_list_row_leaves_the_selection_alone() {
             Step::move_to(Target::name("In row Row 3")),
             Step::click(),
             selected(&["Row 1"]),
-            // A click on the row beside its button picks the row's item.
             Step::move_to(Target::nth(3, Target::component::<VirtualListRow>())),
             Step::click(),
             selected(&["Row 4"]),
@@ -3426,7 +3237,6 @@ fn a_virtual_list_over_a_selection_reference_shows_and_marks_the_referenced_sele
     assert_eq!(selected, [Some(b)]);
 }
 
-/// The background colour of every shown row, in the order of their items.
 fn shown_row_backgrounds(app: &mut App) -> Vec<Color> {
     let world = app.world_mut();
     let mut rows: Vec<(usize, Color)> = world
@@ -3439,7 +3249,6 @@ fn shown_row_backgrounds(app: &mut App) -> Vec<Color> {
     rows.into_iter().map(|(_, color)| color).collect()
 }
 
-/// Settles a virtual list screen and returns the app.
 fn settled_virtual_list_app() -> App {
     let mut app = widgets_app();
     WidgetsSetup::VirtualList.build(app.world_mut()).unwrap();
@@ -3618,8 +3427,6 @@ fn a_separated_virtual_list_with_a_row_height_just_above_its_padding_and_ring_sh
     assert!(rows_and_entities(&mut app).0 > 0);
 }
 
-/// The left edge of an indicator as drawn, in logical pixels: its `Node` holds the laid-out goal
-/// and its `UiTransform` moves and scales that box about its centre.
 fn indicator_visual_left(world: &World, indicator: Entity) -> f32 {
     let node = world.get::<Node>(indicator).unwrap();
     let transform = world.get::<UiTransform>(indicator).unwrap();
@@ -3631,8 +3438,6 @@ fn indicator_visual_left(world: &World, indicator: Entity) -> f32 {
     left + width / 2.0 + shift - width * transform.scale.x / 2.0
 }
 
-/// The drawn left of the segment indicator of `control`, in logical pixels, and the left edge of
-/// `segment` relative to `control`, as the layout has it.
 fn indicator_left_and_goal(app: &App, control: Entity, segment: Entity) -> (f32, f32) {
     use bevy_pluim::segmented_control::SegmentIndicator;
     let world = app.world();
@@ -3683,7 +3488,6 @@ fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
         .try_into()
         .unwrap();
 
-    // At rest it lies behind the selected segment.
     let (left, goal) = indicator_left_and_goal(&app, control, first);
     assert!((left - goal).abs() < 0.6, "{left} vs {goal}");
 
@@ -3700,7 +3504,6 @@ fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
             selections.update_selection(control, |s| s.set_selection([item]));
         })
         .unwrap();
-    // A few frames later it is on its way, neither at the start nor at the goal ...
     for _ in 0..3 {
         app.update();
     }
@@ -3710,7 +3513,6 @@ fn a_segmented_control_slides_its_indicator_to_a_newly_selected_segment() {
         "{start} {left} {goal}"
     );
 
-    // ... and a second later it has arrived.
     for _ in 0..60 {
         app.update();
     }
@@ -3758,7 +3560,6 @@ fn a_sliding_indicator_moves_by_transform_and_leaves_its_node_alone() {
             selections.update_selection(control, |s| s.set_selection([item]));
         })
         .unwrap();
-    // The node takes the goal in the first frames, then stays while the transform eases.
     for _ in 0..3 {
         app.update();
     }
@@ -3834,7 +3635,6 @@ fn an_indicator_hidden_mid_slide_has_its_transform_back_at_rest() {
     let slid = app.world().get::<UiTransform>(indicator).unwrap();
     assert!(slid.translation != Val2::ZERO, "the indicator is sliding");
 
-    // The control ends up with no selected item mid-slide: the indicator hides and rests.
     let selected: Vec<Entity> = app
         .world_mut()
         .query_filtered::<Entity, With<Selected>>()
@@ -3853,8 +3653,6 @@ fn an_indicator_hidden_mid_slide_has_its_transform_back_at_rest() {
     assert_eq!(transform.scale, Vec2::ONE);
 }
 
-/// The drawn left of the child of `track` named `indicator`, in logical pixels, and the left edge of
-/// `item` relative to `track`, as the layout has it.
 fn named_indicator_left_and_goal(
     app: &App,
     track: Entity,
@@ -3882,8 +3680,6 @@ fn named_indicator_left_and_goal(
     (left, edge(item) - edge(track))
 }
 
-/// Checks that the indicator named `indicator` of `track` rests behind `first`, slides when
-/// `change` runs and rests behind `last` a second later.
 fn assert_indicator_slides(
     app: &mut App,
     track: Entity,
@@ -3988,11 +3784,6 @@ fn a_light_dark_toggle_slides_its_indicator_to_a_newly_chosen_option() {
     });
 }
 
-// ---- `TextField` width constraints are layout units (#472) ----
-
-/// The width, in logical pixels, a `TextField` built by `field` is laid out at in a parent
-/// of `parent` (`Val::Auto` for none), whose children are not stretched
-/// unless `stretch` says so.
 fn text_field_width(field: TextField, parent_width: Val, stretch: bool) -> f32 {
     let mut app = widgets_app();
     app.world_mut().spawn(Camera2d);
@@ -4030,7 +3821,6 @@ fn assert_width(actual: f32, expected: f32) {
 
 #[test]
 fn a_text_field_with_a_minimum_above_its_maximum_is_as_wide_as_the_minimum() {
-    // Parent without a width constraint: the field is as wide as its constraints make it.
     let default_max = TextField::new("").with_min_width(px(400));
     assert_width(text_field_width(default_max, Val::Auto, false), 400.0);
 
@@ -4044,7 +3834,6 @@ fn a_text_field_with_a_minimum_above_its_maximum_is_as_wide_as_the_minimum() {
         .with_min_width(px(400));
     assert_width(text_field_width(max_first, Val::Auto, false), 400.0);
 
-    // Also when the parent would stretch it, and the bounds are not clamped.
     let stretched = TextField::new("")
         .with_max_width(px(320))
         .with_min_width(px(400));
@@ -4089,13 +3878,11 @@ fn a_horizontal_list_in_a_narrow_parent_keeps_the_content_width_of_its_rows() {
 
 #[test]
 fn text_field_percentage_bounds_are_relative_to_the_parent() {
-    // A 1000 px parent stretches the field, which stops at 60 %.
     let max = TextField::new("")
         .with_min_width(percent(30))
         .with_max_width(percent(60));
     assert_width(text_field_width(max, px(1000), true), 600.0);
 
-    // Not stretched, an empty field is as narrow as its minimum, 50 % of 400 px.
     let min = TextField::new("")
         .with_min_width(percent(50))
         .with_max_width(Val::Auto);
@@ -4109,9 +3896,7 @@ fn text_field_auto_bounds_do_not_constrain_the_width() {
             .with_min_width(Val::Auto)
             .with_max_width(Val::Auto)
     };
-    // The parent's width wins over the default 320 px maximum when stretched.
     assert_width(text_field_width(auto(), px(700), true), 700.0);
-    // Not stretched, an empty field is as wide as its padding and border.
     let narrow = text_field_width(auto(), Val::Auto, false);
     assert!(narrow < 160.0, "no default minimum: {narrow}");
 }
@@ -4238,11 +4023,6 @@ fn reinserting_a_text_field_updates_value_placeholder_name_and_widths_without_ev
     );
 }
 
-// ---- LightDarkToggle: one tab stop whose arrows pick ----
-
-/// A "Before" button, the `toggle` and an "After" button, with the arrow keys moving the focus
-/// between widgets as an app's directional navigation would. `preference` is inserted first, as
-/// an app that fixes it would.
 fn toggle_app(preference: Option<ThemePreference>) -> App {
     let mut app = directional_navigation_app();
     if let Some(preference) = preference {
@@ -4336,7 +4116,6 @@ fn arrows_move_wrap_and_set_the_preference_in_a_light_dark_toggle() {
     assert_eq!(preference_of(&app), ThemePreference::Light);
     assert_eq!(tab_stops(&app, toggle), vec![options[0]]);
 
-    // Enter and Space still pick the focused option.
     app.insert_resource(ThemePreference::Dark);
     settle(&mut app);
     focus_on(&mut app, options[0]);
@@ -4381,14 +4160,10 @@ fn a_light_dark_toggle_does_not_take_the_focus_from_another_widget() {
     );
 }
 
-// ---- The overview example ----
-
 #[path = "../examples/overview/ui/mod.rs"]
 #[expect(dead_code, reason = "the example's own `main` is not run by the test")]
 mod overview;
 
-/// The overview at the default window size (1280 by 720): the tab bar and the theme toggle on the
-/// left, and on every page the same centred area with its variants inside it.
 #[test]
 fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() {
     let mut app = App::new();
@@ -4400,7 +4175,6 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
     app.cleanup();
     settle(&mut app);
 
-    // The theme control is the toggle, not a button.
     let world = app.world_mut();
     assert_eq!(world.query::<&LightDarkToggle>().iter(world).count(), 1);
     assert!(
@@ -4465,18 +4239,14 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
             .collect();
         assert_eq!(pages.len(), 1, "{tab}: one page is shown");
         let (page, size, centre) = pages[0];
-        // Every page is as wide as the first and has the same centre, so none shifts.
         let (first_size_x, first_centre_x) = *area.get_or_insert((size.x, centre.x));
         assert_eq!((size.x, centre.x), (first_size_x, first_centre_x), "{tab}");
-        // A page fits the window height (the area around it scrolls past that).
         assert!(size.y <= 720.0 - 40.0, "{tab} is {} high", size.y);
-        // The variants are inside the page and the page inside the window.
         assert!(centre.x + size.x / 2.0 <= 1280.0, "{tab}");
         let left = centre.x - size.x / 2.0;
         let right = centre.x + size.x / 2.0;
         let mut parts = vec![page];
         let mut checked = 0;
-        // The page's children (header, groups) and the groups' children (the variants).
         for _depth in 0..2 {
             let mut next = Vec::new();
             for parent in parts {
@@ -4506,9 +4276,6 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
             checked >= 2,
             "{tab}: the header and the variants were looked at"
         );
-        // The wrapping row of variants is centred in the page, and every line of variants is
-        // centred in the row, none overlapping another. (The page centres the row itself, so
-        // the lines are what `justify_content: Center` of the row decides.)
         let rows: Vec<Entity> = world
             .get::<Children>(page)
             .unwrap()
@@ -4541,7 +4308,6 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
             .map(|variant| rect(world, variant))
             .collect();
         assert!(!variants.is_empty(), "{tab}: the row has variants");
-        // A line is the variants that start at the same height.
         let mut lines: Vec<(f32, f32, f32)> = Vec::new();
         for variant in &variants {
             match lines
@@ -4575,8 +4341,6 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
     }
 }
 
-/// The lists on the overview's "Scroll area" page get their rows although a scene inserts their
-/// `List` after the `Selection` and items, so the areas overflow and show their scroll bars.
 #[test]
 fn the_overview_scroll_area_page_has_rows_and_visible_scroll_bars() {
     let mut app = App::new();
