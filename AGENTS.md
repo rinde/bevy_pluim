@@ -283,11 +283,36 @@ which doc to open, and each doc links on to the design notes it relies on.
   `missing_crate_level_docs` are `deny`: every public item has a `///`
   comment, every module (and each example) a `//!` header, and
   `RUSTDOCFLAGS="-D warnings"` in `just lint` keeps intra-doc links honest. Say
-  what a thing is or does, not how it is implemented.
+  what a thing is or does, not how it is implemented, in one line where the
+  name and type already say the rest (see [Comments](#comments)).
 - **`#[expect(…, reason = "…")]`, never `allow`.** `allow_attributes` and
   `allow_attributes_without_reason` are denied in `Cargo.toml`.
 - `#[derive(Debug)]` on every public type (`missing_debug_implementations`
   warns), and `const fn` / `#[must_use]` where clippy asks.
+
+### Comments
+
+Default to none. Rationale, history and how-it-broke stories go in the PR
+description, the commit message or a test, not in the source. All code and
+comments use American English (`color`, `behavior`, `center`, `canceled`).
+
+- Add one only when (a) the code can't say it itself, (b) a maintainer would
+  make the wrong call without some history, or (c) the code is deliberately
+  weird for a reason.
+- One line, two at most. Imperative, stating the constraint, optionally naming
+  the tempting edit that breaks it.
+- Before writing one, check whether a nearby type or name already says it. If
+  so, it is redundant, even when it feels like a "why".
+- Never: a doc that restates types, narration of what a branch does,
+  design-decision explainers, conditionals or code structure, ticket IDs or
+  provenance (`git blame` has it), or a doc on a small self-describing helper.
+  Where `missing_docs` demands a `///` on a public item, one line saying what
+  it is suffices.
+- Match the comment density of the surrounding file.
+- On the fence? No comment.
+- Apply this while writing, not as a cleanup pass. Before opening a PR, check
+  every added comment in the full diff, including ones from earlier sessions.
+- A plain `//` or `///` line that passes these rules is fine.
 
 ### Adding a widget
 
@@ -420,4 +445,5 @@ and recorded: [`docs/testing.md`](docs/testing.md) and
 5. The `docs/` file of each module or design area you changed is updated;
    this file only if a module, doc, example, convention or command was added,
    removed or renamed
-6. The work is on a PR, rebased onto `main` if needed
+6. Every comment the full diff adds passes [Comments](#comments)
+7. The work is on a PR, rebased onto `main` if needed
