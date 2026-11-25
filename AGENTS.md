@@ -233,7 +233,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 - **Insert-time configuration is immutable; refs are read-only.** `PushButton`, `IconButton` and
   `Link` are `#[component(immutable)]`: a live button is changed by building or cloning a value,
   editing it outside the world and inserting it again, which updates the children in place (no
-  `Changed<..>` synchronisation). `PushButtonRefs`, `IconButtonRefs` and `ColorSquareRef` are
+  `Changed<..>` synchronization). `PushButtonRefs`, `IconButtonRefs` and `ColorSquareRef` are
   immutable, queryable records with private fields and no public constructor; read them through
   `PushButtonRefs::label()` / `icon()`, `IconButtonRefs::icon()` and `ColorSquareRef::entity()`.
   `compile_fail` doctests on the types guard both.
