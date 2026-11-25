@@ -1,5 +1,4 @@
-//! The sliding highlight behind the selected item of a track: shared by `SegmentedControl`,
-//! `TabBar` and `LightDarkToggle`, which each have an indicator component of their own.
+//! The sliding highlight behind the selected item of a track.
 
 #![expect(
     clippy::redundant_pub_crate,
@@ -13,22 +12,19 @@ use std::collections::HashMap;
 
 use crate::theme::Theme;
 
-/// How fast an indicator catches up with the selected item, per second: it covers all but about
-/// 1 % of the way in a quarter of a second.
+/// How fast an indicator catches up with the selected item, per second.
 const INDICATOR_RATE: f32 = 18.0;
-/// The distance in logical pixels under which an indicator snaps to its target.
 const INDICATOR_SNAP: f32 = 0.5;
-/// How far in logical pixels the item's box may move before the indicator's `Node` follows it, so
-/// float noise from layout does not dirty layout again.
+/// Ignore item box moves below this, or float noise dirties layout again.
 const GOAL_EPSILON: f32 = 0.01;
 
-/// The component of an indicator: it belongs to one track.
+/// The component of an indicator.
 pub(crate) trait Indicator: Component + Sized {
     /// The indicator of `owner`.
     fn of(owner: Entity) -> Self;
     /// The track this indicator belongs to.
     fn owner(&self) -> Entity;
-    /// The colour of the indicator in `theme`.
+    /// The color of the indicator in `theme`.
     fn color(theme: &Theme) -> Color {
         theme.colors().segmented_selected
     }
@@ -36,14 +32,7 @@ pub(crate) trait Indicator: Component + Sized {
 
 /// Gives every track `T` without one its indicator `I`, drawn behind the items.
 ///
-/// Only tracks that may lack an indicator are looked at, and each by its own children: a track
-/// that is new or inserted again (`Changed<T>`), and, when an indicator was removed or despawned
-/// (also with its track), every track once, because a removed component no longer says whose it
-/// was. A quiet frame does nothing, so the cost no longer grows with tracks times indicators.
-///
-/// An indicator that was reparented away from its track without being removed is a stray: the
-/// track is put back as its parent instead of getting a second indicator. The strays are looked up
-/// by owner once per pass, and only when a candidate has no indicator among its children.
+/// A reparented stray indicator is adopted back, not duplicated.
 pub(crate) fn spawn<I: Indicator, T: Component>(
     changed: Query<Entity, Changed<T>>,
     tracks: Query<Entity, With<T>>,
@@ -89,14 +78,9 @@ pub(crate) fn spawn<I: Indicator, T: Component>(
     }
 }
 
-/// Moves each indicator `I` towards the selected item `S` of its track `T`, snapping the first
-/// time it is placed. With no selected item the indicator is hidden.
+/// Moves each indicator `I` towards the selected item `S` of its track `T`, hiding it with none.
 ///
-/// The `Node` always holds the laid-out box of the selected item (the goal), so layout only runs
-/// when the goal moves. The slide is drawn by the indicator's `UiTransform`: its translation is the
-/// offset of the visible box's centre from the goal's, its scale the visible size over the goal's,
-/// both easing to rest (zero and one). A frame of sliding changes no `Node`, so it dirties no
-/// layout.
+/// Slide through `UiTransform` only: writing the `Node` every frame dirties layout.
 pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
     time: Res<Time>,
     tracks: Query<(&ComputedNode, &UiGlobalTransform, &Children), With<T>>,
@@ -113,7 +97,6 @@ pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
             if node.display != Display::None {
                 node.display = Display::None;
             }
-            // Hidden, the transform is not drawn, but a stale one must not outlive the slide.
             if transform.translation != Val2::ZERO {
                 transform.translation = Val2::ZERO;
             }
@@ -139,7 +122,6 @@ pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
             px(node.left) + px(node.width),
             px(node.top) + px(node.height),
         );
-        // The visible box now: the node's, moved and scaled by the transform.
         let shown = if placed {
             let offset = Vec2::new(px(transform.translation.x), px(transform.translation.y));
             Rect::from_center_size(resting.center() + offset, resting.size() * transform.scale)
@@ -147,8 +129,6 @@ pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
             goal
         };
 
-        // The goal moved: the node takes it at once and the transform keeps what is seen where it
-        // was.
         let moved = !placed
             || (goal.min - resting.min).abs().max_element() >= GOAL_EPSILON
             || (goal.size() - resting.size()).abs().max_element() >= GOAL_EPSILON;
@@ -161,7 +141,6 @@ pub(crate) fn animate<I: Indicator, T: Component, S: Component>(
         }
         let goal_size = goal.size().max(Vec2::splat(f32::EPSILON));
         let (mut offset, mut ratio) = (shown.center() - goal.center(), shown.size() / goal_size);
-        // Ease both towards rest, snapping when near.
         if offset.abs().max_element() < INDICATOR_SNAP
             && (shown.size() - goal.size()).abs().max_element() < INDICATOR_SNAP
         {

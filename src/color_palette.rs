@@ -1,4 +1,4 @@
-//! `ColorPalette`: a grid of colour swatches over a selection of [`Item<Color>`](crate::select::Item).
+//! `ColorPalette`: a grid of color swatches over a selection of [`Item<Color>`](crate::select::Item).
 
 use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
@@ -20,8 +20,6 @@ use crate::{MouseEvent, MouseKind};
 const COLOR_SQUARE_SIZE: f32 = 35.0;
 
 /// Registers the systems and observers of [`ColorPalette`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ColorPalettePlugin;
 
@@ -45,13 +43,10 @@ impl Plugin for ColorPalettePlugin {
     }
 }
 
-/// A grid of colour swatches for a selection of [`Item<Color>`](crate::select::Item).
+/// A grid of color swatches for a selection of [`Item<Color>`](crate::select::Item).
 ///
-/// Like a [`List`] it is a [`ListBox`](bevy::ui_widgets::ListBox) and its swatches
-/// ([`ItemView`]s) are [`ListItem`](bevy::ui_widgets::ListItem)s, so a swatch of the
-/// selection carries [`Selected`]. The [`Selection`] stays the one source of truth:
-/// [`Selected`] follows it, see [`List`]. A swatch's accessible name is the name of its
-/// colour: its Tailwind name (`blue-500`) or else its hex (`#3b82f6`).
+/// Like a [`List`], it is a [`ListBox`](bevy::ui_widgets::ListBox) whose swatches carry
+/// [`Selected`] when in the [`Selection`].
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -63,17 +58,11 @@ impl Plugin for ColorPalettePlugin {
 )]
 pub struct ColorPalette;
 
-/// Marks a palette that builds no swatches: it keeps its [`Selection`] and its watch of the
-/// items, but [`on_items_changed`] leaves it empty until [`wake`] builds them.
-///
-/// A [`ColorPaletteCombo`](crate::color_palette_combo::ColorPaletteCombo) keeps the palette of
-/// its closed popup dormant, since a hidden popup of 242 swatches still costs entities, layout
-/// and memory; it wakes the palette when the popup opens and puts it to sleep when it closes.
+/// Marks a palette that builds no swatches until [`wake`] runs.
 #[derive(Component, Debug, Clone, Copy)]
 pub(crate) struct PaletteDormant;
 
-/// Builds the swatches of a dormant palette from all the items it draws from and lets
-/// [`on_items_changed`] keep them in step again.
+/// Builds the swatches of a dormant palette.
 pub(crate) fn wake(palette: In<Entity>, selections: SelectionParam, mut commands: Commands) {
     let Some((_, values)) = selections.get_items(palette.0) else {
         commands.entity(palette.0).remove::<PaletteDormant>();
@@ -108,8 +97,7 @@ pub(crate) fn sleep(
     }
 }
 
-/// Clears the swatches of the palettes whose items no longer resolve (see `list.rs`'s
-/// `clear_dangling_lists`).
+/// Clears the swatches of the palettes whose items no longer resolve.
 fn clear_dangling_palettes(
     mut removed_selections: RemovedComponents<Selection>,
     mut removed_refs: RemovedComponents<ItemsRef>,
@@ -146,8 +134,6 @@ fn on_items_changed(
             .collect::<Vec<_>>()
     });
 
-    // Linear reconciliation (see `List`): a view stays when its item is wanted and no
-    // earlier view shows it; any other is despawned.
     let wanted: HashSet<Entity> = items.iter().copied().collect();
     let mut shown = HashSet::with_capacity(existing.len());
     for (view_ref, ItemView { item_ref, .. }) in existing {
@@ -164,7 +150,6 @@ fn on_items_changed(
         commands.entity(*list_ref).with_children(|spawner| {
             let mut view = spawner.spawn((
                 Name::new("ItemView"),
-                // Allow scrolling
                 Pickable {
                     should_block_lower: false,
                     ..default()
@@ -172,7 +157,6 @@ fn on_items_changed(
                 Node {
                     display: Display::Flex,
                     justify_self: JustifySelf::Stretch,
-                    // flex_grow: 1.0,
                     justify_content: JustifyContent::Stretch,
                     align_items: AlignItems::Stretch,
                     padding: UiRect::ZERO,
@@ -205,9 +189,7 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
-/// Puts the edited colour of an [`Item<Color>`] on its swatches and redraws their highlight.
-///
-/// Only the swatches of the items that changed are touched; a quiet frame looks at nothing.
+/// Puts the edited color of an [`Item<Color>`] on its swatches.
 fn sync_item_colors(
     changed: Query<Entity, Changed<Item<Color>>>,
     items: Query<&Item<Color>>,
@@ -245,7 +227,7 @@ fn sync_item_colors(
     }
 }
 
-/// Keeps the label of each swatch's [`AccessibilityNode`] at the name of its colour.
+/// Keeps the label of each swatch's [`AccessibilityNode`] at the name of its color.
 fn sync_accessible_names(
     swatches: Query<(Entity, &ItemView)>,
     palettes: Query<(), With<ColorPalette>>,
@@ -271,13 +253,11 @@ fn on_insert_selection(t: On<Insert<Selection>>, mut commands: Commands) {
     commands.run_system_cached_with(watch_palette, t.event().event_target());
 }
 
-/// A palette inserted after its selection and items starts watching them now.
 fn on_insert_palette(t: On<Insert<ColorPalette>>, mut commands: Commands) {
     commands.run_system_cached_with(watch_palette, t.event().event_target());
 }
 
-/// Starts watching the items of the palette. Run as a deferred system by both observers, so the
-/// second of two in one frame sees the `ItemsWatch` the first inserted.
+/// Starts watching the items of the palette. Keep it deferred: of two inserts in one frame, the second must see the first's `ItemsWatch`.
 pub(crate) fn watch_palette(
     palette: In<Entity>,
     color_palettes: Query<Option<&ItemsWatch>, (With<ColorPalette>, With<Selection>)>,
@@ -314,15 +294,9 @@ fn handle_mouse_events(
     let is_selected = selection.is_selected(*target_item_ref);
 
     let highlight = match t.event().kind {
-        // A press is a pointer on the swatch, and shows the strongest highlight.
         MouseKind::Pressed => Some(HoverState::of(true, t.event().hovered())),
         MouseKind::Over => Some(HoverState::of(is_selected, t.event().hovered())),
         MouseKind::Out | MouseKind::Cancel => Some(HoverState::of(is_selected, false)),
-        // A click and a drag say nothing new about the pointer being on the swatch: the
-        // over, press, release and out events around them set the highlight. A drag in
-        // particular can arrive after the pointer left the swatch.
-        // A release says nothing either: selecting and deselecting are the `ListBox`'s events,
-        // see `list::on_value_change` and `list::on_reselect_row`.
         MouseKind::Click(_) | MouseKind::Drag | MouseKind::Released => None,
     };
 
@@ -413,7 +387,6 @@ fn on_selection_change(
             else {
                 continue;
             };
-            // Its own selection, or the one it refers to.
             if selection_ref != changed_selection_ref && color_palette_ref != changed_selection_ref
             {
                 continue;
@@ -499,8 +472,7 @@ enum HoverState {
 }
 
 impl HoverState {
-    /// The highlight of a swatch from its state, for the hover handler and the theme
-    /// system alike so that they cannot disagree.
+    /// The highlight of a swatch from its state.
     const fn of(selected: bool, hovered: bool) -> Self {
         match (selected, hovered) {
             (true, true) => Self::SelectedHover,

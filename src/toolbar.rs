@@ -17,35 +17,20 @@ use crate::select::{Item, SelectionParam, StructureChanges, order_views, plan_vi
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
-/// The width of a button of a [`ToolbarStyle::Filled`] toolbar, in logical pixels.
 const FILLED_WIDTH: f32 = 66.0;
-/// The height of a button of a [`ToolbarStyle::Filled`] toolbar.
 const FILLED_HEIGHT: f32 = 60.0;
-/// The side of the icon of a button of a [`ToolbarStyle::Filled`] toolbar.
 const FILLED_ICON: f32 = 22.0;
-/// The width of a button of a [`ToolbarStyle::Filled`] toolbar whose labels are hidden.
 const ICON_ONLY_WIDTH: f32 = 56.0;
-/// The height of a button of a [`ToolbarStyle::Filled`] toolbar whose labels are hidden.
 const ICON_ONLY_HEIGHT: f32 = 52.0;
-/// The gap between the icon and the label of a button.
 const LABEL_GAP: f32 = 4.0;
-/// The gap between two buttons, and between a button and a group divider.
 const BUTTON_GAP: f32 = 4.0;
-/// The height of the bar along the bottom edge of the active button of a
-/// [`ToolbarStyle::Underlined`] toolbar.
 const BAR_HEIGHT: f32 = 2.0;
-/// The font size of a key hint.
 const HINT_FONT_SIZE: f32 = 10.0;
-/// The opacity of a key hint, as a fraction of its text colour.
 const HINT_OPACITY: f32 = 0.6;
-/// The distance of a key hint from the top edge of its button.
 const HINT_TOP: f32 = 5.0;
-/// The distance of a key hint from the right edge of its button.
 const HINT_RIGHT: f32 = 7.0;
 
 /// Registers the systems and observers of [`Toolbar`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct ToolbarPlugin;
 
@@ -69,22 +54,16 @@ impl Plugin for ToolbarPlugin {
 /// How the active button of a [`Toolbar`] looks.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum ToolbarStyle {
-    /// 66 by 60 px buttons with the icon above a small label; the active one is filled with the
-    /// accent, and its icon and label take the accent text colour. Like a tool dock.
+    /// Buttons with the icon above a small label; the active one is filled with the accent.
     #[default]
     Filled,
-    /// 44 px buttons with an icon only (the label is the accessible name); the active one has
-    /// the subtle accent background, an accent icon and an accent bar along its bottom edge.
-    /// Like a panel bar.
+    /// Icon-only buttons; the active one has an accent bar along its bottom edge.
     Underlined,
 }
 
 /// Whether the buttons of a [`ToolbarStyle::Filled`] [`Toolbar`] show their label.
 ///
-/// Insert a new value on the toolbar to switch; the buttons are laid out again, not respawned.
-/// With the labels hidden the buttons are 56 by 52 px and show the icon alone; the label stays
-/// the accessible name. An [`ToolbarStyle::Underlined`] toolbar never shows labels, so this does
-/// not change it.
+/// An [`ToolbarStyle::Underlined`] toolbar never shows labels, so this does not change it.
 #[derive(Component, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub enum ToolbarLabels {
@@ -95,24 +74,11 @@ pub enum ToolbarLabels {
     Hidden,
 }
 
-/// A row of icon buttons over a [`Selection`](crate::select::Selection) of [`Item<Tool>`]s, where
-/// picking a button selects its item.
+/// A row of icon buttons over a [`Selection`](crate::select::Selection) of [`Item<Tool>`]s.
 ///
-/// Put it on an entity together with a selection that has [`Tool`] items, such as
-/// `Selection::builder().one().build_with_items([Item { data: Tool::new(icon, "Rail") }])`, or
-/// with a [`Selection::Ref`](crate::select::Selection::Ref) to one, so that a keyboard shortcut
-/// and a click go through the same selection. With a `One` selection exactly one tool is active;
-/// with a `ZeroOrOne` selection activating the active tool clears the selection.
-///
-/// Items with different [`Tool::group`]s are separated by a vertical [`Divider`]. A button is a
-/// [`Button`]: Enter and Space on a focused one pick it, like a click. The toolbar is one tab
-/// stop, at the tool that had the focus last (the first at the start): left and right move the
-/// focus to the previous and next tool, wrapping, and Home and End go to the first and last
-/// (focus only, nothing is picked); up and down are left to the app. Disabled and hidden
-/// buttons are skipped.
-///
-/// To a screen reader the row is a toolbar and each button a toggle button named after its
-/// tool, pressed while its tool is active.
+/// Put it on an entity with a selection of [`Tool`] items, or a
+/// [`Selection::Ref`](crate::select::Selection::Ref) to one. Items with different
+/// [`Tool::group`]s are separated by a [`Divider`].
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -127,8 +93,7 @@ pub enum ToolbarLabels {
     AccessibilityNode = AccessibilityNode::from(accesskit::Node::new(Role::Toolbar)),
 )]
 pub struct Toolbar {
-    /// How the active button looks, and with it the size of the buttons and whether they show
-    /// their label.
+    /// How the active button looks.
     pub style: ToolbarStyle,
 }
 
@@ -148,15 +113,11 @@ pub struct Tool {
     /// The text under the icon of a [`ToolbarStyle::Filled`] toolbar; in every style the
     /// accessible name of the button.
     pub label: String,
-    /// The group of the tool. A divider is put between neighbouring tools whose groups differ.
+    /// The group of the tool. A divider separates neighboring groups.
     pub group: u32,
-    /// A shortcut key shown as small text in the top-right corner of the button, such as `"1"`.
-    /// The toolbar only shows it; the application binds the key.
+    /// A shortcut key shown in the corner of the button. The app binds the key.
     pub key_hint: Option<String>,
-    /// What the tool means. A [`Tone::Danger`] tool (a bulldoze tool) turns its icon and label
-    /// the danger hover colour under the pointer and, when active, is filled with the danger
-    /// colour with danger text. A [`Tone::Warning`] tool shows warning text, on the warning
-    /// background when hovered or active.
+    /// What the tool means, which sets its colors.
     pub tone: Tone,
 }
 
@@ -194,9 +155,7 @@ impl Tool {
 
 /// One button of a [`Toolbar`]: picks its item when it is activated.
 ///
-/// Only the widget builds one, and the component is immutable; its style is the toolbar's, read from there. The item
-/// and the toolbar are read with [`item`](Self::item) and [`owner`](Self::owner). A button's
-/// accessible name is its [`Tool::label`], so callers supply meaningful labels.
+/// Read its fields with [`item`](Self::item) and [`owner`](Self::owner).
 ///
 /// ```compile_fail
 /// use bevy_pluim::toolbar::ToolbarButton;
@@ -236,8 +195,7 @@ impl ToolbarButton {
     }
 }
 
-/// The children of a [`ToolbarButton`]; the variant is the style the button was built for, so a
-/// child its style does not have cannot be named.
+/// The children of a [`ToolbarButton`], by the style it was built for.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 pub enum ToolbarButtonRefs {
@@ -306,20 +264,16 @@ impl ToolbarButtonRefs {
     }
 }
 
-/// A divider between two groups of a [`Toolbar`].
 #[derive(Component, Debug, Copy, Clone)]
 struct GroupDivider;
 
-/// What a child of a toolbar is, to tell whether the children match the items.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Slot {
     Button { item: Entity, hint: bool },
     Divider,
 }
 
-/// Brings the buttons and group dividers of every [`Toolbar`] in line with its items, their
-/// groups and its style: the ones that still match keep their entity, the others are spawned
-/// or despawned, and all are put in order.
+/// Brings the buttons and group dividers of every [`Toolbar`] in line with its items.
 fn sync_buttons(
     mut changes: StructureChanges<Toolbar, Tool>,
     toolbars: Query<(&Toolbar, Option<&Children>)>,
@@ -334,7 +288,6 @@ fn sync_buttons(
         let Ok((toolbar, children)) = toolbars.get(toolbar_ref) else {
             continue;
         };
-        // A selection that no longer resolves has no items: the views are cleared.
         let values = selections
             .get_items(toolbar_ref)
             .map_or(&[][..], |(_, values)| values);
@@ -354,8 +307,6 @@ fn sync_buttons(
             });
         }
 
-        // A button of the toolbar's style that shows the same item, with or without its hint, and
-        // a divider are kept; a button of another style never is (`None`).
         let children = children
             .into_iter()
             .flat_map(RelationshipTarget::iter)
@@ -391,8 +342,6 @@ fn sync_buttons(
         for child in &plan.stale {
             commands.entity(*child).despawn();
         }
-        // Buttons and dividers that still match keep their entity (and the focus on them); the
-        // missing ones are spawned and the run is put in order.
         let views = plan
             .slots
             .iter()
@@ -444,8 +393,7 @@ fn spawn_button(
             IconButtonSize::Regular.icon_px(),
         ),
     };
-    // The children are spawned under the button's entity, which is reserved first, so no node is
-    // ever parentless when it is added (a parentless `Node` becomes a `UiRoot`).
+    // Reserve the entity first: a parentless `Node` becomes a `UiRoot`.
     let button = commands.spawn_empty().id();
     let icon = commands
         .spawn((
@@ -538,7 +486,6 @@ fn spawn_button(
     button
 }
 
-/// How a button looks.
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct ButtonLook {
     background: Color,
@@ -546,9 +493,7 @@ struct ButtonLook {
     bar: bool,
 }
 
-/// The look of a button from its tone and state: active, hovered or at rest. Used by the system
-/// that restyles buttons on every change, so a theme change under a resting pointer keeps the
-/// hover.
+/// The look of a button from its tone and state.
 const fn button_look(
     colors: &ThemeColors,
     style: ToolbarStyle,
@@ -616,8 +561,7 @@ const fn button_look(
     }
 }
 
-/// Puts the icon, label, colours and sizes of every button in step with its item, its
-/// selection, the pointer and the theme.
+/// Puts the icon, label, colors and sizes of every button in step with its item and state.
 fn update_buttons(
     theme: Res<Theme>,
     toolbars: Query<(&Toolbar, &ToolbarLabels)>,
@@ -738,9 +682,7 @@ fn update_buttons(
     }
 }
 
-/// Keeps the toolbar a toolbar and each button a button named after the label of its tool,
-/// toggled on while its tool is active and off otherwise. Bevy clears the label of a button
-/// that has no text of its own when it is added, so this runs after it.
+/// Keeps the toolbar a toolbar and each button a toggle button. Run after Bevy's button sync.
 fn sync_accessibility(
     mut toolbars: Query<
         &mut AccessibilityNode,
@@ -761,13 +703,9 @@ fn sync_accessibility(
     selections: SelectionParam,
     mut changes: StructureChanges<Toolbar, Tool>,
 ) {
-    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
-    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut toolbars {
         sync_role(&mut node, Role::Toolbar);
     }
-    // A button is looked at when Bevy reset its node or it is new, and (for its label and
-    // toggled state) when its toolbar's items or selection changed. A quiet frame does neither.
     for (button, mut node) in &mut buttons.p0() {
         sync_button(button, &mut node, &items, &selections);
     }
@@ -782,7 +720,6 @@ fn sync_accessibility(
     }
 }
 
-/// Writes the label and toggled state of one button's node, only where they differ.
 fn sync_button(
     button: &ToolbarButton,
     node: &mut Mut<AccessibilityNode>,
@@ -799,11 +736,10 @@ fn sync_button(
     sync_toggled(node, Some(active));
 }
 
-/// Gives the buttons of an underlined toolbar, whose labels are hidden, a [`Tooltip`] with the
-/// label of their tool, and takes it off again when the toolbar is not underlined. Only a tooltip
-/// the widget added (marked [`OwnedTooltip`]) is replaced or removed: one with other text is the
-/// app's. Limit: an app tooltip with exactly the tool's label, put on before the widget's, is
-/// not told apart from it.
+/// Gives the buttons of an underlined toolbar a [`Tooltip`] with their label.
+///
+/// Only an [`OwnedTooltip`] is replaced or removed. An app tooltip with exactly the tool's label,
+/// put on first, is not told apart from it.
 fn sync_tooltips(
     buttons: Query<(
         Entity,
@@ -816,7 +752,7 @@ fn sync_tooltips(
     mut commands: Commands,
 ) {
     for (entity, button, refs, tooltip, owned) in &buttons {
-        // A tooltip whose text is not the one the widget added replaced it: it is the app's.
+        // A tooltip with other text is the app's: leave it.
         let owned = match (owned, tooltip) {
             (Some(owned), Some(tooltip)) if owned.0 == tooltip.text => true,
             (Some(_), _) => {
@@ -843,7 +779,6 @@ fn sync_tooltips(
     }
 }
 
-/// Picks the tool of the button that was used (a click, or Enter or Space on it).
 fn on_activate(t: On<Activate>, buttons: Query<&ToolbarButton>, mut selections: SelectionParam) {
     let Ok(button) = buttons.get(t.event().event_target()) else {
         return;

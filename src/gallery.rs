@@ -1,5 +1,4 @@
-//! `Gallery`: a row of image cards over a [`Selection`](crate::select::Selection), in titled
-//! groups, exactly one of them picked.
+//! `Gallery`: image cards in titled groups over a [`Selection`](crate::select::Selection).
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
@@ -17,30 +16,18 @@ use crate::label::Label;
 use crate::select::{Item, SelectionParam, StructureChanges, plan_views};
 use crate::theme::{Theme, ThemeColors};
 
-/// The width of a card, in logical pixels.
 const CARD_WIDTH: f32 = 104.0;
-/// The height of a card.
 const CARD_HEIGHT: f32 = 92.0;
-/// The width of the image of a card.
 const IMAGE_WIDTH: f32 = 72.0;
-/// The height of the image of a card.
 const IMAGE_HEIGHT: f32 = 30.0;
-/// The gap between the image and the label of a card.
 const CARD_GAP: f32 = 6.0;
-/// The padding of a card, inside its border.
 const CARD_PADDING: f32 = 6.0;
-/// The gap between two cards of a group.
 const CARDS_GAP: f32 = 6.0;
-/// The gap between a group heading and its cards.
 const HEADING_GAP: f32 = 8.0;
-/// The gap between two groups and the divider between them.
 const GROUP_GAP: f32 = 14.0;
-/// The width of the ring of the picked card.
 const RING_WIDTH: f32 = 2.0;
 
 /// Registers the systems and observers of [`Gallery`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct GalleryPlugin;
 
@@ -56,35 +43,12 @@ impl Plugin for GalleryPlugin {
     }
 }
 
-/// A row of image cards over a [`Selection`](crate::select::Selection) of
-/// [`Item<GalleryCard>`]s, under titled groups, where picking a card selects its item.
+/// Image cards over a [`Selection`](crate::select::Selection) of [`Item<GalleryCard>`]s,
+/// under titled groups: picking a card selects its item.
 ///
-/// Put it on an entity together with a selection that has [`GalleryCard`] items, such as
-/// `Selection::builder().one().build_with_items([Item { data: GalleryCard::new(image, "Steam", "Locomotives") }])`,
-/// or with a [`Selection::Ref`](crate::select::Selection::Ref) to one. The selection should be a
-/// `One`: exactly one card is picked across all groups, and picking another deselects the
-/// first.
-///
-/// Neighbouring items with the same [`GalleryCard::group`] form a group: an overline
-/// [`Label`] with the title above a row of cards. Groups sit side by side with a vertical
-/// [`Divider`] between them, and do not shrink, so a gallery wider than its parent overflows:
-/// put it in a horizontal [`ScrollArea`](crate::scroll_area::ScrollArea) to scroll it.
-///
-/// A card is a [`Button`]: Enter and Space on a focused one pick it, like a click. As a whole the gallery is one tab stop, at its selected item (the first when none is selected).
-/// Left and up move the focus to the previous item and right and down to the next, wrapping in
-/// the order shown, through the groups; Home and End go to the first and last. For a selection of at most one item
-/// the arrows also pick the item they land on (never toggling it off); for a selection of many
-/// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
-///
-/// The gallery owns only the groups and dividers it spawns, and replaces just those when its
-/// items or groups change. Children the application puts under the gallery entity are never
-/// despawned by a rebuild. Those present before the first build stay before the gallery's own
-/// children; a child added later is not reordered, and a rebuild appends the new groups
-/// after it.
-///
-/// To a screen reader the gallery is a radio group and each card a radio button named after
-/// its label, checked while it is picked. The library gives the group no label; an app can
-/// insert Bevy's `AccessibleLabel` on the gallery.
+/// Put it on an entity with a [`Selection`](crate::select::Selection) of `GalleryCard`
+/// items, or a [`Selection::Ref`](crate::select::Selection::Ref) to one. Neighboring items with the
+/// same [`GalleryCard::group`] form a group. Children the app adds under it survive a rebuild.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -100,13 +64,12 @@ impl Plugin for GalleryPlugin {
 )]
 pub struct Gallery;
 
-/// What a card of a [`Gallery`] shows: an image, a label and the group it is under.
+/// What a card of a [`Gallery`] shows.
 #[derive(Debug, Clone, PartialEq, Eq, Reflect)]
 pub struct GalleryCard {
     /// The image, white on transparent (see [`Icon`]), so that it follows the theme.
     pub image: Handle<Image>,
-    /// The text under the image, which wraps to a second line; also the accessible name of
-    /// the card.
+    /// The text under the image; also the accessible name of the card.
     pub label: String,
     /// The title of the group the card is under.
     pub group: String,
@@ -125,10 +88,7 @@ impl GalleryCard {
 
 /// One card of a [`Gallery`]: picks its item when it is activated.
 ///
-/// Only the widget builds one, and the component is immutable: the item and the gallery are
-/// fixed for the life of the card and are read with [`item`](Self::item) and
-/// [`owner`](Self::owner). A card's accessible name is its [`GalleryCard::label`], so callers
-/// supply meaningful labels.
+/// Read its fields with [`item`](Self::item) and [`owner`](Self::owner).
 ///
 /// ```compile_fail
 /// use bevy_pluim::gallery::GalleryCardView;
@@ -178,13 +138,11 @@ pub struct GalleryCardRefs {
     pub label: Entity,
 }
 
-/// The groups a [`Gallery`] was built for, as titles with their items, to tell whether the
-/// children still match the items.
+/// The groups a [`Gallery`] was built for.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 struct BuiltGroups(Vec<(String, Vec<Entity>)>);
 
-/// Marks the groups and dividers the gallery spawned itself, so a rebuild replaces those and
-/// leaves children the application put under the gallery alone.
+/// Marks the groups and dividers the gallery spawned itself.
 #[derive(Component, Debug, Copy, Clone)]
 struct GalleryOwned;
 
@@ -197,8 +155,7 @@ fn label_font(theme: &Theme) -> TextFont {
     }
 }
 
-/// Builds the groups and dividers of every [`Gallery`] again when its items or their groups no
-/// longer match what was built, moving the cards of items that stay into them.
+/// Rebuilds the groups and dividers of a [`Gallery`] whose items or groups changed.
 fn sync_cards(
     mut changes: StructureChanges<Gallery, GalleryCard>,
     galleries: Query<(Option<&Children>, Option<&BuiltGroups>), With<Gallery>>,
@@ -214,7 +171,6 @@ fn sync_cards(
         let Ok((children, built)) = galleries.get(gallery) else {
             continue;
         };
-        // A selection that no longer resolves has no items: the views are cleared.
         let values = selections
             .get_items(gallery)
             .map_or(&[][..], |(_, values)| values);
@@ -232,9 +188,7 @@ fn sync_cards(
         if built == Some(&wanted) {
             continue;
         }
-        // The groups, headings and dividers are cheap and are made again, but a card of an item
-        // that stays is moved into its new row as the same entity, so its focus, hover and
-        // children survive a change elsewhere in the gallery.
+        // Move kept cards into the new rows as the same entities: they keep their focus and hover.
         let old = children
             .into_iter()
             .flat_map(RelationshipTarget::iter)
@@ -288,7 +242,6 @@ fn sync_cards(
                 }
             }
         }
-        // After the kept cards left, which takes the stale ones along with their old groups.
         for child in old {
             commands.entity(child).despawn();
         }
@@ -297,7 +250,6 @@ fn sync_cards(
 }
 
 fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Entity, item: Entity) {
-    // The children are spawned under the card's reserved entity, so no node is ever parentless.
     let card = commands.spawn_empty().id();
     let image = commands
         .spawn((
@@ -305,7 +257,6 @@ fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Enti
             Pickable::IGNORE,
             ChildOf(card),
         ))
-        // The image is wider than tall, which `Icon::bundle`'s square is not.
         .insert(Node {
             width: Val::Px(IMAGE_WIDTH),
             height: Val::Px(IMAGE_HEIGHT),
@@ -353,7 +304,6 @@ fn spawn_card(commands: &mut Commands, theme: &Theme, gallery: Entity, row: Enti
     ));
 }
 
-/// How a card looks.
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct CardLook {
     background: Color,
@@ -361,8 +311,7 @@ struct CardLook {
     ring: bool,
 }
 
-/// The look of a card from its state: picked, hovered or at rest. Used by the system that
-/// restyles cards on every change, so a theme change under a resting pointer keeps the hover.
+/// The look of a card from its state: picked, hovered or at rest.
 const fn card_look(colors: &ThemeColors, picked: bool, hovered: bool) -> CardLook {
     if picked {
         CardLook {
@@ -383,8 +332,7 @@ const fn card_look(colors: &ThemeColors, picked: bool, hovered: bool) -> CardLoo
     }
 }
 
-/// Puts the image, label, colours and fonts of every card in step with its item, its
-/// selection, the pointer and the theme.
+/// Puts the image, label, colors and fonts of every card in step with its item and state.
 fn update_cards(
     theme: Res<Theme>,
     selections: SelectionParam,
@@ -443,10 +391,7 @@ fn update_cards(
     }
 }
 
-/// Keeps the gallery a radio group and each card a radio button named after the label of its
-/// item, toggled while it is picked. Bevy makes a node a button again when its `Button`
-/// changes, and clears the label of a button that has no text of its own when it is added, so
-/// this runs after it.
+/// Keeps the gallery a radio group and each card a radio button. Run after Bevy's button sync.
 fn sync_accessibility(
     mut galleries: Query<
         &mut AccessibilityNode,
@@ -467,13 +412,9 @@ fn sync_accessibility(
     selections: SelectionParam,
     mut changes: StructureChanges<Gallery, GalleryCard>,
 ) {
-    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
-    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut galleries {
         sync_role(&mut node, Role::RadioGroup);
     }
-    // A card is looked at when Bevy reset its node or it is new, and (for its label and
-    // toggled state) when its gallery's items or selection changed. A quiet frame does neither.
     for (view, mut node) in &mut cards.p0() {
         sync_card(view, &mut node, &items, &selections);
     }
@@ -488,7 +429,6 @@ fn sync_accessibility(
     }
 }
 
-/// Writes the role, label and toggled state of one card's node, only where they differ.
 fn sync_card(
     view: &GalleryCardView,
     node: &mut Mut<AccessibilityNode>,
