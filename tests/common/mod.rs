@@ -1,5 +1,4 @@
-//! Shared by the scenario tests: an app to play scenarios in, and the camera
-//! and root node every scenario's setup needs.
+//! Shared by the scenario tests: the app and the camera and root node.
 
 #![expect(
     unreachable_pub,
@@ -13,11 +12,7 @@ use bevy_stagecraft::HeadlessPlugins;
 
 /// A finished headless app with [`WidgetsPlugin`], ready for
 /// `Scenario::run_in`.
-///
-/// `Scenario::headless_app` is not used because it returns an app that
-/// refuses `add_plugins`. `ClearColor` is normally inserted by the render
-/// plugins, which `HeadlessPlugins` leaves out, but `theme.rs` writes to it
-/// whenever the `Theme` changes.
+// `Scenario::headless_app` refuses `add_plugins`; `theme.rs` writes `ClearColor`.
 pub fn widgets_app() -> App {
     let mut app = App::new();
     app.add_plugins(HeadlessPlugins::default());
@@ -28,11 +23,7 @@ pub fn widgets_app() -> App {
     app
 }
 
-/// Spawns a `Camera2d` and the one root `Node` that fills the window, and
-/// returns the root.
-///
-/// A scenario's setup runs before the first update, so `UiRoot`'s
-/// `PostStartup` check finds exactly this root.
+/// Spawns a `Camera2d` and the one full-window root `Node`, and returns the root.
 pub fn spawn_camera_and_root(world: &mut World) -> Entity {
     world.spawn(Camera2d);
     world

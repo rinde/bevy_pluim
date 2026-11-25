@@ -1,17 +1,5 @@
-//! `WidgetsSetup`: the screens scenario files start from.
-//!
-//! The tester finds this one `#[reflect(AppSetup)]` enum by itself, so a
-//! scenario file writes `setup: App(Buttons)` and a Rust scenario
-//! `.app_setup(WidgetsSetup::Buttons)`. Each variant spawns a `Camera2d`, the
-//! one root `Node` and a screen of the widget it is named after. A screen
-//! starts from the example of that name but is a test fixture of its own: it
-//! adds names, widgets and sizes for testing and does not follow later changes
-//! to the example. The examples are not built on this module: they spawn
-//! through `Commands` in a startup system, while a setup is handed the
-//! `World`.
-//!
-//! Pull it in with `mod widgets_setup;` next to `mod common;`; it uses
-//! [`common::spawn_camera_and_root`].
+//! `WidgetsSetup`: the screens scenario files start from (`setup: App(Buttons)`).
+//! A test fixture of its own; it does not follow the examples.
 
 #![expect(
     unreachable_pub,
@@ -68,153 +56,39 @@ use bevy_stagecraft::{AppSetup, ReflectAppSetup};
 
 use crate::common::spawn_camera_and_root;
 
-/// The screens a scenario can start from, one per widget.
+/// The screens a scenario can start from, one per widget; their contents are in `docs/scenario-files.md`.
 #[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(AppSetup)]
 pub enum WidgetsSetup {
-    /// "Add", "Other", a "Disabled" one (`InteractionDisabled`), "Change
-    /// theme" and "Toggle" (a `ToggleState`, off) push buttons; the clicks on
-    /// "Add" are counted in [`Clicks`].
     Buttons,
-    /// Three combos over one list of countries (`first combo` and `third
-    /// combo` share one selection, `own combo` has a selection of its own over
-    /// the same items), a button ("Underneath") and a list sharing the first
-    /// selection (`country list`), both below the combos, so an open combo
-    /// floats over them, and "Change theme".
     Combos,
-    /// Lists in several layouts and corner styles, one per kind of selection
-    /// (`one list`, `zero-or-one list`, `zero-or-more list`,
-    /// `zero-or-more grid list` and the `one-or-more list` that the
-    /// `one-or-more grid list` shares its selection with, while the
-    /// `zero-or-one list` and `zero-or-more list` choose from the same items),
-    /// a `scrolling list` taller than its `list scroll area`, "Add country",
-    /// which adds a country to the shared items, and "Change theme".
     Lists,
-    /// Four 200 by 200 scroll areas, each named after what it does
-    /// (`two-way scroll area`, `vertical scroll area`, `horizontal scroll
-    /// area` and `fitting scroll area`, whose three squares fit and so
-    /// never scroll), and "Change theme". An `outer scroll area` (vertical, absolutely
-    /// placed at x 0, y 300) holds a `nested horizontal scroll area` in a column 400 px taller than it.
-    /// A `card scroll area` (absolutely placed at x 400, y 300, 200 by 200) is a `Card` holding
-    /// a `ClearOfCorners` scroll area of squares, and a `card scroll area without opt-in` (x 650)
-    /// the same without it.
     ScrollAreas,
-    /// A breadcrumb trail over a stack of four panels with buttons that go
-    /// further in or back, and "Change theme".
     BreadCrumbs,
-    /// A list as tab bar over a stack of three panels, and "Change theme".
     Tabs,
-    /// Three palette combos (`first palette combo` and `second palette
-    /// combo` share one selection, `own palette combo` has a selection of its
-    /// own) and "Change theme" in a row, then below it a `palette` of all 242
-    /// Tailwind colours in 22 columns and a 300 by 300 `palette scroll
-    /// area` with 11 columns, both showing one selection. The combos choose
-    /// from the same items.
     ColorPalette,
-    /// Numeric steppers, each named after its type or role (`default
-    /// stepper`, `u16 stepper`, `u32 stepper`, `f32 stepper`, `stepper by
-    /// two`), three of them showing one value (`shared stepper` holds it,
-    /// `first mirror stepper` and `second mirror stepper` point to it), and
-    /// "Change theme".
     NumericStepper,
-    /// Sliders, one per row, each with a `Name`: `continuous slider` (0 to 1,
-    /// 320 pixels wide, accessible name "Continuous"), `stepped slider` (0 to
-    /// 10 in steps of 1, at 0, "Stepped"), `formatted slider` (0 to 100 in
-    /// steps of 5, at 25, its value shown as "25 %", "Speed") and `disabled
-    /// slider` (0 to 10 at 3, shown as "3", `InteractionDisabled`), then
-    /// "Change theme". [`SliderChanges`] keeps the `ValueChange`s of `stepped
-    /// slider`. `zero range slider` (320 px wide, 3 to 3 in steps of 1, at 3,
-    /// spawned last) has [`ZeroRangeChanges`] count its `ValueChange`s.
     Slider,
-    /// Segmented controls, each with a `Name`: `own segmented control`
-    /// (Auto, Manual, with a selection of its own) and `first shared
-    /// segmented control` and `second shared segmented control` (Dark, Light,
-    /// sharing one selection), then "Change theme", `icon segmented control`
-    /// (Grid, List, text and icon, spawned last) and `icon only segmented control`
-    /// (Map, Table, `SegmentLabels::Hidden`, spawned last) and `three-way segmented
-    /// control` (Dark, System, Light, with a selection of its own).
     SegmentedControls,
-    /// A `light dark toggle` (a `LightDarkToggle`, following the system, which a
-    /// headless app does not have, so it shows light) and "Change theme".
     LightDarkToggle,
-    /// Rows of filter chips, each with a `Name`: `status chips` (All 4, Running 2,
-    /// Waiting 1, Problems 1, with a selection of its own, All first), `mirror chips`
-    /// (the same selection through `Selection::reference`) and `narrow chips` (150
-    /// pixels wide, so that the chips wrap, with a selection of its own), then
-    /// "Change theme".
     FilterChips,
-    /// Two panels, each with a title, a subtitle and a close button, which
-    /// closes the panel by despawning it: `closable panel` (a few lines in
-    /// its body) and `tall panel`, whose 100 pixel high body is shorter than
-    /// its twelve lines and so scrolls. Then "Change theme".
     Panel,
-    /// A panel containing groups of controls.
     ControlPanel,
-    /// A `setting rows` column of three `SettingRow`s (`appearance row` with
-    /// a segmented control, `text size row` with a numeric stepper and `last
-    /// row` with a button) and "Change theme".
     SettingRows,
-    /// An icon button named `counted button` with a neutral badge saying 3, a
-    /// `warning button` with a warning badge saying 12, an icon button with no
-    /// badge (`plain button`), "Add badge", which raises the count of the first
-    /// by one, and "Change theme".
     Badge,
-    /// Icon buttons, each with a `Name`: `small button`, `regular button`,
-    /// `large button`, `toggle button` (a `ToggleState` that starts off),
-    /// `warning button` and `danger button`, and "Change theme". `Clicks`
-    /// counts the `Activate`s of `regular button`.
     IconButtons,
-    /// A `gallery` of three cards (Steam, Diesel in "Locomotives", Passenger in
-    /// "Wagons"), a `One` selection of its own, and "Change theme".
     Gallery,
-    /// A `filled toolbar` of three tools (Select, Build, Bulldoze) with a selection of its
-    /// own, and "Change theme".
     Toolbar,
-    /// A `tooltip anchor` push button with the tooltip "Anchor tip", an icon
-    /// button named "Help" (which has a tooltip of its own, "Help") and
-    /// "Change theme".
     Tooltip,
-    /// Buttons that raise toasts: "Save" ("Saved", 1 s), "Save again" (the same text),
-    /// "Delete" ("Deleted 3 pieces", 1 s) and "Change theme".
     Toast,
-    /// Two text fields, each with a `Name`: `name field` (holding "Alpha", accessible name
-    /// "Name") and `seed field` (empty, placeholder "Seed", accessible name "Seed"), then
-    /// "Other" and "Change theme". [`FieldEvents`] counts what the fields triggered.
     TextFields,
-    /// Buttons whose accessible names are checked, each with a `Name`:
-    /// `plain button` (a `PushButton` "Add"), `icon push button` (a
-    /// `PushButton` "Save" with the icon text "+"), `colour button` (a
-    /// `ColorPushButton` showing red-500) and `link` (a `Link` "Docs"), then
-    /// "Change theme".
     ButtonNames,
-    /// One of each widget whose colours follow the theme, side by side: a
-    /// `themed button` ("Other"), a `themed card` and a `themed list` of
-    /// three items (the first selected), then "Change theme".
     Themed,
-    /// A `virtual list` of ten thousand rows ("Row 1" to "Row 10000", 28
-    /// pixels high, a `One` selection of its own, "Row 1" first) in the 240
-    /// by 200 `virtual list scroll area`, and "Change theme".
     VirtualList,
-    /// A `separated virtual list` of ten thousand rows ("Row 1" to "Row 10000",
-    /// 44 pixels high with the separated look, a `One` selection of its own,
-    /// "Row 1" first) in the 240 by 200 `separated virtual list scroll area`,
-    /// and "Change theme".
     SeparatedVirtualList,
-    /// A `row list` of three custom-view rows (a, b, c; a `ZeroOrOne` selection of its own,
-    /// nothing selected), each holding a `combo in row a` (b, c) over the stations Alpha,
-    /// Beta and Gamma with a selection of its own, then "Change theme".
     ComboRows,
-    /// The same custom rows with a `FilterCombo` in each.
     FilterComboRows,
-    /// A `filter combo` (named "City") and an `ordinary combo` over the same cities, sharing one
-    /// `ZeroOrOne` selection with a `city list` below them (which is never filtered), and "Change
-    /// theme"; then, absolutely placed and spawned last, a `multi filter combo` (`ZeroOrMore`,
-    /// own items), a `one filter combo` (`One`, own items), a `long filter combo` (80 options
-    /// low in the window, so its popup opens upward, capped and scrolling) and an `empty filter
-    /// combo` (`One`, no items).
     FilterCombos,
-    /// "Change theme" and a `ThemeEditor` (a card with a row for each colour slot and each number
-    /// of the theme), side by side; the editor's rows are laid out in a column in its scroll area.
     ThemeEditor,
 }
 
@@ -256,75 +130,47 @@ impl AppSetup for WidgetsSetup {
         Ok(())
     }
 
-    /// The screen the app was last built from, so a recording started from the
-    /// app as it is loads back as that screen. What was done to it since (a
-    /// selection, an open combo) is not captured: a script starts from the
-    /// screen as built.
     fn capture(world: &mut World, _dir: &Path, _stem: &str) -> Result<Option<Self>, String> {
         Ok(world.get_resource::<CurrentScreen>().map(|screen| screen.0))
     }
 }
 
-/// The [`WidgetsSetup`] that built the screen now on show, kept by
-/// [`WidgetsSetup::build`] for [`AppSetup::capture`].
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct CurrentScreen(pub WidgetsSetup);
 
-/// How many times the "Add" button of the [`WidgetsSetup::Buttons`] screen
-/// was clicked.
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct Clicks(pub u32);
 
-/// The `Activate`s of the extra buttons of the [`WidgetsSetup::Buttons`]
-/// (`compact`, `no_hover`) and [`WidgetsSetup::ButtonNames`] (`link`,
-/// `colour`) screens, which the touch scenarios read.
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct TouchTaps {
-    /// Activations of the `link`.
     pub link: u32,
-    /// Activations of the `colour button`.
     pub colour: u32,
-    /// Activations of the `compact button`.
     pub compact: u32,
-    /// Activations of the `no hover button`.
     pub no_hover: u32,
-    /// Activations of the `tooltip anchor` of the [`WidgetsSetup::Tooltip`] screen.
     pub tooltip: u32,
 }
 
-/// The `ValueChange<f32>`s the `stepped slider` of the [`WidgetsSetup::Slider`]
-/// screen sent: the value of the last one and how many were final (the end of
-/// a drag or a key).
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct SliderChanges {
-    /// The value of the last change.
     pub last: f32,
-    /// How many changes were final.
     pub finals: u32,
 }
 
-/// The `ValueChange<f32>`s of the `zero range slider` of the `Slider` screen:
-/// how many it sent and how many reported a value other than its bound of 3.
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct ZeroRangeChanges {
-    /// How many changes were sent.
     pub count: u32,
-    /// How many of them reported a value other than 3.
     pub off_bound: u32,
 }
 
-/// A [`Value`] of a constant range the screens know to be valid.
 #[expect(clippy::unwrap_used, reason = "the screens' constant ranges are valid")]
 fn valid(value: Result<Value, ValueError>) -> Value {
     value.unwrap()
 }
 
-/// The root a screen of several widgets goes in: the camera and root of
-/// [`spawn_camera_and_root`], laid out as a wrapping row.
 fn row_root(world: &mut World) -> Entity {
     let root = spawn_camera_and_root(world);
     if let Some(mut node) = world.entity_mut(root).get_mut::<Node>() {
@@ -335,26 +181,20 @@ fn row_root(world: &mut World) -> Entity {
     root
 }
 
-/// Spawns a "Change theme" button that toggles between the light and dark
-/// theme.
 fn spawn_theme_button(parent: &mut ChildSpawner) {
     parent
         .spawn(PushButton::from_label("Change theme"))
         .observe(|_: On<Activate>, mut theme: ResMut<Theme>| theme.light_dark_toggle());
 }
 
-/// The items the country selections draw from.
 fn countries() -> [Item<String>; 5] {
     ["Netherlands", "Canada", "Indonesia", "Portugal", "Belgium"].map(Item::new)
 }
 
-/// The Tailwind colours as items.
 fn color_items() -> Vec<Item<Color>> {
     COLORS.iter().map(|c| Item { data: c.color }).collect()
 }
 
-/// A bundle that lets the pointer reach what lies below it, for the contents
-/// of a scroll area.
 const fn see_through() -> Pickable {
     Pickable {
         should_block_lower: false,
@@ -425,18 +265,14 @@ fn combos(world: &mut World) {
             ));
             spawn_theme_button(row);
         });
-        // Below the combos, so the lists they open float over them. A button
-        // takes the pointer from what is under it, so a list that is not above
-        // it cannot be clicked.
+        // Below the combos: a button takes the pointer from what lies under it, so an open list must float over it.
         root.spawn(PushButton::from_label("Underneath"));
         root.spawn((
             List,
             Name::new("country list"),
             Selection::reference(selection_ref),
         ));
-        // A combo in a scroll area lower than its open list, out of the flow
-        // so that nothing else moves and last so that the tab order stays: the
-        // list is not clipped by the area and takes clicks below it.
+        // Out of the flow and last so nothing moves and the tab order stays; the area must not clip the list.
         root.spawn((
             Name::new("combo scroll area"),
             Node {
@@ -456,7 +292,6 @@ fn combos(world: &mut World) {
                             .zero_or_one()
                             .build_with_items(countries()),
                     ));
-                    // Makes the contents overflow the area, so it can scroll.
                     contents.spawn(Node {
                         width: px(1),
                         height: px(400),
@@ -468,8 +303,6 @@ fn combos(world: &mut World) {
                 false,
             ),
         ));
-        // Combos at the right and bottom window edges, out of the flow and spawned last
-        // for the same reason: their lists are kept inside the window.
         root.spawn((
             Combo,
             Name::new("right edge combo"),
@@ -485,8 +318,6 @@ fn combos(world: &mut World) {
                 .zero_or_one()
                 .build_with_items(countries()),
         ));
-        // A combo whose options carry a note, out of the flow and last like the others:
-        // Delft is unreachable, Utrecht has a plain note.
         root.spawn((
             Combo,
             Name::new("noted combo"),
@@ -499,15 +330,11 @@ fn combos(world: &mut World) {
                 ..default()
             },
             Selection::builder().zero_or_one().build_with_items([
-                // An empty note shows nothing.
                 (Item::new("Amsterdam"), ItemNote::new("")),
                 (Item::new("Delft"), ItemNote::warning("< unreachable >")),
                 (Item::new("Utrecht"), ItemNote::new("4 km")),
             ]),
         ));
-        // A combo with far more options than the window is high, out of the flow and last:
-        // its list is capped to the room beside the button and scrolls
-        // (`combo_taller_than_window_stays_inside_window`).
         root.spawn((
             Combo,
             Name::new("long combo"),
@@ -538,8 +365,6 @@ fn combos(world: &mut World) {
                 .zero_or_one()
                 .build_with_items(countries()),
         ));
-        // A combo over a selection of many, out of the flow and last: a pick leaves its list
-        // open (`combo_touch_many_stays_open`).
         root.spawn((
             Combo,
             Name::new("many combo"),
@@ -555,9 +380,6 @@ fn combos(world: &mut World) {
                 .zero_or_more()
                 .build_with_items(countries()),
         ));
-        // A combo with far more options than fit under it, low in the window and last: its list
-        // opens above the button, capped to the room there
-        // (`combo_list_opening_upward_stays_below_the_top_margin`).
         root.spawn((
             Combo,
             Name::new("upward combo"),
@@ -576,15 +398,10 @@ fn combos(world: &mut World) {
     });
 }
 
-/// The height of the scroll areas that hold a combo on the [`WidgetsSetup::Combos`] and
-/// [`WidgetsSetup::ColorPalette`] screens: lower than the combo's open popup.
 const SMALL_SCROLL_AREA_HEIGHT: f32 = 100.0;
 
-/// The countries the "Add country" button of the [`WidgetsSetup::Lists`]
-/// screen adds, one per click, in this order and then again.
 const MORE_COUNTRIES: [&str; 3] = ["Suriname", "Chile", "Kenya"];
 
-/// The rows of the list in a scroll area on the [`WidgetsSetup::Lists`] screen.
 const SCROLLING_LIST_ROWS: usize = 12;
 
 fn lists(world: &mut World) {
@@ -650,8 +467,6 @@ fn lists(world: &mut World) {
                 .one()
                 .build_with_items(["NL", "CA", "ID", "PT", "BE"].map(Item::new)),
         ));
-        // A list taller than its scroll area, which the wheel scrolls: the
-        // list itself does not scroll, the area around it does.
         root.spawn((
             Name::new("list scroll area"),
             Node {
@@ -679,7 +494,6 @@ fn lists(world: &mut World) {
                     return;
                 };
                 *added += 1;
-                // The lists drawing from the shared items show it.
                 commands.spawn((Item::new(*country), ItemOf(selection_ref)));
             },
         );
@@ -687,7 +501,6 @@ fn lists(world: &mut World) {
     });
 }
 
-/// The colours the squares in a scroll area cycle through.
 const SQUARE_COLORS: [Srgba; 14] = [
     YELLOW_600,
     SKY_600,
@@ -705,8 +518,6 @@ const SQUARE_COLORS: [Srgba; 14] = [
     AMBER_600,
 ];
 
-/// The contents of a scroll area: `num` coloured squares in a grid that fills
-/// in the direction of `grid_auto_flow`.
 fn squares(num: usize, grid_auto_flow: GridAutoFlow) -> impl FnOnce(&mut ChildSpawner) {
     move |parent| {
         parent
@@ -744,13 +555,8 @@ fn squares(num: usize, grid_auto_flow: GridAutoFlow) -> impl FnOnce(&mut ChildSp
     }
 }
 
-/// The size of every scroll area of the [`WidgetsSetup::ScrollAreas`] screen.
-///
-/// Four of them and "Change theme" fit side by side in the default 1280 by 720
-/// window, so a scenario can reach each one without scrolling the page.
 const SCROLL_AREA_SIZE: f32 = 200.0;
 
-/// A scroll area of the [`SCROLL_AREA_SIZE`] named `name`.
 fn sized_scroll_area(name: &'static str, area: impl Bundle) -> impl Bundle {
     (
         Name::new(name),
@@ -778,14 +584,12 @@ fn scroll_areas(world: &mut World) {
             "horizontal scroll area",
             ScrollArea::bundle(squares(200, GridAutoFlow::Column), false, true),
         ));
-        // Three squares in a row are smaller than the area, so nothing scrolls.
         root.spawn(sized_scroll_area(
             "fitting scroll area",
             ScrollArea::bundle(squares(3, GridAutoFlow::Row), true, true),
         ));
         spawn_theme_button(root);
-        // A horizontal-only area inside a vertical one, out of the flow below the row and
-        // spawned last so nothing else moves and the tab order stays.
+        // Out of the flow and last so nothing else moves and the tab order stays.
         root.spawn((
             Name::new("outer scroll area"),
             Node {
@@ -798,7 +602,6 @@ fn scroll_areas(world: &mut World) {
             },
             ScrollArea::bundle(
                 |parent: &mut ChildSpawner| {
-                    // 400 px taller than the nested area, so the outer area's contents overflow.
                     parent
                         .spawn((
                             see_through(),
@@ -820,7 +623,6 @@ fn scroll_areas(world: &mut World) {
                 false,
             ),
         ));
-        // Two rounded cards each holding a bare scroll area, spawned last so nothing else moves.
         for (name, left, clear) in [
             ("card scroll area", 400, true),
             ("card scroll area without opt-in", 650, false),
@@ -855,11 +657,9 @@ fn scroll_areas(world: &mut World) {
     });
 }
 
-/// Marks the entity holding the breadcrumb trail's selection.
 #[derive(Component, Copy, Clone, Debug)]
 struct BreadCrumbsSelection;
 
-/// Which panel an item of the breadcrumb trail stands for.
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
 enum BreadCrumbsAction {
     Home,
@@ -869,7 +669,6 @@ enum BreadCrumbsAction {
     PanelBsub,
 }
 
-/// Adds the panel `target` to the end of the trail.
 fn push_to_selection(
     target: BreadCrumbsAction,
     selections: &mut SelectionParam<With<BreadCrumbsSelection>>,
@@ -881,12 +680,10 @@ fn push_to_selection(
     selections.update_selection_single(|selection| selection.push(item_ref));
 }
 
-/// Takes the last panel off the trail.
 fn pop_on_activate(_: On<Activate>, mut selections: SelectionParam<With<BreadCrumbsSelection>>) {
     selections.update_selection_single(SelectionValue::pop);
 }
 
-/// Spawns a button that adds the panel `target` to the trail when released.
 fn spawn_go_to(parent: &mut ChildSpawner, label: &'static str, target: BreadCrumbsAction) {
     parent.spawn(PushButton::from_label(label)).observe(
         move |_: On<Activate>,
@@ -897,7 +694,6 @@ fn spawn_go_to(parent: &mut ChildSpawner, label: &'static str, target: BreadCrum
     );
 }
 
-/// Spawns a button that takes the last panel off the trail when released.
 fn spawn_go_back(parent: &mut ChildSpawner, label: &'static str) {
     parent
         .spawn(PushButton::from_label(label))
@@ -931,7 +727,6 @@ fn create_a(spawner: In<StackChildSpawner>, mut commands: Commands) {
             Children::spawn(SpawnWith(|parent: &mut ChildSpawner| {
                 parent.spawn(Label::header("Panel A"));
                 spawn_go_back(parent, "Go back to home");
-                // Replaces Panel A by its variant instead of adding to it.
                 parent
                     .spawn(PushButton::from_label("Go to panel A variant"))
                     .observe(
@@ -1181,7 +976,6 @@ fn tabs(world: &mut World) {
         .get_resource::<Theme>()
         .map_or(Color::NONE, |theme| theme.colors().border);
     let root = spawn_camera_and_root(world);
-    // The tab bar, a filler and "Change theme" on top, the stack below.
     world.entity_mut(root).insert(Node {
         display: Display::Grid,
         grid_template_columns: vec![
@@ -1223,8 +1017,7 @@ fn tabs(world: &mut World) {
 fn color_palette(world: &mut World) {
     let root = row_root(world);
     if let Some(mut node) = world.entity_mut(root).get_mut::<Node>() {
-        // Keep the rows at the top instead of stretching them over the window,
-        // so where a popup opens does not depend on how much room is left.
+        // Keep rows at the top so where a popup opens does not depend on the room left.
         node.align_content = AlignContent::FlexStart;
     }
     let selection_ref = world
@@ -1242,9 +1035,7 @@ fn color_palette(world: &mut World) {
         )
         .id();
     world.entity_mut(root).with_children(|root| {
-        // The combos come first so that their popups open below them, over the
-        // palettes. The row is as wide as the window, which puts the palettes
-        // on the next line.
+        // Combos first so their popups open below them, over the palettes.
         root.spawn(Node {
             width: percent(100),
             align_items: AlignItems::FlexStart,
@@ -1275,9 +1066,6 @@ fn color_palette(world: &mut World) {
             ));
             spawn_theme_button(controls);
         });
-        // A combo whose selection is always one colour (the first until another is
-        // picked), so that picking the colour it already has changes nothing. Out of
-        // the flow, left of the controls, so that nothing else on the screen moves.
         root.spawn((
             ColorPaletteCombo,
             Node {
@@ -1293,9 +1081,6 @@ fn color_palette(world: &mut World) {
                 .build_with_items_ref(selection_ref),
             Name::new("one palette combo"),
         ));
-        // One combo in each top corner, placed out of the flow so that nothing
-        // else on the screen moves: the popups are wider than the room these
-        // have to the window edge, so the window margin is what places them.
         for (name, left, right) in [
             ("left edge palette combo", Some(px(0)), None),
             ("right edge palette combo", None, Some(px(0))),
@@ -1315,8 +1100,7 @@ fn color_palette(world: &mut World) {
                 Name::new(name),
             ));
         }
-        // 22 columns of 11 rows keep the whole palette (836 by 418) inside the
-        // window; 11 columns of 22 rows, as in the example, are taller than it.
+        // 22 columns of 11 rows fit the palette (836 by 418) in the window; 11 columns of 22 rows do not.
         root.spawn((
             ColorPalette,
             ListLayout::VerticalGrid { columns: 22 },
@@ -1343,10 +1127,6 @@ fn color_palette(world: &mut World) {
                 true,
             ),
         ));
-        // A combo in a scroll area lower than its open popup, under the palette
-        // scroll area, out of the flow so that nothing else moves and last so
-        // that the tab order stays: the popup is not clipped by the area and
-        // takes clicks below it.
         root.spawn((
             Name::new("palette combo scroll area"),
             Node {
@@ -1372,9 +1152,6 @@ fn color_palette(world: &mut World) {
                 false,
             ),
         ));
-        // Combos over a selection of many, out of the flow and last for the same reasons:
-        // `zero or more palette combo` starts with nothing selected, `one or more palette
-        // combo` with slate-50, the first colour.
         for (name, left, selection) in [
             (
                 "zero or more palette combo",
@@ -1434,15 +1211,12 @@ fn numeric_stepper(world: &mut World) {
             valid(Value::new_f32(10.0, 5.0, 15.0, 0.5)),
             Name::new("f32 stepper"),
         ));
-        // A step that does not divide the range: from 7 one more step would
-        // pass the maximum of 8, and from 1 one fewer the minimum of 0.
+        // A step that does not divide the range: one more from 7 passes 8, one fewer from 1 passes 0.
         root.spawn((
             NumericStepper::default(),
             valid(Value::new_u8(5, 0, 8, 2)),
             Name::new("stepper by two"),
         ));
-        // One value shown by three steppers: the first holds it, the other two
-        // point to it through `ValueRef`.
         let shared = root
             .spawn((
                 NumericStepper::default(),
@@ -1655,8 +1429,7 @@ fn toolbar(world: &mut World) {
             Name::new("filled toolbar"),
         ));
         spawn_theme_button(root);
-        // The toolbars below are out of the flow and spawned last, so nothing above moves and
-        // the tab order of the first two stays.
+        // Out of the flow and last so the tab order of the first two stays.
         let absolute = |top: i32| Node {
             position_type: PositionType::Absolute,
             left: px(0),
@@ -1841,7 +1614,6 @@ fn setting_rows(world: &mut World) {
     world.entity_mut(root).with_children(spawn_theme_button);
 }
 
-/// Marks the button whose badge "Add badge" raises.
 #[derive(Component)]
 struct CountedButton;
 
@@ -1969,18 +1741,12 @@ fn toast(world: &mut World) {
     });
 }
 
-/// What the fields of the [`WidgetsSetup::TextFields`] screen triggered: how many
-/// `TextFieldChange`s and `TextFieldCommit`s, and the text of the last of each.
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct FieldEvents {
-    /// The number of `TextFieldChange`s.
     pub changes: u32,
-    /// The text of the last `TextFieldChange`.
     pub changed: String,
-    /// The number of `TextFieldCommit`s.
     pub commits: u32,
-    /// The text of the last `TextFieldCommit`.
     pub committed: String,
 }
 
@@ -2067,7 +1833,6 @@ fn themed(world: &mut World) {
     });
 }
 
-/// How many rows the `virtual list` of the [`WidgetsSetup::VirtualList`] screen has.
 const VIRTUAL_LIST_ROWS: usize = 10_000;
 
 fn virtual_list(world: &mut World, separated: bool) {
@@ -2111,8 +1876,6 @@ fn separated_virtual_list(height: f32) -> VirtualList {
     VirtualList::separated(row_height(height)).unwrap_or_else(|_| std::process::abort())
 }
 
-/// A custom item view of the [`WidgetsSetup::ComboRows`] screen: the item's text and a
-/// `combo in row <item>` over the stations, with a selection of its own.
 fn combo_row(spawner: In<ItemViewSpawner>, items: Query<&Item<String>>, mut commands: Commands) {
     let Ok(item) = items.get(spawner.item) else {
         return;
@@ -2173,7 +1936,6 @@ fn combo_rows(world: &mut World, filter: bool) {
     });
 }
 
-/// A slider with a valid range and step, or an abort: these are fixed values.
 fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
     Slider::new(value, min, max)
         .and_then(|slider| match step {
@@ -2183,7 +1945,6 @@ fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
         .unwrap_or_else(|_| std::process::abort())
 }
 
-/// The cities the filter combos choose from.
 fn cities() -> [Item<String>; 5] {
     ["Amsterdam", "Delft", "Den Haag", "Utrecht", "Rotterdam"].map(Item::new)
 }
@@ -2217,7 +1978,6 @@ fn filter_combos(world: &mut World) {
             ));
             spawn_theme_button(row);
         });
-        // Below the combos, so the popups they open float over them.
         root.spawn(PushButton::from_label("Underneath"));
         root.spawn((
             List,
@@ -2263,7 +2023,7 @@ fn filter_combos(world: &mut World) {
                 .one()
                 .build_with_items(Vec::<Item<String>>::new()),
         ));
-        // Renames the shared items' "Delft" in place, for `filter_combo_follows_a_rename.ron`.
+        // Renames the shared items' "Delft" for `filter_combo_follows_a_rename.ron`.
         root.spawn((PushButton::from_label("Rename Delft"), placed(300.0, 500.0)))
             .observe(|_: On<Activate>, mut items: Query<&mut Item<String>>| {
                 for mut item in &mut items {

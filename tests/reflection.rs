@@ -1,6 +1,4 @@
-//! The widget components and the `Theme` resource are in the type registry of an app with
-//! `WidgetsPlugin`, so that tools which look types up by name (such as scenario files) can find
-//! them. A refactor that drops a derive fails here rather than in a scenario.
+//! The widget components and the `Theme` resource are in the type registry.
 
 #![expect(
     clippy::unwrap_used,
