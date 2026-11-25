@@ -22,9 +22,6 @@ use crate::focus::{
 use crate::theme::{Theme, ThemeColors};
 
 /// Registers the systems and observers of [`Slider`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin), which also adds Bevy's headless
-/// `SliderPlugin` unless the app has it.
 #[derive(Copy, Clone, Debug)]
 pub struct SliderPlugin;
 
@@ -78,8 +75,7 @@ impl std::fmt::Display for SliderError {
 
 impl std::error::Error for SliderError {}
 
-/// The default minimum width of the value label, in logical pixels, so that the
-/// track does not move as the text changes.
+/// The default minimum width of the value label, in logical pixels.
 pub const DEFAULT_LABEL_MIN_WIDTH_PX: f32 = 54.0;
 
 /// The width of a slider whose `Node` leaves it `Auto`, in logical pixels.
@@ -90,41 +86,12 @@ const THUMB_PX: f32 = 16.0;
 const TRACK_PX: f32 = 4.0;
 const LABEL_GAP_PX: f32 = 12.0;
 
-/// A horizontal slider: a track, a fill up to the value and a round thumb, with
-/// the value as text beside it when it has a `format`.
+/// A horizontal slider over Bevy's headless `bevy::ui_widgets::Slider`.
 ///
-/// It is Bevy's headless `bevy::ui_widgets::Slider` underneath. Pressing the
-/// track moves the thumb there and dragging moves it, both through the headless
-/// slider's `ValueChange<f32>`, which the app observes on the slider. The slider
-/// keeps its own `SliderValue` in step with those changes, rounded to the `step`
-/// first, and the `ValueChange` the app sees carries that rounded value. An app
-/// that sets the value itself inserts a `SliderValue`.
+/// Observe `ValueChange<f32>` on it for the value rounded to `step`; insert a `SliderValue` to set
+/// it. A slider with a `format` owns the `margin.right` of its `Node`.
 ///
-/// The slider is one tab stop. While it has the focus, the left and right arrows
-/// move it by `step` (by a hundredth of the range when it has none), Home and
-/// End to its ends; it keeps those keys from bubbling on, and lets up and down
-/// through. An [`InteractionDisabled`] slider is drawn in `text_disabled` and
-/// ignores the pointer and the keys.
-///
-/// It is 200 px wide unless the app gives its `Node` a width; the thumb stays
-/// inside it at both ends. The value label lies to the right of it, in a margin
-/// of `label_min_width` plus a gap that the slider reserves: a slider with a
-/// `format` owns its `Node`'s `margin.right`, one without leaves it to the app.
-///
-/// To a screen reader it is a `Role::Slider` with the value, bounds and step as
-/// numbers, the text `format` shows as its value and `name` as its label. The
-/// fields are read when the component is inserted; insert it again to change them.
-///
-/// The value, bounds and step are validated by [`Slider::new`] and
-/// [`Slider::with_step`] and read through [`Slider::value`], [`Slider::min`],
-/// [`Slider::max`] and [`Slider::step`]. A range of one value (`min == max`) is
-/// valid: the slider then always holds that value.
-///
-/// `Slider` is an immutable component: it is configuration, replaced by inserting a new
-/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut Slider>` becomes
-/// `commands.entity(e).insert(..)` of a prepared `Slider`. Inserting a new `Slider` rebuilds the parts and resets the value to the new one without a `ValueChange`.
-///
-/// A `&mut` query does not compile:
+/// The component is immutable; insert a new value to change it. A `&mut` query does not compile:
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
@@ -278,7 +245,6 @@ impl Slider {
         snapped.clamp(min, max) as f32
     }
 
-    /// The step the keys move by: `step`, or a hundredth of the range.
     fn key_step(&self) -> f32 {
         let step = self
             .step
@@ -293,7 +259,6 @@ impl Slider {
             return;
         };
         let old_parts = world.entity(entity).get::<SliderRefs>().copied();
-        // Reserve the label's margin, or give it back when the label went away.
         let margin = match (slider.format, old_parts.and_then(|old| old.label)) {
             (Some(_), _) => Some(Val::Px(slider.label_min_width + LABEL_GAP_PX)),
             (None, Some(_)) => Some(Val::Px(0.0)),
@@ -349,7 +314,7 @@ impl Slider {
             ))
             .id();
         // The thumb's left edge moves over the slider's width less its own, as the
-        // headless slider's pointer maths assume.
+        // headless slider's pointer math assume.
         let travel = commands
             .spawn((
                 Name::new("SliderTravel"),
@@ -438,8 +403,6 @@ pub struct SliderRefs {
     pub label: Option<Entity>,
 }
 
-/// The number of decimals in `step`, up to six; `None` for a step that is not
-/// a multiple of a millionth.
 fn decimals_of(step: f64) -> Option<i32> {
     (0..=6).find(|decimals| {
         let scaled = step * 10f64.powi(*decimals);
@@ -452,7 +415,6 @@ fn round_to_decimals(value: f64, decimals: i32) -> f64 {
     (value * factor).round() / factor
 }
 
-/// The colours of a slider in one state.
 struct Look {
     thumb: Color,
     ink: Color,
@@ -460,8 +422,6 @@ struct Look {
     text: Color,
 }
 
-/// The colours of a slider that is `disabled`, `pressed` (on the track or
-/// dragged) or `hovered`.
 const fn look(colors: &ThemeColors, disabled: bool, pressed: bool, hovered: bool) -> Look {
     let thumb = if disabled {
         colors.card_surface
@@ -488,7 +448,6 @@ const fn look(colors: &ThemeColors, disabled: bool, pressed: bool, hovered: bool
     }
 }
 
-/// What styling a slider touches.
 #[derive(SystemParam)]
 struct SliderStyler<'w, 's> {
     theme: Res<'w, Theme>,
@@ -570,21 +529,18 @@ impl SliderStyler<'_, '_> {
         }
     }
 
-    /// Gives the thumb of a slider the theme's control radius.
     fn set_radius(&mut self, refs: &SliderRefs) {
         if let Ok(mut node) = self.nodes.get_mut(refs.thumb) {
             node.border_radius = BorderRadius::all(self.theme.control_radius);
         }
     }
 
-    /// Gives the thumb of a slider the theme's small shadow.
     fn set_shadow(&mut self, refs: &SliderRefs) {
         if let Ok(mut shadow) = self.shadows.get_mut(refs.thumb) {
             *shadow = self.theme.small_shadow().into();
         }
     }
 
-    /// Gives the value label of a slider the theme's font.
     fn set_font(&mut self, refs: &SliderRefs) {
         let Some(text_entity) = refs
             .label
@@ -603,7 +559,6 @@ impl SliderStyler<'_, '_> {
     }
 }
 
-/// Styles one new slider, or all of them when the theme changes.
 fn theme_sliders(
     slider_ref: In<Option<Entity>>,
     mut sliders: Query<(SliderState, &mut Node)>,
@@ -626,7 +581,6 @@ fn theme_sliders(
     }
 }
 
-/// The changes that restyle a slider: its hover, value or drag, or being pressed or disabled.
 type SliderStyleChange = Or<(
     Changed<Hovered>,
     Changed<SliderValue>,
@@ -635,11 +589,6 @@ type SliderStyleChange = Or<(
     Added<InteractionDisabled>,
 )>;
 
-/// Restyles the sliders whose value, hover, press or disabled state changed.
-///
-/// Only the affected sliders are visited: those the change filter names, then
-/// those that lost `Pressed` or `InteractionDisabled` (read from the removal
-/// messages into a buffer kept in a `Local`). A slider in both sets is styled once.
 fn restyle_sliders(
     changed: Query<SliderState, SliderStyleChange>,
     sliders: Query<SliderState>,
@@ -666,10 +615,7 @@ fn restyle_sliders(
     }
 }
 
-/// Rounds a change of one of our sliders to its step and keeps its value in step.
-///
-/// A global observer runs before the app's observers on the slider, so the app
-/// sees the rounded value.
+/// Runs before the app's observers on the slider, so they see the rounded value.
 fn on_value_change(
     mut change: On<ValueChange<f32>>,
     sliders: Query<(&Slider, &SliderValue)>,
@@ -686,15 +632,12 @@ fn on_value_change(
     }
 }
 
-/// Whether the system cancelled a finger this frame.
 fn a_touch_was_cancelled(touches: Option<Res<Touches>>) -> bool {
     touches.is_some_and(|touches| touches.iter_just_canceled().next().is_some())
 }
 
-/// Ends the press or drag of the sliders when a touch is cancelled. Bevy's headless slider
-/// removes [`Pressed`] and clears the drag on a release only, so a cancelled touch would
-/// leave the thumb looking held. Every held slider is let go: the cancel names no slider, and
-/// a slider is held by one pointer at a time.
+/// Bevy's headless slider ends a press on a release only: a canceled touch must let go of every
+/// held slider.
 fn end_cancelled_presses(
     mut sliders: Query<(Entity, &mut SliderDragState, Has<Pressed>), With<HeadlessSlider>>,
     mut commands: Commands,
@@ -709,8 +652,6 @@ fn end_cancelled_presses(
     }
 }
 
-/// Keeps the keys a focused slider uses from bubbling on, pressed, repeated or
-/// released, also at an end.
 fn keep_navigation_keys(
     mut input: On<FocusedInput<KeyboardInput>>,
     sliders: Query<(), With<Slider>>,
@@ -729,8 +670,6 @@ fn keep_navigation_keys(
     }
 }
 
-/// Gives the slider's accessibility node its role, label and value text; the
-/// headless slider sets the numbers.
 fn sync_accessibility(
     mut sliders: Query<
         (&Slider, &SliderValue, &mut AccessibilityNode),

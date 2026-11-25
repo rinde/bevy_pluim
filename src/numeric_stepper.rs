@@ -1,15 +1,4 @@
 //! `NumericStepper`: a value with a decrease and an increase button.
-//!
-//! # Migrating from the unvalidated `Value`
-//!
-//! - `Value::new_u8` / `new_u16` / `new_u32` / `new_f32` return `Result<Value, ValueError>`;
-//!   handle or `?` the result. Reversed bounds, a zero integer step and non-finite or
-//!   non-positive float input are errors, no longer silently repaired.
-//! - `Value::F32` holds a [`FloatValue`], not a tuple of `f32`s; `UIntValue` and
-//!   `FloatValue` fields are private. Read them with `value()`, `min()`, `max()` and
-//!   `step()`; to change bounds or step, build a new value with `FloatValue::new` or
-//!   `UIntValue::new` and wrap it in `Value::F32` / `Value::U8` / ..
-//! - `increment` and `decrement` leave a float unchanged when it cannot strictly move.
 
 use accesskit::{Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
@@ -38,8 +27,6 @@ use bevy::picking::pointer::PointerId;
 use crate::{HoverLock, MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`NumericStepper`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct NumericStepperPlugin;
 
@@ -67,51 +54,16 @@ impl Plugin for NumericStepperPlugin {
 /// How a [`NumericStepper`] shows its [`Value`].
 pub type ValueFormat = fn(&Value) -> String;
 
-/// The default width of the value label, in logical pixels, so that the buttons
-/// do not move as the text changes. It is the one constant [`Slider`](crate::slider::Slider)
-/// shares for its own label.
+/// The default width of the value label, in logical pixels.
 pub use crate::slider::DEFAULT_LABEL_MIN_WIDTH_PX;
 
 /// A [`Value`] with a decrease and an increase button.
 ///
-/// The value is either on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] is triggered on the value's entity when the user steps it with a button or an arrow key, not when the stepper is spawned or the app sets the value itself (the display follows those too). A stepper without a [`Value`], or whose [`ValueRef`] target has none, logs an `error!` and stays unbuilt.
+/// The value is on the same entity or, through [`ValueRef`], on another one. A [`ValueChange`] fires
+/// on it when the user steps it, not when the app sets it. The buttons are [`InteractionDisabled`]
+/// at a bound; the stepper owns that component on them.
 ///
-/// The buttons are small [`IconButton`]s that change the value when they are
-/// [`Activate`]d. A button that cannot step any further, at the minimum or maximum, is
-/// [`InteractionDisabled`] until the value moves away from that bound again. The
-/// stepper owns that component on its buttons: it enables a button whenever the
-/// value allows a step, so do not disable one yourself.
-///
-/// The application chooses how the value is shown with `format` (the
-/// default is [`Value`]'s `Display`), the icons and accessible names of the
-/// buttons, and the minimum width of the value label. An icon left at its default
-/// handle is replaced by a plain minus or plus drawn by the library. The
-/// fields are read when the component is inserted.
-///
-/// The stepper can also be scrubbed like a slider. A background fill shows where the value is
-/// between its bounds, and dragging sideways from anywhere on the stepper, the "-" and "+"
-/// buttons included, moves the value across that range (a drag over the whole width of the
-/// stepper covers the whole range), snapped to the step, with a [`ValueChange`] for each change.
-/// A drag does not also step the button it started on. A click on the value (without dragging)
-/// swaps it for a [`TextField`] holding the number: Enter, Tab or a click elsewhere sets the
-/// value to the number typed (clamped to the bounds, whole for an integer; text after the number
-/// is ignored, and text without a number leaves the value as it was), Escape drops the edit.
-///
-/// The stepper is one spin button to a screen reader: its own node has the role
-/// `SpinButton`, the value, bounds and step as numbers, the text `format` shows as its
-/// value (kept in step when the value changes, also through a [`ValueRef`]) and `name` as
-/// its label. The value text has no accessibility node of its own, so it is not read twice.
-///
-/// The arrow keys step the value as well, while the focus is on the stepper or on one of
-/// its buttons (the keys bubble up to the stepper): the up and right arrows increase it,
-/// the down and left arrows decrease it, within the same bounds. The stepper is not a
-/// tab stop itself; its buttons are.
-///
-/// `NumericStepper` is an immutable component: it is configuration, replaced by inserting a new
-/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut NumericStepper>` becomes
-/// `commands.entity(e).insert(..)` of a prepared `NumericStepper`. The stepper owns the parts it builds and an open number editor, and inserting again replaces only those: children of your own are kept (the parts are added after them). Its `Value` stays mutable and keeps its `ValueRef`.
-///
-/// A `&mut` query does not compile:
+/// The component is immutable; insert a new value to change it. A `&mut` query does not compile:
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
@@ -131,8 +83,7 @@ pub struct NumericStepper {
     /// Turns the value into the text between the buttons.
     #[reflect(ignore)]
     pub format: ValueFormat,
-    /// The icon of the decrease button, white on transparent (see
-    /// [`Icon`](crate::icon::Icon)).
+    /// The icon of the decrease button, white on transparent.
     pub decrease_icon: Handle<Image>,
     /// The icon of the increase button.
     pub increase_icon: Handle<Image>,
@@ -164,9 +115,7 @@ impl Default for NumericStepper {
     }
 }
 
-/// What `bsn!` patches when a scene writes `NumericStepper { .. }`: the fields not
-/// written are those of [`NumericStepper::default`], and the icons are
-/// [`HandleTemplate`]s.
+/// What `bsn!` patches when a scene writes `NumericStepper { .. }`.
 pub struct NumericStepperTemplate {
     /// See [`NumericStepper::format`].
     pub format: ValueFormat,
@@ -234,8 +183,7 @@ impl Template for NumericStepperTemplate {
     }
 }
 
-// `NumericStepper` is `Default` and `Clone`, so without this `Unpin` impl (what `#[derive(FromTemplate)]`
-// writes) bevy's blanket `FromTemplate` for such types would conflict with the one below.
+// Keeps the blanket `FromTemplate` for `Default + Clone` types from conflicting with the impl below.
 #[expect(
     unused_lifetimes,
     reason = "the higher-ranked bound is what keeps this impl from applying generally"
@@ -246,7 +194,6 @@ impl FromTemplate for NumericStepper {
     type Template = NumericStepperTemplate;
 }
 
-/// A white-on-transparent 16 px minus or plus.
 fn glyph(plus: bool) -> Image {
     const SIZE: u32 = 16;
     let mut data = vec![0u8; (SIZE * SIZE * 4) as usize];
@@ -312,12 +259,9 @@ impl NumericStepper {
         let access_node = spin_button(&stepper, &value);
         world.commands().entity(context.entity).insert((
             AccessibilityNode::from(access_node),
-            // The column resize cursor, a double arrow with a bar: a drag scrubs the value.
             EntityCursor::System(SystemCursorIcon::ColResize),
         ));
 
-        // Inserting again replaces the parts the widget made (and an open number editor); a
-        // child of the application is none of them and stays.
         let old_parts: Vec<Entity> = world
             .entity(context.entity)
             .get::<Children>()
@@ -342,9 +286,6 @@ impl NumericStepper {
             .commands()
             .entity(context.entity)
             .with_children(move |spawner| {
-                // The track runs from the right edge of the decrease button to the left
-                // edge of the increase button: the fill is empty at the minimum and
-                // reaches the increase button at the maximum.
                 spawner
                     .spawn((
                         Name::new("ScrubTrack"),
@@ -379,7 +320,6 @@ impl NumericStepper {
                     Name::new(stepper.decrease_name.clone()),
                     StepperPart(stepper_entity),
                     Decrease,
-                    // Not the stepper's resize cursor: only the drag scrubs there.
                     EntityCursor::default(),
                     value_ref,
                 ));
@@ -390,14 +330,10 @@ impl NumericStepper {
                     Name::new("Value"),
                     StepperPart(stepper_entity),
                     Text((stepper.format)(&value)),
-                    // The text cursor: a click here opens the number editor. The label
-                    // blocks the stepper below it, so its cursor is the only one hovered.
                     EntityCursor::System(SystemCursorIcon::Text),
                     Pickable::default(),
                     Node {
                         min_width: Val::Px(stepper.label_min_width),
-                        // Takes the room a wider stepper leaves, so the buttons stay at
-                        // its ends.
                         flex_grow: 1.0,
                         justify_content: JustifyContent::Center,
                         align_self: AlignSelf::Center,
@@ -430,7 +366,6 @@ impl NumericStepper {
     }
 }
 
-/// The accessibility node of a stepper showing `value`: a spin button.
 fn spin_button(stepper: &NumericStepper, value: &Value) -> AccessNode {
     let mut node = AccessNode::new(Role::SpinButton);
     if let Some(name) = &stepper.name {
@@ -440,7 +375,6 @@ fn spin_button(stepper: &NumericStepper, value: &Value) -> AccessNode {
     node
 }
 
-/// Writes the number, bounds, step and text of `value` to `node`.
 fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
     let (now, min, max, step) = value.numbers();
     node.set_numeric_value(now);
@@ -451,10 +385,6 @@ fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
 }
 
 /// Points a [`NumericStepper`] to the entity holding its [`Value`].
-///
-/// Immutable, like every Bevy relationship: insert a new one to point elsewhere. The parts of a
-/// stepper carry one too, so the [`ValueReferrers`] of a value lists the views to update when it
-/// changes.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[component(immutable)]
 #[relationship(relationship_target = ValueReferrers)]
@@ -462,18 +392,12 @@ fn set_spin_value(node: &mut AccessNode, format: ValueFormat, value: &Value) {
 pub struct ValueRef(pub Entity);
 
 /// The entities that refer to a [`Value`] through a [`ValueRef`].
-///
-/// These are the mirror steppers and the parts (fill, label and buttons) of every stepper showing
-/// it. Derived by Bevy's relationship hooks and read-only.
 #[derive(Component, Debug, Default, Reflect)]
 #[relationship_target(relationship = ValueRef)]
 #[reflect(Component)]
 pub struct ValueReferrers(Vec<Entity>);
 
 /// Why a [`Value`], [`UIntValue`] or [`FloatValue`] could not be built.
-///
-/// The configuration is rejected as given: bounds are never swapped and a step is never
-/// replaced.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueError {
     /// The minimum is above the maximum.
@@ -500,11 +424,6 @@ impl std::fmt::Display for ValueError {
 impl std::error::Error for ValueError {}
 
 /// A number with bounds and a step size.
-///
-/// A `Value` is live data: the stepper and its mirrors change it in place with
-/// [`Self::increment`] and [`Self::decrement`], and an app replaces it as a whole. The
-/// payloads can only be built through their validating constructors, so the value always
-/// lies within its bounds and a step is always positive.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 pub enum Value {
@@ -742,44 +661,30 @@ impl std::fmt::Display for Value {
 #[derive(Component, Clone, Copy, Debug)]
 struct Increase;
 
-/// Marks a part the stepper spawned itself, so a re-insert replaces those and no child of the app.
 #[derive(Component)]
 struct StepperPart(Entity);
 #[derive(Component, Clone, Copy, Debug)]
 struct Decrease;
-/// The background fill of the stepper it holds, as wide as the value is far between its bounds.
 #[derive(Component, Clone, Copy, Debug)]
 struct ScrubFill(Entity);
-/// What a stepper remembers about the press on it.
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct Scrub {
-    /// Where the value was, between 0 and 1, when the pointer went down on the stepper.
     start: Option<f64>,
-    /// Whether that press became a drag, so its release is no click and no step.
     dragged: bool,
-    /// The pointer (the mouse or one finger) that went down, the only one that scrubs until it
-    /// lifts: a second finger neither starts another scrub nor moves this one.
     pointer: Option<PointerId>,
 }
-/// The text field that replaces the value label while the user types a number.
 #[derive(Component, Clone, Copy, Debug)]
 struct ScrubEditor {
     stepper: Entity,
-    /// The part of the stepper that had the keyboard focus when the editor was opened with the
-    /// keyboard, which gets it back when the editor closes with the focus unclaimed.
     restore_focus: Option<Entity>,
 }
-/// An editor whose field has given up the focus, to be closed after its commit was handled.
 #[derive(Component, Clone, Copy, Debug)]
 struct EditorDone;
-/// The value label of a stepper, which knows the stepper for its `format`.
 #[derive(Component, Clone, Copy, Debug)]
 struct NumericStepperLabel(Entity);
 
-/// How opaque the fill behind the value is over the stepper's own background.
 const FILL_ALPHA: f32 = 0.25;
 const SCRUB_CURSOR: EntityCursor = EntityCursor::System(SystemCursorIcon::ColResize);
-/// The width of the small icon buttons at the ends of the stepper, in logical pixels.
 const BUTTON_WIDTH_PX: f32 = 30.0;
 
 fn theme_numeric_stepper(
@@ -864,11 +769,8 @@ fn on_activate(
     }
 }
 
-/// Steps the value of the stepper the key reached with the arrow keys.
-///
-/// The stepper owns the arrow keys while one of its buttons has the focus, so it stops them
-/// there (pressed, repeated or released, also at a limit) and an app's directional
-/// navigation never sees them.
+/// Stops the arrow keys while a button of the stepper has the focus, so directional navigation
+/// never sees them.
 fn on_key_input(
     mut trigger: On<FocusedInput<KeyboardInput>>,
     steppers: Query<(), With<NumericStepper>>,
@@ -890,8 +792,7 @@ fn on_key_input(
         return;
     }
     let input = &trigger.event().input;
-    // F2 opens the number editor, as it does to edit a cell in a spreadsheet. Enter is the
-    // focused button's own: it steps.
+    // F2 opens the editor; Enter stays the focused button's own.
     if input.key_code == KeyCode::F2 {
         let opens = input.state == ButtonState::Pressed && !input.repeat;
         trigger.propagate(false);
@@ -943,14 +844,12 @@ fn on_key_input(
     });
 }
 
-/// The [`NumericStepper`] that `entity` is or lies in.
 fn stepper_of(
     entity: Entity,
     parents: &Query<&ChildOf>,
     steppers: &Query<(), With<NumericStepper>>,
 ) -> Option<Entity> {
     let mut at = entity;
-    // The deepest part (the icon of a button) is a few levels below the stepper.
     for _ in 0..8 {
         if steppers.contains(at) {
             return Some(at);
@@ -960,8 +859,6 @@ fn stepper_of(
     None
 }
 
-/// Scrubs the value when the pointer is dragged on a stepper, and opens the number editor on a
-/// click on the value.
 fn on_mouse(
     trigger: On<MouseEvent>,
     parents: Query<&ChildOf>,
@@ -988,7 +885,6 @@ fn on_mouse(
     let Some(stepper) = stepper_of(event.entity, &parents, &steppers) else {
         return;
     };
-    // While a number is typed, the pointer belongs to the text field.
     if editors.iter().any(|editor| editor.stepper == stepper) {
         return;
     }
@@ -1019,8 +915,7 @@ fn on_mouse(
                 return;
             }
             if !scrub.dragged {
-                // For the whole drag the cursor is the resize cursor wherever the pointer is,
-                // and the other controls do not react to it.
+                // The drag owns the cursor; the other controls ignore the pointer.
                 if let Some(cursor) = cursor_override.as_deref_mut() {
                     cursor.0 = Some(SCRUB_CURSOR);
                 }
@@ -1068,7 +963,6 @@ fn on_mouse(
     }
 }
 
-/// Replaces the value label of a stepper with the number editor.
 fn open_editor(
     stepper: Entity,
     label: Entity,
@@ -1114,7 +1008,6 @@ fn open_editor(
     commands.entity(stepper).insert_children(index, &[editor]);
 }
 
-/// Sets the value to the number typed in the editor, if there is one.
 fn on_editor_commit(
     trigger: On<TextFieldCommit>,
     editors: Query<&ScrubEditor>,
@@ -1144,8 +1037,7 @@ fn on_editor_commit(
     }
 }
 
-/// Marks the editor whose field gave up the focus, to be closed in `Last`, after the commit
-/// that comes with the same loss was handled.
+/// Closed in `Last`, after the commit that comes with the same focus loss.
 fn on_editor_focus_lost(
     trigger: On<FocusLost>,
     editors: Query<(Entity, &TextFieldRefs), With<ScrubEditor>>,
@@ -1158,7 +1050,6 @@ fn on_editor_focus_lost(
     }
 }
 
-/// Gives a freshly built number editor the keyboard focus.
 fn focus_new_editors(
     new: Query<&TextFieldRefs, (Added<TextFieldRefs>, With<ScrubEditor>)>,
     mut focus: ResMut<InputFocus>,
@@ -1168,7 +1059,6 @@ fn focus_new_editors(
     }
 }
 
-/// Closes the editors that are done and shows the value again.
 fn finish_editors(
     done: Query<(Entity, &ScrubEditor), With<EditorDone>>,
     mut labels: Query<(&NumericStepperLabel, &mut Node)>,
@@ -1178,7 +1068,6 @@ fn finish_editors(
 ) {
     for (editor, scrub_editor) in &done {
         commands.entity(editor).despawn();
-        // Focus nobody claimed goes back to where the keys were before the editor.
         if let Some(back) = scrub_editor.restore_focus
             && focus.get().is_none()
             && buttons.contains(back)
@@ -1193,8 +1082,7 @@ fn finish_editors(
     }
 }
 
-/// Forgets a press once the mouse button is up and no finger is down, so the next one starts
-/// afresh and a stale drag never swallows a later keyboard `Activate`.
+/// A stale press must not swallow a later keyboard `Activate`.
 fn end_scrub(
     buttons: Res<ButtonInput<MouseButton>>,
     touches: Option<Res<Touches>>,
@@ -1225,14 +1113,6 @@ fn end_scrub(
 }
 
 /// The leading number of `text`: the longest start of it that is a finite number.
-///
-/// The number grammar is Rust's `f64` one (sign, digits with an optional point,
-/// optional exponent), so the text is scanned once to find where a number could
-/// end, and only a few candidate prefixes are parsed: the longest, then (only
-/// when that overflows to infinity) a binary search over the exponent digits
-/// and over the mantissa digits, whose values grow with their length. That is
-/// O(n log n) in the worst case, however long the pasted text is, where trying
-/// every prefix was O(n^2).
 fn parse_number(text: &str) -> Option<f64> {
     let text = text.trim();
     let bytes = text.as_bytes();
@@ -1260,7 +1140,6 @@ fn parse_number(text: &str) -> Option<f64> {
     }
     let mantissa_end = at;
 
-    // An exponent needs at least one digit after `e` and an optional sign.
     let mut exponent = None;
     if matches!(bytes.get(at), Some(b'e' | b'E')) {
         let sign_at = at + 1;
@@ -1277,9 +1156,6 @@ fn parse_number(text: &str) -> Option<f64> {
         if let Some(number) = finite(full) {
             return Some(number);
         }
-        // Infinite. A positive exponent grows with its digits, so find the
-        // most digits that stay finite. A negative one only shrinks the
-        // number, so no exponent prefix helps.
         if !negative {
             let (mut low, mut high) = (0, count);
             while low + 1 < high {
@@ -1298,8 +1174,6 @@ fn parse_number(text: &str) -> Option<f64> {
     if let Some(number) = finite(mantissa_end) {
         return Some(number);
     }
-    // The mantissa alone overflows. Its prefixes grow with their length, and
-    // every one with a digit is valid, so find the longest finite one.
     let first_digit = bytes.iter().position(u8::is_ascii_digit)?;
     let (mut low, mut high) = (first_digit + 1, mantissa_end);
     while low + 1 < high {
@@ -1313,7 +1187,6 @@ fn parse_number(text: &str) -> Option<f64> {
     finite(low)
 }
 
-/// How far `value` is between its bounds, as a CSS percentage.
 fn fraction_percent(value: &Value) -> f32 {
     (value.fraction() * 100.0) as f32
 }
@@ -1329,7 +1202,6 @@ fn on_change(
     mut fills: Query<&mut Node, (With<ScrubFill>, Without<NumericStepper>)>,
     mut commands: Commands,
 ) {
-    // Only the views that refer to a changed value are visited, through its `ValueReferrers`.
     for (value_entity, value, referrers) in &changed_values {
         // A stepper holding its own value has no `ValueRef`.
         if own_value_steppers.contains(value_entity)
@@ -1366,7 +1238,6 @@ fn on_change(
     }
 }
 
-/// Makes `button` [`InteractionDisabled`] or not, touching it only if that changes.
 fn set_disabled(commands: &mut Commands, button: Entity, is_disabled: bool, should_be: bool) {
     if should_be && !is_disabled {
         commands.entity(button).insert(InteractionDisabled);
@@ -1583,17 +1454,14 @@ mod tests {
                     assert_eq!(Value::$new(1, 5, 4, 1).unwrap_err(), ValueError::MinAboveMax);
                     assert_eq!(Value::$new(1, 0, 4, 0).unwrap_err(), ValueError::ZeroStep);
                     assert_eq!(Value::$new(1, 5, 4, 0).unwrap_err(), ValueError::MinAboveMax);
-                    // The initial value is clamped to the inclusive range.
                     assert_eq!(Value::$new(0, 2, 4, 1).unwrap().$as(), Some(2));
                     assert_eq!(Value::$new(9, 2, 4, 1).unwrap().$as(), Some(4));
-                    // Equal bounds and an oversized step are valid but cannot step.
                     for value in [Value::$new(3, 3, 3, 1).unwrap(), Value::$new(1, 0, 2, 5).unwrap()] {
                         assert!(!value.can_increment() && !value.can_decrement());
                         let mut stepped = value;
                         assert!(!stepped.increment() && !stepped.decrement());
                         assert_eq!(stepped.$as(), value.$as());
                     }
-                    // Overflow and underflow leave the value alone.
                     let mut top = Value::$new(<$ty>::MAX, 0, <$ty>::MAX, 2).unwrap();
                     assert!(!top.increment() && top.$as() == Some(<$ty>::MAX));
                     assert!(top.decrement() && top.$as() == Some(<$ty>::MAX - 2));
@@ -1720,7 +1588,6 @@ mod tests {
         while value.increment() {
             shown.push(value.to_string());
         }
-        // The display rounds the accumulated error away, whatever the step count.
         let expected: Vec<String> = (0..shown.len())
             .map(|i| format!("{:.1}", i as f32 / 10.0))
             .collect();
@@ -1767,7 +1634,6 @@ mod tests {
         assert!(!value.can_increment() && value.can_decrement());
         assert!(value.decrement() && value.decrement() && value.as_u8() == Some(5));
         assert!(!value.can_decrement() && value.can_increment());
-        // A step that does not reach the maximum stops short of it.
         let mut short = Value::new_u8(5, 5, 10, 3).unwrap();
         assert!(short.increment() && !short.increment() && short.as_u8() == Some(8));
     }
