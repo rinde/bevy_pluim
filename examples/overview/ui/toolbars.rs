@@ -106,7 +106,6 @@ pub(super) fn galleries(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut com
     );
 }
 
-/// A horizontal scroll area over the gallery of `cards`.
 pub(super) fn gallery_scroll_area(cards: [Item<GalleryCard>; 6]) -> impl Scene {
     ScrollArea::scene(
         move || {

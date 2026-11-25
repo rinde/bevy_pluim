@@ -12,11 +12,9 @@ use bevy_pluim::select::{ItemParam, ItemValues, SelectionParam, SelectionValue};
 )]
 use super::*;
 
-/// Marks the selection of the trail of the "Bread crumbs with a stack" variant.
 #[derive(Component, Copy, Clone, Debug, Default)]
 struct TrailSelection;
 
-/// What a stop of the trail is, to find its item.
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
 enum TrailStop {
     Home,
@@ -27,8 +25,7 @@ enum TrailStop {
 }
 
 pub(super) fn navigation(spawner: In<StackChildSpawner>, mut commands: Commands) {
-    // The trail's stops: panel A is created once and shown again through the variant, which
-    // is a reference to it.
+    // Panel A is created once; the variant shows it by reference.
     let trail = [
         (
             TrailStop::Home,
@@ -130,9 +127,6 @@ pub(super) fn navigation(spawner: In<StackChildSpawner>, mut commands: Commands)
     );
 }
 
-// ---- The trail's panels ----
-
-/// An observer that pushes `target` onto the trail.
 fn go_to(
     target: TrailStop,
 ) -> impl Fn(On<Activate>, SelectionParam<With<TrailSelection>>, ItemParam<String, &TrailStop>) + Clone
@@ -145,7 +139,6 @@ fn go_to(
     }
 }
 
-/// An observer that replaces the last crumb with `target`.
 fn replace_with(
     target: TrailStop,
 ) -> impl Fn(On<Activate>, SelectionParam<With<TrailSelection>>, ItemParam<String, &TrailStop>) + Clone
@@ -234,9 +227,6 @@ fn trail_b_sub(spawner: In<StackChildSpawner>, mut commands: Commands) {
     );
 }
 
-// ---- The tabs' panels ----
-
-/// Three colour palette combos sharing one selection, one with its own, and a combo on a card.
 fn tab_palettes(spawner: In<StackChildSpawner>, mut commands: Commands) {
     let colors = commands
         .spawn(ItemValues::spawn(SpawnIter(
@@ -292,7 +282,6 @@ fn tab_palettes(spawner: In<StackChildSpawner>, mut commands: Commands) {
     );
 }
 
-/// A scroll area of 100 items beside a list.
 fn tab_list(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,
@@ -316,7 +305,6 @@ fn tab_list(spawner: In<StackChildSpawner>, mut commands: Commands) {
     );
 }
 
-/// A wrapping grid of 300 numbered cards in a scroll area that scrolls both ways.
 fn tab_cards(spawner: In<StackChildSpawner>, mut commands: Commands) {
     spawner.spawn_scene(
         &mut commands,

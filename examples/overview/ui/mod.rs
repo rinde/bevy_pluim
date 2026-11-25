@@ -77,11 +77,9 @@ impl Plugin for OverviewPlugin {
     }
 }
 
-/// The icon every icon button, tool and card of the overview shows.
 #[derive(Resource)]
 struct Icon(Handle<Image>);
 
-/// The tabs, each with the system that spawns its page the first time it is shown.
 fn tab_pages(commands: &mut Commands) -> Vec<(Item<String>, StackItem)> {
     let mut tabs = Vec::new();
     let mut add = |name: &str, page: StackItem| tabs.push((Item::new(name), page));
@@ -192,7 +190,6 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                 row_gap: px(10.0),
             }
             Children [
-                // The theme control; it is the widget of the "Light dark toggle" page, too.
                 LightDarkToggle
                 --
                 TabBar
@@ -203,8 +200,6 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                 ~{Selection::reference(selection)}
             ]
             --
-            // The pages scroll when one is taller than the window; each is as wide as this area
-            // and centres its contents.
             Node {
                 flex_grow: 1.0,
                 min_width: px(0.0),
@@ -219,7 +214,6 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     });
 }
 
-/// The area the pages are shown in.
 fn pages(selection: Entity) -> impl Scene {
     ScrollArea::scene(
         move || {
@@ -233,9 +227,6 @@ fn pages(selection: Entity) -> impl Scene {
     )
 }
 
-// ---- The layout every page shares ----
-
-/// A page: a column as wide as the pages area, with everything centred.
 fn page() -> Node {
     Node {
         width: percent(100.0),
@@ -246,7 +237,6 @@ fn page() -> Node {
     }
 }
 
-/// The variants of a page, centred and wrapping.
 fn groups() -> Node {
     Node {
         max_width: px(960.0),
@@ -260,7 +250,6 @@ fn groups() -> Node {
     }
 }
 
-/// Widgets side by side inside a variant.
 fn row() -> Node {
     Node {
         flex_direction: FlexDirection::Row,
@@ -270,7 +259,6 @@ fn row() -> Node {
     }
 }
 
-/// One variant: a secondary label naming what is different about it, over the widget.
 fn variant(caption: &'static str, content: impl Scene) -> impl Scene {
     bsn! {
         Node {
@@ -298,7 +286,6 @@ fn stations() -> [(Item<String>, ItemNote); 3] {
     ]
 }
 
-/// A slider with a valid range and step: these are fixed values.
 #[expect(clippy::expect_used, reason = "the sliders use fixed valid values")]
 fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
     Slider::new(value, min, max)

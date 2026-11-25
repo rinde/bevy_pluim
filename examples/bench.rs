@@ -1,16 +1,6 @@
-//! A repeatable CPU and memory benchmark of the widgets, in a headless app.
+//! A CPU and memory benchmark of the widgets in a headless app.
 //!
-//! Run it optimised: `just bench` (all workloads at their default sizes) or
-//! `just bench -- --workload tooltips --size 5000`. See `docs/benchmarks.md`
-//! for how to read and compare the numbers.
-//!
-//! Each workload spawns its widgets under one root, runs warm-up frames, then
-//! times `App::update` for a fixed number of frames of fixed 1/60 s time, and
-//! prints one markdown table row: frame time (mean, median, 95th percentile,
-//! maximum), entities, and the resident memory the workload added. The suite
-//! runs every workload in a fresh process so one cannot leave memory behind for
-//! the next. The `bevy *` workloads use no widget of this crate and are the
-//! Bevy baseline the library's overhead is read against.
+//! Run it optimized with `just bench`; see `docs/benchmarks.md`.
 
 use std::io::Write as _;
 use std::process::{Command, ExitCode};
@@ -47,30 +37,28 @@ use bevy_pluim::tooltip::{Tooltip, TooltipPopup};
 use bevy_pluim::virtual_list::{RowHeight, VirtualList};
 use bevy_stagecraft::HeadlessPlugins;
 
-/// Frames played before timing starts, so the first layout and spawns settle.
+/// Frames played before timing starts.
 const WARMUP_FRAMES: usize = 60;
-/// Frames after the spawn that count towards the startup time (the widgets are built by then).
+/// Frames after the spawn that count towards the startup time.
 const STARTUP_FRAMES: usize = 3;
 /// Frames timed unless `--frames` says otherwise.
 const DEFAULT_FRAMES: usize = 300;
 /// Values changed per frame by the stepper workloads.
 const CHANGED_STEPPERS: usize = 20;
 
-/// How many `List` selections the `lists-selection-changing` workload replaces every frame.
+/// `List` selections replaced per frame by `lists-selection-changing`.
 const CHANGED_LISTS: usize = 50;
-/// Steppers mirroring each shared value in `steppers-shared-changing`.
+/// Steppers per shared value in `steppers-shared-changing`.
 const MIRRORS: usize = 10;
-/// Wheel messages sent per frame by `wheel-deep`, as a trackpad sends at a high rate.
+/// Wheel messages sent per frame by `wheel-deep`.
 const WHEEL_EVENTS: usize = 16;
-/// Entities of the deep tree the fake pointers hover (the leaf and its nearest ancestors).
+/// Entities of the deep tree the fake pointers hover.
 const HOVERED_ANCESTORS: usize = 8;
 
-/// Marks an entity of the wheel tree that the fake pointers hover.
 #[derive(Component)]
 struct WheelHovered;
 
-/// Puts the marked entities in the hover map of two pointers, after picking has
-/// rebuilt it (there is no real pointer in a headless run).
+/// Puts the `WheelHovered` entities in the hover map of two pointers.
 fn fake_hover(
     hovered: Query<Entity, With<WheelHovered>>,
     mut hover_map: ResMut<bevy::picking::hover::HoverMap>,
@@ -85,13 +73,10 @@ fn fake_hover(
     }
 }
 
-/// Frames the fake pointer rests on one tooltip host: longer than the tooltip
-/// delay (0.5 s is 30 frames at 60 per second), so each popup spawns, is laid
-/// out and placed before the pointer moves on and despawns it.
+/// Frames the fake pointer rests on one tooltip host. Keep it above the 0.5 s tooltip delay (30 frames).
 const HOVER_REST_FRAMES: usize = 45;
 
-/// Moves a fake mouse pointer over the `Tooltip` hosts one after the other,
-/// resting on each for `HOVER_REST_FRAMES`, after picking has rebuilt the hover map and before it updates `Hovered`.
+/// Moves a fake mouse pointer over the `Tooltip` hosts in turn.
 fn hover_tooltip_hosts(
     hosts: Query<Entity, With<Tooltip>>,
     mut hover_map: ResMut<bevy::picking::hover::HoverMap>,
@@ -117,11 +102,7 @@ fn hover_tooltip_hosts(
     }
 }
 
-/// Holds a primary-button scrub drag on the one `NumericStepper`, as a person
-/// dragging it would: Left is pressed in `ButtonInput<MouseButton>` (so
-/// `end_scrub` keeps the drag on) and the first frame sends a `PointerPress`,
-/// then every frame a `PointerDrag` moving further than the drag threshold. The
-/// stepper's own observer then switches the crate-private `HoverLock` on.
+/// Holds a scrub drag on the one `NumericStepper`: Left stays pressed in `ButtonInput` so `end_scrub` keeps it on.
 fn hold_scrub_drag(app: &mut App, index: usize) {
     use bevy::camera::NormalizedRenderTarget;
     use bevy::picking::backend::HitData;
@@ -165,16 +146,13 @@ fn hold_scrub_drag(app: &mut App, index: usize) {
     });
 }
 
-/// A finger presses, pans quickly and lifts on every scroll area, one step a frame from `start`,
-/// so each area is left flinging. Frames in the bench are short, so the pan is fast enough to
-/// outlast the run.
+/// A finger presses, pans and lifts on every scroll area, leaving each flinging.
 fn fling_every_area(app: &mut App, step: usize) {
     use bevy::camera::NormalizedRenderTarget;
     use bevy::picking::backend::HitData;
     use bevy::picking::events::{PointerClick, PointerDrag, PointerPress, PointerRelease};
     use bevy::picking::pointer::{Location, PointerButton, PointerId};
     let world = app.world_mut();
-    // The tall node inside each area: a touch starts on it, as on any content of the area.
     let mut query = world.query_filtered::<&Children, With<ScrollContents>>();
     let targets: Vec<Entity> = query
         .iter(world)
@@ -229,163 +207,118 @@ fn fling_every_area(app: &mut App, step: usize) {
     }
 }
 
-/// What is spawned and what happens each frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Workload {
     /// Plain Bevy nodes with a text child: the baseline for the buttons.
     BevyTexts,
     /// Plain Bevy nodes: the baseline for the tooltips.
     BevyNodes,
-    /// A node with a `Text` child: the baseline for the push buttons that has
-    /// their parent and child entities.
+    /// The baseline for the push buttons, with their parent and child entities.
     BevyTextChildren,
-    /// `PushButton`s, idle.
     PushButtons,
-    /// Nodes with a `Tooltip`, idle (no pointer).
     Tooltips,
-    /// Nodes with a `Tooltip`, the pointer moving over them one at a time and
-    /// resting long enough for each popup to show: hover and popup cost.
+    /// The pointer rests on each tooltip host in turn, so every popup shows.
     TooltipsHovering,
-    /// The `tooltips-hovering` hosts and one `NumericStepper` held in a scrub
-    /// drag, so the crate-private `HoverLock` is on: what the lock costs while
-    /// the fake pointer keeps moving over the hosts (#756).
+    /// `TooltipsHovering` with a stepper scrub drag, so `HoverLock` is on.
     TooltipsScrubbing,
-    /// A `VirtualList` of many items, idle.
     VirtualList,
-    /// The same `VirtualList`, its scroll position moved every frame.
     VirtualListScrolling,
-    /// Several `VirtualList`s side by side, idle.
     VirtualLists,
-    /// Many independent `FilterChips`; one row is marked changed every frame.
+    /// One row is marked changed every frame.
     FilterChipsOneChanging,
-    /// The same `FilterChips`, idle: the floor the changing workload is read against.
+    /// The floor `FilterChipsOneChanging` is read against.
     FilterChipsIdle,
-    /// The same `FilterChips`; one row's selection moves to its next chip every frame, so only
-    /// that row is restyled (#709).
+    /// One row's selection moves to its next chip every frame.
     FilterChipsSelectionChanging,
-    /// The same `FilterChips`; every frame the `Theme` is marked changed, so every chip is
-    /// restyled but none gets a new font (#710).
+    /// The `Theme` is marked changed every frame, with no new font.
     FilterChipsRestyling,
-    /// Many independent `List`s of three noted items; one note is marked changed every frame.
+    /// One note is marked changed every frame.
     ListNotesChanging,
-    /// The same lists, idle: the floor the changing workload is read against.
+    /// The floor `ListNotesChanging` is read against.
     ListNotesIdle,
-    /// Many independent `List`s of three items; `CHANGED_LISTS` selections are replaced every
-    /// frame, so the lists' selection sync shows (#671).
+    /// `CHANGED_LISTS` selections are replaced every frame.
     ListsSelectionChanging,
-    /// The same lists, idle: the floor the changing workload is read against.
+    /// The floor `ListsSelectionChanging` is read against.
     ListsSelectionIdle,
-    /// One `List` of many items, replaced by a new one with all its items every frame:
-    /// the initial build of the views.
+    /// One `List` is replaced by a new one with all its items every frame.
     ListItemsInitial,
-    /// One `List` of many items; one item is added every frame: an incremental change.
+    /// One item is added to a `List` every frame.
     ListItemsAdding,
-    /// `ListItemsAdding` with `ListLayout::Horizontal` (a flex row, since Horizontal is no longer a grid).
+    /// `ListItemsAdding` with `ListLayout::Horizontal`.
     ListItemsHorizontalAdding,
-    /// `ListItemsAdding` with `ListLayout::VerticalGrid` of four columns (a Taffy grid).
+    /// `ListItemsAdding` with a four-column `ListLayout::VerticalGrid`.
     ListItemsGridAdding,
-    /// Many closed `ColorPaletteCombo`s over one shared 242-colour source, idle.
     PaletteCombosIdle,
-    /// Several `ThemeEditor`s, idle: each has a closed palette combo per colour slot.
     ThemeEditorsIdle,
-    /// One source of many items shared by `SHARED_LISTS` hidden `List`s; one item is added every
-    /// frame, so one `ItemsChanged` reaches every watcher.
+    /// One item added every frame to a source shared by `SHARED_LISTS` hidden lists.
     ItemsSharedAdding,
-    /// One `ColorPalette` of many swatches; one item is added every frame (#679).
     PaletteItemsAdding,
-    /// One `TabBar` of many tabs; one item is added every frame (#679).
     TabItemsAdding,
-    /// One `SegmentedControl` of many segments; one item is added every frame (#679).
     SegmentItemsAdding,
-    /// Many independent `NumericStepper`s, idle: the floor the changing workloads are read against.
+    /// The floor the changing stepper workloads are read against.
     SteppersIdle,
-    /// The same steppers; `CHANGED_STEPPERS` values are marked changed every frame.
+    /// `CHANGED_STEPPERS` values are marked changed every frame.
     SteppersChanging,
-    /// Groups of ten `NumericStepper`s mirroring one shared `Value`; `CHANGED_STEPPERS` shared
-    /// values are changed every frame.
+    /// Groups of ten steppers mirror one shared `Value`; `CHANGED_STEPPERS` shared values change every frame.
     SteppersSharedChanging,
-    /// Many parents, each with a `ToastStack` holding one long toast, idle (#678).
     ToastsIdle,
-    /// The same parents; `TOAST_BURST` short toasts are spawned under other parents every frame.
+    /// `TOAST_BURST` short toasts are spawned under other parents every frame.
     ToastsBursting,
-    /// Many `IconButton`s each with a `Badge`, idle (#685).
     BadgesIdle,
-    /// The same buttons; `CHANGED_STEPPERS` badges get a new count every frame (#685).
+    /// `CHANGED_STEPPERS` badges get a new count every frame.
     BadgesChanging,
-    /// Many `Panel`s, idle (#685).
     PanelsIdle,
-    /// The same panels; `CHANGED_STEPPERS` are inserted again every frame (#685).
+    /// `CHANGED_STEPPERS` panels are inserted again every frame.
     PanelsChanging,
-    /// Many `SettingRows` columns of five rows, idle (#689).
     SettingRowsIdle,
-    /// The same columns; in `CHANGED_STEPPERS` of them a row is removed at the end and a new one
-    /// inserted at the front every frame (#689).
+    /// In `CHANGED_STEPPERS` columns a row is removed at the end and a new one inserted at the front every frame.
     SettingRowsChanging,
-    /// Many independent `SegmentedControl`s of three segments, idle.
     SegmentedControlsIdle,
-    /// The same controls; one control's selection moves to its next segment every frame, and
-    /// only that control is restyled (#709).
+    /// One control's selection moves to its next segment every frame; only it is restyled.
     SegmentedControlsSelectionChanging,
-    /// Many independent `SegmentedControl`s; one control's selection moves to its next segment
-    /// every frame, so its indicator slides (#677).
+    /// One control's selection moves every frame, so its indicator slides.
     IndicatorsAnimating,
-    /// Plain Bevy nodes in the same root; one node's left offset changes every frame: the
-    /// baseline of `indicators-animating`, whose one layout write per frame costs the same in
-    /// Bevy's layout whatever the widgets are (#782).
+    /// Baseline of `indicators-animating`: one node's left offset changes every frame.
     BevyNodesResizing,
-    /// The same controls; one control's indicator is despawned every frame and must be made again
-    /// (#677).
+    /// One control's indicator is despawned every frame and made again.
     IndicatorsRemoved,
-    /// Many independent `Gallery`s of three cards, idle.
     GalleriesIdle,
-    /// One `FilterChips` of `size` chips; every frame its first item goes and a new one is added.
+    /// The first item goes and a new one is added every frame.
     FilterChipsEditing,
-    /// One `Toolbar` of `size` tools, edited like `FilterChipsEditing`.
+    /// Edited like `FilterChipsEditing`.
     ToolbarEditing,
-    /// One `Gallery` of `size` cards, edited like `FilterChipsEditing`.
+    /// Edited like `FilterChipsEditing`.
     GalleryEditing,
-    /// Many independent `TabBar`s of three tabs, idle (#670).
     TabBarsIdle,
-    /// Many deep chains of nodes with a button at the bottom, idle (#684).
     DeepTreesIdle,
-    /// The same chains; two nested nodes of one chain flip `Display::None` every frame, so
-    /// their subtrees overlap (#684).
+    /// Two nested nodes of one chain flip `Display::None` every frame, so their subtrees overlap.
     DeepTreesDisplay,
-    /// The same chains; one chain moves to another parent every frame (#684).
+    /// One chain moves to another parent every frame.
     DeepTreesReparenting,
-    /// Many independent `SegmentedControl`s (roving-focus groups); the focus moves to
-    /// another control's segment every frame.
+    /// The focus moves to another control's segment every frame.
     RovingGroupsFocus,
-    /// The same controls; one control's selection is replaced every frame.
+    /// One control's selection is replaced every frame.
     RovingGroupsSelection,
-    /// The same controls, idle: the floor the two roving workloads are read against.
+    /// The floor the two roving workloads are read against.
     RovingGroupsIdle,
-    /// Wheel input over a deep, nested scroll tree: `WHEEL_EVENTS` trackpad messages a frame for
-    /// two pointers (#682).
+    /// `WHEEL_EVENTS` trackpad messages a frame for two pointers over a deep scroll tree.
     WheelDeep,
-    /// The same tree and hover map with no wheel input: the floor `wheel-deep` is read against.
+    /// The floor `wheel-deep` is read against.
     WheelDeepIdle,
-    /// Many tall scroll areas, none flinging: the floor `scroll-flings-active` is read against (#801).
+    /// The floor `scroll-flings-active` is read against.
     ScrollFlingsIdle,
-    /// The same areas, each lifted from a fast touch pan in the first frame, so every area flings
-    /// for the frames that follow (#801).
+    /// Each area is lifted from a fast touch pan in the first frame, so every area flings.
     ScrollFlingsActive,
-    /// Many `Slider`s, idle.
     SlidersIdle,
-    /// The same sliders; one is pressed and the one before it released every frame.
+    /// One slider is pressed and the one before it released every frame.
     SlidersPressing,
-    /// Change-detection microbenchmark (see `ticks`): a `Changed` filter reader
-    /// over a component without a summary tick, nothing mutates.
+    /// Change-detection microbenchmark: a `Changed` filter reader, nothing mutates.
     TicksFilterIdle,
-    /// The same, a contiguous reader that skips on the summary tick, nothing mutates.
+    /// A reader that skips on the summary tick, nothing mutates.
     TicksSummaryIdle,
-    /// `Changed` filter reader, one entity mutated per frame.
     TicksFilterOne,
-    /// Summary-tick reader, one entity mutated per frame (the skip never applies).
     TicksSummaryOne,
-    /// `Changed` filter reader, every entity mutated per frame.
     TicksFilterAll,
-    /// Summary-tick reader, every entity mutated per frame.
     TicksSummaryAll,
 }
 
@@ -532,7 +465,6 @@ impl Workload {
         }
     }
 
-    /// The size used when `--size` is not given: widgets, items or lists.
     const fn default_size(self) -> usize {
         match self {
             Self::BevyTexts | Self::BevyTextChildren | Self::PushButtons => 1_000,
@@ -610,7 +542,6 @@ impl Workload {
     }
 }
 
-/// What one run was asked to do.
 #[derive(Clone, Copy, Debug)]
 struct Run {
     workload: Workload,
@@ -649,7 +580,6 @@ fn main() -> ExitCode {
     )
 }
 
-/// Reports a `--workload` name that is none of the workloads and lists the valid ones.
 fn unknown_workload(name: &str) -> ExitCode {
     let names: Vec<_> = Workload::ALL.iter().map(|w| w.name()).collect();
     let _ = writeln!(
@@ -670,7 +600,7 @@ fn usage() -> ExitCode {
     ExitCode::from(2)
 }
 
-/// Runs every workload in a process of its own and prints the table.
+/// Runs each workload in a fresh process so none leaves memory behind for the next.
 fn suite(size: Option<usize>, frames: usize) -> ExitCode {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{}", environment());
@@ -705,7 +635,6 @@ fn suite(size: Option<usize>, frames: usize) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// The build, hardware and workload header that makes numbers comparable.
 fn environment() -> String {
     let cpu = std::fs::read_to_string("/proc/cpuinfo")
         .ok()
@@ -730,7 +659,7 @@ fn environment() -> String {
     )
 }
 
-/// Resident set size in bytes, 0 where `/proc` is not there.
+/// Resident set size in bytes, 0 without `/proc`.
 fn resident_bytes() -> u64 {
     std::fs::read_to_string("/proc/self/statm")
         .ok()
@@ -738,20 +667,17 @@ fn resident_bytes() -> u64 {
         .map_or(0, |pages| pages * 4096)
 }
 
-/// Table component without a summary tick, for the change-detection workloads.
 #[derive(Component)]
 struct Plain(u32);
 
-/// The same with `#[component(summary_tick)]`.
 #[derive(Component)]
 #[component(summary_tick)]
 struct Summarised(u32);
 
-/// Keeps the readers' work observable so it is not optimised away.
+/// Keeps the readers' work from being optimized away.
 #[derive(Resource, Default)]
 struct Sink(u64);
 
-/// Reader of the status quo: a `Changed` filter visits every row's ticks.
 fn read_with_filter(query: Query<&Plain, Changed<Plain>>, mut sink: ResMut<Sink>) {
     let mut sum = 0_u64;
     for plain in &query {
@@ -760,8 +686,6 @@ fn read_with_filter(query: Query<&Plain, Changed<Plain>>, mut sink: ResMut<Sink>
     sink.0 = sum;
 }
 
-/// Contiguous reader: a table whose summary tick is old is skipped whole, else
-/// its rows' change ticks are compared one by one.
 fn read_with_summary(
     query: Query<Ref<Summarised>>,
     ticks: SystemChangeTick,
@@ -785,7 +709,6 @@ fn read_with_summary(
     sink.0 = sum;
 }
 
-/// Mutates the first entity (`one`) or all of them through change detection.
 fn mutate_plain<const ALL: bool>(mut query: Query<&mut Plain>) {
     for mut plain in &mut query {
         plain.0 = plain.0.wrapping_add(1);
@@ -856,11 +779,9 @@ fn measure(run: Run) -> String {
     }
     app.finish();
     app.cleanup();
-    // One frame for startup, so the empty app's memory is the reference.
     app.update();
     let before = resident_bytes();
 
-    // Startup: spawning the workload and its first frames, which build the widgets.
     let startup = Instant::now();
     spawn(app.world_mut(), run);
     for _ in 0..STARTUP_FRAMES {
@@ -878,7 +799,7 @@ fn measure(run: Run) -> String {
         frame(&mut app, run.workload, run.size, index);
         times.push(start.elapsed());
         if run.workload == Workload::TooltipsScrubbing {
-            // Outside the timing: `HoverLock` is crate-private, but while it is on no popup shows.
+            // `HoverLock` is crate-private; while it is on no popup shows.
             let world = app.world_mut();
             popups_seen += world.query::<&TooltipPopup>().iter(world).count();
         }
@@ -914,13 +835,11 @@ fn measure(run: Run) -> String {
     )
 }
 
-/// One frame; the scrolling workload first moves the scroll position.
 fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
     if workload == Workload::TooltipsScrubbing {
         hold_scrub_drag(app, index);
     }
     if workload == Workload::ListItemsInitial {
-        // A new list with all its items each frame, so every frame builds `size` views.
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<List>>();
         let old: Vec<Entity> = query.iter(world).collect();
@@ -941,7 +860,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             | Workload::ListItemsHorizontalAdding
             | Workload::ListItemsGridAdding
     ) {
-        // One more item for the list's `ItemValues`, so one `ItemsChanged` per frame.
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<List>>();
         if let Some(list) = query.iter(world).next() {
@@ -1026,8 +944,7 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::FilterChipsOneChanging {
-        // Marks one row changed without touching what layout sees, so the frame shows
-        // what the widgets' structure systems cost and not a relayout.
+        // Mark changed without touching what layout sees, so the frame excludes relayout.
         let world = app.world_mut();
         let mut query = world.query::<&mut FilterChips>();
         let count = query.iter(world).count();
@@ -1038,8 +955,7 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::ListNotesChanging {
-        // Marks one note changed without altering it, so the frame shows what finding the
-        // affected rows costs and not a relayout.
+        // Mark changed without altering, so the frame excludes relayout.
         let world = app.world_mut();
         let mut query = world.query::<&mut ItemNote>();
         let count = query.iter(world).count();
@@ -1050,8 +966,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::ListsSelectionChanging {
-        // Replaces the selection of `CHANGED_LISTS` lists (an immutable component) with a
-        // clone, so `Changed<Selection>` fires for those lists alone.
         let world = app.world_mut();
         let mut query = world.query_filtered::<(Entity, &Selection), With<List>>();
         let count = query.iter(world).count();
@@ -1071,8 +985,7 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         workload,
         Workload::SteppersChanging | Workload::SteppersSharedChanging
     ) {
-        // Marks `CHANGED_STEPPERS` values changed without moving them, so the frame shows what
-        // the stepper systems cost and not a relayout of the root for a wider label.
+        // Mark changed without moving the value, so the root is not laid out again.
         let world = app.world_mut();
         let mut query = world.query::<&mut Value>();
         let count = query.iter(world).count();
@@ -1105,8 +1018,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::SettingRowsChanging {
-        // Removes the last row of a column and inserts a new one at its front, so the dividers
-        // of that column are looked at again and no other column is.
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<SettingRows>>();
         let columns: Vec<Entity> = query.iter(world).collect();
@@ -1130,8 +1041,7 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::ToastsBursting {
-        // A burst of short toasts under other parents: duplicates are rare (the text has the
-        // frame number), and each toast goes after a few frames, so the stacks stay.
+        // The text has the frame number, so duplicates are rare.
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<ToastParent>>();
         let parents: Vec<Entity> = query.iter(world).collect();
@@ -1156,8 +1066,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::RovingGroupsSelection {
-        // Replaces the selection of one control (an immutable component) with a clone, so
-        // `Changed<Selection>` fires for that control alone.
         let world = app.world_mut();
         let mut query = world.query_filtered::<(Entity, &Selection), With<SegmentedControl>>();
         let count = query.iter(world).count();
@@ -1170,7 +1078,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::FilterChipsSelectionChanging {
-        // Moves the selection of one row to its next chip: only that row is restyled.
         let world = app.world_mut();
         let mut query = world.query_filtered::<(Entity, &ItemValues), With<FilterChips>>();
         let count = query.iter(world).count();
@@ -1188,8 +1095,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         workload,
         Workload::IndicatorsAnimating | Workload::SegmentedControlsSelectionChanging
     ) {
-        // Moves the selection of one control to its next segment, so that control's indicator
-        // slides over the following frames while the others stay settled.
         let world = app.world_mut();
         let mut query = world.query_filtered::<(Entity, &ItemValues), With<SegmentedControl>>();
         let count = query.iter(world).count();
@@ -1204,7 +1109,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::BevyNodesResizing {
-        // One plain node moves every frame, as one indicator's goal does.
         let world = app.world_mut();
         let mut query = world.query_filtered::<&mut Node, With<BaselineMover>>();
         let count = query.iter(world).count();
@@ -1213,7 +1117,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::DeepTreesDisplay {
-        // Two nested nodes of one chain flip together, so two dirty roots overlap.
         let world = app.world_mut();
         let mut query = world.query::<(&DeepChain, &mut Node)>();
         let chain = index * 7 % size.max(1);
@@ -1229,7 +1132,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::DeepTreesReparenting {
-        // One chain moves to the other of two parents.
         let world = app.world_mut();
         let mut query = world.query::<(Entity, &DeepChain, &ChildOf)>();
         let moved: Vec<(Entity, Entity)> = query
@@ -1246,7 +1148,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::IndicatorsRemoved {
-        // Despawns the indicator of one control; the next frame makes it again.
         let world = app.world_mut();
         let mut indicators = world.query_filtered::<Entity, With<SegmentIndicator>>();
         let all: Vec<Entity> = indicators.iter(world).collect();
@@ -1255,8 +1156,6 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
         }
     }
     if workload == Workload::SlidersPressing {
-        // Presses one slider and releases the one pressed the frame before, so the
-        // frame shows what restyling costs next to the idle sliders.
         let world = app.world_mut();
         let mut query = world.query_filtered::<Entity, With<Slider>>();
         let sliders: Vec<Entity> = query.iter(world).collect();
@@ -1269,19 +1168,17 @@ fn frame(app: &mut App, workload: Workload, size: usize, index: usize) {
             }
         }
     }
-    if workload == Workload::FilterChipsRestyling {
-        // Every chip is restyled; none has a new font, so nothing may be laid out again.
-        if let Some(mut theme) = app.world_mut().get_resource_mut::<Theme>() {
-            theme.set_changed();
-        }
+    if workload == Workload::FilterChipsRestyling
+        && let Some(mut theme) = app.world_mut().get_resource_mut::<Theme>()
+    {
+        theme.set_changed();
     }
     app.update();
 }
 
-/// Nodes in a chain of the deep-tree workloads, each with a button at the bottom.
+/// Nodes in a deep-tree chain.
 const DEEP_DEPTH: usize = 40;
 
-/// Marks the nodes of a chain that a deep-tree workload changes.
 #[derive(Component)]
 struct DeepChain {
     chain: usize,
@@ -1289,15 +1186,12 @@ struct DeepChain {
     flips: bool,
 }
 
-/// Marks a parent a deep-tree workload moves chains between.
 #[derive(Component)]
 struct DeepSpare;
 
-/// Marks a parent node of the toast workloads.
 #[derive(Component)]
 struct ToastParent;
 
-/// The absolutely placed node of a `bevy-nodes-resizing` row that moves.
 #[derive(Component)]
 struct BaselineMover;
 
@@ -1548,7 +1442,7 @@ fn spawn(world: &mut World, run: Run) {
             }
             Workload::ItemsSharedAdding => {
                 let source = root.spawn(list_items(run.size)).id();
-                // Hidden, so layout does not drown the cost of the item events.
+                // Hidden, so layout does not drown the item events' cost.
                 root.spawn(Node {
                     display: Display::None,
                     ..default()
@@ -1703,8 +1597,6 @@ fn spawn(world: &mut World, run: Run) {
     }
 }
 
-/// `chains` chains of `DEEP_DEPTH` nodes under one of two spare parents, each with a button at
-/// the bottom.
 fn deep_trees(world: &mut World, root: Entity, chains: usize) {
     let spare = world
         .spawn((Node::default(), DeepSpare, ChildOf(root)))
@@ -1730,17 +1622,14 @@ fn deep_trees(world: &mut World, root: Entity, chains: usize) {
     }
 }
 
-/// How many lists share the source of `items-shared-adding`.
+/// Lists sharing the source of `items-shared-adding`.
 const SHARED_LISTS: usize = 8;
-/// A colour that differs by index, for the palette workload.
 #[expect(clippy::cast_precision_loss, reason = "a bench colour")]
 const fn palette_color(index: usize) -> Color {
     Color::hsl((index % 360) as f32, 0.7, 0.5)
 }
 
-/// A `One` selection over `size` items, for the list workloads.
-/// Despawns the first item of the one widget `W` and adds a new item last, so the item count
-/// stays `size` and one small structural change reaches the widget every frame.
+/// Despawns the first item of the one widget `W` and adds a new item last.
 fn edit_items<W: Component, T: Send + Sync + 'static>(
     app: &mut App,
     new: impl FnOnce(usize) -> T,
@@ -1764,9 +1653,7 @@ fn list_items(size: usize) -> impl Bundle {
         .build_with_items((0..size).map(|item| Item::new(format!("Item {item}"))))
 }
 
-/// A vertical scroll area whose contents are a chain of `depth` nested nodes; halfway down is
-/// a nested horizontal scroll area holding the rest, ending in a leaf larger than both areas.
-/// The leaf, its nearest ancestors and one node of the outer area are `WheelHovered`.
+/// A scroll area over `depth` nested nodes with a nested scroll area halfway down.
 fn wheel_tree(parent: &mut ChildSpawner, depth: usize) {
     parent.spawn((
         Node {
@@ -1788,7 +1675,6 @@ fn wheel_chain(parent: &mut ChildSpawner, left: usize, depth: usize, outer: bool
         ..default()
     });
     if left == 0 && outer {
-        // Hover one node of the outer area, so both areas are wheel targets.
         node.insert(WheelHovered);
         node.with_children(|child| {
             child.spawn((

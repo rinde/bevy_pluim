@@ -1,4 +1,4 @@
-//! Generates one libtest function for every scenario suite case.
+//! Generates one libtest function per scenario case.
 
 #![expect(
     clippy::expect_used,

@@ -1,6 +1,4 @@
-//! The redesign's HUD built from this crate's widgets over sample data: run state, a warnings
-//! button, the panel toolbar with its panels, the tool dock and the bars above it. A plain
-//! background stands in for the map.
+//! A HUD built from this crate's widgets over sample data.
 
 mod ui;
 

@@ -12,15 +12,12 @@ use bevy::ui_widgets::{SliderValue, ValueChange};
 use bevy_pluim::numeric_stepper::{self, FloatValue, ValueFormat};
 use bevy_pluim::text_field::{TextFieldChange, TextFieldCommit};
 
-/// The text the Report text field's events are written to.
 #[derive(Component, Debug, Clone, Copy, Default)]
 struct ReportLabel;
 
-/// The slider whose value the [`SharedStepper`] shows too.
 #[derive(Component, Debug, Clone, Copy)]
 struct SharedSlider;
 
-/// The stepper whose value the [`SharedSlider`] shows too.
 #[derive(Component, Debug, Clone, Copy)]
 struct SharedStepper;
 
@@ -147,7 +144,6 @@ pub(super) fn text_fields(spawner: In<StackChildSpawner>, mut commands: Commands
     );
 }
 
-/// "Ground" at 0 and "+7", "+14", ... above it.
 fn level(value: &Value) -> String {
     match value.as_u8() {
         Some(0) | None => "Ground".to_string(),
@@ -155,7 +151,6 @@ fn level(value: &Value) -> String {
     }
 }
 
-/// Shows the slider's new value in the stepper.
 fn slider_moved(
     change: On<ValueChange<f32>>,
     mut stepper: Single<&mut Value, With<SharedStepper>>,
@@ -172,7 +167,6 @@ fn slider_moved(
     }
 }
 
-/// Moves the slider to the stepper's new value.
 fn stepper_stepped(
     change: On<numeric_stepper::ValueChange>,
     slider: Single<Entity, With<SharedSlider>>,
