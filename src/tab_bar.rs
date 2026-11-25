@@ -24,22 +24,14 @@ use crate::select::{
 };
 use crate::theme::Theme;
 
-/// The height of a tab, in logical pixels.
 const TAB_HEIGHT: f32 = 30.0;
-/// The least width of a tab.
 const TAB_MIN_WIDTH: f32 = 48.0;
-/// The padding between a tab's text and its sides.
 const TAB_SIDE_PADDING: f32 = 12.0;
-/// The padding of the bar around its tabs.
 const BAR_PADDING: f32 = 3.0;
-/// The gap between two tabs.
 const TAB_GAP: f32 = 2.0;
-/// The size of a tab's text.
 const TAB_FONT_SIZE: f32 = 13.0;
 
 /// Registers the systems and observers of [`TabBar`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct TabBarPlugin;
 
@@ -66,8 +58,7 @@ impl Plugin for TabBarPlugin {
             PostUpdate,
             (
                 sync_accessibility.in_set(AccessibilitySync),
-                // After the tab list's own roving `TabIndex`, which it writes through commands
-                // before `FocusChangeEvents`, so the hidden bar's -1 is the last word.
+                // Run after the tab list's roving `TabIndex`, so a hidden bar's -1 wins.
                 sync_tab_index
                     .after(collect_hidden_changes)
                     .after(InputFocusSystems::FocusChangeEvents),
@@ -81,13 +72,10 @@ impl Plugin for TabBarPlugin {
     }
 }
 
-/// A row of tabs that picks one item, to switch between the panels of a
-/// [`Stack`](crate::stack::Stack), say.
+/// A row of tabs that picks one item.
 ///
-/// Give it a [`Selection`] (own, with its [`Item<String>`]s, or a
-/// [`Selection::Ref`] to one that other widgets share) of the kind
-/// [`SelectionValue::One`](crate::select::SelectionValue::One); it shows one [`TabBarTab`] per
-/// item, with the selected one highlighted in the theme's `segmented_*` colours.
+/// Give it a [`Selection`] of [`SelectionValue::One`](crate::select::SelectionValue::One)
+/// over [`Item<String>`]s; it shows one [`TabBarTab`] per item.
 ///
 /// ```no_run
 /// # use bevy::prelude::*;
@@ -103,15 +91,7 @@ impl Plugin for TabBarPlugin {
 /// }
 /// ```
 ///
-/// The bar is a `bevy_ui_widgets` [`TabList`] and each tab a [`Tab`], so the bar is one tab
-/// stop (the selected tab, or the focused one), the arrow keys, Home and End move the focus
-/// over the tabs, and a click or Enter / Space on a focused tab selects it. The tab list asks
-/// for the change, and the [`Selection`] decides: [`SelectedTab`] and Bevy's `Selected` on the
-/// tabs follow the selection, also when it is changed from elsewhere.
-///
-/// To a screen reader the bar is a tab list and each tab a tab named after its item's text,
-/// selected while its item is. The library gives the bar no label; an app can insert Bevy's
-/// `AccessibleLabel` on it.
+/// The bar is a [`TabList`] and each tab a [`Tab`]; the [`Selection`] decides the selected tab.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -139,8 +119,7 @@ impl TabBar {
     }
 }
 
-/// The highlight behind the selected tab of a [`TabBar`]: a child of the bar, placed absolutely
-/// behind the tabs, which slides to the selected tab when the selection changes.
+/// The highlight behind the selected tab of a [`TabBar`].
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("TabIndicator"), Node, BackgroundColor::default())]
 struct TabIndicator {
@@ -159,9 +138,7 @@ impl Indicator for TabIndicator {
 
 /// One tab of a [`TabBar`]: a [`Tab`] showing one item.
 ///
-/// Only the widget builds one, and the component is immutable: the item and the bar are fixed
-/// for the life of the tab and are read with [`item`](Self::item) and [`owner`](Self::owner).
-/// A tab's accessible name is its item's text, so callers supply meaningful item labels.
+/// Read its fields with [`item`](Self::item) and [`owner`](Self::owner).
 ///
 /// ```compile_fail
 /// use bevy_pluim::tab_bar::TabBarTab;
@@ -202,21 +179,18 @@ impl TabBarTab {
     }
 }
 
-/// Marks the text of a [`TabBarTab`].
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 struct TabBarTabLabel;
 
-/// Keeps the keys a focused tab moves the focus with (left, right, Home, End) from
-/// bubbling on to an app's directional navigation: the tab list stops a first press only,
-/// so this stops the repeats and releases as well. Up and down go on, as a row of tabs
-/// does not use them.
+/// Keeps left, right, Home and End on a focused tab from reaching directional navigation.
+///
+/// The tab list stops only the first press, so this stops repeats and releases too.
 fn keep_navigation_keys(
     mut input: On<FocusedInput<KeyboardInput>>,
     tabs: Query<(), With<TabBarTab>>,
     focus: Res<InputFocus>,
 ) {
-    // `focused_entity` follows the event up the tree, so the focus itself is read.
     let tab = input.event_target();
     if focus.get() != Some(tab) || !tabs.contains(tab) {
         return;
@@ -274,7 +248,7 @@ fn theme_tab_bars(
         }
         let mut styled = node.clone();
         styled.border_radius = BorderRadius::all(theme.control_radius);
-        // Written only when it differs: any `Node` write makes Bevy lay the tree out again.
+        // Write only on a difference: any write lays the tree out again.
         node.set_if_neq(styled);
         background.set_if_neq(BackgroundColor(theme.colors().segmented_track));
     }
@@ -291,7 +265,6 @@ fn theme_tab_bars(
         styled.justify_content = JustifyContent::Center;
         styled.border_radius = BorderRadius::all(theme.control_radius);
         node.set_if_neq(styled);
-        // The selected look is the indicator's, which slides.
         background.set_if_neq(BackgroundColor(Color::NONE));
     }
 
@@ -318,7 +291,7 @@ fn theme_tab_bars(
         text_color.set_if_neq(TextColor(
             segment_colors(theme.colors(), selected, hovered.get()).1,
         ));
-        // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+        // Write only on a difference: any write lays the tree out again.
         text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(TAB_FONT_SIZE),
@@ -328,8 +301,7 @@ fn theme_tab_bars(
     }
 }
 
-/// Names each tab after its item's text. The roles are `bevy_ui_widgets`' own, and the
-/// selected state follows Bevy's `Selected`, which the tab list derives from [`SelectedTab`].
+/// Names each tab after its item's text.
 fn sync_accessibility(
     mut tabs: ParamSet<(
         Query<
@@ -341,8 +313,6 @@ fn sync_accessibility(
     items: Query<&Item<String>>,
     changed_items: Query<Entity, Changed<Item<String>>>,
 ) {
-    // A tab is looked at when Bevy reset its node or it is new, and when its item's text
-    // changed; an idle frame touches none.
     for (tab, mut node) in &mut tabs.p0() {
         if let Ok(item) = items.get(tab.item()) {
             sync_label(&mut node, &item.data);
@@ -361,18 +331,10 @@ fn sync_accessibility(
     }
 }
 
-/// Keeps the [`TabIndex`] of the tabs of every bar: while the bar is shown, the tab list's
-/// roving one (Bevy's `update_tablist_derived_state`: 0 for the focused tab, else the selected
-/// one, else the first enabled one, -1 for the others), and -1 for every tab while the bar is hidden (its [`InheritedVisibility`]
-/// is hidden, or it or an ancestor is `Display::None`, as in a hidden `Stack` panel), so Tab
-/// skips a hidden bar and reaches it again once it shows.
+/// Sets the [`TabIndex`] of every tab to -1 while its bar is hidden, so Tab skips it.
 ///
-/// The tab list writes its roving index only when the selection, the tabs or the focus change,
-/// so it would neither hide a bar nor bring one back. This looks only at the bars that may
-/// need a different answer: a new bar or tab, a changed `SelectedTab` or `Children`, a tab
-/// whose `InteractionDisabled` or `TabIndex` changed, a move of the focus (the bars of the
-/// tab that had it and the one that has it), and a bar whose visibility, `Display::None` (on
-/// it or an ancestor) or parent changed. A quiet frame does no work.
+/// The tab list's roving index is written only on a selection or focus change, so it
+/// never hides or restores a bar.
 fn sync_tab_index(
     hidden: Res<HiddenDirty>,
     bars: Query<(&SelectedTab, &Children), With<TabBar>>,
@@ -445,7 +407,6 @@ fn sync_tab_index(
     }
 }
 
-/// Restyles the tabs of a bar when a tab gains or loses the pointer.
 fn hover_change(tabs: Query<&TabBarTab, Changed<Hovered>>, mut commands: Commands) {
     for tab in &tabs {
         commands.run_system_cached_with(theme_tab_bars, Some(tab.owner()));
@@ -478,8 +439,7 @@ fn sync_selected_tab(
     }
 }
 
-/// Keeps [`SelectedTab`] and the colours of the tabs in step with the selection, own or
-/// referenced.
+/// Keeps [`SelectedTab`] and the colors of the tabs in step with the selection.
 fn selection_change(
     changed: Query<Entity, Changed<Selection>>,
     bars: Query<Entity, With<TabBar>>,
@@ -490,7 +450,6 @@ fn selection_change(
     if changed.is_empty() {
         return;
     }
-    // Only the bars whose own selection, or the one they refer to, changed.
     for bar in &bars {
         if !changed.contains(&bar)
             && !selections
@@ -521,8 +480,6 @@ fn on_items_changed(
         return;
     };
 
-    // Linear reconciliation (see `List`): a tab stays when its item is wanted and no
-    // earlier tab shows it; any other is despawned.
     let wanted: HashSet<Entity> = items.iter().copied().collect();
     let mut shown = HashSet::new();
     for (tab_id, tab) in children
@@ -562,8 +519,7 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_tab_bars, Some(*bar_ref));
 }
 
-/// Puts the tabs of a bar in the order of its items. Children are only reordered, and only when
-/// they differ.
+/// Puts the tabs of a bar in the order of its items.
 fn order_tabs(
     input: In<ItemsChangedInput>,
     bars: Query<&Children, With<TabBar>>,
@@ -582,8 +538,7 @@ fn order_tabs(
     }
 }
 
-/// Shows the current text of each tab's item: a changed [`Item<String>`] updates its
-/// [`TabBarTabLabel`] in place.
+/// Shows the current text of each tab's item.
 fn sync_label_text(
     changed_items: Query<(), Changed<Item<String>>>,
     tabs: Query<&TabBarTab>,
@@ -605,9 +560,7 @@ fn sync_label_text(
     }
 }
 
-/// Clears the tabs of the bars whose items no longer resolve, as if their source had none (see
-/// `list.rs`'s `clear_dangling_lists`). Looks only in a frame where a `Selection` or `ItemsRef`
-/// was removed.
+/// Clears the tabs of the bars whose items no longer resolve.
 fn clear_dangling_tab_bars(
     mut removed_selections: RemovedComponents<Selection>,
     mut removed_refs: RemovedComponents<ItemsRef>,

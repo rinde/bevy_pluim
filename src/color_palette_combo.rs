@@ -23,8 +23,6 @@ use crate::theme::Theme;
 use crate::{MouseEvent, MouseKind, color_push_button};
 
 /// Registers the systems and observers of [`ColorPaletteCombo`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ColorPaletteComboPlugin;
 
@@ -58,18 +56,8 @@ impl Plugin for ColorPaletteComboPlugin {
 #[reflect(Component)]
 /// A button that opens a [`ColorPalette`] in a popup.
 ///
-/// Opening the popup moves the keyboard focus to its palette, so the arrow keys, Enter and
-/// Space work on it. Escape closes it, as does the focus leaving the palette (Tab away, a
-/// click elsewhere); the focus then goes back to the button, unless it moved to another widget.
-///
-/// To assistive technology the button is a combo box ([`Role::ComboBox`](accesskit::Role::ComboBox)) without a label:
-/// its value is the names of the selected colours joined by `", "` in selection order (empty
-/// for none), it is expanded while the popup is open, and it controls the popup's palette.
-///
-/// Any [`Selection`] works, including `OneOrMore` and `ZeroOrMore`. The button's colour square
-/// previews the first selected item that has an [`Item<Color>`] (transparent when there is
-/// none, also for a mandatory selection that has not picked its first item yet); it does not
-/// show the others. A popup over a selection of many stays open when a swatch is picked.
+/// Any [`Selection`] works. The button's color square previews the first selected
+/// [`Item<Color>`].
 #[require(
     Node {
         flex_direction: FlexDirection::Column,
@@ -81,9 +69,6 @@ impl Plugin for ColorPaletteComboPlugin {
 pub struct ColorPaletteCombo;
 
 /// Marks the button of a [`ColorPaletteCombo`].
-///
-/// A [`ColorPushButton`] is named after its colour; this one is not, since its value says the
-/// colour.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 pub struct ColorPaletteComboButton;
@@ -96,17 +81,7 @@ pub struct ColorPaletteComboFloat;
 
 /// Builds a [`ColorPaletteCombo`]: its button and its popup, both children of the combo.
 ///
-/// The popup is a [`Float`], placed in the viewport rather than in the combo, so nothing
-/// around the combo (a scroll area, a card) clips it or draws over it.
-///
-/// The popup is named after its combo, `<combo name> popup`, so that a scenario
-/// or a query finds it by name whatever the order the combos were spawned in.
-/// The name is taken now: renaming the combo later does not rename its popup.
-///
-/// The popup's [`ColorPalette`] refers to the combo's selection from the start, so that
-/// it shows and changes it without waiting for a change of the selection. A combo that
-/// has no [`Selection`] yet gets the reference when it is given one, see
-/// [`on_selection_change`].
+/// The popup is a [`Float`] named `<combo name> popup`, taken at build time.
 fn on_insert_combo(
     t: On<Insert<ColorPaletteCombo>>,
     mut commands: Commands,
@@ -117,7 +92,6 @@ fn on_insert_combo(
     theme: Res<Theme>,
 ) {
     let combo = t.event().event_target();
-    // Inserting the component again on a live combo keeps what it already built.
     if built.contains(combo) {
         return;
     }
@@ -125,7 +99,6 @@ fn on_insert_combo(
 
     let mut button_id = Entity::PLACEHOLDER;
     let mut float_id = Entity::PLACEHOLDER;
-    // Reserved now so that the combo can keep it; the scroll area inserts it as its contents.
     let palette_id = commands.spawn_empty().id();
 
     let list_layout = list_layouts.get(combo).ok().copied();
@@ -137,7 +110,6 @@ fn on_insert_combo(
                 Name::new("ColorPaletteComboButton"),
                 ColorPushButton,
                 NoDefaultHover,
-                // allow mouse events to pass through to parent
                 Pickable {
                     should_block_lower: false,
                     ..default()
@@ -170,7 +142,6 @@ fn on_insert_combo(
                                 ..default()
                             },
                             ColorPalette,
-                            // A closed popup builds no swatches, see `PaletteDormant`.
                             PaletteDormant,
                             list_layout.unwrap_or(ListLayout::VerticalGrid { columns: 6 }),
                         ));
@@ -214,7 +185,6 @@ fn on_insert_combo(
         .observe(toggle_on_activate);
 }
 
-/// The name of the popup of a combo called `combo_name`.
 fn popup_name(combo_name: Option<&Name>) -> Name {
     Name::new(format!(
         "{} popup",
@@ -251,7 +221,6 @@ fn close_on_focus_lost(
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
-    // The event bubbles: only the palette itself losing the focus counts.
     let Ok(sub_refs) = sub_refs.get(lost.event().entity) else {
         return;
     };
@@ -261,7 +230,6 @@ fn close_on_focus_lost(
     if sub_refs.palette != lost.event().entity {
         return;
     }
-    // A finger or button held down on the combo's button is not leaving: the release toggles.
     if state == ColorPaletteComboState::Open && pointers.pressed_over(sub_refs.button) {
         return;
     }
@@ -284,10 +252,8 @@ fn on_remove_combo(
     sub_refs: Query<&SubRefs>,
     mut commands: Commands,
 ) {
-    // The parts are children of the combo, so they go with a despawned combo by themselves.
     let combo = t.event().event_target();
     if let Ok(sub_refs) = sub_refs.get(combo) {
-        // The palette is inside the popup, unless the popup never inserted it.
         commands.entity(sub_refs.palette).try_despawn();
         commands.entity(sub_refs.float_id).try_despawn();
         commands.entity(sub_refs.button).try_despawn();
@@ -376,16 +342,14 @@ fn on_insert_state(
         popup::set_expanded(&mut node, open);
     }
     if open {
-        // The swatches are built now, so the popup has its size after the next layout:
-        // hide it until `place_opened_popups` has placed it.
+        // Hide the popup until `place_opened_popups` has placed it.
         commands.run_system_cached_with(wake, sub_refs.palette);
         commands
             .entity(sub_refs.float_id)
             .remove::<PendingSleep>()
             .insert((Visibility::Hidden, PendingPlacement(sub_refs)));
     } else {
-        // The swatches go at the end of the frame, not now: a pick in them that closed the
-        // popup is still being handled by their `ListBox`.
+        // Sleep at the end of the frame: the `ListBox` is still handling the pick that closed it.
         commands
             .entity(sub_refs.float_id)
             .remove::<PendingPlacement>()
@@ -393,11 +357,9 @@ fn on_insert_state(
     }
 }
 
-/// On the popup of a combo that closed and whose palette has not been made dormant yet.
 #[derive(Component, Debug, Copy, Clone)]
 struct PendingSleep(Entity);
 
-/// Despawns the swatches of the popups that closed, once the frame's input is handled.
 fn sleep_closed_popups(pending: Query<(Entity, &PendingSleep)>, mut commands: Commands) {
     for (float, &PendingSleep(palette)) in &pending {
         commands.run_system_cached_with(sleep, palette);
@@ -405,12 +367,10 @@ fn sleep_closed_popups(pending: Query<(Entity, &PendingSleep)>, mut commands: Co
     }
 }
 
-/// On the popup of a combo that opened and has not been placed yet.
 #[derive(Component, Debug, Copy, Clone)]
 struct PendingPlacement(SubRefs);
 
-/// Places the popups that just opened once layout has given them the size of their swatches,
-/// then shows them.
+/// Places the popups that just opened once layout has sized them, then shows them.
 fn place_opened_popups(pending: Query<(Entity, &PendingPlacement)>, mut commands: Commands) {
     for (float, &PendingPlacement(sub_refs)) in &pending {
         commands.run_system_cached_with(position_float, sub_refs);
@@ -421,12 +381,7 @@ fn place_opened_popups(pending: Query<(Entity, &PendingPlacement)>, mut commands
     }
 }
 
-/// Places the popup of a combo under its button, centred on it, in viewport coordinates.
-///
-/// The popup is moved in until it is 10 pixels from the window's left and right
-/// edges, and goes above the button instead of under it when it would run off the bottom. Only
-/// the button's position and the popup's laid-out size are read, so the first opening is placed
-/// like any other.
+/// Places the popup of a combo under its button, centered on it, in viewport coordinates.
 fn position_float(
     sub_refs: In<SubRefs>,
     viewport: UiViewport,
@@ -453,10 +408,8 @@ fn position_float(
     };
     let button_size = button_computed_node.size() * button_computed_node.inverse_scale_factor();
     let float_size = float_computed_node.size() * float_computed_node.inverse_scale_factor();
-    // `UiGlobalTransform` holds the centre of the node.
     let button_center = button_transform.translation * button_computed_node.inverse_scale_factor();
 
-    // Centred under the button, then pushed back inside the UI target.
     let centered_x = button_center.x - float_size.x / 2.0;
     node.left = Val::Px(keep_in_window_x(centered_x, float_size.x, target.x));
     let fit = fit_vertically(
@@ -467,15 +420,11 @@ fn position_float(
         target.y,
     );
     node.top = Val::Px(fit.top);
-    // A popup taller than the window scrolls with the wheel instead of running off it.
     node.max_height = Val::Px(fit.max_height);
     node.overflow.y = OverflowAxis::Scroll;
 }
 
-/// The colours of the selected items that have an [`Item<Color>`], in selection order.
-///
-/// A selected item without a colour (a pending mandatory selection holds a placeholder) is
-/// skipped.
+/// The colors of the selected items that have an [`Item<Color>`], in selection order.
 fn selected_colors<'a>(
     selection: &'a SelectionValue,
     items: &'a Query<&Item<Color>>,
@@ -486,11 +435,7 @@ fn selected_colors<'a>(
         .map(|item| item.data)
 }
 
-/// Keeps the popup's palette and the button's colour square in step with the combo's
-/// selection.
-///
-/// The palette already refers to the selection the combo had when it was spawned; this
-/// points it at the new one when the combo gets or is given another selection.
+/// Keeps the popup's palette and the button's color square in step with the combo's selection.
 fn on_selection_change(
     q: Query<Entity, Changed<Selection>>,
     combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
@@ -506,7 +451,6 @@ fn on_selection_change(
             else {
                 continue;
             };
-            // Its own selection, or the one it refers to.
             if selection_ref != changed_selection_ref
                 && color_palette_combo_ref != changed_selection_ref
             {
@@ -517,13 +461,10 @@ fn on_selection_change(
                 .get_ref(sub_refs.palette)
                 .is_none_or(|existing_ref| existing_ref != selection_ref)
             {
-                // Selection id has changed -> propagate to the palette
                 commands
                     .entity(sub_refs.palette)
                     .insert(Selection::reference(selection_ref));
             } else {
-                // Same selection, but its items may have been replaced (`ItemsRef`): the
-                // palette follows the items of the selection it refers to.
                 commands.run_system_cached_with(watch_palette, sub_refs.palette);
             }
 
@@ -544,9 +485,7 @@ fn on_selection_change(
     }
 }
 
-/// Shows the edited colour of a selected [`Item<Color>`] in the button's square.
-///
-/// Looks at the combos only when an item colour changed, and writes only on a difference.
+/// Shows the edited color of a selected [`Item<Color>`] in the button's square.
 fn sync_edited_item_colors(
     changed: Query<(), Changed<Item<Color>>>,
     combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
@@ -579,9 +518,7 @@ fn sync_edited_item_colors(
     }
 }
 
-/// Keeps the button of each combo a combo box to assistive technology, with the name of the
-/// selected colour as its value and the popup's palette as what it controls. Bevy makes a
-/// node a button again when its `Button` changes, so this runs after it.
+/// Keeps the button of each combo a combo box. Run after Bevy's button sync.
 fn sync_accessibility(
     combos: Query<(Entity, &SubRefs), With<ColorPaletteCombo>>,
     selections: SelectionParam,
@@ -604,12 +541,7 @@ fn sync_accessibility(
 
 /// Closes an open combo when a pointer lifts its primary button, or a finger, outside of it.
 ///
-/// Inside is the combo's button, which opens and closes the popup itself on
-/// [`Activate`], and its popup, whatever the selection: a release on the popup's
-/// scroll bar or between its swatches leaves it open, and a pick closes it on its own,
-/// see [`close_on_swatch_click`]. Whether the pointer that lifted is on them is picking's
-/// hover map for that pointer, so a finger counts as well as the mouse, and it works
-/// whatever the camera renders to, a window or an image.
+/// The button toggles on [`Activate`] and a swatch pick closes through [`close_on_swatch_click`].
 fn close_combos_on_outside_click(
     mut inputs: MessageReader<PointerInput>,
     pointers: PopupPointers,
@@ -630,7 +562,6 @@ fn close_combos_on_outside_click(
             else {
                 continue;
             };
-            // Inside the float counts as inside whatever the selection.
             if popup::closes_on_outside_release(
                 combo_state == ColorPaletteComboState::Open,
                 pointers.over(Some(pointer), subs.button),
@@ -648,7 +579,7 @@ fn close_combos_on_outside_click(
     }
 }
 
-/// Closes the popup of a combo and puts its button back to the resting colours.
+/// Closes the popup of a combo and puts its button back to the resting colors.
 fn close(
     combo: Entity,
     background_color: &mut BackgroundColor,
@@ -662,16 +593,10 @@ fn close(
         .insert(ColorPaletteComboState::Closed);
 }
 
-/// Closes the popup of a combo whose selection holds one item at most when a swatch
-/// in it is clicked, left button, whether or not the click changed the selection.
+/// Closes the popup of a combo with a selection of one item at most when a swatch is clicked.
 ///
-/// It is a global observer of [`MouseEvent`]s because a click is a press and a release on
-/// the same swatch, which `MouseKind::Click` says and a `Released` cannot (a release alone
-/// also ends a press that began elsewhere, a drag of the popup's scroll thumb that ends
-/// over a swatch). It acts only on a click whose target is a [`swatch`](ItemView) that
-/// belongs to a palette of a combo, so a click on the popup that is not on a swatch (its
-/// scroll bar, the gap between swatches) does not close it. A selection of many
-/// (`OneOrMore`, `ZeroOrMore`) keeps the popup open for the next pick.
+/// Act on `Click`, not `Released`: a release also ends a press that began elsewhere, such as a
+/// scroll thumb drag.
 fn close_on_swatch_click(
     t: On<MouseEvent>,
     palettes: Query<&SubRefs, With<ColorPalette>>,
@@ -747,7 +672,6 @@ fn handle_combo_button_mouse_events(
     }
 }
 
-/// Opens the popup of a [`ColorPaletteCombo`] whose button was activated, or closes it.
 fn toggle_on_activate(
     activate: On<Activate>,
     buttons: Query<&SubRefs, With<ColorPaletteComboButton>>,

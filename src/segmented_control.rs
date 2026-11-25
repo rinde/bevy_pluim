@@ -26,26 +26,16 @@ use crate::select::{
 use crate::theme::{Theme, ThemeColors};
 use crate::tooltip::{OwnedTooltip, Tooltip};
 
-/// The height of a segment, in logical pixels.
 const SEGMENT_HEIGHT: f32 = 28.0;
-/// The least width of a segment.
 const SEGMENT_MIN_WIDTH: f32 = 40.0;
-/// The padding between a segment's text and its sides.
 const SEGMENT_SIDE_PADDING: f32 = 10.0;
-/// The padding of the track around its segments.
 const TRACK_PADDING: f32 = 3.0;
-/// The gap between two segments.
 const SEGMENT_GAP: f32 = 2.0;
-/// The side of a segment's icon, in logical pixels.
 const SEGMENT_ICON_SIZE: f32 = 16.0;
-/// The gap between a segment's icon and its text.
 const SEGMENT_ICON_GAP: f32 = 6.0;
-/// The size of a segment's text.
 const SEGMENT_FONT_SIZE: f32 = 13.0;
 
 /// Registers the systems and observers of [`SegmentedControl`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct SegmentedControlPlugin;
 
@@ -78,16 +68,10 @@ impl Plugin for SegmentedControlPlugin {
     }
 }
 
-/// A track of segments that picks one item, like a small tab bar or a switch.
+/// A track of segments that picks one item.
 ///
-/// The track and its segments are rounded by [`Theme::control_radius`], like the other controls,
-/// not by radii of their own.
-///
-/// Give it a [`Selection`] (own, with its [`Item<String>`]s, or a
-/// [`Selection::Ref`] to one that other widgets share) of the kind
-/// [`SelectionValue::One`](crate::select::SelectionValue::One); it shows one [`Segment`] per
-/// item, with the selected one highlighted. A click on a segment (or Enter / Space on a focused
-/// one) selects it, and a selection changed from elsewhere restyles the segments.
+/// Give it a [`Selection`] of [`SelectionValue::One`](crate::select::SelectionValue::One)
+/// over [`Item<String>`]s; it shows one [`Segment`] per item.
 ///
 /// ```no_run
 /// # use bevy::prelude::*;
@@ -103,23 +87,7 @@ impl Plugin for SegmentedControlPlugin {
 /// }
 /// ```
 ///
-/// A segment shows its item's text. An item that also carries an [`ItemIcon`] shows that icon,
-/// 16 px, before the text; with [`SegmentLabels::Hidden`] on the control the icon is all it
-/// shows, and a [`Tooltip`] with the text. An item without an icon always shows its text.
-///
-/// The selected segment is marked by a [`SegmentIndicator`] behind the segments, which slides to
-/// a newly selected segment instead of jumping.
-///
-/// Each segment is a [`Button`] and carries [`Selected`] while it is the selected one. As a
-/// whole the control is one tab stop, at its selected item (the first when none is selected).
-/// Left and up move the focus to the previous item and right and down to the next, wrapping in
-/// the order shown; Home and End go to the first and last. For a selection of at most one item
-/// the arrows also pick the item they land on (never toggling it off); for a selection of many
-/// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
-///
-/// To a screen reader the control is a radio group and each segment a radio button, checked
-/// while it is selected. The library gives the group no label; an app can insert Bevy's
-/// `AccessibleLabel` on the control.
+/// A segment shows its item's text, and an [`ItemIcon`] before it when the item has one.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -149,22 +117,16 @@ impl SegmentedControl {
     }
 }
 
-/// An icon for the segment of an item of a [`SegmentedControl`], put on the item entity next to
-/// its [`Item<String>`] (like [`ItemNote`](crate::list::ItemNote) on a list item).
+/// An icon for the segment of an item of a [`SegmentedControl`], put on the item entity.
 ///
-/// The image is white on transparent, like those of [`Icon`](crate::icon::Icon); the segment
-/// tints it with the colour of its text. Inserting, changing or removing it updates the segment
-/// in place.
+/// The image is white on transparent, like those of [`Icon`](crate::icon::Icon).
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct ItemIcon(pub Handle<Image>);
 
 /// Whether the segments of a [`SegmentedControl`] show their text next to their icon.
 ///
-/// Insert a new value on the control to switch; segments are not respawned. It only affects
-/// items with an [`ItemIcon`]: an item without one keeps its text, so no segment is empty. A
-/// segment whose text is hidden gets a [`Tooltip`] with it, and its accessible name stays the
-/// text.
+/// Only items with an [`ItemIcon`] are affected; hidden text goes to a [`Tooltip`].
 #[derive(Component, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub enum SegmentLabels {
@@ -175,8 +137,7 @@ pub enum SegmentLabels {
     Hidden,
 }
 
-/// The icon of a [`Segment`] whose item has an [`ItemIcon`]: a 16 px image, tinted with the
-/// segment's text colour.
+/// The icon of a [`Segment`] whose item has an [`ItemIcon`].
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("SegmentIcon"))]
@@ -184,10 +145,7 @@ pub struct SegmentIcon;
 
 /// One segment of a [`SegmentedControl`]: a button showing one item.
 ///
-/// Only the widget builds one, and the component is immutable: the item and the control are
-/// fixed for the life of the segment and are read with [`item`](Self::item) and
-/// [`owner`](Self::owner). A segment's accessible name is its item's text, so callers supply
-/// meaningful item labels.
+/// Read its fields with [`item`](Self::item) and [`owner`](Self::owner).
 ///
 /// ```compile_fail
 /// use bevy_pluim::segmented_control::Segment;
@@ -236,11 +194,7 @@ impl Segment {
 
 /// The highlight behind the selected [`Segment`] of a [`SegmentedControl`].
 ///
-/// It is a child of the control, placed absolutely behind the segments, and slides to the
-/// selected segment when the selection changes; the segments themselves are transparent.
-///
-/// Only the widget builds one, and the component is immutable: the control is fixed for the life
-/// of the indicator and is read with [`owner`](Self::owner).
+/// Read its control with [`owner`](Self::owner).
 ///
 /// ```compile_fail
 /// use bevy_pluim::segmented_control::SegmentIndicator;
@@ -280,11 +234,10 @@ impl Indicator for SegmentIndicator {
     }
 }
 
-/// Marks the text of a [`Segment`].
 #[derive(Component, Debug, Copy, Clone)]
 struct SegmentLabel;
 
-/// The background and text colour of a segment from its state.
+/// The background and text color of a segment from its state.
 pub(crate) const fn segment_colors(
     colors: &ThemeColors,
     selected: bool,
@@ -299,7 +252,6 @@ pub(crate) const fn segment_colors(
     }
 }
 
-/// Selects the item of the activated segment.
 fn on_activate(t: On<Activate>, segments: Query<&Segment>, mut selections: SelectionParam) {
     let Ok(segment) = segments.get(t.event().entity) else {
         return;
@@ -309,8 +261,7 @@ fn on_activate(t: On<Activate>, segments: Query<&Segment>, mut selections: Selec
     });
 }
 
-/// Writes `styled` into `node` only when it differs: a write, even of equal values, makes Bevy
-/// lay the tree out again, and a selection change restyles its control each time (#782).
+/// Writes `styled` into `node` only on a difference: any write lays the tree out again.
 fn set_node(node: &mut Mut<Node>, styled: Node) {
     node.set_if_neq(styled);
 }
@@ -349,7 +300,6 @@ fn style_label(
     mut text_font: Mut<TextFont>,
 ) {
     text_color.set_if_neq(TextColor(ink));
-    // Written only when it differs: a write makes Bevy lay the tree out again (#710).
     text_font.set_if_neq(TextFont {
         font: theme.body_font.clone().into(),
         font_size: Theme::font_size(SEGMENT_FONT_SIZE),
@@ -358,9 +308,7 @@ fn style_label(
     });
 }
 
-/// Themes the controls: with `Some(control)` only that control, its segments, indicator and
-/// their labels and icons, found through `Children`, so the work does not grow with the number
-/// of controls; with `None` all of them.
+/// Themes one control with `Some(control)`, or all of them with `None`.
 fn theme_segmented_controls(
     control_id: In<Option<Entity>>,
     theme: Res<Theme>,
@@ -462,8 +410,7 @@ fn theme_segmented_controls(
     }
 }
 
-/// Keeps each segment's icon, the visibility of its text and its tooltip in step with its item's
-/// [`ItemIcon`] and its control's [`SegmentLabels`], in place.
+/// Keeps each segment's icon, text visibility and tooltip in step with its [`ItemIcon`] and [`SegmentLabels`].
 fn sync_icons(
     changed_icons: Query<(), Changed<ItemIcon>>,
     mut removed_icons: RemovedComponents<ItemIcon>,
@@ -540,7 +487,7 @@ fn sync_icons(
                 node.display = display;
             }
         }
-        // A tooltip whose text is not the one the widget added replaced it: it is the app's.
+        // A tooltip with other text is the app's: leave it.
         let owned = match (owned, tooltip) {
             (Some(owned), Some(tooltip)) if owned.0 == tooltip.text => true,
             (Some(_), _) => {
@@ -570,8 +517,7 @@ fn sync_icons(
     }
 }
 
-/// Shows the current text of each segment's item: a changed [`Item<String>`] updates its
-/// segment's [`SegmentLabel`] in place.
+/// Shows the current text of each segment's item.
 fn sync_label_text(
     changed_items: Query<(), Changed<Item<String>>>,
     segments: Query<&Segment>,
@@ -593,9 +539,7 @@ fn sync_label_text(
     }
 }
 
-/// Keeps the control a radio group and each segment a radio button named after its item's text,
-/// toggled while it is [`Selected`]. Bevy makes a node a button again when its `Button` changes,
-/// so this runs after it.
+/// Keeps the control a radio group and each segment a radio button. Run after Bevy's button sync.
 fn sync_accessibility(
     mut controls: Query<
         &mut AccessibilityNode,
@@ -620,13 +564,9 @@ fn sync_accessibility(
     changed_items: Query<Entity, Changed<Item<String>>>,
     mut deselected: RemovedComponents<Selected>,
 ) {
-    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
-    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut controls {
         sync_role(&mut node, Role::RadioGroup);
     }
-    // A segment is looked at when Bevy reset its node, it is new, or it gained `Selected`; and
-    // below when it lost `Selected` or its item's text changed. A quiet frame does none.
     for (segment, mut node, selected) in &mut segments.p0() {
         sync_segment(segment, &mut node, selected, &items);
     }
@@ -648,7 +588,6 @@ fn sync_accessibility(
     }
 }
 
-/// Writes the role, label and toggled state of one segment's node, only where they differ.
 fn sync_segment(
     segment: &Segment,
     node: &mut Mut<AccessibilityNode>,
@@ -662,16 +601,13 @@ fn sync_segment(
     sync_toggled(node, Some(selected));
 }
 
-/// Restyles the segments of a control when a segment gains or loses the pointer.
 fn hover_change(segments: Query<&Segment, Changed<Hovered>>, mut commands: Commands) {
     for segment in &segments {
         commands.run_system_cached_with(theme_segmented_controls, Some(segment.owner()));
     }
 }
 
-/// Keeps [`Selected`] and the colours of the segments in step with the selection, own or
-/// referenced. Looks only at the controls whose own selection, or the one their
-/// `Selection::Ref` resolves to, changed.
+/// Keeps [`Selected`] and the colors of the segments in step with the selection.
 fn selection_change(
     changed: Query<Entity, Changed<Selection>>,
     controls: Query<(Entity, Option<&Children>), With<SegmentedControl>>,
@@ -728,8 +664,6 @@ fn on_items_changed(
     };
     let selection = selections.get(*control_ref);
 
-    // Linear reconciliation (see `List`): a segment stays when its item is wanted and no
-    // earlier segment shows it; any other is despawned.
     let wanted: HashSet<Entity> = items.iter().copied().collect();
     let mut shown = HashSet::new();
     for (segment_id, segment) in children
@@ -771,8 +705,7 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_segmented_controls, Some(*control_ref));
 }
 
-/// Puts the segments of a control in the order of its items, before any other child (the
-/// indicator). Children are only reordered, and only when they differ.
+/// Puts the segments of a control in the order of its items, before the indicator.
 fn order_segments(
     input: In<ItemsChangedInput>,
     controls: Query<&Children, With<SegmentedControl>>,
@@ -791,9 +724,7 @@ fn order_segments(
     }
 }
 
-/// Clears the segments of the controls whose items no longer resolve, as if their source had
-/// none (see `list.rs`'s `clear_dangling_lists`). Looks only in a frame where a `Selection` or
-/// `ItemsRef` was removed.
+/// Clears the segments of the controls whose items no longer resolve.
 fn clear_dangling_controls(
     mut removed_selections: RemovedComponents<Selection>,
     mut removed_refs: RemovedComponents<ItemsRef>,

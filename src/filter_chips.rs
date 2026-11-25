@@ -1,5 +1,4 @@
-//! `FilterChips`: a wrapping row of pill-shaped options, one of them active, each with an
-//! optional count.
+//! `FilterChips`: a wrapping row of pill-shaped options with optional counts.
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
@@ -19,20 +18,13 @@ use crate::select::{
 };
 use crate::theme::{Theme, ThemeColors};
 
-/// The height of a chip.
 const CHIP_HEIGHT: f32 = 30.0;
-/// The padding left and right of the text of a chip.
 const CHIP_PADDING: f32 = 11.0;
-/// The gap between chips, along and across the row.
 const CHIP_GAP: f32 = 6.0;
-/// The gap between the label and the count of a chip.
 const COUNT_GAP: f32 = 5.0;
-/// The opacity of a count, against the label.
 const COUNT_ALPHA: f32 = 0.6;
 
 /// Registers the systems and observers of [`FilterChips`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct FilterChipsPlugin;
 
@@ -57,26 +49,10 @@ impl Plugin for FilterChipsPlugin {
     }
 }
 
-/// A wrapping row of pill-shaped options over a [`Selection`] of [`Item<Chip>`]s, with the
-/// active one filled.
+/// A wrapping row of pill-shaped options over a [`Selection`] of [`Item<Chip>`]s.
 ///
-/// Put it on an entity together with a selection that has [`Chip`] items, such as
-/// `Selection::builder().one().build_with_items([Item { data: Chip::with_count("All", 4) }])`,
-/// or with a [`Selection::Ref`] to one. The selection should be a `One`: exactly one chip is
-/// active, and activating the active chip changes nothing. Which chips there are is the
-/// application's: add and remove the items to change them. To change a count, change the
-/// [`Chip`] in its [`Item`]; the chip is kept and its text changes.
-///
-/// A chip is a [`Button`]: Enter and Space on a focused chip pick it, like a click. The chips
-/// wrap onto further lines when the row is too narrow. As a whole the row is one tab stop, at its selected item (the first when none is selected).
-/// Left and up move the focus to the previous item and right and down to the next, wrapping in
-/// the order shown; Home and End go to the first and last. For a selection of at most one item
-/// the arrows also pick the item they land on (never toggling it off); for a selection of many
-/// they move the focus only, and Enter or Space toggle. Disabled and hidden items are skipped.
-///
-/// To a screen reader the row is a radio group and each chip a radio button named after its
-/// label and count (`Waiting 3`), checked while it is active. The library gives the group no
-/// label; an app can insert Bevy's `AccessibleLabel` on the row.
+/// Put it on an entity with a selection of [`Chip`] items, or a [`Selection::Ref`] to one.
+/// Use a `One` selection: activating the active chip changes nothing.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -122,10 +98,7 @@ impl Chip {
 
 /// One chip of a [`FilterChips`]: a pill that picks its item when it is activated.
 ///
-/// Only the widget builds one, and the component is immutable: the item and the row are fixed
-/// for the life of the chip and are read with [`item`](Self::item) and [`owner`](Self::owner).
-/// A chip's accessible name is its [`Chip::label`] (and count), so callers supply meaningful
-/// labels.
+/// Read its fields with [`item`](Self::item) and [`owner`](Self::owner).
 ///
 /// ```compile_fail
 /// use bevy_pluim::filter_chips::ChipView;
@@ -193,9 +166,7 @@ pub struct ChipLabel;
 #[reflect(Component)]
 pub struct ChipCount;
 
-/// Spawns a chip for every item of a [`FilterChips`] that has none, drops the chips of items
-/// that are gone and puts the chips in the order of the items. A chip of an item that stays is
-/// the same entity before and after.
+/// Spawns, drops and orders the chips of a [`FilterChips`] to match its items.
 fn sync_chips(
     mut changes: StructureChanges<FilterChips, Chip>,
     chips: Query<Option<&Children>, With<FilterChips>>,
@@ -209,7 +180,6 @@ fn sync_chips(
         let Ok(children) = chips.get(chips_ref) else {
             continue;
         };
-        // A selection that no longer resolves has no items: the views are cleared.
         let values = selections
             .get_items(chips_ref)
             .map_or(&[][..], |(_, values)| values);
@@ -241,8 +211,6 @@ fn sync_chips(
         for view in &plan.stale {
             commands.entity(*view).despawn();
         }
-        // Chips of items that are still there keep their entity, and with it their focus and
-        // hover; only the missing ones are spawned.
         let chips_in_order = plan
             .slots
             .iter()
@@ -272,7 +240,6 @@ fn chip_font(theme: &Theme) -> TextFont {
 }
 
 fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entity) -> Entity {
-    // The children are spawned under the chip's reserved entity, so no node is ever parentless.
     let chip = commands.spawn_empty().id();
     let label = commands
         .spawn((
@@ -317,7 +284,6 @@ fn spawn_chip(commands: &mut Commands, theme: &Theme, chips: Entity, item: Entit
     chip
 }
 
-/// How a chip looks.
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct ChipStyle {
     background: Color,
@@ -325,8 +291,7 @@ struct ChipStyle {
     text: Color,
 }
 
-/// The look of a chip from its state: active, hovered or at rest. Used by the system that
-/// restyles chips on every change, so a theme change under a resting pointer keeps the hover.
+/// The look of a chip from its state: active, hovered or at rest.
 const fn chip_style(colors: &ThemeColors, active: bool, hovered: bool) -> ChipStyle {
     if active {
         ChipStyle {
@@ -347,9 +312,7 @@ const fn chip_style(colors: &ThemeColors, active: bool, hovered: bool) -> ChipSt
     }
 }
 
-/// Puts the text, colours and fonts of one chip, or of every chip when `chip` is `None`, in
-/// step with its item, its selection, the pointer and the theme. Run for a new chip from its
-/// hook, for all of them when the [`Theme`] changes and by [`restyle_changed_chips`].
+/// Puts the text, colors and fonts of one chip, or of every chip when `chip` is `None`, in step with its state.
 fn theme_chips(
     chip: In<Option<Entity>>,
     theme: Res<Theme>,
@@ -364,7 +327,6 @@ fn theme_chips(
     )>,
     mut texts: Query<(&mut Text, &mut TextColor, &mut TextFont, &mut Node)>,
 ) {
-    // One chip is looked up directly, so restyling k chips costs k lookups, not k walks of all.
     let chips = match chip.0 {
         Some(id) => Either::Left(views.get_mut(id).into_iter()),
         None => Either::Right(views.iter_mut()),
@@ -408,17 +370,13 @@ fn theme_chips(
             if node.margin.left != margin {
                 node.margin.left = margin;
             }
-            // Only a difference may be written: a write marks the font changed, which makes
-            // Bevy lay the text, and so the whole tree, out again (#710).
+            // Write only on a difference: any write lays the tree out again.
             font.set_if_neq(chip_font(&theme));
         }
     }
 }
 
-/// Restyles the chips whose state changed: the pointer came or went, their [`Chip`] changed,
-/// or the selection their row draws from changed (its own, or the one its `Selection::Ref`
-/// resolves to). Chips of a row that draws from another source are left alone, and nothing
-/// happens in a frame where nothing changed.
+/// Restyles the chips whose hover, [`Chip`] or selection changed.
 fn restyle_changed_chips(
     hovered: Query<Entity, (With<ChipView>, Changed<Hovered>)>,
     rows: Query<(Entity, &Children), With<FilterChips>>,
@@ -433,8 +391,6 @@ fn restyle_changed_chips(
     let changed_item_owners: EntityHashSet = changed_items.iter().map(|(_, of)| of.0).collect();
     let mut restyle = EntityHashSet::default();
     restyle.extend(&hovered);
-    // Only the rows (not their chips) are visited to find the affected ones, and only the
-    // children of an affected row are looked at, so the work scales with the chips restyled.
     if !changed_selections.is_empty() || !changed_item_entities.is_empty() {
         for (row, children) in &rows {
             let selection_changed = !changed_selections.is_empty()
@@ -465,7 +421,6 @@ fn restyle_changed_chips(
     }
 }
 
-/// The accessible name of a chip: its label, and its count after a space when it has one.
 fn accessible_name(chip: &Chip) -> String {
     chip.count.map_or_else(
         || chip.label.clone(),
@@ -473,9 +428,7 @@ fn accessible_name(chip: &Chip) -> String {
     )
 }
 
-/// Keeps the row a radio group and each chip a radio button named after its label and count,
-/// toggled while it is active. Bevy makes a node a button again when its `Button` changes, and
-/// takes the name from only one of the chip's two texts, so this runs after it.
+/// Keeps the row a radio group and each chip a radio button. Run after Bevy's button sync.
 fn sync_accessibility(
     mut rows: Query<
         &mut AccessibilityNode,
@@ -496,13 +449,9 @@ fn sync_accessibility(
     selections: SelectionParam,
     mut changes: StructureChanges<FilterChips, Chip>,
 ) {
-    // The container is not a `Button`, so nothing of Bevy's resets its role; it is set once by
-    // `#[require]` and re-synced only when its node changes (or is added).
     for mut node in &mut rows {
         sync_role(&mut node, Role::RadioGroup);
     }
-    // A chip is looked at when Bevy reset its node or it is new, and (for its name and
-    // toggled state) when its row's items or selection changed. A quiet frame does neither.
     for (view, mut node) in &mut chips.p0() {
         sync_chip(view, &mut node, &items, &selections);
     }
@@ -517,7 +466,6 @@ fn sync_accessibility(
     }
 }
 
-/// Writes the role, name and toggled state of one chip's node, only where they differ.
 fn sync_chip(
     view: &ChipView,
     node: &mut Mut<AccessibilityNode>,
@@ -535,10 +483,9 @@ fn sync_chip(
     sync_toggled(node, Some(active));
 }
 
-/// Picks the chip that was used (a click, or Enter or Space on it).
+/// Picks the chip that was used.
 ///
-/// This relies on `toggle_selected` doing nothing for the active chip of a `One` selection: the
-/// selection stays as it is, so activating the active chip changes nothing.
+/// Relies on `toggle_selected` leaving the active chip of a `One` selection alone.
 fn on_activate(t: On<Activate>, views: Query<&ChipView>, mut selections: SelectionParam) {
     let Ok(view) = views.get(t.event().event_target()) else {
         return;

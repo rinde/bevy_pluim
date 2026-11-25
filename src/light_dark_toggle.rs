@@ -21,31 +21,21 @@ use crate::list::sync_selected;
 use crate::segmented_control::segment_colors;
 use crate::theme::{Theme, ThemeMode};
 
-/// The height of an option.
 const OPTION_HEIGHT: f32 = 28.0;
-/// The padding between an option's content and its sides.
 const OPTION_SIDE_PADDING: f32 = 10.0;
-/// The padding of the track around its options.
 const TRACK_PADDING: f32 = 3.0;
-/// The gap between two options.
 const OPTION_GAP: f32 = 2.0;
-/// The gap between an option's icon and its label.
 const ICON_GAP: f32 = 6.0;
-/// The size of an option's icon.
 const ICON_SIZE: u32 = 16;
-/// The size of an option's label.
 const OPTION_FONT_SIZE: f32 = 13.0;
 
 /// Registers the systems and observers of [`LightDarkToggle`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct LightDarkTogglePlugin;
 
 impl Plugin for LightDarkTogglePlugin {
     fn build(&self, app: &mut App) {
-        // `WindowPlugin` spawns the primary window while it builds, so the window of a normal app
-        // exists before this plugin does and no `Add<Window>` observer will see it.
+        // The primary window exists before this plugin, so no `Add<Window>` observer sees it.
         let preset: Vec<Entity> = app
             .world_mut()
             .query::<(Entity, &Window)>()
@@ -83,22 +73,18 @@ impl Plugin for LightDarkTogglePlugin {
     }
 }
 
-/// Which colours the app wants: its [`Theme`] follows this.
+/// Which colors the app wants: its [`Theme`] follows this.
 ///
-/// A [`LightDarkToggle`] sets it, and adding the first toggle inserts the default,
-/// [`System`](Self::System), so the app follows the system's light or dark setting. An app that
-/// wants light or dark fixed inserts `ThemePreference::Light` or `ThemePreference::Dark` (before
-/// or after adding the toggle; an existing value is kept). Without this resource nothing
-/// touches the [`Theme`]'s mode or the window.
+/// Without this resource nothing touches the [`Theme`]'s mode or the window.
 #[derive(Resource, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
 #[reflect(Resource)]
 pub enum ThemePreference {
-    /// Always the light colours.
+    /// Always the light colors.
     Light,
-    /// The light or dark colours as the system says (light when it is not known).
+    /// The light or dark colors as the system says (light when unknown).
     #[default]
     System,
-    /// Always the dark colours.
+    /// Always the dark colors.
     Dark,
 }
 
@@ -113,18 +99,7 @@ impl ThemePreference {
     }
 }
 
-/// The light or dark setting of the system, as far as the app has heard of it.
-///
-/// Read from the primary window when the app starts, and kept up to date from Bevy's
-/// [`WindowThemeChanged`] messages, which the windowing system sends when the person changes
-/// the setting, of the primary window only (those of other windows are ignored, also while there
-/// is no primary window). `None` when no window has told (headless, or a system without the setting).
-/// A primary window spawned with a fixed [`Window::window_theme`] says nothing about the system:
-/// the windowing system reports that theme back as the window's, so it is not read, and
-/// `SystemTheme` stays `None` until a [`WindowThemeChanged`] arrives.
-/// While the preference is fixed to light or dark the window is told to use that theme, and
-/// some platforms then stop reporting the system's, so a change made in that time may only be
-/// seen when the app goes back to [`ThemePreference::System`].
+/// The light or dark setting of the system, or `None` when no window has told.
 #[derive(Resource, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
 #[reflect(Resource)]
 pub struct SystemTheme(pub Option<ThemeMode>);
@@ -136,13 +111,10 @@ const fn mode_of(theme: WindowTheme) -> ThemeMode {
     }
 }
 
-/// Marks a window that was spawned with a fixed theme, whose `window_theme` is then not the
-/// system's.
+/// Marks a window spawned with a fixed theme, which is not the system's.
 #[derive(Component, Debug, Copy, Clone)]
 struct PresetWindowTheme;
 
-/// Marks a window spawned with a [`Window::window_theme`], before the windowing system fills it
-/// in with the theme it really uses.
 fn mark_preset_window_theme(add: On<Add<Window>>, windows: Query<&Window>, mut commands: Commands) {
     if windows
         .get(add.entity)
@@ -153,20 +125,12 @@ fn mark_preset_window_theme(add: On<Add<Window>>, windows: Query<&Window>, mut c
 }
 
 /// Keeps [`SystemTheme`] up to date from the primary window only.
-///
-/// A [`WindowThemeChanged`] counts only when its `window` is the current primary window; those of
-/// other windows (which may have a fixed theme) are ignored, and so are all of them while there
-/// is no primary window. A primary window that is a different entity from the one read before
-/// (the old one was despawned and another marked) is read once, like the first, and a theme
-/// already known stays until then, or while there is none.
 fn track_system_theme(
     mut changes: MessageReader<WindowThemeChanged>,
     windows: Query<(Entity, &Window, Has<PresetWindowTheme>), With<PrimaryWindow>>,
     mut system: ResMut<SystemTheme>,
     mut probed: Local<Option<Entity>>,
 ) {
-    // The window's own theme is the system's until we fix it, which we only do later, unless
-    // the app fixed it at creation.
     let primary = windows.iter().next();
     if let Some((entity, window, preset)) = primary
         && *probed != Some(entity)
@@ -200,13 +164,9 @@ fn apply_preference(
     }
 }
 
-/// Makes the primary window adopt the preference: light or dark when fixed, the system's own
-/// when following it.
+/// Makes the primary window adopt the preference.
 ///
-/// A theme written here is ours, not the system's: a window that gets one before
-/// [`track_system_theme`] has read it (a replacement primary spawned after that system ran in the
-/// frame) is marked [`PresetWindowTheme`], so the fixed theme is never taken for the system's.
-/// The system theme of such a window is then known from its first [`WindowThemeChanged`] only.
+/// Marks a window [`PresetWindowTheme`] before [`track_system_theme`] reads it, or our theme reads as the system's.
 fn apply_window_theme(
     preference: Res<ThemePreference>,
     mut windows: Query<(Entity, &mut Window, Has<PresetWindowTheme>), With<PrimaryWindow>>,
@@ -229,13 +189,7 @@ fn apply_window_theme(
 
 /// A switch between light, the system's setting and dark, with an icon and a label on each.
 ///
-/// Spawn it and nothing else: it sets the [`ThemePreference`] (starting at
-/// [`System`](ThemePreference::System) unless the app inserted one), the preference sets the
-/// [`Theme`]'s mode, and the primary window, if there is one, adopts light or dark with it.
-/// The icons (sun, computer and moon) are drawn by the library. To a screen reader the toggle
-/// is a radio group named "Theme" and each option a radio button, toggled while it is the
-/// preference; the options are one tab stop: the arrow keys, Home and End move between them and pick the option
-/// they land on, and Enter or Space picks the focused one.
+/// Spawn it and nothing else: it sets the [`ThemePreference`], which sets the [`Theme`]'s mode.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -271,9 +225,7 @@ pub struct LightDarkOption {
     pub preference: ThemePreference,
 }
 
-/// The highlight behind the selected option of a [`LightDarkToggle`]: a child of the toggle,
-/// placed absolutely behind the options, which slides to the selected option when the preference
-/// changes.
+/// The highlight behind the selected option of a [`LightDarkToggle`].
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("OptionIndicator"), Node, BackgroundColor::default())]
 struct OptionIndicator {
@@ -290,11 +242,9 @@ impl Indicator for OptionIndicator {
     }
 }
 
-/// Marks the icon of an option.
 #[derive(Component, Debug, Copy, Clone)]
 struct OptionIcon;
 
-/// Marks the label of an option.
 #[derive(Component, Debug, Copy, Clone)]
 struct OptionLabel;
 
@@ -330,8 +280,6 @@ impl LightDarkToggle {
         .into_iter()
         .zip(icons)
         {
-            // The option is its own roving item: the toggle's state is the preference, not a
-            // selection of items.
             let option_id = commands.spawn_empty().id();
             let mut option = commands.entity(option_id);
             option.insert((
@@ -375,20 +323,18 @@ enum Glyph {
     Moon,
 }
 
-/// The distance from a point to a segment.
 fn segment_distance(p: Vec2, a: Vec2, b: Vec2) -> f32 {
     let ab = b - a;
     let t = ((p - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
     p.distance(a + ab * t)
 }
 
-/// The signed distance from a point to a box of half size `half` around the origin.
 fn box_distance(p: Vec2, half: Vec2) -> f32 {
     let q = p.abs() - half;
     q.max(Vec2::ZERO).length() + q.x.max(q.y).min(0.0)
 }
 
-/// The signed distance of a point of the 16 px icon to the shape: negative inside.
+/// The signed distance of a point of the icon to the shape: negative inside.
 fn shape_distance(icon: Glyph, p: Vec2) -> f32 {
     let centre = Vec2::splat(ICON_SIZE as f32 / 2.0);
     match icon {
@@ -415,7 +361,6 @@ fn shape_distance(icon: Glyph, p: Vec2) -> f32 {
     }
 }
 
-/// A white-on-transparent, antialiased icon.
 fn icon_image(icon: Glyph) -> Image {
     let mut data = vec![0u8; (ICON_SIZE * ICON_SIZE * 4) as usize];
     for y in 0..ICON_SIZE {
@@ -446,7 +391,6 @@ fn icon_image(icon: Glyph) -> Image {
     )
 }
 
-/// Whether the preference or the system theme changed.
 fn preference_or_system_changed(
     preference: Option<Res<ThemePreference>>,
     system: Res<SystemTheme>,
@@ -454,7 +398,6 @@ fn preference_or_system_changed(
     system.is_changed() || preference.is_some_and(|preference| preference.is_changed())
 }
 
-/// Whether the toggles' look may be out of date.
 fn theme_toggles_stale(
     theme: Res<Theme>,
     preference: Option<Res<ThemePreference>>,
@@ -503,13 +446,12 @@ fn theme_toggles(
         }
         let mut styled = node.clone();
         styled.border_radius = BorderRadius::all(theme.control_radius);
-        // Written only when it differs: any `Node` write makes Bevy lay the tree out again.
+        // Write only on a difference: any write lays the tree out again.
         node.set_if_neq(styled);
         background.set_if_neq(BackgroundColor(theme.colors().segmented_track));
     }
 
     let preference = preference.map(|p| *p);
-    // Each option's colours: (selected, hovered), by the option's entity.
     let mut colours = Vec::new();
     for (option_id, child_of, option, hovered, mut node, mut background) in &mut options {
         if toggle_id.0.is_some_and(|id| id != child_of.parent()) {
@@ -526,7 +468,6 @@ fn theme_toggles(
         styled.justify_content = JustifyContent::Center;
         styled.border_radius = BorderRadius::all(theme.control_radius);
         node.set_if_neq(styled);
-        // The selected look is the indicator's, which slides.
         background.set_if_neq(BackgroundColor(Color::NONE));
         colours.push((
             option_id,
@@ -554,7 +495,7 @@ fn theme_toggles(
             continue;
         };
         text_color.set_if_neq(TextColor(*ink));
-        // Written only when it differs: a write makes Bevy lay the tree out again (#710).
+        // Write only on a difference: any write lays the tree out again.
         text_font.set_if_neq(TextFont {
             font: theme.body_font.clone().into(),
             font_size: Theme::font_size(OPTION_FONT_SIZE),
@@ -564,9 +505,7 @@ fn theme_toggles(
     }
 }
 
-/// Keeps the toggle a radio group named "Theme" and each option a radio button named after its
-/// label, toggled while it is the preference. Bevy makes a node a button again when its `Button`
-/// changes, so this runs after it.
+/// Keeps the toggle a radio group and each option a radio button. Run after Bevy's button sync.
 fn sync_accessibility(
     mut toggles: Query<
         &mut AccessibilityNode,
@@ -592,8 +531,6 @@ fn sync_accessibility(
         sync_role(&mut node, Role::RadioGroup);
         sync_label(&mut node, "Theme");
     }
-    // An option is looked at when Bevy reset its node or it is new, and all of them when the
-    // preference changed; an idle frame touches none.
     let current = preference.as_deref().copied();
     for (option, mut node) in &mut options.p0() {
         sync_option(*option, &mut node, current);
@@ -605,7 +542,6 @@ fn sync_accessibility(
     }
 }
 
-/// Writes the label, role and toggled state of one option's node, only where they differ.
 fn sync_option(
     option: LightDarkOption,
     node: &mut Mut<AccessibilityNode>,
