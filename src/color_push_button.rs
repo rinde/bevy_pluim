@@ -1,4 +1,4 @@
-//! `ColorPushButton`: a button showing a colour square.
+//! `ColorPushButton`: a button showing a color square.
 
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::lifecycle::HookContext;
@@ -14,8 +14,6 @@ use crate::tailwind::color_name;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`ColorPushButton`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct ColorPushButtonPlugin;
 
@@ -34,12 +32,9 @@ impl Plugin for ColorPushButtonPlugin {
     }
 }
 
-/// A button that shows a colour square instead of a label.
+/// A button that shows a color square instead of a label.
 ///
-/// Like [`PushButton`](crate::push_button::PushButton) it is a
-/// [`bevy::ui_widgets::Button`] and triggers [`Activate`](bevy::ui_widgets::Activate).
-/// Its accessible name is the name of the colour it shows: a Tailwind name
-/// (`blue-500`) or else a hex (`#3b82f6`).
+/// Its accessible name is the Tailwind name of its color, else its hex.
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add)]
@@ -53,13 +48,12 @@ impl Plugin for ColorPushButtonPlugin {
 )]
 pub struct ColorPushButton;
 
-/// Marks the colour square of a [`ColorPushButton`].
+/// Marks the color square of a [`ColorPushButton`].
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 pub struct ColorSquare;
 
-/// The colour square of a [`ColorPushButton`], for reading. Only the widget builds it; the
-/// component is immutable and its field is private.
+/// The color square of a [`ColorPushButton`], for reading.
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -71,7 +65,7 @@ pub struct ColorSquare;
 pub struct ColorSquareRef(Entity);
 
 impl ColorSquareRef {
-    /// The colour square.
+    /// The color square.
     #[must_use]
     pub const fn entity(&self) -> Entity {
         self.0
@@ -111,10 +105,7 @@ impl ColorPushButton {
     }
 }
 
-/// Keeps the label of each button's [`AccessibilityNode`] at the name of its colour.
-/// Bevy clears the label of a button without text when it is added, so this also
-/// sets it again after that. The button of a palette combo is left alone: it is a combo
-/// box whose value says the colour.
+/// Skips the button of a palette combo: it is a combo box.
 fn sync_accessible_names(
     buttons: Query<
         (Entity, &ColorSquareRef),
@@ -134,7 +125,6 @@ fn sync_accessible_names(
     }
 }
 
-/// Restyles a [`ColorPushButton`] whose [`InteractionDisabled`] was just added or removed.
 fn restyle_on_disabled_change(
     added: Query<Entity, (With<ColorPushButton>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,

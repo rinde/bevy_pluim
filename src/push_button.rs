@@ -1,6 +1,4 @@
 //! `PushButton`: a themed button with a label and an optional icon.
-//!
-//! This is the reference widget for how widgets in this crate are put together.
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -19,8 +17,6 @@ use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`PushButton`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct PushButtonPlugin;
 
@@ -42,7 +38,6 @@ impl Plugin for PushButtonPlugin {
     }
 }
 
-/// Restyles a [`PushButton`] whose [`ToggleState`] was just inserted.
 fn restyle_on_toggle(
     t: On<Insert<ToggleState>>,
     buttons: Query<(), With<PushButton>>,
@@ -54,10 +49,8 @@ fn restyle_on_toggle(
     }
 }
 
-/// Keeps the label of each button's [`AccessibilityNode`] at its text, without the icon, and its
-/// toggled state at its [`ToggleState`] (unset without one). Bevy leaves a
-/// [`bevy::ui_widgets::Button`] unlabelled. A combo's button is left alone: it is a
-/// combo box whose value says the selection.
+/// Keeps the accessible label and toggled state in line with the text and [`ToggleState`].
+/// Skips a combo's button: it is a combo box.
 fn sync_accessibility(
     mut buttons: ParamSet<(
         Query<
@@ -75,8 +68,6 @@ fn sync_accessibility(
     )>,
     mut untoggled: RemovedComponents<ToggleState>,
 ) {
-    // Only buttons whose node Bevy reset, whose text changed or whose toggle was inserted are
-    // looked at, plus those that lost their `ToggleState`; an idle frame touches none.
     for (button, toggle, mut node) in &mut buttons.p0() {
         sync_label(&mut node, &button.label);
         sync_toggled(&mut node, toggle.map(|toggle| toggle.0));
@@ -91,27 +82,10 @@ fn sync_accessibility(
 }
 
 /// A themed button with a label and an optional icon.
+/// Observe [`Activate`](bevy::ui_widgets::Activate) to react; insert a [`ToggleState`] to make it
+/// a toggle.
 ///
-/// It is a [`bevy::ui_widgets::Button`]: it is [`Pressed`] while
-/// held, triggers [`Activate`](bevy::ui_widgets::Activate) when it is used (a
-/// click, or Enter or Space on a focused button) and is disabled by inserting
-/// [`InteractionDisabled`]. React to a use of the button by observing
-/// `Activate`; the hover and press colours follow the pointer on their own, and
-/// stay right when the [`Theme`] changes under a pointer that rests on the button.
-/// Its [`Hovered`] says whether the pointer is on it.
-///
-/// Insert a [`ToggleState`] to make it an on/off toggle, as on an
-/// [`IconButton`](crate::icon_button::IconButton): an `Activate` inserts the flipped value
-/// (observe `On<Insert<ToggleState>>` to react), and an on button has the `accent_subtle`
-/// background and `accent_subtle_text` text. To a screen reader it is `toggled` with the state;
-/// without a `ToggleState` it has no toggled state.
-///
-/// Insert a `PushButton` again to change the label or add or remove the icon of a live button:
-/// the existing text children are updated in place (the icon child is spawned or despawned and
-/// [`PushButtonRefs`] follows), so the text on screen always equals the accessible label.
-///
-/// The component is immutable: its configuration is read when it is inserted, so clone or build
-/// a value, edit it outside the world and insert it again. It cannot be queried mutably:
+/// The component is immutable; insert a new value to change it:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -142,12 +116,7 @@ pub struct PushButton {
     icon: Option<String>,
 }
 
-/// The size of a [`PushButton`]. Insert `ButtonSize::Compact` with the button, or later; a theme
-/// change keeps it.
-///
-/// `Regular` is padded by [`Theme::item_padding`], has a 14 px label and a small shadow.
-/// `Compact` is [`Theme::compact_button_height`] high with [`Theme::compact_button_padding`], a
-/// smaller radius, a semibold 12 px label and no shadow, for buttons inside a row.
+/// The size of a [`PushButton`].
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 pub enum ButtonSize {
@@ -159,11 +128,6 @@ pub enum ButtonSize {
 }
 
 /// Where the icon of a [`PushButton`] sits relative to its label.
-///
-/// Insert it with the button, or later; it only moves the existing children, nothing is
-/// respawned. A button without an icon is not affected.
-///
-/// The default is `Right`, the order the button has always had.
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 pub enum IconPlacement {
@@ -179,8 +143,6 @@ pub enum IconPlacement {
 }
 
 impl IconPlacement {
-    /// The flex direction that lays out `[label, icon]` (the order they are spawned in) so the
-    /// icon ends up where this placement says.
     const fn flex_direction(self) -> FlexDirection {
         match self {
             Self::Left => FlexDirection::RowReverse,
@@ -195,8 +157,7 @@ impl IconPlacement {
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonLabel;
 
-/// The children of a [`PushButton`], for reading. Only the widget builds and updates it; the
-/// component is immutable and its fields are private.
+/// The children of a [`PushButton`], for reading.
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -228,10 +189,7 @@ impl PushButtonRefs {
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PushButtonIcon;
 
-/// Marker component that disables the default hover effect for `PushButton`s.
-///
-/// Inserting or removing it on a live button takes effect at once: the button rests at `background_primary`
-/// for its owner to colour, or follows the pointer again.
+/// Disables the default hover effect of a [`PushButton`].
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NoDefaultHover;
 
@@ -252,9 +210,6 @@ impl PushButton {
         }
     }
 
-    /// Builds the children and observers once, and on every later insert brings the label and the
-    /// icon of the existing children in line with the new value. Runs as one queued command so
-    /// two inserts before a flush cannot both spawn children.
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
         let Some(button) = world.get::<Self>(entity) else {
@@ -326,7 +281,6 @@ impl PushButton {
     }
 }
 
-/// Sets the string of the `Text` on `entity`, only when it differs.
 fn set_text(world: &mut World, entity: Entity, value: &str) {
     if let Some(mut text) = world.get_mut::<Text>(entity)
         && text.0 != value
@@ -335,7 +289,6 @@ fn set_text(world: &mut World, entity: Entity, value: &str) {
     }
 }
 
-/// What the pointer and the app are doing to a [`PushButton`].
 #[expect(
     clippy::struct_excessive_bools,
     reason = "four independent facts of a button's state"
@@ -348,7 +301,6 @@ struct ButtonState {
     on: bool,
 }
 
-/// The background of a [`PushButton`] with the default hover, from its state.
 const fn background_for(colors: &ThemeColors, state: ButtonState) -> Color {
     let ButtonState {
         disabled,
@@ -381,15 +333,11 @@ fn handle_hover(
     >,
     theme: Res<Theme>,
 ) {
-    // A click and a drag say nothing new about the pointer being on the button: the over,
-    // press, release and out events around them set the colours. A drag in particular can
-    // arrive after the pointer left the button, so it must not put it back under the pointer.
+    // A `Drag` can arrive after `Out`; only the over, press, release and out events set hover.
     let kind = trigger.event().kind;
     if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
-    // A mouse is on the button for every event but `Out` and `Cancel`, a release included; a
-    // finger never hovers.
     let pressed = trigger.event().pressed();
     let hovered = trigger.event().hovered();
     if let Ok((mut background, toggle)) = query.get_mut(trigger.event().event_target()) {
@@ -406,7 +354,6 @@ fn handle_hover(
     }
 }
 
-/// Restyles a [`PushButton`] whose [`InteractionDisabled`] was just added or removed.
 fn restyle_on_disabled_change(
     added: Query<Entity, (With<PushButton>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
@@ -421,8 +368,6 @@ fn restyle_on_disabled_change(
     }
 }
 
-/// Restyles a [`PushButton`] whose [`ButtonSize`] or [`IconPlacement`] was changed after it was
-/// spawned.
 fn restyle_on_size_change(
     changed: Query<
         Entity,
@@ -438,7 +383,6 @@ fn restyle_on_size_change(
     }
 }
 
-/// Restyles a [`PushButton`] that gained or lost [`NoDefaultHover`].
 fn restyle_on_hover_marker_change(
     added: Query<Entity, (With<PushButton>, Added<NoDefaultHover>)>,
     mut removed: RemovedComponents<NoDefaultHover>,
@@ -503,7 +447,6 @@ fn theme_push_button(
     ) in it
     {
         let on = toggle.is_some_and(|t| t.0);
-        // A button with `NoDefaultHover` is coloured by its owner, so it rests here.
         background_color.0 = background_for(
             theme.colors(),
             ButtonState {
@@ -534,7 +477,6 @@ fn theme_push_button(
             (theme.font_size_secondary, FontWeight::default())
         };
 
-        // label
         if let Ok((mut text_color, mut text_font)) = labels.get_mut(refs.label_id) {
             text_color.set_if_neq(TextColor(if disabled {
                 theme.colors().text_disabled
@@ -551,7 +493,6 @@ fn theme_push_button(
             });
         }
 
-        // icon
         if let Some(icon_id) = refs.icon_id
             && let Ok((mut text_color, mut text_font)) = icons.get_mut(icon_id)
         {

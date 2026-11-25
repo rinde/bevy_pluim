@@ -18,11 +18,7 @@ use crate::focus::{
 use crate::theme::Theme;
 
 /// Registers the systems of [`TextField`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin). A text field also needs Bevy's
-/// `TextInputPlugin` and `PointerFocusPlugin`, which `UiWidgetsPlugins` (and so
-/// `DefaultPlugins`) adds: the first edits the text, the second gives the field the focus
-/// on a click and takes it away on a click anywhere else.
+/// Needs Bevy's `TextInputPlugin` and `PointerFocusPlugin`, which `UiWidgetsPlugins` adds.
 #[derive(Copy, Clone, Debug)]
 pub struct TextFieldPlugin;
 
@@ -57,50 +53,13 @@ pub const DEFAULT_MIN_WIDTH_PX: f32 = 160.0;
 /// The default [`TextField::max_width`], as `Val::Px` (logical pixels).
 pub const DEFAULT_MAX_WIDTH_PX: f32 = 320.0;
 
-/// A single-line text input: a bordered box that a person clicks to type in.
+/// A single-line text input.
 ///
-/// The box has the theme's `card_surface` fill, a 1 px `border` and the control radius; the
-/// text is body text in `text_primary`. While the field is empty it shows its `placeholder`,
-/// if it has one, in `text_tertiary`. While it has the keyboard focus the focus ring is
-/// around the box, whether the focus came from a click or from Tab, so a person sees where
-/// the keys go.
+/// [`TextFieldChange`] fires whenever its text changes and [`TextFieldCommit`] when it gives up
+/// the focus other than by `Escape`. `min_width` and `max_width` are passed to the `Node` as is.
 ///
-/// A click anywhere on the box, its border included, gives the field the focus (it is a tab
-/// stop as well). `Enter` (also the numpad's) gives the focus up
-/// and so does `Escape`, which also puts back the text the field had when it took the focus;
-/// both keys stop there and do not bubble on to the field's ancestors;
-/// a press anywhere else gives it up too, as does Tab.
-///
-/// [`TextFieldChange`] is triggered on the field whenever its text changes, and
-/// [`TextFieldCommit`] when the field gives the focus up other than by `Escape`: by `Enter`,
-/// Tab or a press elsewhere, even when the text did not change.
-///
-/// The box is at least `min_width` and at most `max_width` wide; within those it takes the
-/// width its parent gives it, never the width of its text, which scrolls inside the box
-/// instead.
-///
-/// The two widths are Bevy layout constraints, not a validated pair of pixel measurements:
-/// each is a [`Val`] passed unchanged to the field's `Node` as `min_width` / `max_width`, so
-/// `Val::Auto`, percentages (of the parent's width), viewport units and the rest work, and
-/// are resolved by layout. Only `Val::Px` is in logical pixels. Nothing is converted or
-/// compared before layout. When both resolve and the minimum is above the maximum, the
-/// minimum wins, as in Bevy's layout: a field with a 400 px minimum and the default 320 px
-/// maximum is 400 px wide. That is a layout rule, not an error; neither bound is clamped and
-/// nothing is logged.
-///
-/// The fields are read when the component is inserted: insert a new `TextField` to set the
-/// text, placeholder, name or widths. That sets the text without a [`TextFieldChange`].
-/// The text being typed is in the `EditableText` of [`TextFieldRefs::input`], and in the
-/// events.
-///
-/// To a screen reader the field is a text input (on [`TextFieldRefs::input`]) with its text
-/// as its value and `name`, if any, as its label.
-///
-/// `TextField` is an immutable component: it is configuration, replaced by inserting a new
-/// one, never edited in place, so a system cannot take it as `&mut`. Migrating: a `Query<&mut TextField>` becomes
-/// `commands.entity(e).insert(..)` of a prepared `TextField`. Inserting a new `TextField` sets its text without a `TextFieldChange`.
-///
-/// A `&mut` query does not compile:
+/// The component is immutable; insert a new value to change it, which sets the text without a
+/// [`TextFieldChange`]. A `&mut` query does not compile:
 ///
 /// ```compile_fail
 /// use bevy::prelude::*;
@@ -133,12 +92,9 @@ pub struct TextField {
     pub placeholder: Option<String>,
     /// The accessible name of the field, the label a screen reader reads.
     pub name: Option<String>,
-    /// The least width of the box, a layout constraint for the field's `Node::min_width`
-    /// ([`DEFAULT_MIN_WIDTH_PX`] logical pixels by default). It wins over `max_width` when
-    /// both resolve and it is the greater.
+    /// The least width of the box, passed to `Node::min_width`; wins over `max_width`.
     pub min_width: Val,
-    /// The greatest width of the box, a layout constraint for the field's `Node::max_width`
-    /// ([`DEFAULT_MAX_WIDTH_PX`] logical pixels by default).
+    /// The greatest width of the box, passed to `Node::max_width`.
     pub max_width: Val,
 }
 
@@ -169,16 +125,14 @@ impl TextField {
         self
     }
 
-    /// The same field, at least `min_width` wide: any [`Val`], passed to the `Node` as is
-    /// (logical pixels only for `Val::Px`). It takes precedence over a smaller `max_width`.
+    /// The same field, at least `min_width` wide.
     #[must_use]
     pub const fn with_min_width(mut self, min_width: Val) -> Self {
         self.min_width = min_width;
         self
     }
 
-    /// The same field, at most `max_width` wide: any [`Val`], passed to the `Node` as is
-    /// (logical pixels only for `Val::Px`). A greater `min_width` takes precedence over it.
+    /// The same field, at most `max_width` wide.
     #[must_use]
     pub const fn with_max_width(mut self, max_width: Val) -> Self {
         self.max_width = max_width;
@@ -287,7 +241,6 @@ struct TextFieldInput {
     on_focus: Option<String>,
 }
 
-/// Puts the fields of a newly inserted [`TextField`] on its parts.
 fn apply_text_field(
     field: In<Entity>,
     mut fields: Query<(&TextField, &TextFieldRefs, &mut Node)>,
@@ -313,7 +266,6 @@ fn apply_text_field(
     }
 }
 
-/// Shows the placeholder only while the text is empty.
 const fn placeholder_display(value: &str) -> Display {
     if value.is_empty() {
         Display::Flex
@@ -322,8 +274,7 @@ const fn placeholder_display(value: &str) -> Display {
     }
 }
 
-/// Gives the focus to the input of a field when a press lands on the box around it, its
-/// 1 px border included, rather than letting the request bubble on and clear the focus.
+/// Gives the box's border the focus too: a press there would bubble on and clear the focus.
 fn on_field_acquire_focus(
     mut trigger: On<AcquireFocus>,
     fields: Query<&TextFieldRefs>,
@@ -338,7 +289,6 @@ fn on_field_acquire_focus(
     }
 }
 
-/// Remembers the text when the field takes the focus, for `Escape` to put back.
 fn on_focus_gained(
     trigger: On<FocusGained>,
     mut inputs: Query<(&mut TextFieldInput, &EditableText)>,
@@ -349,9 +299,7 @@ fn on_focus_gained(
     input.on_focus = Some(editable.value().to_string());
 }
 
-/// Commits the text when the field gives the focus up, unless `Escape` did.
-///
-/// The focus changes after the text edits of the frame are applied, so the text is complete.
+/// Runs after the frame's text edits, so the committed text is complete.
 fn on_focus_lost(
     trigger: On<FocusLost>,
     mut inputs: Query<(&mut TextFieldInput, &EditableText)>,
@@ -368,14 +316,10 @@ fn on_focus_lost(
     }
 }
 
-/// Marks the input of a [`TextField`] whose `Enter` and `Escape` belong to the widget around it
-/// (a [`FilterCombo`](crate::filter_combo::FilterCombo)'s search box), so the field leaves them
-/// alone instead of giving the focus up.
+/// Marks an input whose `Enter` and `Escape` belong to the widget around it.
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub(crate) struct OwnKeys;
 
-/// `Enter` gives the focus up; `Escape` puts the text back as it was when the field took
-/// the focus and gives the focus up too.
 fn on_key_input(
     mut trigger: On<FocusedInput<KeyboardInput>>,
     mut inputs: Query<(&mut TextFieldInput, &mut EditableText), Without<OwnKeys>>,
@@ -412,8 +356,6 @@ fn on_key_input(
     }
 }
 
-/// Triggers a [`TextFieldChange`] when an edit changed the text, and shows the placeholder
-/// while it is empty.
 fn on_text_edit(
     trigger: On<TextEditChange>,
     mut inputs: Query<(&mut TextFieldInput, &EditableText)>,
@@ -443,8 +385,6 @@ fn on_text_edit(
     });
 }
 
-/// Keeps the text of each field as the value of its accessibility node, and its name as the
-/// label. A node is only looked at when its text, its `TextField` or the node itself changed.
 fn sync_accessibility(
     mut inputs: Query<(&TextFieldInput, Ref<EditableText>, &mut AccessibilityNode)>,
     fields: Query<Ref<TextField>>,

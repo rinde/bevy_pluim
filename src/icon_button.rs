@@ -16,8 +16,6 @@ use crate::tooltip::Tooltip;
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`IconButton`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct IconButtonPlugin;
 
@@ -37,11 +35,10 @@ impl Plugin for IconButtonPlugin {
     }
 }
 
-/// What an [`IconButton`] or a [`Tool`](crate::toolbar::Tool) of a
-/// [`Toolbar`](crate::toolbar::Toolbar) means, which picks its colours.
+/// What an [`IconButton`] or a [`Tool`](crate::toolbar::Tool) means; picks its colors.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum Tone {
-    /// The ordinary colours.
+    /// The ordinary colors.
     #[default]
     Neutral,
     /// A warning: the warning background, border and text.
@@ -56,8 +53,7 @@ pub enum IconButtonSize {
     /// A 44 px button with a 22 px icon.
     #[default]
     Regular,
-    /// A 30 px button with a 16 px icon, whose icon is secondary text until the
-    /// pointer is on the button.
+    /// A 30 px button with a 16 px icon.
     Small,
     /// A 54 px button with a 24 px icon.
     Large,
@@ -85,27 +81,11 @@ impl IconButtonSize {
     }
 }
 
-/// A button that shows an [`Icon`] and nothing else: no border, the control
-/// radius and the primary background, the hover background under the pointer.
+/// A button that shows an [`Icon`] and nothing else; `name` is its accessible name and tooltip.
 ///
-/// Its [`Tone`] changes the colours. A [`Tone::Warning`] button has the warning
-/// background, a 1 px warning border, a warning icon and a large shadow, is
-/// brighter under the pointer, and while on (a [`ToggleState`], such as its panel being open) shows
-/// a 3 px bar in the warning border colour. A [`Tone::Danger`] button turns its
-/// icon the danger hover colour under the pointer and, when on, is filled with
-/// the danger colour.
+/// Observe [`Activate`] to react.
 ///
-/// It is a [`bevy::ui_widgets::Button`], so an action observes
-/// [`Activate`] on it, and it is disabled by
-/// inserting [`InteractionDisabled`]. `name` is its accessible name, the label
-/// of its [`AccessibilityNode`], since the icon has no text. The name is also
-/// shown as a [`Tooltip`] when the pointer rests on the button.
-///
-/// Insert an `IconButton` again to change the icon (play and pause) or the name
-/// of a live button.
-///
-/// The component is immutable: clone or build a value, edit it outside the world and insert it.
-/// It cannot be queried mutably:
+/// The component is immutable; insert a new value to change it:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -139,41 +119,26 @@ pub struct IconButton {
     pub name: String,
     /// The size of the button.
     pub size: IconButtonSize,
-    /// What the button means; picks its colours.
+    /// What the button means; picks its colors.
     pub tone: Tone,
 }
 
-/// Whether a toggle [`IconButton`] is on, such as a pause button while the game
-/// is paused. An on button shows the subtle accent background, an accent icon and
-/// an accent bar along its bottom edge.
-///
-/// Insert it on an [`IconButton`] to make it a toggle: an
-/// [`Activate`] (a click, or Enter / Space) inserts
-/// the flipped value, which restyles the button and is what an app observes
-/// (`On<Insert<ToggleState>>`). An app can insert a value itself to set it from
-/// outside, for a keyboard shortcut or because the game paused itself. A button
-/// without it is a plain, momentary button. It is one on/off button, not part of
-/// a group. To a screen reader a button with it is a toggle button, pressed while
-/// it is on; one without it has no toggled state at all.
+/// Whether a toggle [`IconButton`] is on. Inserting it makes the button a toggle; an
+/// [`Activate`] inserts the flipped value.
 #[derive(Component, Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
 pub struct ToggleState(pub bool);
 
-/// The accent bar child of a toggle [`IconButton`], spawned with the first
-/// [`ToggleState`].
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 struct ToggleBarRef(Entity);
 
-/// The bar along the bottom edge of an on toggle button.
 #[derive(Component, Clone, Copy, Debug)]
 struct ToggleBar;
 
-/// The height of the bar of an on toggle button, in logical pixels.
 const BAR_HEIGHT_PX: f32 = 2.0;
 
-/// The [`Icon`] child of an [`IconButton`], for reading. Only the widget builds it; the component
-/// is immutable and its field is private.
+/// The [`Icon`] child of an [`IconButton`], for reading.
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -214,8 +179,6 @@ impl IconButton {
 
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
-        // Checked when the command runs, not now: two inserts before a flush would both see no
-        // refs and both spawn an icon and register the observers.
         world.commands().queue(move |world: &mut World| {
             let Ok(mut entity_mut) = world.get_entity_mut(entity) else {
                 return;
@@ -244,7 +207,6 @@ impl IconButton {
     }
 }
 
-/// What the pointer and the app are doing to a button.
 #[expect(
     clippy::struct_excessive_bools,
     reason = "four independent facts of a button's state"
@@ -257,22 +219,17 @@ struct ButtonState {
     on: bool,
 }
 
-/// How a button looks.
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct Look {
     background: Color,
     border: Option<Color>,
     icon: IconColor,
-    /// The colour and height of the bar along the bottom edge, when it shows.
     bar: Option<(Color, f32)>,
 }
 
-/// The height of the bar of an on [`Tone::Warning`] button, in logical pixels.
 const WARNING_BAR_HEIGHT_PX: f32 = 3.0;
-/// How far a warning button moves from its background to its border colour under the pointer.
 const WARNING_BRIGHTEN: f32 = 0.25;
 
-/// The look of a button from its tone, size and state.
 fn look(colors: &ThemeColors, tone: Tone, size: IconButtonSize, state: ButtonState) -> Look {
     let ButtonState {
         disabled,
@@ -340,7 +297,6 @@ fn look(colors: &ThemeColors, tone: Tone, size: IconButtonSize, state: ButtonSta
     }
 }
 
-/// Flips the [`ToggleState`] of a button that has one.
 pub(crate) fn toggle_on_activate(
     trigger: On<Activate>,
     states: Query<&ToggleState, Without<InteractionDisabled>>,
@@ -352,7 +308,6 @@ pub(crate) fn toggle_on_activate(
     }
 }
 
-/// Restyles a button whose [`ToggleState`] was just inserted.
 fn restyle_on_toggle(t: On<Insert<ToggleState>>, mut commands: Commands) {
     commands.run_system_cached_with(theme_icon_buttons, Some(t.event().event_target()));
 }
@@ -396,7 +351,6 @@ fn handle_hover(
     }
 }
 
-/// Restyles an [`IconButton`] whose [`InteractionDisabled`] was just added or removed.
 fn restyle_on_disabled_change(
     added: Query<Entity, (With<IconButton>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
@@ -411,9 +365,7 @@ fn restyle_on_disabled_change(
     }
 }
 
-/// Keeps the label of each button's [`AccessibilityNode`] at its name, and its
-/// toggled state at its [`ToggleState`], or unset without one. Bevy clears the
-/// label of a button without text when the button is added, so this runs after it.
+/// Runs after Bevy clears the label of a button without text.
 fn sync_accessibility(
     mut buttons: ParamSet<(
         Query<
@@ -428,8 +380,6 @@ fn sync_accessibility(
     )>,
     mut untoggled: RemovedComponents<ToggleState>,
 ) {
-    // Only buttons whose node Bevy reset, whose name changed or whose toggle was inserted are
-    // looked at, plus those that lost their `ToggleState`; an idle frame touches none.
     for (button, toggle, mut node) in &mut buttons.p0() {
         sync_label(&mut node, &button.name);
         sync_toggled(&mut node, toggle.map(|toggle| toggle.0));

@@ -15,8 +15,6 @@ use crate::theme::{Theme, ThemeColors};
 use crate::{MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`Link`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct LinkPlugin;
 
@@ -33,23 +31,10 @@ impl Plugin for LinkPlugin {
     }
 }
 
-/// Clickable text. Whether it reacts is up to [`InteractionDisabled`].
+/// Clickable text: a [`bevy::ui_widgets::Button`] with [`Role::Link`]. Disable it with
+/// [`InteractionDisabled`].
 ///
-/// It is a [`bevy::ui_widgets::Button`] that triggers
-/// [`Activate`](bevy::ui_widgets::Activate) when it is used. Insert
-/// [`InteractionDisabled`] to disable it and remove it to enable it again, as for the other
-/// buttons: a disabled link keeps its `Button`, shows plain text in the primary text colour
-/// (the current crumb of a trail, say), does not react to the pointer, never activates from
-/// the pointer or keyboard and is skipped by Tab. The link restyles when the marker is added
-/// or removed, also under the pointer.
-///
-/// To assistive technology it is a link ([`Role::Link`]), not a button.
-///
-/// Insert a `Link` again to change the label of a live link: its text is updated in place, so
-/// the text on screen always equals the accessible label.
-///
-/// The component is immutable: build or clone a value, edit it outside the world and insert it.
-/// It cannot be queried mutably:
+/// The component is immutable; insert a new value to change it:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -91,9 +76,6 @@ impl Link {
         }
     }
 
-    /// Spawns the text and registers the hover observer once; on every later insert sets the
-    /// text of the existing child. Runs as one queued command so two inserts before a flush
-    /// cannot both spawn a text.
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
         let Some(link) = world.get::<Self>(entity) else {
@@ -127,7 +109,6 @@ impl Link {
     }
 }
 
-/// Restyles a [`Link`] whose [`InteractionDisabled`] was just added or removed.
 fn restyle_on_disabled_change(
     added: Query<Entity, (With<Link>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
@@ -142,13 +123,7 @@ fn restyle_on_disabled_change(
     }
 }
 
-/// Keeps each link a link to assistive technology. Bevy makes a node a button again when its
-/// `Button` changes, so this runs after it.
-///
-/// It looks only at links whose [`AccessibilityNode`] changed (every reset of Bevy's, the
-/// `label_changed` and `image_changed` systems and the bounds sync, writes the node through
-/// `DerefMut` in `UiSystems::PostLayout`, before this runs) or whose [`Link`] changed.
-/// `sync_role` writes only when the role differs, so this never marks the node changed itself.
+/// Runs after Bevy makes a node a button again when its `Button` changes.
 fn sync_accessibility(
     mut links: Query<
         (&Link, &mut AccessibilityNode),
@@ -161,7 +136,6 @@ fn sync_accessibility(
     }
 }
 
-/// What a [`Link`] is doing, which decides its colours.
 #[derive(Clone, Copy)]
 struct LinkLook {
     disabled: bool,
@@ -169,7 +143,6 @@ struct LinkLook {
     hovered: bool,
 }
 
-/// The background and the text colour of a [`Link`], from its state.
 const fn colors_for(colors: &ThemeColors, look: LinkLook) -> (Color, Color) {
     let LinkLook {
         disabled,
@@ -193,14 +166,11 @@ fn handle_hover(
     mut link_texts: Query<&mut TextColor, With<LinkText>>,
     theme: Res<Theme>,
 ) {
-    // A click and a drag say nothing new about the pointer being on the link: the over,
-    // press, release and out events around them set the colours. A drag in particular can
-    // arrive after the pointer left the link, so it must not put it back under the pointer.
+    // A `Drag` can arrive after `Out`; only the over, press, release and out events set hover.
     let kind = trigger.event().kind;
     if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
-    // The pointer is on the link for every event but `Out`, a release included.
     let (bg_color, link_color) = colors_for(
         theme.colors(),
         LinkLook {
