@@ -1,12 +1,5 @@
 //! `FilterCombo`: a [`Combo`](crate::combo::Combo) whose popup has a search box that filters
 //! the options as a person types.
-//!
-//! The popup is a card holding a search field above a scrolling [`List`] of the options, and a
-//! "No matching items" line that shows when nothing matches. The keyboard focus stays in the
-//! search field while the popup is open: typing edits the query, Arrow Down and Arrow Up move
-//! the active option through the options that match, and Enter picks it. The query and the
-//! active option are the widget's own: the [`Selection`] and its items are never changed by
-//! filtering, and another widget showing the same items sees all of them.
 
 use accesskit::{Live, Node as AccessNode, Role};
 use bevy::a11y::AccessibilityNode;
@@ -42,8 +35,6 @@ use crate::text_field::{OwnKeys, TextField, TextFieldChange, TextFieldRefs};
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`FilterCombo`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub struct FilterComboPlugin;
 
@@ -75,64 +66,28 @@ impl Plugin for FilterComboPlugin {
     }
 }
 
-/// The text of the zero-results line.
 const NO_MATCHES_TEXT: &str = "No matching items";
 
-/// The placeholder of the search box.
 const SEARCH_PLACEHOLDER: &str = "Search..";
 
-/// The accessible name of the search box when the combo has no name.
 const SEARCH_NAME: &str = "Search";
 
-/// The padding of the popup around the search box and the list, in logical pixels. It is also
-/// the padding of the list itself (`CornerStyle::Separated`), which the active option brings
-/// into view with it.
+/// Also the padding of the separated list, which scroll-into-view includes.
 const POPUP_PADDING: f32 = 6.0;
 
-/// How many frames after a change the active option is kept in view: the layout that moves
-/// it comes one frame later.
+/// Frames the active option is kept in view after a change: layout moves it a frame later.
 const SETTLE_FRAMES: u8 = 3;
 
 /// A button that opens a popup with a search box and a [`List`] of the options it filters.
 ///
-/// It is used like a [`Combo`](crate::combo::Combo), on a node with a [`Selection`] (its own,
-/// or a [`Selection::reference`] to one it shares), and shows the selected items on its
-/// button in the same way, with a [`ComboPlaceholder`] while nothing is selected. Opening the
-/// popup starts with an empty query and puts the keyboard focus in the search box.
-///
-/// # Filtering
-///
-/// The query is text typed in the search box, not the selected value. The options whose
-/// `Item<String>` text contains it, ignoring case, stay; the others are hidden (and left out
-/// of the keyboard navigation and the accessibility tree), in the order of the source items. An
-/// empty query shows all of them. A note ([`ItemNote`](crate::list::ItemNote)) shows but is not
-/// searched. With no match the popup says "No matching items". The filter belongs to this
-/// widget: the options are the original item entities, so another widget on the same items
-/// shows all of them, and filtering never changes the [`Selection`].
+/// Used like a [`Combo`](crate::combo::Combo). Filtering hides rows only: the [`Selection`] and
+/// its items are never changed.
 ///
 /// # Keyboard
 ///
-/// - Typing, Backspace, Delete, Left, Right, Home, End, selection and the clipboard shortcuts
-///   edit the query; Space types a space.
-/// - Arrow Down and Arrow Up move the active option through the matching options, wrapping,
-///   and repeat when held. They change nothing else and never reach an app's directional
-///   navigation.
-/// - Enter (also the numpad's) picks the active option as a click on it would: a selection of
-///   one item at most closes the popup and gives the focus back to the button; a selection of
-///   many stays open with the query so that more can be picked. With no active option (nothing
-///   matches) it does nothing.
-/// - Escape closes the popup without picking. Tab and Shift+Tab, and a click elsewhere, close
-///   it without picking too, and the focus goes where they send it. Reopening starts with an
-///   empty query.
-/// - While an input method is composing text, none of these keys picks or closes anything.
-///
-/// The active option starts as the first selected matching option, otherwise the first match.
-/// After the query or the items change it stays when it still matches, otherwise it becomes
-/// the first match, or none.
-///
-/// To assistive technology the button is a combo box whose value is the selected items, and the
-/// search box is a combo box whose value is the query, which controls the list and has the
-/// active option as its active descendant. `name`, if given, is the label of both.
+/// The focus stays in the search box: typing edits the query, Arrow Down and Arrow Up move the
+/// active option, and Enter picks it as a click would. Escape, Tab and an outside click close
+/// the popup without picking.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[component(on_add = Self::on_add, on_insert = Self::on_insert)]
@@ -146,13 +101,12 @@ const SETTLE_FRAMES: u8 = 3;
     Name::new("FilterCombo"),
 )]
 pub struct FilterCombo {
-    /// The accessible name of the combo, the label a screen reader reads. The search box is
-    /// named "Search" without one.
+    /// The accessible name of the combo; the search box is named "Search" without one.
     pub name: Option<String>,
 }
 
 impl FilterCombo {
-    /// The same combo, with `name` as its accessible name.
+    /// The same combo with `name` as its accessible name.
     #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
@@ -174,7 +128,6 @@ impl FilterCombo {
                 ComboButton,
                 NoDefaultHover,
                 FilterPart(root),
-                // Lets the pointer through to the combo, as a `Combo`'s button does.
                 Pickable {
                     should_block_lower: false,
                     ..default()
@@ -201,7 +154,6 @@ impl FilterCombo {
                 },
                 BackgroundColor::default(),
                 BorderColor::default(),
-                // A popup floats over what is below it, so it takes the pointer from there.
                 Pickable::default(),
                 Visibility::Hidden,
                 FilterPart(root),
@@ -222,7 +174,6 @@ impl FilterCombo {
                 ComboList,
                 FilterList,
                 FilterPart(root),
-                // Never a tab stop: the search box has the focus while the popup is open.
                 Unreachable,
                 Node {
                     overflow: Overflow::scroll_y(),
@@ -232,7 +183,6 @@ impl FilterCombo {
                 ChildOf(popup),
             ))
             .id();
-        // The list scrolls itself when the popup is capped to the window: it gets a bar.
         commands.spawn(popup_scroll_bar(list));
         let empty = commands
             .spawn((
@@ -269,7 +219,7 @@ impl FilterCombo {
     }
 }
 
-/// The parts of a [`FilterCombo`], on the combo itself. Only the widget builds it.
+/// The parts of a [`FilterCombo`]. Only the widget builds it.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
@@ -283,81 +233,69 @@ pub struct FilterComboRefs {
 }
 
 impl FilterComboRefs {
-    /// The button that opens and closes the popup.
+    /// The button.
     #[must_use]
     pub const fn button(&self) -> Entity {
         self.button
     }
 
-    /// The popup, a [`Float`] holding the search box, the list and the zero-results line.
+    /// The popup.
     #[must_use]
     pub const fn popup(&self) -> Entity {
         self.popup
     }
 
-    /// The [`TextField`] of the search box.
+    /// The search box.
     #[must_use]
     pub const fn field(&self) -> Entity {
         self.field
     }
 
-    /// The text input inside the search box, which has the keyboard focus while the popup is
-    /// open.
+    /// The text input inside the search box.
     #[must_use]
     pub const fn input(&self) -> Entity {
         self.input
     }
 
-    /// The [`List`] of all the options, those that do not match the query hidden.
+    /// The option list.
     #[must_use]
     pub const fn list(&self) -> Entity {
         self.list
     }
 
-    /// The "No matching items" line.
+    /// The zero-results line.
     #[must_use]
     pub const fn empty(&self) -> Entity {
         self.empty
     }
 }
 
-/// The part of a [`FilterCombo`] this entity is, pointing at the combo.
 #[derive(Component, Debug, Copy, Clone)]
 struct FilterPart(Entity);
 
-/// Marks the [`List`] in the popup.
 #[derive(Component, Debug, Copy, Clone)]
 struct FilterList;
 
-/// Marks the zero-results line.
 #[derive(Component, Debug, Copy, Clone)]
 struct FilterEmpty;
 
-/// Marks the row of the active option, which has the focus ring drawn on it.
 #[derive(Component, Debug, Copy, Clone)]
 struct ActiveOption;
 
-/// Marks a combo whose results must be worked out again.
 #[derive(Component, Debug, Copy, Clone)]
 struct FilterDirty;
 
-/// The option the keyboard is on: the item and its row.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct Active {
     item: Entity,
     view: Entity,
 }
 
-/// What a [`FilterCombo`] remembers while it is open.
 #[derive(Component, Debug, Clone, Default)]
 struct FilterState {
-    /// The text in the search box.
     query: String,
-    /// The active option, if any option matches.
     active: Option<Active>,
-    /// Whether the popup has just opened, so that the active option starts at the selection.
     fresh: bool,
-    /// How many more frames to keep the active option in view.
     settle: u8,
 }
 
@@ -371,7 +309,6 @@ struct Parts {
     empty: Entity,
 }
 
-/// The search box for a combo with this name.
 fn search_field(name: Option<&str>) -> TextField {
     TextField::new("")
         .with_placeholder(SEARCH_PLACEHOLDER)
@@ -380,7 +317,6 @@ fn search_field(name: Option<&str>) -> TextField {
         .with_max_width(Val::Auto)
 }
 
-/// The accessibility node of the zero-results line: a polite status.
 fn empty_accessibility() -> AccessibilityNode {
     let mut node = AccessNode::new(Role::Status);
     node.set_label(NO_MATCHES_TEXT);
@@ -388,8 +324,7 @@ fn empty_accessibility() -> AccessibilityNode {
     AccessibilityNode::from(node)
 }
 
-/// Finishes the setup once the search field has built its input: records the parts and wires
-/// the observers.
+/// Runs once the search field has built its input.
 fn finish_setup(parts: In<Parts>, fields: Query<&TextFieldRefs>, mut commands: Commands) {
     let Parts {
         root,
@@ -435,7 +370,6 @@ fn finish_setup(parts: In<Parts>, fields: Query<&TextFieldRefs>, mut commands: C
     commands.run_system_cached_with(theme_filter_combos, Some(root));
 }
 
-/// Puts the name of a combo on its button and its search box.
 fn apply_name(
     root: In<Entity>,
     combos: Query<(&FilterCombo, &FilterComboRefs)>,
@@ -454,14 +388,12 @@ fn on_insert_filter_combo(
     refs: Query<(), With<FilterComboRefs>>,
     mut commands: Commands,
 ) {
-    // A combo inserted again keeps its parts; its name is applied by the hook.
     let root = t.event().event_target();
     if refs.contains(root) {
         commands.entity(root).insert(FilterDirty);
     }
 }
 
-/// Shows or hides the popup as the state says, and starts or ends a search.
 fn on_state(
     t: On<Insert<ComboState>>,
     mut combos: Query<(
@@ -485,7 +417,6 @@ fn on_state(
             fresh: true,
             ..default()
         };
-        // Sets the text without a change event; the query starts empty.
         commands
             .entity(refs.field)
             .insert(search_field(combo.name.as_deref()));
@@ -493,7 +424,6 @@ fn on_state(
         focus.set(refs.input, FocusCause::Navigated);
     } else {
         set_active(&mut commands, &mut filter, refs.input, None);
-        // The focus never stays on something hidden; where a click or Tab sent it, it stays.
         let on_popup = focus
             .get()
             .is_some_and(|focused| focused == refs.input || focused == refs.list);
@@ -508,10 +438,6 @@ fn on_state(
     }
 }
 
-/// Marks the open combos whose rows or items changed.
-///
-/// A renamed item marks only the open combos that draw from its items entity, so an edit to
-/// one source leaves every other combo alone.
 fn mark_dirty(
     lists: Query<&FilterPart, (With<FilterList>, Changed<Children>)>,
     renamed: Query<&ItemOf, Changed<Item<String>>>,
@@ -539,12 +465,10 @@ fn mark_dirty(
     }
 }
 
-/// Whether the text of an option matches the query: it contains it, ignoring case.
 fn matches(label: &str, lowercase_query: &str) -> bool {
     lowercase_query.is_empty() || label.to_lowercase().contains(lowercase_query)
 }
 
-/// Hides the rows that do not match the query, and keeps the active option on a match.
 fn apply_filters(
     dirty: Query<Entity, With<FilterDirty>>,
     mut combos: Query<(&FilterComboRefs, &ComboState, &mut FilterState)>,
@@ -624,10 +548,6 @@ fn apply_filters(
     }
 }
 
-/// Makes `next` the active option, moving the marker from the old row to the new one.
-///
-/// The search box also gets Bevy's [`ActiveDescendant`] naming that row, as a `ListBox` has one,
-/// so a check can read the active option the same way for both.
 fn set_active(
     commands: &mut Commands,
     filter: &mut FilterState,
@@ -653,7 +573,6 @@ fn set_active(
     filter.active = next;
 }
 
-/// Takes the new text of a search box as the query.
 fn on_field_change(
     t: On<TextFieldChange>,
     parts: Query<&FilterPart>,
@@ -673,7 +592,6 @@ fn on_field_change(
     }
 }
 
-/// The rows that show, in order, with their items.
 fn shown_rows(
     list: Entity,
     children: &Query<&Children>,
@@ -693,8 +611,6 @@ fn shown_rows(
         .collect()
 }
 
-/// The keys the search box handles: Arrow Down and Arrow Up move the active option, Enter picks
-/// it. Everything else edits the query, or is left to the text input.
 fn on_key(
     mut input: On<FocusedInput<KeyboardInput>>,
     parts: Query<&FilterPart>,
@@ -710,7 +626,6 @@ fn on_key(
     else {
         return;
     };
-    // While an input method composes, its keys are its own.
     if editable.is_composing() {
         return;
     }
@@ -728,7 +643,7 @@ fn on_key(
             if !pressed {
                 return;
             }
-            // The text input moved the caret for this key as well; the key is ours.
+            // The text input also handled this key; undo its caret move.
             if matches!(
                 editable.pending_edits.last(),
                 Some(TextEdit::Up(_) | TextEdit::Down(_))
@@ -779,8 +694,7 @@ fn on_key(
                 commands.entity(root).insert(ComboState::Closed);
             }
         }
-        // By key code, as `TextField` does: the text input reads the logical key, which not
-        // every source of key events fills in.
+        // Match the key code, not the logical key, which not every source of events fills in.
         KeyCode::Escape => {
             input.propagate(false);
             if pressed {
@@ -791,7 +705,6 @@ fn on_key(
     }
 }
 
-/// Closes the popup when the search box loses the focus other than to the popup itself.
 fn on_focus_lost(
     lost: On<FocusLost>,
     parts: Query<&FilterPart>,
@@ -809,9 +722,7 @@ fn on_focus_lost(
     let over = |entity: Entity| pointers.over(None, entity);
     let open = state == ComboState::Open;
     if open {
-        // The focus going to the button: by a press on it, the button toggles the popup itself
-        // on release; by Shift+Tab, the popup closes.
-        // A press on the button, a finger included, is not leaving whatever took the focus.
+        // A press on the button toggles the popup on release; closing here would reopen it.
         if pointers.pressed_over(refs.button) {
             return;
         }
@@ -819,8 +730,7 @@ fn on_focus_lost(
             commands.entity(root).insert(ComboState::Closed);
             return;
         }
-        // A click in the popup takes the focus off the search box (the list, the empty line
-        // and the card are not where typing goes): it stays open and the box gets it back.
+        // A click inside the popup keeps it open and gives the focus back to the box.
         if over(refs.popup) {
             if focus.get().is_none_or(|focused| focused == refs.list) {
                 focus.set(refs.input, FocusCause::Navigated);
@@ -828,7 +738,6 @@ fn on_focus_lost(
             return;
         }
     }
-    // An outside click may have closed the popup already: the focus still goes back.
     if focus.get().is_none() {
         focus.set(refs.button, FocusCause::Navigated);
     }
@@ -837,7 +746,6 @@ fn on_focus_lost(
     }
 }
 
-/// Gives the focus on to the search box if a click put it on the list.
 fn on_list_focus(
     gained: On<FocusGained>,
     parts: Query<&FilterPart>,
@@ -854,12 +762,8 @@ fn on_list_focus(
     }
 }
 
-/// Closes an open combo when a pointer lifts its primary button, or a finger, outside of it.
-///
-/// Inside, for the pointer that lifted (picking's hover map has an entry for a finger as well
-/// as for the mouse), is the button, which toggles the popup itself, and the popup: the search box and the
-/// zero-results line always, and the list only for a selection of many, so that a pick there
-/// keeps the popup open for the next one.
+/// Closes an open combo on a primary release outside it. The list counts as inside for a
+/// selection of many items.
 fn close_on_outside_click(
     mut inputs: MessageReader<PointerInput>,
     pointers: PopupPointers,
@@ -916,8 +820,6 @@ fn handle_button_mouse_events(
     }
 }
 
-/// Puts the popup of each open combo under its button, as wide as the button at least, kept
-/// inside the window and above the button when it would run off the bottom.
 fn place_open_popups(
     viewport: UiViewport,
     combos: Query<(&ComboState, &FilterComboRefs)>,
@@ -970,9 +872,7 @@ fn place_open_popups(
     }
 }
 
-/// Scrolls the list just far enough to show the active option and its ring, and keeps the
-/// scroll position inside the contents after they shrank. Only the list moves, never a scroll
-/// area around the combo.
+/// Scrolls the list, never a scroll area around the combo, to show the active option.
 fn keep_active_in_view(
     mut combos: Query<(&FilterComboRefs, &ComboState, &mut FilterState)>,
     nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
@@ -1005,8 +905,7 @@ fn keep_active_in_view(
             let list_top = list_size
                 .y
                 .mul_add(-0.5, list_transform.translation.y * scale);
-            // The ring is shown with the row, and so is the list's padding beside the first
-            // and last: both count as part of it (the padding is wider than the ring).
+            // The padding beside the first and last row counts as part of the row.
             let room = POPUP_PADDING.max(FOCUS_RING_REACH);
             let top = row_top - list_top + position - room;
             let bottom = room.mul_add(2.0, top + row_size.y);
@@ -1022,9 +921,6 @@ fn keep_active_in_view(
     }
 }
 
-/// Keeps the button and the search box of each combo in step for assistive technology: both
-/// are combo boxes controlling the list; the box has the query as its value and the active
-/// option as its active descendant.
 fn sync_accessibility(
     combos: Query<(
         Entity,
@@ -1070,7 +966,6 @@ fn sync_accessibility(
     }
 }
 
-/// Sets the label of a node to `name`, or clears it, writing only when it differs.
 fn sync_name(node: &mut Mut<AccessibilityNode>, name: Option<&str>) {
     match name {
         Some(name) => sync_label(node, name),
@@ -1082,8 +977,6 @@ fn sync_name(node: &mut Mut<AccessibilityNode>, name: Option<&str>) {
     }
 }
 
-/// Updates the button label and the list's selection when the selection of a combo (own or
-/// shared), a selected item's text or its placeholder changes.
 fn selection_change(
     changed: Query<Entity, Changed<Selection>>,
     fresh: Query<Entity, Added<FilterComboRefs>>,
@@ -1094,7 +987,6 @@ fn selection_change(
     mut commands: Commands,
 ) {
     for (combo, selection) in &combos {
-        // A renamed selected item changes the button's text.
         let renamed_selected = !renamed.is_empty()
             && selections
                 .get(combo)
@@ -1113,7 +1005,6 @@ fn selection_change(
     }
 }
 
-/// Points the list at the selection of the combo and shows the selected items on the button.
 fn update_selection(
     combo: In<Entity>,
     selections: SelectionParam,
@@ -1153,7 +1044,6 @@ fn update_selection(
     };
 }
 
-/// Draws the ring on the active option and takes it off the one that is not any more.
 fn style_active_options(
     added: Query<Entity, Added<ActiveOption>>,
     active: Query<Entity, With<ActiveOption>>,

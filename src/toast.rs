@@ -11,19 +11,13 @@ use itertools::Either;
 use crate::card::Card;
 use crate::theme::Theme;
 
-/// How long a toast shows by default, in seconds.
 const DEFAULT_DURATION_SECS: f32 = 3.0;
-/// The longest a toast is timed for, in seconds (one day): longer, infinite and
-/// huge durations are capped to it, as `Duration` cannot hold them.
+/// One day: `Duration` cannot hold longer or infinite values, so durations are capped to it.
 const MAX_DURATION_SECS: f32 = 86_400.0;
-/// The widest a toast gets, in pixels; longer text wraps.
 const MAX_WIDTH: f32 = 480.0;
-/// The gap between stacked toasts, in pixels.
 const GAP: f32 = 8.0;
 
-/// Registers the systems and observers of [`Toast`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
+/// Registers the systems of [`Toast`].
 #[derive(Copy, Clone, Debug)]
 pub struct ToastPlugin;
 
@@ -46,13 +40,11 @@ impl Plugin for ToastPlugin {
     }
 }
 
-/// Where the stack of toasts sits: its distance from the bottom edge of the
-/// window, so that the application can keep it above what lies there (a tool
-/// dock, say).
+/// Where the stack of toasts sits, as a distance from the bottom of the window.
 #[derive(Resource, Copy, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Resource)]
 pub struct ToastPlacement {
-    /// The distance between the lowest toast and the bottom of the window.
+    /// The distance from the bottom of the window.
     pub bottom: Val,
 }
 
@@ -62,23 +54,13 @@ impl Default for ToastPlacement {
     }
 }
 
-/// A transient message: a [`Card`] with the text, shown bottom centre in the
-/// window for `duration` seconds and then despawned.
+/// A transient message shown bottom center for `duration` seconds, then despawned.
 ///
-/// Spawn it as a child of the UI root. It moves into the [`ToastStack`] that is
-/// a child of its own parent (made there if it has none, so each root has its
-/// own), where several at once stack upwards with the newest at the bottom; a
-/// new toast with the same text restarts the timer of the one showing in that
-/// stack instead of stacking. A toast with no parent has no stack to join: an
-/// `error!` is logged and it is despawned. It never takes the pointer and is no tab stop. For a screen
-/// reader it is a status (a polite live region) with the text.
+/// Spawn it as a child of the UI root: it moves into that parent's [`ToastStack`], and a toast
+/// with the same text restarts the one showing. Without a parent it is logged and despawned.
 ///
-/// Insert a new `Toast` on a live entity to change its text or duration: the text and the
-/// accessibility label follow and the timer restarts with the new duration, but the toast keeps
-/// its entity and its place in the stack. Empty text keeps the card and its normal lifetime.
-///
-/// The component is immutable: build or clone a value, edit it outside the world and insert it
-/// again to update a live widget. It cannot be queried mutably:
+/// Insert a new `Toast` on a live entity to change it. The component is immutable, so it cannot
+/// be queried mutably:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -107,9 +89,7 @@ impl Default for ToastPlacement {
 pub struct Toast {
     /// The message.
     pub text: String,
-    /// How long it shows, in seconds. Zero, a negative value and NaN all mean
-    /// zero: the toast goes after its first tick. A value above one day,
-    /// infinity included, is capped to one day (86,400 s).
+    /// How long it shows, in seconds. Negative and NaN mean zero; above one day is capped.
     pub duration: f32,
 }
 
@@ -122,9 +102,7 @@ impl Toast {
         }
     }
 
-    /// The same toast shown for `seconds`. Zero, a negative value and NaN mean
-    /// zero (it goes after its first tick); a value above one day, infinity
-    /// included, is capped to one day (86,400 s). Nothing here panics.
+    /// The same toast shown for `seconds`, see [`Toast::duration`].
     #[must_use]
     pub const fn with_duration(mut self, seconds: f32) -> Self {
         self.duration = seconds;
@@ -151,9 +129,7 @@ impl Toast {
     }
 }
 
-/// The column the [`Toast`]s of a window are stacked in, bottom centre, created
-/// by the first toast as a child of its parent. Its [`Node::bottom`] follows
-/// [`ToastPlacement`].
+/// The column the [`Toast`]s of a window are stacked in.
 #[derive(Component, Copy, Clone, Debug, Default, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -172,14 +148,11 @@ impl Toast {
 )]
 pub struct ToastStack;
 
-/// Time left on a [`Toast`]; the toast is despawned when it runs out.
 #[derive(Component, Clone, Debug, Default, Reflect)]
 #[reflect(Component)]
 struct ToastTimer(Timer);
 
 impl ToastTimer {
-    /// The timer for a [`Toast::duration`]: NaN and negative values become 0,
-    /// anything above [`MAX_DURATION_SECS`] (infinity too) is capped to it.
     fn for_duration(seconds: f32) -> Self {
         let seconds = if seconds.is_nan() {
             0.0
@@ -190,20 +163,14 @@ impl ToastTimer {
     }
 }
 
-/// A [`Toast`] that has moved into its [`ToastStack`].
 #[derive(Component, Copy, Clone, Debug, Reflect)]
 #[reflect(Component)]
 struct ToastShown;
 
-/// Whether a toast has not moved into its stack yet: `place_toasts` runs only then, so a frame
-/// without a fresh toast builds nothing and looks at no stack.
 fn any_fresh_toast(fresh: Query<(), (With<Toast>, Without<ToastShown>)>) -> bool {
     !fresh.is_empty()
 }
 
-/// Whether [`ToastPlacement`] changed or a stack was added since the last look: a new stack gets
-/// the placement even when it did not change (a stack made late, under a root spawned after the
-/// first toast).
 fn placement_needs_applying(
     placement: Res<ToastPlacement>,
     added: Query<(), Added<ToastStack>>,
@@ -211,22 +178,16 @@ fn placement_needs_applying(
     placement.is_changed() || !added.is_empty()
 }
 
-/// Moves new toasts into the stack of their own parent, creating it when the
-/// parent has none, and drops one whose text is already showing in that stack,
-/// restarting the timer of that one instead. A toast with no parent is logged
-/// and despawned: it has no stack to join and nowhere to make one.
 fn place_toasts(
     mut commands: Commands,
     stacks: Query<(Entity, &ChildOf), With<ToastStack>>,
     mut fresh: Query<(Entity, &Toast, &mut ToastTimer, Option<&ChildOf>), Without<ToastShown>>,
     mut shown: Query<(&ChildOf, &Toast, &mut ToastTimer), With<ToastShown>>,
 ) {
-    // parent -> stack: the existing stacks and those made this run.
     let mut known: HashMap<Entity, Entity> = stacks
         .iter()
         .map(|(stack, parent)| (parent.parent(), stack))
         .collect();
-    // Toasts kept this run: (stack, text, entity), so a later duplicate can restart them.
     let mut kept: Vec<(Entity, String, Entity)> = Vec::new();
     for (entity, toast, mut timer, parent) in &mut fresh {
         let Some(parent) = parent.map(ChildOf::parent) else {
@@ -252,7 +213,6 @@ fn place_toasts(
             .iter()
             .find(|(s, text, _)| *s == target && *text == toast.text)
         {
-            // Same as an already shown duplicate: the later duration restarts the kept toast.
             commands
                 .entity(*first)
                 .insert(ToastTimer::for_duration(toast.duration));
@@ -267,7 +227,6 @@ fn place_toasts(
     }
 }
 
-/// Keeps the stack at the distance from the bottom that [`ToastPlacement`] says.
 fn place_stack(placement: Res<ToastPlacement>, mut stacks: Query<&mut Node, With<ToastStack>>) {
     for mut node in &mut stacks {
         if node.bottom != placement.bottom {
@@ -276,7 +235,6 @@ fn place_stack(placement: Res<ToastPlacement>, mut stacks: Query<&mut Node, With
     }
 }
 
-/// Counts the toasts down and despawns those that ran out.
 fn tick_toasts(
     mut commands: Commands,
     time: Res<Time>,

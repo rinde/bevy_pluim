@@ -1,9 +1,5 @@
-//! What `Combo` and `ColorPaletteCombo` share: the button's colours, the side effects of
-//! opening and closing the popup, the outside-click rule and the button's accessibility node.
-//!
-//! The two widgets differ in where their parts live (`ComboRefs` against `SubRefs`), in what
-//! the popup is (a list, or a palette inside a float) and in when a click inside the popup
-//! keeps it open; each passes those as arguments.
+//! What `Combo` and `ColorPaletteCombo` share: button look, popup open/close effects, outside
+//! click rule and accessibility node.
 
 #![expect(
     clippy::redundant_pub_crate,
@@ -27,24 +23,16 @@ use crate::focus::{Unreachable, clear_label, sync_controls, sync_role, sync_valu
 use crate::scroll_area::{PopupScrollBar, TouchPans};
 use crate::theme::Theme;
 
-/// How a combo's button is coloured.
+/// How a combo's button is colored.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum ButtonLook {
-    /// `background_primary` and `border`: the button at rest.
     Resting,
-    /// `background_secondary` and `border_highlight`: hovered, pressed or open.
     Highlighted,
 }
 
 /// The look the button takes for a pointer event, or `None` to leave it as it is.
 ///
-/// A drag says nothing new about the pointer being on the button, and can arrive after the
-/// pointer left it, so it does not restyle it. A release or a click on a closed combo does
-/// not either. An open combo stays highlighted whatever the pointer does.
-///
-/// `hovered` is `MouseEvent::hovered`: a finger never hovers, so its `Over` changes nothing,
-/// its press shows the highlight while it is down, and its release or cancel puts the button
-/// back at rest.
+/// `hovered` is `MouseEvent::hovered`, false for a finger.
 pub(crate) const fn button_look(kind: MouseKind, hovered: bool, open: bool) -> Option<ButtonLook> {
     match (kind, open) {
         (MouseKind::Drag, _) => None,
@@ -67,7 +55,6 @@ pub(crate) const fn button_look(kind: MouseKind, hovered: bool, open: bool) -> O
     }
 }
 
-/// Colours the button for `look`.
 pub(crate) fn apply_look(
     look: ButtonLook,
     theme: &Theme,
@@ -86,8 +73,7 @@ pub(crate) fn apply_look(
     }
 }
 
-/// The pointers that lifted their primary button (the left mouse button, a finger) since the
-/// system last looked. Reading the messages takes them, so call it once per run.
+/// The pointers that lifted their primary button since the last call. Call it once per run.
 pub(crate) fn primary_releases(inputs: &mut MessageReader<PointerInput>) -> Vec<PointerId> {
     inputs
         .read()
@@ -96,11 +82,7 @@ pub(crate) fn primary_releases(inputs: &mut MessageReader<PointerInput>) -> Vec<
         .collect()
 }
 
-/// Where the pointers are, whatever their kind: the hover map of picking, which has an entry
-/// for a finger as well as for the mouse, where picking's `Hovered` follows the mouse only.
-///
-/// A node is under a pointer when it, or a descendant of it, is among the entities that
-/// pointer hits, which is what `Hovered` says for the mouse.
+/// Where the pointers are, fingers included, read from the hover map.
 #[derive(SystemParam)]
 pub(crate) struct PopupPointers<'w, 's> {
     hover_map: Res<'w, HoverMap>,
@@ -112,15 +94,12 @@ pub(crate) struct PopupPointers<'w, 's> {
 }
 
 impl PopupPointers<'_, '_> {
-    /// Whether the finger's last press was a pan of a scroll area: its lift is not a tap, so
-    /// it closes nothing.
+    /// Whether the finger's last press was a scroll pan.
     pub(crate) fn panned(&self, pointer: PointerId) -> bool {
         self.pans.panned(pointer)
     }
 
-    /// Whether `test` holds for a hit of `pointer` or one of its ancestors. `None` asks about
-    /// every pointer that is there now. A finger that just lifted is gone from the hover
-    /// map, and is looked up where it was a frame before.
+    /// A finger that just lifted is gone from the hover map: look it up in the previous one.
     fn hit(&self, pointer: Option<PointerId>, test: impl Fn(Entity) -> bool) -> bool {
         let under = |hits: &EntityHashMap<HitData>| {
             hits.keys()
@@ -137,20 +116,16 @@ impl PopupPointers<'_, '_> {
         )
     }
 
-    /// Whether `pointer` (any pointer for `None`) is on `entity`.
     pub(crate) fn over(&self, pointer: Option<PointerId>, entity: Entity) -> bool {
         self.hit(pointer, |hit| hit == entity)
     }
 
-    /// Whether `pointer` (any pointer for `None`) is on the scroll bar of `list`, which counts
-    /// as inside its popup.
     pub(crate) fn over_scroll_bar(&self, pointer: Option<PointerId>, list: Entity) -> bool {
         self.hit(pointer, |hit| {
             self.bars.get(hit).is_ok_and(|bar| bar.list() == list)
         })
     }
 
-    /// Whether a pointer that has its primary button or finger down is on `entity`.
     pub(crate) fn pressed_over(&self, entity: Entity) -> bool {
         self.pressing
             .iter()
@@ -158,12 +133,7 @@ impl PopupPointers<'_, '_> {
     }
 }
 
-/// Whether a release of the primary button closes the popup: it is open and the pointer is on
-/// neither the button nor the part of the popup that counts as inside, for the pointer that
-/// lifted, a mouse or a finger.
-///
-/// What counts as inside differs: a `Combo`'s list only for a selection of many items, a
-/// `ColorPaletteCombo`'s float always.
+/// Whether a primary release closes the popup.
 pub(crate) const fn closes_on_outside_release(
     open: bool,
     over_button: bool,
@@ -172,17 +142,13 @@ pub(crate) const fn closes_on_outside_release(
     open && !over_button && !over_inside_of_popup
 }
 
-/// Shows or hides the popup and makes the popup's focus target a tab stop only while open.
-///
-/// `popup` is the part that takes the focus (a combo's list, a palette combo's palette),
-/// `visible_part` the part whose visibility changes (the same list, or the palette's float).
+/// Shows or hides `visible_part`; `popup` is a tab stop only while open.
 pub(crate) fn show_popup(commands: &mut Commands, open: bool, popup: Entity, visible_part: Entity) {
     commands.entity(visible_part).insert(if open {
         Visibility::Visible
     } else {
         Visibility::Hidden
     });
-    // A closed popup is not a tab stop.
     if open {
         commands.entity(popup).remove::<Unreachable>();
     } else {
@@ -190,8 +156,7 @@ pub(crate) fn show_popup(commands: &mut Commands, open: bool, popup: Entity, vis
     }
 }
 
-/// Moves the focus into the popup when it opens and back to the button when it closes with
-/// the focus still on the popup, so it never stays on something hidden.
+/// Moves the focus into the popup on open and back to the button on close.
 pub(crate) fn move_focus(focus: &mut InputFocus, open: bool, popup: Entity, button: Entity) {
     if open {
         focus.set(popup, FocusCause::Navigated);
@@ -200,12 +165,10 @@ pub(crate) fn move_focus(focus: &mut InputFocus, open: bool, popup: Entity, butt
     }
 }
 
-/// Says on the button's node whether the popup is open.
 pub(crate) fn set_expanded(node: &mut AccessibilityNode, open: bool) {
     node.set_expanded(open);
 }
 
-/// Makes the button's node a combo box with `value`, controlling `popup`, without a label.
 pub(crate) fn sync_combo_box(node: &mut Mut<AccessibilityNode>, value: &str, popup: Entity) {
     sync_role(node, Role::ComboBox);
     clear_label(node);

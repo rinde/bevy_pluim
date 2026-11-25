@@ -9,22 +9,17 @@ use crate::float::{Float, UiViewport};
 use crate::theme::Theme;
 use crate::{DRAG_THRESHOLD, HoverLock, MouseEvent, MouseKind};
 
-/// How long the pointer must rest on a [`Tooltip`] node before the popup shows, in seconds.
+/// Seconds the pointer must rest on a [`Tooltip`] node before the popup shows.
 pub const TOOLTIP_DELAY_SECS: f32 = 0.5;
 
-/// The distance from the window edge the popup keeps, in logical pixels.
 const MARGIN: f32 = 6.0;
-/// The gap between the node and its popup, in logical pixels.
 const GAP: f32 = 6.0;
 
-/// Marks an entity whose [`Tooltip`] a widget added, holding the text it gave it, so that the
-/// widget replaces or removes only that one: a [`Tooltip`] with other text is the app's.
+/// Marks a [`Tooltip`] a widget added, holding its text; a tooltip with other text is the app's.
 #[derive(Component, Debug, Clone)]
 pub(crate) struct OwnedTooltip(pub String);
 
 /// Registers the systems and observers of [`Tooltip`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct TooltipPlugin;
 
@@ -45,29 +40,11 @@ impl Plugin for TooltipPlugin {
     }
 }
 
-/// A short text shown in a popup below the node after the pointer has rested on it for
-/// [`TOOLTIP_DELAY_SECS`]. A finger that is held on the node for as long, without moving, shows
-/// it too (see below).
+/// A short text shown in a popup after the pointer rests on the node for [`TOOLTIP_DELAY_SECS`],
+/// or a finger is held on it that long without moving.
 ///
-/// The popup is a [`Float`] child of the node, placed in the viewport below the node and kept
-/// inside the window, and goes above it when it would run off the bottom. It hides when the
-/// pointer leaves the node or presses it (and does not come back until the pointer has left
-/// and returned), and it never takes the pointer. An
-/// [`IconButton`](crate::icon_button::IconButton) has one with its name, and so has the button
-/// of an underlined [`Toolbar`](crate::toolbar::Toolbar), whose labels are hidden.
-///
-/// A finger held on the node (or a descendant) for [`TOOLTIP_DELAY_SECS`] without moving past a
-/// few pixels shows the popup above the node when there is room (the finger covers what is
-/// below), else below it. The popup goes when the finger lifts or the touch is cancelled. A long
-/// press that showed one does not press the widget: its pressed look ends when the popup shows
-/// and the lift activates nothing (no [`Activate`](bevy::ui_widgets::Activate), pick or value
-/// change). A finger that moves before the delay, or a short tap, shows none. Only the first
-/// finger counts.
-///
-/// A `Tooltip` with empty text shows no popup (an empty bordered box would say nothing); a popup
-/// that is showing goes when the text is changed to empty.
-///
-/// Insert a `Tooltip` again to change the text.
+/// A long press cancels the press: the lift activates nothing. Empty text shows no popup. Insert
+/// a `Tooltip` again to change the text.
 #[derive(Component, Clone, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[require(Hovered, TooltipClock)]
@@ -83,38 +60,28 @@ impl Tooltip {
     }
 }
 
-/// How long the pointer has rested on a [`Tooltip`] node.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 struct TooltipClock {
-    /// Seconds the pointer has been on the node without being pressed.
     elapsed: f32,
-    /// Set by a press: no popup until the pointer has left.
     suppressed: bool,
-    /// The finger that is down on the node, if any.
     touch: Option<TouchPress>,
 }
 
-/// A finger that went down on a [`Tooltip`] node and has not moved past the drag threshold.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TouchPress {
-    /// The finger; the first one wins, others are ignored.
     pointer: PointerId,
-    /// The entity the finger went down on: the node or one of its descendants.
     target: Entity,
-    /// Seconds the finger has been down without moving.
     elapsed: f32,
 }
 
-/// Marks a [`Tooltip`] node that `update_tooltips` must visit: the pointer is on it, or it has
-/// state to wind down. Idle tooltips have none, so a quiet frame visits nothing.
+/// Marks a [`Tooltip`] node `update_tooltips` must visit, so a quiet frame visits none.
 #[derive(Component, Clone, Copy, Debug)]
 struct TooltipActive;
 
-/// The popup of a [`Tooltip`] node that is showing.
+/// The popup of a [`Tooltip`] node.
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct TooltipPopup {
-    /// The node the popup belongs to.
     owner: Entity,
 }
 
@@ -126,15 +93,13 @@ impl TooltipPopup {
     }
 }
 
-/// The text of a popup.
 #[derive(Component, Clone, Copy, Debug)]
 struct TooltipText;
 
-/// Marks the popup of a long press: it is placed above the node when there is room.
+/// Marks the popup of a long press.
 #[derive(Component, Clone, Copy, Debug)]
 struct TouchPopup;
 
-/// The popup of a node, set while it shows.
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 struct TooltipRef(Entity);
 
@@ -155,7 +120,6 @@ fn text_font(theme: &Theme) -> TextFont {
     }
 }
 
-/// Marks the tooltip nodes the pointer has come onto, when `Hovered` or the `Tooltip` changes.
 fn track_active_tooltips(
     changed: Query<
         (Entity, &Hovered),
@@ -174,8 +138,6 @@ fn track_active_tooltips(
     }
 }
 
-/// Follows a finger on a [`Tooltip`] node: a press starts counting, a move past the drag
-/// threshold before the popup shows, a lift, a cancel or the finger leaving ends it.
 fn track_touch(
     t: On<MouseEvent>,
     parents: Query<&ChildOf>,
@@ -255,7 +217,6 @@ fn update_tooltips(
                 clock.suppressed = false;
             }
         } else if locked {
-            // A scrub drag holds the pointer: no tooltip shows or starts counting.
             clock.elapsed = 0.0;
         } else if pressed {
             clock.suppressed = true;
@@ -264,7 +225,6 @@ fn update_tooltips(
             clock.elapsed += time.delta_secs();
         }
         if let Some(touch) = clock.touch.as_mut() {
-            // A scrub drag holds the pointer: no touch tooltip shows or counts either.
             touch.elapsed = if locked {
                 0.0
             } else {
@@ -288,7 +248,6 @@ fn update_tooltips(
                 }
             }
             (true, Some(TooltipRef(popup))) => {
-                // Follow a changed text.
                 if let Ok(children) = popups.get(*popup) {
                     for child in children {
                         if let Ok(mut text) = popup_texts.get_mut(*child)
@@ -306,15 +265,12 @@ fn update_tooltips(
             (false, None) => {}
         }
         if !hovered.get() && clock.touch.is_none() && !wanted && popup.is_none() {
-            // Nothing left to wind down: stop visiting until the pointer returns.
             commands.entity(entity).remove::<TooltipActive>();
         }
     }
 }
 
-/// Ends the press a long press began, from the node it went down on up to the tooltip node: the
-/// buttons among them lose `Pressed`, so the lift fires no `Activate` (Bevy's button needs it),
-/// and a `Cancel` restores the resting look as a cancelled touch does (hover is false for it).
+/// Removes `Pressed` from the pressed node up to the tooltip node, so the lift fires no `Activate`.
 fn end_press(commands: &mut Commands, parents: &Query<&ChildOf>, touch: TouchPress, node: Entity) {
     let mut entity = touch.target;
     loop {
@@ -324,8 +280,7 @@ fn end_press(commands: &mut Commands, parents: &Query<&ChildOf>, touch: TouchPre
             kind: MouseKind::Cancel,
             distance: Vec2::ZERO,
             button: None,
-            // Not marked as a finger's, so `track_touch` does not take it for the finger
-            // going away: the popup stays until the finger lifts.
+            // Not a touch event, or `track_touch` would end the popup.
             touch: false,
             pointer: PointerId::Mouse,
         });
@@ -348,7 +303,6 @@ fn spawn_popup(commands: &mut Commands, theme: &Theme, owner: Entity, text: &str
             popup_node(theme),
             BackgroundColor(theme.colors().card_surface),
             BorderColor::all(theme.colors().border),
-            // Hidden until `place_popups` has the laid-out size to place it with.
             Visibility::Hidden,
             Pickable::IGNORE,
             ChildOf(owner),
@@ -370,23 +324,17 @@ fn despawn_popup_with_owner(
     refs: Query<&TooltipRef>,
     mut commands: Commands,
 ) {
-    // The popup is a child of the node, so it goes with a despawned node by itself.
     let node = t.event().event_target();
     if let Ok(TooltipRef(popup)) = refs.get(node) {
         commands.entity(*popup).try_despawn();
     }
-    // `update_tooltips` only visits nodes with a `Tooltip`, so a ref left behind would stay stale
-    // and stop the popup showing once a `Tooltip` is inserted again. (A despawning node ignores
-    // these.)
+    // A stale ref would stop the popup showing once a `Tooltip` is inserted again.
     commands
         .entity(node)
         .try_remove::<(TooltipRef, TooltipActive)>()
         .try_insert(TooltipClock::default());
 }
 
-/// Puts each popup centred under its node, inside the window, or above the node when it would
-/// run off the bottom, and shows it. Needs the popup's laid-out size, so it shows one frame
-/// after it is spawned.
 fn place_popups(
     viewport: UiViewport,
     mut popups: Query<(
@@ -408,7 +356,6 @@ fn place_popups(
         if popup_size == Vec2::ZERO {
             continue;
         }
-        // `UiGlobalTransform` holds the centre of the node.
         let center = owner_transform.translation * scale;
         let mut left = center.x - popup_size.x / 2.0;
         let below = center.y + owner_size.y / 2.0 + GAP;
@@ -418,9 +365,6 @@ fn place_popups(
             left = left.min(target.x - MARGIN - popup_size.x).max(MARGIN);
         }
         let fits_below = target.is_none_or(|t| below + popup_size.y + MARGIN <= t.y);
-        // A finger covers what is below the node, so a touch popup goes above it when there is
-        // room; any popup goes above when it would run off the bottom, but never above the
-        // window's margin, whatever room there is.
         let top = if touch && above >= MARGIN {
             above
         } else if fits_below {
@@ -436,7 +380,6 @@ fn place_popups(
     }
 }
 
-/// Restyles the popups that are showing after a theme change.
 fn restyle_popups(
     theme: Res<Theme>,
     mut popups: Query<
@@ -522,9 +465,7 @@ mod tests {
         assert_eq!(active(&mut app), 0, "the marker outlives the pointer");
     }
 
-    /// A tooltip nobody is on is never visited. Its clock is given a value that `update_tooltips`
-    /// would reset (an unhovered node's clock is always the default), so a visit shows as a
-    /// changed value and as a write.
+    /// The stale clock would be reset by a visit, so a visit shows as a write.
     #[test]
     fn an_unmarked_tooltip_is_not_visited_in_a_quiet_frame() {
         let mut app = app();
