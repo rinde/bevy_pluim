@@ -33,7 +33,7 @@ impl Plugin for SliderPlugin {
                 Update,
                 (
                     restyle_sliders,
-                    end_cancelled_presses.run_if(a_touch_was_cancelled),
+                    end_canceled_presses.run_if(a_touch_was_canceled),
                     (|| None::<Entity>)
                         .pipe(theme_sliders)
                         .run_if(resource_changed::<Theme>),
@@ -632,13 +632,13 @@ fn on_value_change(
     }
 }
 
-fn a_touch_was_cancelled(touches: Option<Res<Touches>>) -> bool {
+fn a_touch_was_canceled(touches: Option<Res<Touches>>) -> bool {
     touches.is_some_and(|touches| touches.iter_just_canceled().next().is_some())
 }
 
 /// Bevy's headless slider ends a press on a release only: a canceled touch must let go of every
 /// held slider.
-fn end_cancelled_presses(
+fn end_canceled_presses(
     mut sliders: Query<(Entity, &mut SliderDragState, Has<Pressed>), With<HeadlessSlider>>,
     mut commands: Commands,
 ) {

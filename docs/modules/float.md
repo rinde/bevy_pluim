@@ -2,7 +2,7 @@
 
 `Float`: the viewport-placed popup layer, and the helpers that keep popups inside the window.
 
-Read this before changing `src/float.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/float.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [popups](../design/popups.md).
 

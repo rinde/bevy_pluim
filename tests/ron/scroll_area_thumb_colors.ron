@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "the scroll thumb shows rest, hover and press colours and keeps them across a theme change",
+    name: "the scroll thumb shows rest, hover and press colors and keeps them across a theme change",
     setup: App(ScrollAreas),
     steps: [
         Wait(2),

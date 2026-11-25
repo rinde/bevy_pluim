@@ -76,7 +76,7 @@ and a Bevy `trace`/Tracy build for per-system time.
 | `indicators-animating` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, so its indicator slides (#677) |
 | `indicators-removed` | 500 `SegmentedControl`s | one `SegmentIndicator` despawned per frame, made again by `spawn` (#677) |
 | `segmented-controls-selection-changing` | 500 `SegmentedControl`s | one control's selection re-inserted per frame, the others unrelated (#709) |
-| `palette-combos-idle` | 50 | closed `ColorPaletteCombo`s over the 242 Tailwind colours, nothing changing (#680) |
+| `palette-combos-idle` | 50 | closed `ColorPaletteCombo`s over the 242 Tailwind colors, nothing changing (#680) |
 | `theme-editors-idle` | 1 | `ThemeEditor`s with every popup closed, nothing changing (#680) |
 | `galleries-idle` | 500 `Gallery`s of 3 cards | idle frames of independent galleries (#661) |
 | `filter-chips-editing`, `toolbar-editing`, `gallery-editing` | 200 items | one widget; every frame an item is removed or inserted in the middle (#690) |
@@ -794,7 +794,7 @@ Two changes, measured with `--frames 15` (release build; columns: mean frame tim
 microseconds, entities at the end, memory in MiB).
 
 - **One entity fewer per row.** A default row had a view, a label and an observer entity (from
-  `view.observe(handle_mouse_events)`). The hover and press colours are now handled by one
+  `view.observe(handle_mouse_events)`). The hover and press colors are now handled by one
   global observer, which acts only on views carrying the private `DefaultRow` marker, so a
   palette swatch (its own observer) and a custom view (`handle_custom_view_mouse_events`) are
   untouched. A row is a view and a label (a note child exists only with an `ItemNote`). Dropping

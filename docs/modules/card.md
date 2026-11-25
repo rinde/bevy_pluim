@@ -2,7 +2,7 @@
 
 `Card`: themed background, border, radius and shadow; the smallest theming example.
 
-Read this before changing `src/card.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/card.rs`. When the module's behavior changes, update this file in the same PR.
 
 ## Details
 

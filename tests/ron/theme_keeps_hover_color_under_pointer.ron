@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a button under the pointer keeps its hover colour when the theme changes",
+    name: "a button under the pointer keeps its hover color when the theme changes",
     setup: App(Themed),
     steps: [
         Wait(2),

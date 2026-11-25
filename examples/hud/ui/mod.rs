@@ -623,7 +623,7 @@ fn fill_panels(
             }
             PanelKind::Preferences => {
                 let rows = [
-                    (Pref::Appearance, "Appearance", "Dark or light colours"),
+                    (Pref::Appearance, "Appearance", "Dark or light colors"),
                     (
                         Pref::WarningsButton,
                         "Warnings button",

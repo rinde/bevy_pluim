@@ -2,7 +2,7 @@
 
 Scroll areas: focus-ring room, natural content size, the wheel, a finger's pan and scroll-into-view.
 
-When the behaviour described here changes, update this file in the same PR.
+When the behavior described here changes, update this file in the same PR.
 
 ## A scroll area leaves room for a focus ring
 

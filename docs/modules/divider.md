@@ -2,7 +2,7 @@
 
 `Divider`: a 1 px horizontal or vertical rule.
 
-Read this before changing `src/divider.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/divider.rs`. When the module's behavior changes, update this file in the same PR.
 
 ## Details
 

@@ -336,20 +336,20 @@ fn box_distance(p: Vec2, half: Vec2) -> f32 {
 
 /// The signed distance of a point of the icon to the shape: negative inside.
 fn shape_distance(icon: Glyph, p: Vec2) -> f32 {
-    let centre = Vec2::splat(ICON_SIZE as f32 / 2.0);
+    let center = Vec2::splat(ICON_SIZE as f32 / 2.0);
     match icon {
         Glyph::Sun => {
-            let disc = p.distance(centre) - 3.2;
+            let disc = p.distance(center) - 3.2;
             (0..8).fold(disc, |d, i| {
                 let direction = Vec2::from_angle(i as f32 * std::f32::consts::FRAC_PI_4);
                 let ray =
-                    segment_distance(p, centre + direction * 5.2, centre + direction * 7.0) - 0.7;
+                    segment_distance(p, center + direction * 5.2, center + direction * 7.0) - 0.7;
                 d.min(ray)
             })
         }
         Glyph::Moon => {
-            let disc = p.distance(centre) - 6.0;
-            let bite = p.distance(centre + Vec2::new(3.2, -2.6)) - 5.0;
+            let disc = p.distance(center) - 6.0;
+            let bite = p.distance(center + Vec2::new(3.2, -2.6)) - 5.0;
             disc.max(-bite)
         }
         Glyph::Computer => {
@@ -452,7 +452,7 @@ fn theme_toggles(
     }
 
     let preference = preference.map(|p| *p);
-    let mut colours = Vec::new();
+    let mut colors = Vec::new();
     for (option_id, child_of, option, hovered, mut node, mut background) in &mut options {
         if toggle_id.0.is_some_and(|id| id != child_of.parent()) {
             continue;
@@ -469,7 +469,7 @@ fn theme_toggles(
         styled.border_radius = BorderRadius::all(theme.control_radius);
         node.set_if_neq(styled);
         background.set_if_neq(BackgroundColor(Color::NONE));
-        colours.push((
+        colors.push((
             option_id,
             segment_colors(theme.colors(), is_selected, hovered.get()).1,
         ));
@@ -486,12 +486,12 @@ fn theme_toggles(
     }
 
     for (child_of, mut image) in &mut icons {
-        if let Some((_, ink)) = colours.iter().find(|(id, _)| *id == child_of.parent()) {
+        if let Some((_, ink)) = colors.iter().find(|(id, _)| *id == child_of.parent()) {
             image.color = *ink;
         }
     }
     for (child_of, mut text_color, mut text_font) in &mut labels {
-        let Some((_, ink)) = colours.iter().find(|(id, _)| *id == child_of.parent()) else {
+        let Some((_, ink)) = colors.iter().find(|(id, _)| *id == child_of.parent()) else {
             continue;
         };
         text_color.set_if_neq(TextColor(*ink));

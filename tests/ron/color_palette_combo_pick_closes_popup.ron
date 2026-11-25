@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "clicking a swatch closes the popup, even the selected colour",
+    name: "clicking a swatch closes the popup, even the selected color",
     setup: App(ColorPalette),
     steps: [
         Wait(2),

@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a segment's icon follows the colour of its text in both themes",
+    name: "a segment's icon follows the color of its text in both themes",
     setup: App(SegmentedControls),
     steps: [
         Wait(2),

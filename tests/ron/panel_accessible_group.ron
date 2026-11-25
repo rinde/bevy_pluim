@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a panel is a group labelled with its title",
+    name: "a panel is a group labeled with its title",
     setup: App(Panel),
     steps: [
         Wait(2),

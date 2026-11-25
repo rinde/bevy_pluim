@@ -2,7 +2,7 @@
 
 `NumericStepper` and its validated `Value`: - / + buttons, arrow keys, drag to scrub, click or F2 to type.
 
-Read this before changing `src/numeric_stepper.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/numeric_stepper.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [keyboard focus and navigation](../design/keyboard-focus.md), [pointer, touch and buttons](../design/pointer-and-buttons.md).
 

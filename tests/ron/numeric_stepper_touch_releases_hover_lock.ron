@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a lift or a cancelled touch ends a numeric stepper scrub and its hover lock",
+    name: "a lift or a canceled touch ends a numeric stepper scrub and its hover lock",
     setup: App(NumericStepper),
     steps: [
         Wait(2),

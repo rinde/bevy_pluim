@@ -8,7 +8,7 @@ fixed.
 ## What this is
 
 A reusable Bevy UI widget library built on Bevy's native `Node` UI: buttons,
-lists, combos, scroll areas, tabs, breadcrumbs, colour palettes, a slider and a
+lists, combos, scroll areas, tabs, breadcrumbs, color palettes, a slider and a
 numeric stepper, all themed from one `Theme` resource. It is used by nopjes,
 but it is a library in its own right.
 
@@ -25,7 +25,7 @@ widget, not here.
    `docs/modules/<module>.md` and a sibling widget before adding anything;
    match what is already there.
 3. **Small, verifiable changes.** One PR does one thing.
-4. **Docs stay in sync.** When behaviour changes, update the doc of the
+4. **Docs stay in sync.** When behavior changes, update the doc of the
    module you changed (`docs/modules/<module>.md`, or the `docs/design/`,
    testing or examples doc it concerns) in the same PR. Change this file only
    when a module, doc, convention or command is added, removed or changes; it
@@ -52,7 +52,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 
 | Read | When |
 | --- | --- |
-| `docs/modules/<module>.md` | before changing `src/<module>.rs`: its behaviour, edge cases, tests and bench workloads |
+| `docs/modules/<module>.md` | before changing `src/<module>.rs`: its behavior, edge cases, tests and bench workloads |
 | [`docs/design/pointer-and-buttons.md`](docs/design/pointer-and-buttons.md) | pointer and touch input, `MouseEvent`, `Hovered`, `UiRoot`, how buttons activate |
 | [`docs/design/keyboard-focus.md`](docs/design/keyboard-focus.md) | tab stops, the focus ring, arrow keys in composite widgets, directional navigation, hidden nodes |
 | [`docs/design/lists-and-selection.md`](docs/design/lists-and-selection.md) | `ListBox` and `Selection`, custom item views, shared selections and items |
@@ -69,8 +69,8 @@ which doc to open, and each doc links on to the design notes it relies on.
 
 - [`lib.rs`](docs/modules/lib.md): `WidgetsPlugin` (the one plugin an app adds), `UiRoot`, and the crate-private `MouseEvent` every widget reacts to.
 - [`theme.rs`](docs/modules/theme.md): `Theme`: the light and dark `ThemeColors`, fonts, rem type scale, radii and shadows, with the WCAG contrast guard.
-- [`theme_editor.rs`](docs/modules/theme_editor.md): `ThemeEditor`: a card that edits the `Theme` in use, every colour slot and number, while the widgets follow.
-- [`tailwind.rs`](docs/modules/tailwind.md): The 242 Tailwind colours and `color_name`, for colour pickers and accessible names.
+- [`theme_editor.rs`](docs/modules/theme_editor.md): `ThemeEditor`: a card that edits the `Theme` in use, every color slot and number, while the widgets follow.
+- [`tailwind.rs`](docs/modules/tailwind.md): The 242 Tailwind colors and `color_name`, for color pickers and accessible names.
 - [`focus.rs`](docs/modules/focus.md): Crate-private keyboard focus: tab stops, roving groups, the focus ring, hidden-state tracking and the accessibility sync helpers.
 - [`glyph_images.rs`](docs/modules/glyph_images.md): Crate-private per-app cache of the images the library draws (chevron, minus, plus, sun, computer, moon).
 
@@ -96,7 +96,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 - [`push_button.rs`](docs/modules/push_button.md): `PushButton`: a label and optional icon; the reference widget to copy.
 - [`icon_button.rs`](docs/modules/icon_button.md): `IconButton`: an icon-only button with sizes, tones and an optional toggle state.
 - [`link.rs`](docs/modules/link.md): `Link`: clickable text, a button with `Role::Link`.
-- [`color_push_button.rs`](docs/modules/color_push_button.md): `ColorPushButton`: a button showing a colour square.
+- [`color_push_button.rs`](docs/modules/color_push_button.md): `ColorPushButton`: a button showing a color square.
 - [`numeric_stepper.rs`](docs/modules/numeric_stepper.md): `NumericStepper` and its validated `Value`: - / + buttons, arrow keys, drag to scrub, click or F2 to type.
 - [`slider.rs`](docs/modules/slider.md): `Slider`: a themed horizontal range control over Bevy's headless slider.
 - [`text_field.rs`](docs/modules/text_field.md): `TextField`: a single-line text input with change and commit events.
@@ -110,7 +110,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 - [`filter_chips.rs`](docs/modules/filter_chips.md): `FilterChips`: a wrapping row of pill chips that picks one `Item<Chip>`.
 - [`gallery.rs`](docs/modules/gallery.md): `Gallery`: grouped picture cards that pick one item.
 - [`toolbar.rs`](docs/modules/toolbar.md): `Toolbar`: a row of tool buttons over `Item<Tool>`, filled or underlined.
-- [`color_palette.rs`](docs/modules/color_palette.md): `ColorPalette`: a grid of colour swatches over a selection of `Item<Color>`.
+- [`color_palette.rs`](docs/modules/color_palette.md): `ColorPalette`: a grid of color swatches over a selection of `Item<Color>`.
 - [`color_palette_combo.rs`](docs/modules/color_palette_combo.md): `ColorPaletteCombo`: a `ColorPalette` in a combo-style popup.
 
 **Containers and display**
@@ -133,7 +133,7 @@ which doc to open, and each doc links on to the design notes it relies on.
   redesign's HUD over sample data), `bench` (headless CPU and memory
   benchmark; `scroll-flings-idle` and `scroll-flings-active` cover flings) and `gallery` (plays the scenario files in a window). See
   [`docs/examples.md`](docs/examples.md).
-- Tests: `tests/headless.rs` (behaviour in a headless `App`),
+- Tests: `tests/headless.rs` (behavior in a headless `App`),
   `tests/reflection.rs` (type registry), `tests/scenarios.rs` and
   `tests/ron_scenarios.rs` (scripted scenarios, `tests/ron/*.ron`), and the
   GPU-only `tests/recorded_scenarios_gpu.rs`. See
@@ -179,7 +179,7 @@ which doc to open, and each doc links on to the design notes it relies on.
   smallest example.
   A restyle writes `TextFont` and `TextColor` only when the value differs
   (`set_if_neq`, or a compare before assigning a field): every write marks
-  the text changed and Bevy lays the whole tree out again, so a colour-only
+  the text changed and Bevy lays the whole tree out again, so a color-only
   theme change writes no `TextFont` and a font-only one no `TextColor`
   (`restyling_text_widgets_*` in `tests/headless.rs`). A widget that owns only
   some `TextFont` fields compares those before assigning. A new widget with
@@ -188,12 +188,12 @@ which doc to open, and each doc links on to the design notes it relies on.
   background from one function of that state (`background_for` in
   `push_button.rs`, `item_background` in `list.rs`) that both its pointer
   handler and its `theme_*` system call, so a theme change under a resting
-  pointer keeps the hover colour. The state is read from `Hovered` and `Pressed`,
+  pointer keeps the hover color. The state is read from `Hovered` and `Pressed`,
   not tracked by hand; a `PushButton` with `NoDefaultHover` rests at
-  `background_primary` for its owner to colour.
+  `background_primary` for its owner to color.
 - **Touch.** A finger is its own pointer (`PointerId::Touch`) and every widget works with it
   (#793). A tap is a press and a release on the same node, so it activates and picks as a
-  click does; a finger that slides off before lifting, or is cancelled, activates nothing. A
+  click does; a finger that slides off before lifting, or is canceled, activates nothing. A
   finger does not hover: `MouseEvent::hovered()` is the one place that tells touch from mouse
   (false for a touch `Over`), so no widget tests for touch itself and a custom row reads
   `Hovered`, which a finger never sets. A pan on a scroll area or list scrolls it and picks
@@ -215,8 +215,8 @@ which doc to open, and each doc links on to the design notes it relies on.
   `Node::border_radius`, not a component; set it on the node. Since Bevy 0.20
   its corners are `CornerRadius`es and its constructors (`BorderRadius::all`,
   `top`, ..) are not `const`, so a function that builds one cannot be either.
-- **No hard-coded colours outside `theme.rs` and `tailwind.rs`.** Add a slot
-  to `ThemeColors` (both default themes) rather than inlining a colour.
+- **No hard-coded colors outside `theme.rs` and `tailwind.rs`.** Add a slot
+  to `ThemeColors` (both default themes) rather than inlining a color.
 - **Setup lives in component hooks and `#[require(…)]`.** `on_add` for
   one-time setup (`PushButton`, `Combo`, `Link`, `ColorPushButton`),
   `on_insert` where re-inserting should re-run it (`Card`, `Label`, `List`,
@@ -441,7 +441,7 @@ and recorded: [`docs/testing.md`](docs/testing.md) and
 1. `just fmt`
 2. `just lint`
 3. `just test`
-4. New behaviour has a test, where the harness allows it
+4. New behavior has a test, where the harness allows it
 5. The `docs/` file of each module or design area you changed is updated;
    this file only if a module, doc, example, convention or command was added,
    removed or renamed

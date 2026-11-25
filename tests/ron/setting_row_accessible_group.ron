@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a setting row is a group labelled with its title",
+    name: "a setting row is a group labeled with its title",
     setup: App(SettingRows),
     steps: [
         Wait(2),

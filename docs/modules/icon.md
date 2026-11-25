@@ -2,7 +2,7 @@
 
 `Icon`: an app-provided image tinted with a theme role.
 
-Read this before changing `src/icon.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/icon.rs`. When the module's behavior changes, update this file in the same PR.
 
 ## Details
 

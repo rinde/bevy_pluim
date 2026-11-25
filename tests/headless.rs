@@ -921,7 +921,7 @@ fn a_selection_ref_shared_by_bread_crumbs_and_a_stack_stays_in_sync() {
 }
 
 #[test]
-fn a_divider_has_the_divider_colour_and_follows_a_theme_change() {
+fn a_divider_has_the_divider_color_and_follows_a_theme_change() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let horizontal = app
@@ -993,7 +993,7 @@ fn a_kbd_shows_its_key_with_a_border_and_follows_a_theme_change() {
 }
 
 #[test]
-fn an_icon_is_tinted_with_the_text_colour_and_follows_a_theme_change() {
+fn an_icon_is_tinted_with_the_text_color_and_follows_a_theme_change() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let icon = app
@@ -1235,7 +1235,7 @@ fn pointer_over_or_out(app: &mut App, target: Entity, over: bool) {
 }
 
 #[test]
-fn an_icon_button_shows_the_hover_colour_under_the_pointer_and_the_press_colour_when_held() {
+fn an_icon_button_shows_the_hover_color_under_the_pointer_and_the_press_color_when_held() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app
@@ -1523,7 +1523,7 @@ fn a_disabled_link_keeps_its_button_and_is_interaction_disabled() {
 }
 
 #[test]
-fn a_disabled_link_ignores_the_pointer_and_shows_the_text_colour() {
+fn a_disabled_link_ignores_the_pointer_and_shows_the_text_color() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let link = app
@@ -1691,7 +1691,7 @@ fn background(app: &App, entity: Entity) -> Color {
 }
 
 #[test]
-fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
+fn a_held_push_button_is_pressed_and_colored_through_the_root() {
     let mut app = headless_app();
     let button = spawn_push_button(&mut app);
 
@@ -1702,7 +1702,7 @@ fn a_held_push_button_is_pressed_and_coloured_through_the_root() {
     assert_eq!(
         background(&app, button),
         colors.selected_hovered_item,
-        "Bevy's Button stops Press from bubbling, yet the colour must still follow it"
+        "Bevy's Button stops Press from bubbling, yet the color must still follow it"
     );
 
     click_and_release(&mut app, button);
@@ -2558,7 +2558,7 @@ fn a_combo_button_writes_its_accessibility_node_only_when_the_shown_text_changes
 }
 
 #[test]
-fn a_color_palette_combo_button_writes_its_accessibility_node_only_when_the_colour_changes() {
+fn a_color_palette_combo_button_writes_its_accessibility_node_only_when_the_color_changes() {
     let mut app = headless_app();
     app.world_mut().spawn((Window::default(), PrimaryWindow));
     let (combo, button) = spawn_palette_combo(&mut app);
@@ -2598,7 +2598,7 @@ fn a_color_palette_combo_button_controls_its_palette() {
 }
 
 #[test]
-fn a_color_push_button_outside_a_combo_is_named_after_its_colour() {
+fn a_color_push_button_outside_a_combo_is_named_after_its_color() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app.world_mut().spawn((ColorPushButton, ChildOf(root))).id();
@@ -4420,7 +4420,7 @@ fn changing_the_theme_fonts_restyles_the_text_of_widgets() {
 }
 
 #[test]
-fn each_label_variant_gets_its_colour_and_size_and_a_theme_change_restyles_it() {
+fn each_label_variant_gets_its_color_and_size_and_a_theme_change_restyles_it() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let mut spawn = |label: Label| app.world_mut().spawn((label, ChildOf(root))).id();
@@ -5282,7 +5282,7 @@ fn a_separated_list_follows_a_theme_change() {
 }
 
 #[test]
-fn a_pill_gets_the_colours_of_its_tone_and_a_new_tone_restyles_it() {
+fn a_pill_gets_the_colors_of_its_tone_and_a_new_tone_restyles_it() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let pill = app
@@ -5901,7 +5901,7 @@ fn inserting_a_panel_again_adds_and_removes_its_close_button() {
 }
 
 #[test]
-fn a_panel_stays_labelled_by_its_title_after_it_is_inserted_again_with_other_parts() {
+fn a_panel_stays_labeled_by_its_title_after_it_is_inserted_again_with_other_parts() {
     let mut app = headless_app();
     let panel = app.world_mut().spawn(Panel::new("Trains")).id();
     app.update();
@@ -5969,7 +5969,7 @@ fn a_setting_row_has_a_title_a_description_and_a_control_slot() {
 }
 
 #[test]
-fn a_setting_row_is_a_group_labelled_with_its_title_and_described_by_its_description() {
+fn a_setting_row_is_a_group_labeled_with_its_title_and_described_by_its_description() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let row = app
@@ -6028,7 +6028,7 @@ fn inserting_a_setting_row_again_changes_its_text_and_keeps_its_control() {
 }
 
 #[test]
-fn a_panel_is_a_group_labelled_by_its_title_which_follows_a_new_panel() {
+fn a_panel_is_a_group_labeled_by_its_title_which_follows_a_new_panel() {
     let mut app = headless_app();
     let panel = app.world_mut().spawn(Panel::new("Trains")).id();
     app.update();
@@ -6391,7 +6391,7 @@ fn clicking_a_tool_of_a_one_toolbar_selects_it_and_fills_it() {
 }
 
 #[test]
-fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_colour_when_active() {
+fn the_label_of_a_filled_button_is_its_text_and_takes_the_accent_text_color_when_active() {
     let mut app = headless_app();
     let toolbar = spawn_toolbar(&mut app, ToolbarStyle::Filled, Selection::builder().one());
     let buttons = toolbar_buttons(&app, toolbar);
@@ -7109,7 +7109,7 @@ fn a_tooltip_popup_keeps_six_pixels_from_the_left_and_right_window_edges() {
     let (mut app, _) = placement_app((800, 600), Vec2::new(400.0, 100.0), Vec2::new(20.0, 20.0));
     assert!(
         (placed_popup(&mut app, popup).0 - 350.0).abs() < 0.01,
-        "a node away from the edges has its popup centred"
+        "a node away from the edges has its popup centerd"
     );
 }
 
@@ -7511,7 +7511,7 @@ fn a_badge_follows_its_item_to_the_buttons_made_when_the_toolbar_style_changes()
 }
 
 #[test]
-fn a_theme_change_recolours_a_badge_that_did_not_change() {
+fn a_theme_change_recolors_a_badge_that_did_not_change() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app
@@ -7612,7 +7612,7 @@ fn icon_tint(app: &App, button: Entity) -> Color {
 }
 
 #[test]
-fn a_warning_icon_button_has_the_warning_colours_at_rest_hovered_and_on() {
+fn a_warning_icon_button_has_the_warning_colors_at_rest_hovered_and_on() {
     let mut app = headless_app();
     let button = spawn_toned_icon_button(&mut app, Tone::Warning, IconButtonSize::Large);
     let light = DEFAULT_LIGHT_THEME_COLORS;
@@ -7676,7 +7676,7 @@ fn a_danger_icon_button_turns_danger_when_hovered_and_filled_when_on() {
 }
 
 #[test]
-fn a_neutral_icon_button_keeps_its_ordinary_colours() {
+fn a_neutral_icon_button_keeps_its_ordinary_colors() {
     let mut app = headless_app();
     let button = spawn_toned_icon_button(&mut app, Tone::Neutral, IconButtonSize::Regular);
     let light = DEFAULT_LIGHT_THEME_COLORS;
@@ -7690,7 +7690,7 @@ fn a_neutral_icon_button_keeps_its_ordinary_colours() {
 }
 
 #[test]
-fn a_danger_tool_gets_the_danger_colours_at_rest_hovered_and_active() {
+fn a_danger_tool_gets_the_danger_colors_at_rest_hovered_and_active() {
     for style in [ToolbarStyle::Filled, ToolbarStyle::Underlined] {
         let mut app = headless_app();
         let root = app.world_mut().spawn(Node::default()).id();
@@ -7839,7 +7839,7 @@ fn theme_editor_app() -> App {
 }
 
 #[test]
-fn the_theme_editor_has_a_row_for_each_editable_colour_slot() {
+fn the_theme_editor_has_a_row_for_each_editable_color_slot() {
     let mut app = theme_editor_app();
     assert_eq!(ui_root_count(&mut app), 1);
     let slots = bevy_pluim::theme_editor::editable_color_slots();
@@ -7862,7 +7862,7 @@ fn the_theme_editor_has_a_row_for_each_editable_colour_slot() {
 }
 
 #[test]
-fn picking_a_colour_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
+fn picking_a_color_in_the_theme_editor_sets_that_slot_of_the_theme_in_use() {
     let mut app = theme_editor_app();
     let (combo, items) = {
         let world = app.world_mut();
@@ -7951,7 +7951,7 @@ fn pick_accent_in_the_theme_editor(app: &mut App) -> Color {
 }
 
 #[test]
-fn picking_a_colour_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
+fn picking_a_color_in_the_theme_editor_in_dark_mode_sets_the_dark_half_only() {
     let mut app = theme_editor_app();
     app.world_mut()
         .get_resource_mut::<Theme>()
@@ -8069,7 +8069,7 @@ fn count_toasts(app: &mut App) -> usize {
 }
 
 #[test]
-fn the_theme_editor_exports_every_colour_slot_as_rust_text() {
+fn the_theme_editor_exports_every_color_slot_as_rust_text() {
     use bevy::reflect::structs::Struct as _;
     let source = overview::theme_editor::colors_source("LIGHT", &DEFAULT_LIGHT_THEME_COLORS);
     assert!(source.starts_with("const LIGHT: ThemeColors = ThemeColors {\n"));
@@ -8108,7 +8108,7 @@ fn the_overview_example_builds_and_every_page_runs() {
         "Lists",
         "Combos",
         "Filter combos",
-        "Colours",
+        "Colors",
         "Segmented control",
         "Light dark toggle",
         "Filter chips",
@@ -9795,14 +9795,14 @@ fn a_segment_of_an_item_with_an_icon_gets_a_sixteen_pixel_icon_before_its_text()
 }
 
 #[test]
-fn the_icon_of_a_segment_follows_the_colour_of_its_text_and_the_theme() {
+fn the_icon_of_a_segment_follows_the_color_of_its_text_and_the_theme() {
     let mut app = headless_app();
     let control = spawn_mixed_icon_control(&mut app);
     let segment = segments_of(&app, control)[0];
     let icon = icon_of(&app, segment).unwrap();
-    let colour = |app: &App| app.world().entity(icon).get::<ImageNode>().unwrap().color;
+    let color = |app: &App| app.world().entity(icon).get::<ImageNode>().unwrap().color;
     assert_eq!(
-        colour(&app),
+        color(&app),
         DEFAULT_LIGHT_THEME_COLORS.segmented_selected_text
     );
     app.world_mut()
@@ -9812,7 +9812,7 @@ fn the_icon_of_a_segment_follows_the_colour_of_its_text_and_the_theme() {
     app.update();
     app.update();
     assert_eq!(
-        colour(&app),
+        color(&app),
         DEFAULT_DARK_THEME_COLORS.segmented_selected_text
     );
 }
@@ -10524,7 +10524,7 @@ fn inserting_a_link_again_changes_its_text_in_place_and_keeps_its_label_in_step(
 }
 
 #[test]
-fn no_default_hover_inserted_after_spawn_stops_the_hover_colours() {
+fn no_default_hover_inserted_after_spawn_stops_the_hover_colors() {
     let mut app = headless_app();
     let button = spawn_push_button(&mut app);
     app.world_mut().entity_mut(button).insert(NoDefaultHover);
@@ -10537,7 +10537,7 @@ fn no_default_hover_inserted_after_spawn_stops_the_hover_colours() {
 }
 
 #[test]
-fn no_default_hover_removed_after_spawn_brings_the_hover_colours_back() {
+fn no_default_hover_removed_after_spawn_brings_the_hover_colors_back() {
     let mut app = headless_app();
     let root = app.world_mut().spawn(Node::default()).id();
     let button = app
@@ -11960,7 +11960,7 @@ fn select_items(app: &mut App, selection_ref: Entity, items: &[Entity]) {
 }
 
 #[test]
-fn a_color_palette_combo_over_many_shows_the_first_selected_colour_and_names_them_all() {
+fn a_color_palette_combo_over_many_shows_the_first_selected_color_and_names_them_all() {
     use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500};
     let none = Color::Srgba(Srgba::NONE);
     let (red, blue, green): (Color, Color, Color) =
@@ -17194,7 +17194,7 @@ fn renaming_an_item_updates_a_filter_combos_button_rows_and_matches() {
 }
 
 #[test]
-fn editing_an_item_colour_in_place_updates_its_swatch_highlight_combo_preview_and_name() {
+fn editing_an_item_color_in_place_updates_its_swatch_highlight_combo_preview_and_name() {
     use bevy::color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500, YELLOW_300};
     let mut app = headless_app();
     app.world_mut().spawn((Window::default(), PrimaryWindow));
@@ -18117,7 +18117,7 @@ fn restyling_text_widgets_with_an_unchanged_font_writes_no_text_font() {
 }
 
 #[test]
-fn restyling_text_widgets_with_a_colour_only_change_writes_no_text_font() {
+fn restyling_text_widgets_with_a_color_only_change_writes_no_text_font() {
     let mut app = app_counting_font_writes();
     spawn_text_widgets(&mut app);
     let writes = font_writes_of_a_restyle(&mut app, |theme| {
@@ -18184,7 +18184,7 @@ fn spawn_hinted_toolbar(app: &mut App) -> Entity {
 }
 
 #[test]
-fn restyling_a_toolbar_with_an_unchanged_theme_writes_no_text_font_or_colour() {
+fn restyling_a_toolbar_with_an_unchanged_theme_writes_no_text_font_or_color() {
     let mut app = app_counting_text_writes();
     spawn_hinted_toolbar(&mut app);
     assert_eq!(font_writes_of_a_restyle(&mut app, |_| ()), 0);
@@ -18192,7 +18192,7 @@ fn restyling_a_toolbar_with_an_unchanged_theme_writes_no_text_font_or_colour() {
 }
 
 #[test]
-fn restyling_a_toolbar_with_a_colour_only_change_writes_no_text_font() {
+fn restyling_a_toolbar_with_a_color_only_change_writes_no_text_font() {
     let mut app = app_counting_text_writes();
     spawn_hinted_toolbar(&mut app);
     let writes = font_writes_of_a_restyle(&mut app, |theme| theme.set_mode(ThemeMode::Dark));
@@ -18210,14 +18210,14 @@ fn restyling_a_toolbar_with_a_changed_font_still_writes_it_to_label_and_hint() {
 }
 
 #[test]
-fn restyling_text_widgets_with_an_unchanged_theme_writes_no_text_colour() {
+fn restyling_text_widgets_with_an_unchanged_theme_writes_no_text_color() {
     let mut app = app_counting_text_writes();
     spawn_text_widgets(&mut app);
     assert_eq!(color_writes_of_a_restyle(&mut app, |_| ()), 0);
 }
 
 #[test]
-fn restyling_text_widgets_with_a_font_only_change_writes_no_text_colour() {
+fn restyling_text_widgets_with_a_font_only_change_writes_no_text_color() {
     let mut app = app_counting_text_writes();
     spawn_text_widgets(&mut app);
     let writes = color_writes_of_a_restyle(&mut app, |theme| theme.font_size_body += 2.0);
@@ -18225,11 +18225,11 @@ fn restyling_text_widgets_with_a_font_only_change_writes_no_text_colour() {
 }
 
 #[test]
-fn restyling_text_widgets_with_a_changed_colour_still_writes_it() {
+fn restyling_text_widgets_with_a_changed_color_still_writes_it() {
     let mut app = app_counting_text_writes();
     spawn_text_widgets(&mut app);
     let writes = color_writes_of_a_restyle(&mut app, |theme| theme.set_mode(ThemeMode::Dark));
-    assert!(writes >= 8, "the text takes the new colours: {writes}");
+    assert!(writes >= 8, "the text takes the new colors: {writes}");
 }
 
 fn showing_tooltip_text(app: &mut App, button: Entity) -> Entity {
@@ -18281,7 +18281,7 @@ fn restyling_a_showing_tooltip_popup_writes_text_font_only_for_a_font_change() {
 }
 
 #[test]
-fn restyling_a_showing_tooltip_popup_writes_text_colour_only_for_a_colour_change() {
+fn restyling_a_showing_tooltip_popup_writes_text_color_only_for_a_color_change() {
     let (mut app, button) = tooltip_app();
     // `tick` runs only `Update`, so the counter runs there too.
     app.init_resource::<ColorWrites>();

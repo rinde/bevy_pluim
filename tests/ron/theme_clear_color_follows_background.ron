@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "the clear colour follows the background of the theme",
+    name: "the clear color follows the background of the theme",
     setup: App(Themed),
     steps: [
         Wait(2),

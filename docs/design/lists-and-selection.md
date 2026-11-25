@@ -2,7 +2,7 @@
 
 How lists, item views and selections fit together. The selection model itself is in [`select.rs`](../modules/select.md).
 
-When the behaviour described here changes, update this file in the same PR.
+When the behavior described here changes, update this file in the same PR.
 
 ## A list can render its own item views
 
@@ -11,7 +11,7 @@ When the behaviour described here changes, update this file in the same PR.
 per item with an `ItemViewSpawner { item, view }` and spawns the contents
 under the `ItemView`, which the list still owns, spawns and despawns with
 `ItemsChanged` and themes. The items need not be `Item<String>`. Such a view
-is `CustomView`: its children take the pointer, so hover colours come from
+is `CustomView`: its children take the pointer, so hover colors come from
 `Hovered` (`custom_view_hover`) and press and release from a global
 `MouseEvent` observer that walks up from the target to the view
 (`custom_view_of`), ignoring a target inside a nested `Button`, `List`, `Combo` or `FilterCombo`
@@ -53,7 +53,7 @@ selected row would toggle twice (`list_click_deselects_once.ron`,
 whose `ItemView::list_ref` is not the event's source list: a nested list (a combo's popup
 in a custom view) reports the row of the list around it, because `listbox_on_row_click`
 searches above the popup when the click's target is the popup itself. Hover and
-selected colours stay on `MouseEvent`. A `ListBox` also sets an
+selected colors stay on `MouseEvent`. A `ListBox` also sets an
 `ActiveDescendant` on a click and, once the list has focus (a `List` is one tab stop),
 handles the arrow keys (all four move, wrapping round), Home and End by moving it, and
 Enter / Space by sending the `ValueChange` of the active row, which goes through
@@ -70,7 +70,7 @@ A `ColorPalette` is a `List` with `NoDefaultItems`, so it is a `ListBox` of
 `on_selection_change`, using `list.rs`'s `sync_selected` / `sync_multi_select`,
 `list.rs`'s `on_value_change` turns the `ListBox`'s pick into a selection update
 for palettes too, and `on_reselect_row` deselects a swatch that is `Selected`.
-A swatch has no text, so its accessible name is the name of its colour (see
+A swatch has no text, so its accessible name is the name of its color (see
 `color_palette.rs` in its [module doc](../modules/color_palette.md)); a `Role(role: ListItem)` locator without a label
 still reaches all of them, so the scenarios use `Nth(..)` or
 `App(Accessible(..))`.

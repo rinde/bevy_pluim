@@ -2,7 +2,7 @@
 
 `VirtualList`: rows of one height for many thousands of items, rendering only those in view.
 
-Read this before changing `src/virtual_list.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/virtual_list.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [lists and selection](../design/lists-and-selection.md), [keyboard focus and navigation](../design/keyboard-focus.md), [scrolling](../design/scrolling.md).
 

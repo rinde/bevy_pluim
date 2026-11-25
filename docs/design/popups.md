@@ -2,7 +2,7 @@
 
 How combo popups take focus, open and close, and where popups are placed.
 
-When the behaviour described here changes, update this file in the same PR.
+When the behavior described here changes, update this file in the same PR.
 
 ## A combo's popup takes the keyboard focus while it is open
 
@@ -29,7 +29,7 @@ The
 `ComboButton` and the `ColorPushButton` of a `ColorPaletteCombo` are `Button`s;
 the combo toggles its `ComboState` (the palette combo its `ColorPaletteComboState`) on their
 `Activate`, so on release and on Enter / Space for a focused button, and a
-press alone opens nothing. Hover and press colours stay `MouseEvent`, observed
+press alone opens nothing. Hover and press colors stay `MouseEvent`, observed
 on the combo, which gets the pointer because the button has `should_block_lower:
 false`. The outside-click systems read the primary-button releases of `PointerInput`
 (a mouse click or a tap) and the hover map of the pointer that released
@@ -41,7 +41,7 @@ pick by itself, not through the outside click: a global observer of
 `MouseEvent`s acts on a `MouseKind::Click` (a press and a release on the same
 swatch) on a swatch that belongs to the popup's `ColorPalette` and, for a
 selection of one item at most (`One`, `ZeroOrOne`), inserts `ColorPaletteComboState::Closed`,
-whether or not the click changed the selection (the selected colour of a `One`
+whether or not the click changed the selection (the selected color of a `One`
 combo, a deselecting click of a `ZeroOrOne` one). A selection of many keeps
 the popup open, on a click and on Enter / Space (a palette combo over many
 is supported: `color_palette_combo_many_stays_open.ron`). A `Combo` has not been moved over (#96 left it): a release on
@@ -53,7 +53,7 @@ where `ComboState` / `ColorPaletteComboState` is inserted (the hook, the observe
 check `ComboState` / `ColorPaletteComboState`, and `App(Accessible(..))` reads the node's role, value
 and `Expanded` / `Collapsed`; `controls` is checked headless. The popup is still the
 home-made `Float`, not `bevy_ui_widgets`' `MenuButton` / popover: that would
-change positioning, z-index and outside-click behaviour, so it is a ticket of
+change positioning, z-index and outside-click behavior, so it is a ticket of
 its own if wanted.
 
 ## Popups are placed against the UI target of their widget, not the primary window (#669)

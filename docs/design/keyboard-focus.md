@@ -2,7 +2,7 @@
 
 Tab stops, the focus ring, composite widgets with arrow keys, directional navigation and the accessibility tree.
 
-When the behaviour described here changes, update this file in the same PR.
+When the behavior described here changes, update this file in the same PR.
 
 ## Keyboard focus: tab stops and the focus ring
 
@@ -60,7 +60,7 @@ focus with `FocusCause::Navigated`, makes it visible, asks `ScrollIntoView` for 
 and, for a radio group over a selection of at most one (`One`, `ZeroOrOne`), picks it with
 `set_selection([item])`, never toggling, so wrapping to the same item keeps it; the toggle's `RovingPick::Activate` instead triggers `Activate` on the option landed on, which sets `ThemePreference` exactly as a click does (and changes nothing when it is the current one). With
 `OneOrMore` / `ZeroOrMore` the arrows move the focus only; Enter / Space keep their
-`Activate` behaviour (`toggle_selected`), as does a toolbar's. When the focused item goes
+`Activate` behavior (`toggle_selected`), as does a toolbar's. When the focused item goes
 (despawned, disabled, hidden) the focus moves to the next eligible item, else the previous,
 and is cleared when none is left; focus that went to another widget, or that something cleared,
 is never taken or put back (`holds_focus` remembers that the group had it; a despawned item
@@ -71,7 +71,7 @@ the frame it presses it, which Bevy's Tab navigation does not see), and the
 `composite_screen` tests of `tests/scenarios.rs` (held arrows, an app's directional
 navigation, disabled / hidden / empty groups, removal, reorder, a pick that lands on the
 already selected item, shared selections). The keyboard
-behaviour of these four widgets changed in #493; nopjes tabs once into each and uses the
+behavior of these four widgets changed in #493; nopjes tabs once into each and uses the
 arrows inside.
 
 ## Directional navigation is the app's

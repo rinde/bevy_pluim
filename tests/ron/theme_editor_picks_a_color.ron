@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "picking a colour in the theme editor sets that slot of the theme",
+    name: "picking a color in the theme editor sets that slot of the theme",
     setup: App(ThemeEditor),
     steps: [
         Wait(3),
