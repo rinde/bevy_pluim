@@ -1,4 +1,4 @@
-//! `Icon`: an image tinted with a theme colour.
+//! `Icon`: an image tinted with a theme color.
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
@@ -8,8 +8,6 @@ use itertools::Either;
 use crate::theme::{Theme, ThemeColors};
 
 /// Registers the systems and observers of [`Icon`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct IconPlugin;
 
@@ -24,7 +22,7 @@ impl Plugin for IconPlugin {
     }
 }
 
-/// The theme colour an [`Icon`] is tinted with.
+/// The theme color an [`Icon`] is tinted with.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum IconColor {
     /// [`ThemeColors::text_primary`].
@@ -49,7 +47,7 @@ pub enum IconColor {
 }
 
 impl IconColor {
-    /// The colour this role has in `colors`.
+    /// The color this role has in `colors`.
     #[must_use]
     pub const fn color(self, colors: &ThemeColors) -> Color {
         match self {
@@ -66,29 +64,22 @@ impl IconColor {
     }
 }
 
-/// A square image tinted with a theme colour, so it follows hover, active and
-/// theme changes like the text around it.
+/// A square image tinted with a theme color.
 ///
-/// Spawn [`Icon::bundle`] with a `Handle<Image>` the application provides; the
-/// library ships no icon set. The image must be white on transparent, because
-/// the tint multiplies it: a coloured image is tinted too, and a black one
-/// stays black. Turn SVGs into white-on-transparent PNGs. Sizes in the design
-/// are 16, 18, 22 and 24 px.
-///
-/// A widget that owns the icon changes the colour role by inserting the
-/// `Icon` again, for instance with [`IconColor::AccentText`] while active.
+/// The image must be white on transparent: the tint multiplies it, so a black
+/// one stays black.
 #[derive(Component, Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[require(ImageNode::default(), Node::default(), Name::new("Icon"))]
 #[component(on_insert=Self::on_insert)]
 pub struct Icon {
-    /// The theme colour the image is tinted with.
+    /// The theme color the image is tinted with.
     pub color: IconColor,
 }
 
 impl Icon {
     /// An icon of `image`, `size` logical pixels square, tinted with the
-    /// primary text colour.
+    /// primary text color.
     #[must_use]
     pub fn bundle(image: Handle<Image>, size: f32) -> impl Bundle {
         Self::bundle_with_color(image, size, IconColor::TextPrimary)

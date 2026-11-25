@@ -9,10 +9,7 @@ use crate::select::Item;
 use crate::theme::Theme;
 use crate::toolbar::{Tool, ToolbarButton};
 
-/// The height, and the minimum width, of a badge, in logical pixels at the default rem size.
-///
-/// It is laid out in rem, so it grows with the text: in pixels a larger rem size would clip
-/// the count.
+/// The height and minimum width of a badge, in logical pixels at the default rem size.
 const BADGE_SIZE_PX: f32 = 16.0;
 /// The padding to the left and right of the text of a badge, in logical pixels.
 const BADGE_PADDING_PX: f32 = 4.0;
@@ -22,8 +19,6 @@ const BADGE_OFFSET_PX: f32 = -2.0;
 const BADGE_FONT_SIZE_PX: f32 = 10.0;
 
 /// Registers the systems of [`Badge`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct BadgePlugin;
 
@@ -33,8 +28,7 @@ impl Plugin for BadgePlugin {
     }
 }
 
-/// What a [`Badge`] says about its button. The application picks it; the library does not
-/// know what a count means.
+/// What a [`Badge`] says about its button.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum BadgeTone {
     /// An ordinary count, such as the number of trains.
@@ -48,15 +42,7 @@ pub enum BadgeTone {
 ///
 /// Put it on an [`IconButton`](crate::icon_button::IconButton), or on the
 /// [`Item<Tool>`](crate::toolbar::Tool) of a [`Toolbar`](crate::toolbar::Toolbar) to badge that
-/// tool's button. The badge is 16 px high with a minimum width of 16 px, and does not block the
-/// pointer from the button under it. It is not in the accessibility tree itself: its text is the
-/// description of the button's accessibility node. The application sets and updates the text by inserting a
-/// new `Badge`; removing the component, or an empty text, shows nothing (no overlay is drawn and
-/// the host's description is cleared), and inserting a nonempty one again brings it back. A
-/// badge mirrored from an `Item<Tool>` is updated by inserting a new `Badge` on the item.
-///
-/// The component is immutable: build or clone a value, edit it outside the world and insert it
-/// again to update a live widget. It cannot be queried mutably:
+/// tool's button. Immutable: insert a new value to change it. It cannot be queried mutably:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -72,7 +58,7 @@ pub enum BadgeTone {
 pub struct Badge {
     /// The text of the badge, usually a count. Empty shows no badge.
     pub text: String,
-    /// How the badge is coloured.
+    /// How the badge is colored.
     pub tone: BadgeTone,
 }
 
@@ -85,8 +71,7 @@ impl Badge {
         }
     }
 
-    /// A neutral badge showing `count`; a count of 0 shows "0", so the application removes the
-    /// badge when it wants none.
+    /// A neutral badge showing `count`; 0 shows "0".
     #[must_use]
     pub fn count(count: usize) -> Self {
         Self::new(count.to_string())
@@ -111,10 +96,6 @@ struct BadgeLabel;
 
 /// Gives the button of a tool the [`Badge`] of its item, and takes it off when the item has
 /// none.
-///
-/// Looks only at what a change concerns: a button that is new or whose [`ToolbarButton`] was
-/// inserted again (a replaced item), and the buttons of an item whose [`Badge`] changed or was
-/// removed or that is new. A quiet frame reads no button.
 fn mirror_item_badges(
     changed_items: Query<Entity, (With<Item<Tool>>, Or<(Changed<Badge>, Added<Item<Tool>>)>)>,
     new_buttons: Query<Entity, Changed<ToolbarButton>>,
@@ -148,7 +129,6 @@ fn mirror_item_badges(
     if touched.is_empty() {
         return;
     }
-    // A button whose own badge was taken off is looked at again too.
     for entity in &*touched {
         if let Ok((entity, button, current)) = buttons.get(*entity) {
             mirror(entity, button, current);
@@ -187,10 +167,6 @@ fn badge_node() -> Node {
 
 /// Spawns, updates and despawns the badge node of every button to match its [`Badge`] and the
 /// theme.
-///
-/// Looks only at the hosts whose [`Badge`] changed or was removed, that are new, or whose
-/// accessibility node changed (Bevy rewrites it, which would drop the description), and at all
-/// of them when the [`Theme`] changes.
 fn sync_badges(
     theme: Res<Theme>,
     mut removed: RemovedComponents<Badge>,
@@ -243,7 +219,6 @@ fn sync_badges(
             continue;
         };
         let badge = badge.filter(|b| !b.text.is_empty());
-        // The badge node stays out of the accessibility tree; its text describes the host.
         if let Some(access) = access.as_mut() {
             match badge {
                 Some(badge) if access.description() != Some(badge.text.as_str()) => {

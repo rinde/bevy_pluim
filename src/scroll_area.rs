@@ -1,9 +1,6 @@
 //! `ScrollArea`: scrollable contents with vertical and/or horizontal scroll bars.
 //!
-//! The scroll bars are `bevy_ui_widgets` [`Scrollbar`]s: the widget sizes and places
-//! each thumb, scrolls the contents when the thumb is dragged and pages them on a click
-//! on the track. This module keeps the layout, the look, the wheel and scrolling a
-//! focused row into view.
+//! Built on the `bevy_ui_widgets` [`Scrollbar`]s.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -32,8 +29,6 @@ use crate::theme::{Theme, ThemeColors};
 use crate::{DRAG_THRESHOLD, MouseEvent, MouseKind};
 
 /// Registers the systems and observers of [`ScrollArea`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct ScrollAreaPlugin;
 
@@ -86,9 +81,6 @@ impl Plugin for ScrollAreaPlugin {
 
 /// A node with scroll bars. Build one with [`ScrollArea::bundle`], or with [`ScrollArea::scene`]
 /// in a `bsn!` scene.
-///
-/// To assistive technology it is a scroll view ([`Role::ScrollView`]); its scroll bars and
-/// their thumbs are not in the accessibility tree.
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 #[require(
@@ -113,17 +105,9 @@ impl ScrollArea {
     }
 }
 
-/// Opt-in that keeps a [`ScrollArea`] at the bottom of a rounded [`Card`](crate::card::Card)
-/// above the card's corners.
-///
-/// The area gets a bottom margin of the card's corner radius (`Theme::panel_radius`).
-///
-/// An area clips to a rectangle (Bevy 0.20 has no rounded clip), so contents scrolled half out
-/// of view, or with square corners of their own, would otherwise stick out of the card's rounded
-/// bottom corners. It is opt-in because an area cannot tell whether it touches the card's
-/// corners (other nodes may sit below it, or the card may be square), and it keeps
-/// the margin in step with the theme. Insert it with the area, or later. A [`Panel`](crate::panel::Panel)
-/// does the same for its own body, and only while it has no footer. Removing it sets the bottom margin back to zero.
+/// Opt-in that gives a [`ScrollArea`] a bottom margin of the card's corner radius
+/// (`Theme::panel_radius`), so its square clip stays inside a rounded
+/// [`Card`](crate::card::Card).
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_add=Self::on_add, on_remove=Self::on_remove)]
@@ -136,7 +120,6 @@ impl ClearOfCorners {
             .run_system_cached_with(clear_of_corners, Some(context.entity));
     }
 
-    /// Takes the margin back to [`Val::ZERO`] when the opt-in goes.
     fn on_remove(mut world: DeferredWorld, context: HookContext) {
         if let Some(mut node) = world.get_mut::<Node>(context.entity) {
             node.margin.bottom = Val::ZERO;
@@ -203,19 +186,12 @@ impl ScrollArea {
                             width: Val::Percent(100.0),
                             height: Val::Percent(100.0),
                             overflow,
-                            // Place the contents explicitly: auto-placement puts a
-                            // bar in the first free cell, which is not its own when
-                            // the area lacks the other bar.
+                            // Explicit: auto-placement misplaces a bar when the other is absent.
                             grid_row: GridPlacement::start(1),
                             grid_column: GridPlacement::start(1),
-                            // Keep children at their natural size: a child stretched to
-                            // this node's height reported no overflow when it is a grid
-                            // (taffy 0.10, Bevy 0.19), which left nothing to scroll; still
-                            // needed on taffy 0.14: `Stretch` leaves the maximum scroll 2 px short (#265).
+                            // Not `Stretch`: it leaves the maximum scroll 2 px short.
                             align_items: AlignItems::FlexStart,
-                            // The area clips at its padding box, so the focus ring of
-                            // a child at the edge (2 px wide, 1 px offset) needs room
-                            // inside it (#293).
+                            // Room for the focus ring of an edge child.
                             padding: UiRect::all(Val::Px(FOCUS_RING_REACH)),
                             ..default()
                         },
@@ -240,14 +216,7 @@ impl ScrollArea {
 
     /// A scroll area for a `bsn!` scene, whose contents the scene list `contents()` makes.
     ///
-    /// Use it as an entry of a scene (`@scroll_area(..)` of a function returning it, or by
-    /// composing it into another scene). `v_scroll` and `h_scroll` enable scrolling (and a
-    /// scroll bar) on that axis. It builds the same area as [`ScrollArea::bundle`], which stays
-    /// for code that spawns through `Commands`.
-    ///
-    /// The factory runs for every build of the template, so each area gets fresh contents of
-    /// its own, also when a resolved scene is instantiated again. Clone what the contents
-    /// capture (a handle, say) inside it:
+    /// The factory runs for every build, so clone what the contents capture inside it:
     ///
     /// ```ignore
     /// ScrollArea::scene(move || bsn_list! { @squares(icon.clone()) }, true, false)
@@ -257,7 +226,6 @@ impl ScrollArea {
         v_scroll: bool,
         h_scroll: bool,
     ) -> impl Scene {
-        // A scene's template must be `Clone`, a scene list is not: share the factory instead.
         let contents = Arc::new(contents);
         bsn! {
             template(move |context| {
@@ -278,9 +246,8 @@ impl ScrollArea {
     }
 }
 
-/// Inserts `bundle` on the entity of a scene's template once the scene has been applied, so
-/// that the scene's own `Node` does not overwrite what the area's hooks set and the area is
-/// not taken for a root before it has a parent.
+/// Inserts `bundle` once the scene has been applied, so the scene's own `Node` does not
+/// overwrite what the area's hooks set.
 fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> EmptySceneEffect {
     let entity = context.entity.id();
     context.entity.world_scope(|world| {
@@ -289,15 +256,8 @@ fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> Emp
     EmptySceneEffect
 }
 
-/// Marks a scroll bar of a [`ScrollArea`]: a node with exactly one thumb, placed in the grid
-/// cell of its axis and themed.
-///
-/// The axis is not stored here: it is the `orientation` of the `bevy_ui_widgets`
-/// [`Scrollbar`] on the same entity, which also names the contents it scrolls.
-/// [`ScrollArea::bundle`] spawns both. The marker is not a scrolling widget on its own, a bar
-/// without a [`Scrollbar`] does nothing. Inserting the marker again reuses the existing thumb
-/// and places the bar again; changing the `Scrollbar`'s orientation on a live bar moves the bar
-/// to the other cell and swaps its thickness on the next frame.
+/// Marks a scroll bar of a [`ScrollArea`]. It needs a [`Scrollbar`] on the same entity, whose
+/// `orientation` gives the axis.
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[reflect(Component)]
 #[component(immutable, on_insert = Self::on_insert)]
@@ -305,8 +265,7 @@ fn insert_after_scene(context: &mut TemplateContext, bundle: impl Bundle) -> Emp
 pub struct ScrollBar;
 
 impl ScrollBar {
-    /// Places the bar by its [`Scrollbar`] and queues the setup of its thumb as one idempotent
-    /// command: two inserts before the commands are applied still leave one thumb.
+    /// Queues the thumb setup as one idempotent command: two inserts still leave one thumb.
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
         let bar = context.entity;
         let orientation = world
@@ -341,7 +300,7 @@ fn place(node: &mut Node, orientation: ControlOrientation) {
     node.grid_column = GridPlacement::start(column);
 }
 
-/// Sets the thickness of a bar across its axis, and lets the other dimension size itself.
+/// Sets the thickness of a bar across its axis.
 const fn size_bar(node: &mut Node, orientation: ControlOrientation, thickness: Val) {
     match orientation {
         ControlOrientation::Horizontal => {
@@ -368,14 +327,12 @@ fn refresh_changed_scroll_bars(
     }
 }
 
-/// The thumb of a [`ScrollBar`]: a `bevy_ui_widgets` [`ScrollbarThumb`], which has no
-/// `Node` because the widget sizes and places it along its track.
+/// The thumb of a [`ScrollBar`].
 #[derive(Component, Clone, Copy, Debug)]
 #[require(ScrollbarThumb, Hovered, Pickable::default(), Name::new("ScrollThumb"))]
 struct ScrollThumb;
 
-/// The thumb's background: the one function of its state that the pointer handler, the drag
-/// restyle and `theme_scroll_area` all call, so a theme change under the pointer keeps the colour.
+/// The thumb's background for a state; shared by the pointer handler, the drag restyle and the theme system.
 const fn thumb_background(colors: &ThemeColors, hovered: bool, pressed: bool) -> Color {
     if pressed {
         colors.selected_hovered_item
@@ -392,7 +349,6 @@ fn handle_hover(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    // A click or a drag says nothing new: the events around them set the state.
     let kind = trigger.event().kind;
     if matches!(kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
@@ -401,7 +357,6 @@ fn handle_hover(
     let Ok((mut background, drag)) = query.get_mut(thumb) else {
         return;
     };
-    // The pointer is on the thumb for every event but `Out`, a release included.
     let hovered = trigger.event().hovered();
     let dragging = drag.is_some_and(|drag| drag.dragging);
     let pressed = trigger.event().pressed() || (dragging && hovered);
@@ -413,8 +368,7 @@ fn handle_hover(
     *background = BackgroundColor(thumb_background(theme.colors(), hovered, pressed));
 }
 
-/// Restyles a thumb whose drag started or ended: a drag that ends with the pointer away from the
-/// thumb sends it no release, so the pointer events alone would leave the pressed colour.
+/// Restyles a thumb whose drag started or ended; a drag ending off the thumb sends it no release.
 fn restyle_thumbs_on_drag_change(
     mut thumbs: Query<
         (
@@ -435,13 +389,8 @@ fn restyle_thumbs_on_drag_change(
 
 /// Scrolls the [`ScrollContents`] around an entity just far enough to show it and its focus ring.
 ///
-/// Answers [`ScrollIntoView`], which a `ListBox` triggers when the arrow keys
-/// move its active descendant. An axis is moved only when the contents scroll
-/// along it, and the [`ScrollPosition`] stays within `0..=max` as in
-/// `update_scroll_position`. An entity outside any scroll area is left alone. One in a
-/// [`FixedNode`] (a popup) scrolls that popup when it scrolls (a `Combo` list capped to the
-/// window height) and otherwise nothing, never the area around it: the popup is not laid
-/// out in the area's contents, so scrolling them would not show it.
+/// Answers [`ScrollIntoView`]. An entity in a [`FixedNode`] scrolls that popup or nothing, never
+/// the area around it.
 fn scroll_into_view(
     mut event: On<ScrollIntoView>,
     nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
@@ -465,8 +414,6 @@ fn scroll_into_view(
     let Ok((mut scroll_position, node)) = contents.get_mut(area) else {
         return;
     };
-    // A popup that does not scroll is not laid out in the contents of the area around it, so
-    // scrolling those would not show the target.
     if fixed_nodes.contains(area)
         && node.overflow.x != OverflowAxis::Scroll
         && node.overflow.y != OverflowAxis::Scroll
@@ -479,11 +426,9 @@ fn scroll_into_view(
     let area_scale = area_computed.inverse_scale_factor();
     let target_size = target_computed.size() * target_scale;
     let area_size = area_computed.size() * area_scale;
-    // Top left corners in logical pixels, as the layout last placed them (the
-    // target's already shifted by the scroll position it had then).
+    // The target's position already includes its current scroll position.
     let target_top_left = target_transform.translation * target_scale - target_size * 0.5;
     let area_top_left = area_transform.translation * area_scale - area_size * 0.5;
-    // The target's focus ring is shown with it, so its reach counts as part of the target.
     let ring = Vec2::splat(FOCUS_RING_REACH);
     let local_top_left = target_top_left - area_top_left + scroll_position.0 - ring;
     let local_bottom_right = local_top_left + target_size + ring * 2.0;
@@ -509,23 +454,8 @@ fn scroll_into_view(
 
 /// Scrolls the nodes under the pointer by the mouse wheel.
 ///
-/// An axis is moved only when the node's [`Node::overflow`] scrolls along it,
-/// and the [`ScrollPosition`] stays within `0..=max` on that axis, where `max`
-/// is how far the contents overflow the node (0 when they fit). Both are in
-/// logical pixels. It moves any [`ScrollPosition`] under the pointer, not only a
-/// [`ScrollContents`], so a node of an app's own with one scrolls too.
-///
-/// With Ctrl held the wheel's horizontal and vertical deltas are swapped first.
-/// Then a node that scrolls horizontally but not vertically (`overflow.y` is not
-/// `Scroll`) takes a wheel event with no horizontal delta (`dx == 0`) as a
-/// horizontal scroll by its vertical delta, since a mouse wheel only turns
-/// vertically. An event with a horizontal delta scrolls by that delta alone.
-///
-/// The nearest scrollable ancestor of each hovered entity receives the wheel. Nested
-/// areas scroll only the innermost area, even when it is at its limit. Fixed nodes
-/// stop the ancestor search so a floating popup does not scroll its owner.
-///
-/// Registered once, by [`ScrollAreaPlugin`].
+/// Moves any [`ScrollPosition`] under the pointer, not only a [`ScrollContents`]. Nested areas
+/// scroll only the innermost, even at its limit; fixed nodes stop the ancestor search.
 pub(crate) fn update_scroll_position(
     mut mouse_wheel_events: MessageReader<MouseWheel>,
     hover_map: Res<HoverMap>,
@@ -539,8 +469,6 @@ pub(crate) fn update_scroll_position(
     if mouse_wheel_events.is_empty() {
         return;
     }
-    // The hover map and the hierarchy do not change while this system runs, so the
-    // scroll targets are the same for every wheel message of the frame: find them once.
     let WheelScratch {
         targets,
         outer_targets,
@@ -568,8 +496,6 @@ pub(crate) fn update_scroll_position(
                 current = parent.map(ChildOf::parent);
             }
         }
-        // A nested scroll area gets the wheel alone, even if picking also reports
-        // its outer area. Do not pass the wheel on when the inner area is at its limit.
         outer_targets.clear();
         for &target in targets.iter() {
             let mut current = hierarchy.get(target).ok().and_then(|(parent, fixed)| {
@@ -592,7 +518,6 @@ pub(crate) fn update_scroll_position(
                 current = parent.map(ChildOf::parent);
             }
         }
-        // One entry per pointer, so an area two pointers hover scrolls once for each.
         resolved.extend(targets.difference(outer_targets).copied());
     }
 
@@ -608,20 +533,17 @@ pub(crate) fn update_scroll_position(
             std::mem::swap(&mut dx, &mut dy);
         }
 
-        // Each message is applied in turn (and clamped in turn), as before.
         for entity in resolved.iter() {
             let Ok((mut scroll_position, computed, node)) = scrolled_node_query.get_mut(*entity)
             else {
                 continue;
             };
-            // A mouse wheel only turns vertically, so an area that scrolls sideways
-            // alone takes the vertical turn for a horizontal one.
+            // A mouse wheel only turns vertically: sideways-only areas take it as horizontal.
             let dx = if dx == 0.0 && node.overflow.y != OverflowAxis::Scroll {
                 dy
             } else {
                 dx
             };
-            // A turn of the wheel stops a fling, even one the area cannot move any further.
             if flinging.contains(*entity) {
                 commands.entity(*entity).try_remove::<Fling>();
             }
@@ -631,11 +553,9 @@ pub(crate) fn update_scroll_position(
 }
 
 /// Scrolls `scroll_position` by `(-dx, -dy)` logical pixels along the axes `node` scrolls,
-/// keeping each in `[0, max]`, `max` being how far the contents overflow.
+/// clamped to the overflow.
 ///
-/// Writes only a position that moves: a mutable dereference marks the `ScrollPosition`
-/// changed, which wakes its observers (a combo closing on an ancestor's scroll) although
-/// nothing scrolled. Shared by the wheel and a finger's pan.
+/// Write only a position that moves: a spurious change closes a combo in an ancestor.
 fn scroll_by(
     scroll_position: &mut Mut<ScrollPosition>,
     computed: &ComputedNode,
@@ -660,17 +580,14 @@ fn scroll_by(
     }
 }
 
-/// How far the contents of `computed` overflow it, in logical pixels: the largest
-/// [`ScrollPosition`] on each axis (0 when they fit).
+/// How far the contents of `computed` overflow it, in logical pixels.
 fn max_scroll(computed: &ComputedNode) -> Vec2 {
     ((computed.content_size() - computed.size()) * computed.inverse_scale_factor()).max(Vec2::ZERO)
 }
 
 /// Where each finger's last press began and whether it became a pan.
 ///
-/// An entry stays after the lift, until the same finger presses again, so the systems that
-/// read the lift and the click (one frame later than the last drag) can still tell a pan from
-/// a tap.
+/// Entries outlive the lift: the click arrives a frame after the last drag.
 #[derive(Resource, Debug, Default)]
 pub(crate) struct TouchPans {
     pans: HashMap<PointerId, Pan>,
@@ -712,10 +629,8 @@ struct Pan {
 /// past [`DRAG_THRESHOLD`], and ends the press the drag began on so the lift neither activates
 /// nor picks it.
 ///
-/// The area is routed as the wheel does: the nearest scrollable ancestor of the node the finger
-/// went down on, stopping after a [`FixedNode`] (a popup that scrolls itself is found first),
-/// and nothing is passed on at a limit. A finger that goes down on a [`Slider`], a
-/// [`NumericStepper`] or a [`ScrollBar`] keeps its own drag and does not pan.
+/// A finger that goes down on a [`Slider`], a [`NumericStepper`] or a [`ScrollBar`] keeps its
+/// own drag and does not pan.
 fn pan_with_finger(
     t: On<MouseEvent>,
     mut pans: ResMut<TouchPans>,
@@ -734,8 +649,7 @@ fn pan_with_finger(
     match event.kind {
         MouseKind::Pressed => {
             let target = find_pan_target(event.entity, &hierarchy, &own_drag, &scrolled);
-            // A finger that lands on a flinging area stops it, and is not a tap on what it
-            // landed on, as on iOS.
+            // As on iOS, a finger landing on a flinging area stops it and is not a tap.
             let caught = target.is_some_and(|area| flinging.contains(area));
             if let Some(area) = target.filter(|_| caught) {
                 commands.entity(area).try_remove::<Fling>();
@@ -773,8 +687,6 @@ fn pan_with_finger(
             let Ok((mut scroll_position, computed, node)) = scrolled.get_mut(target) else {
                 return;
             };
-            // A finger gives both axes, so an area that scrolls sideways alone takes a
-            // mostly vertical drag as a horizontal one, as the wheel does.
             let sideways_only = node.overflow.y != OverflowAxis::Scroll;
             let dx = if sideways_only && delta.y.abs() > delta.x.abs() {
                 delta.y
@@ -809,19 +721,17 @@ fn pan_with_finger(
 /// How long a finger's last movement counts towards the speed it lets go with, in seconds.
 const VELOCITY_WINDOW: f32 = 0.1;
 
-/// The slowest release, in logical pixels a second, that still flings: a slower drag ends where
-/// the finger lifted.
+/// The slowest release, in logical pixels a second, that still flings.
 const MIN_FLING_SPEED: f32 = 100.0;
 
-/// A fling ends when it is slower than this, in logical pixels a second: half a pixel in a frame
-/// of a sixtieth of a second.
+/// A fling ends when slower than this, in logical pixels a second.
 const STOP_FLING_SPEED: f32 = 30.0;
 
 /// How much of its speed a fling keeps each millisecond: iOS `DecelerationRate.normal`.
 const DECELERATION_PER_MS: f32 = 0.998;
 
-/// Adds the finger's travel `distance` at time `now` to `samples`, forgetting what is older than
-/// [`VELOCITY_WINDOW`] but the newest such sample, which the speed is measured from.
+/// Adds the finger's travel `distance` at time `now` to `samples`, dropping those older than
+/// [`VELOCITY_WINDOW`] but the newest of them.
 fn record_sample(samples: &mut VecDeque<(f32, Vec2)>, now: f32, distance: Vec2) {
     samples.push_back((now, distance));
     while samples
@@ -833,8 +743,7 @@ fn record_sample(samples: &mut VecDeque<(f32, Vec2)>, now: f32, distance: Vec2) 
 }
 
 /// The finger's velocity in logical pixels a second at `now`, from the last [`VELOCITY_WINDOW`]
-/// of `samples`: its travel since the newest sample at least that old (the oldest when none is),
-/// over the time since. A finger that rested for the whole window has none.
+/// of `samples`; none when it rested for the whole window.
 fn release_velocity(samples: &VecDeque<(f32, Vec2)>, now: f32) -> Vec2 {
     let (Some(&(then, from)), Some(&(_, to))) = (
         samples
@@ -854,8 +763,7 @@ fn release_velocity(samples: &VecDeque<(f32, Vec2)>, now: f32) -> Vec2 {
 }
 
 /// The scroll velocity a finger moving at `finger` gives the area `node`: opposite to the finger,
-/// along the axes the area scrolls, with a sideways-only area taking a mostly vertical finger as
-/// horizontal, as a pan does.
+/// along the axes the area scrolls.
 fn fling_velocity(finger: Vec2, node: &Node) -> Vec2 {
     let scrolls_x = node.overflow.x == OverflowAxis::Scroll;
     let scrolls_y = node.overflow.y == OverflowAxis::Scroll;
@@ -870,8 +778,7 @@ fn fling_velocity(finger: Vec2, node: &Node) -> Vec2 {
     )
 }
 
-/// A scroll area that keeps scrolling after a finger let go of it, slowing down. Put on the area
-/// when a fast pan ends and taken off when it stops, so only flinging areas are visited.
+/// A scroll area that keeps scrolling after a finger let go of it, slowing down.
 #[derive(Component, Debug)]
 pub(crate) struct Fling {
     /// Scroll velocity in logical pixels a second.
@@ -882,8 +789,8 @@ pub(crate) struct Fling {
 }
 
 /// How far a speed of `velocity` (logical pixels a second) travels in `dt` seconds while it decays
-/// by [`DECELERATION_PER_MS`] each millisecond, and what it is after. Integrated exactly, so the
-/// distance does not depend on how the time is cut into frames.
+/// by [`DECELERATION_PER_MS`] each millisecond, and what it is after. Exact in `dt`, so the frame
+/// rate does not change the distance.
 fn decelerate(velocity: Vec2, dt: f32) -> (Vec2, Vec2) {
     // `v(t) = v0 * r^(1000 t)` for `r` per millisecond; its integral is `v0 (f - 1) / ln_rate`.
     let ln_rate = DECELERATION_PER_MS.ln() * 1000.0;
@@ -894,8 +801,7 @@ fn decelerate(velocity: Vec2, dt: f32) -> (Vec2, Vec2) {
 /// Moves each flinging area on by the time since the last frame, stopping an axis at its limit and
 /// the fling when it is slow, or when something else moved the area.
 ///
-/// Writes the [`ScrollPosition`] only when the result differs, so an area at its limit marks
-/// nothing changed and does not close a combo in it.
+/// Write the [`ScrollPosition`] only on a difference: a spurious change closes a combo in it.
 pub(crate) fn step_flings(
     time: Res<Time>,
     mut flinging: Query<(
@@ -919,7 +825,6 @@ pub(crate) fn step_flings(
         let moved = wanted.clamp(Vec2::ZERO, max);
         let scrolls_x = node.overflow.x == OverflowAxis::Scroll;
         let scrolls_y = node.overflow.y == OverflowAxis::Scroll;
-        // An axis that ran into its limit, or does not scroll, stops there.
         let velocity = Vec2::new(
             if scrolls_x && moved.x.to_bits() == wanted.x.to_bits() {
                 velocity.x
@@ -949,8 +854,7 @@ pub(crate) fn step_flings(
 }
 
 /// Ends the pressed look of the nodes a finger landed on while their area was flinging, so its
-/// lift activates nothing. Runs after the frame's pointer events: the press that made the node
-/// `Pressed` may be delivered after the observer that saw the touch.
+/// lift activates nothing. Runs after the frame's pointer events, which may press the node late.
 fn end_caught_presses(
     mut pans: ResMut<TouchPans>,
     hierarchy: Query<(Option<&ChildOf>, Has<FixedNode>)>,
@@ -982,8 +886,6 @@ fn find_pan_target(
             found = Some(entity);
         }
         let (parent, fixed) = hierarchy.get(entity).ok()?;
-        // Look on past the area for a control dragged itself only up to the area, and stop at
-        // a floating popup, whose owner does not scroll with it.
         if found.is_some() || fixed {
             break;
         }
@@ -992,9 +894,8 @@ fn find_pan_target(
     found
 }
 
-/// Ends the press a pan began, from the node the finger went down on up to the area: the
-/// buttons among them lose `Pressed`, so the lift fires no `Activate` (Bevy's button needs it),
-/// and a `Cancel` restores the resting look as a cancelled touch does.
+/// Ends the press a pan began, from the node the finger went down on up to the area: buttons
+/// lose `Pressed`, so the lift fires no `Activate`, and a `Cancel` restores the resting look.
 fn end_press(
     commands: &mut Commands,
     hierarchy: &Query<(Option<&ChildOf>, Has<FixedNode>)>,
@@ -1009,7 +910,7 @@ fn end_press(
             kind: MouseKind::Cancel,
             distance: Vec2::ZERO,
             button: None,
-            // Not marked as a finger's, so the pan does not take it for the finger going away.
+            // Not marked as a finger's: the pan would take it for the finger going away.
             touch: false,
             pointer: PointerId::Mouse,
         });
@@ -1023,7 +924,7 @@ fn end_press(
     }
 }
 
-/// Buffers [`update_scroll_position`] keeps between frames, so a wheel message allocates nothing.
+/// Buffers [`update_scroll_position`] keeps between frames.
 #[derive(Default)]
 pub(crate) struct WheelScratch {
     targets: HashSet<Entity>,
@@ -1031,10 +932,7 @@ pub(crate) struct WheelScratch {
     resolved: Vec<Entity>,
 }
 
-/// Hides a scroll bar while the contents fit along its axis, and shows it again when
-/// they overflow. The thumb's size and place are the [`Scrollbar`]'s. A bar is looked at when
-/// its contents were laid out again or when its [`Scrollbar`] changed (a new orientation
-/// means another axis).
+/// Hides a scroll bar while the contents fit along its axis.
 fn show_scroll_bars(
     scroll_contents: Query<(Ref<ComputedNode>, &ScrollAreaRefs)>,
     mut scroll_bars: Query<(Ref<Scrollbar>, &mut Visibility), With<ScrollBar>>,
@@ -1044,9 +942,7 @@ fn show_scroll_bars(
             ControlOrientation::Horizontal => (contents.size().x, contents.content_size().x),
             ControlOrientation::Vertical => (contents.size().y, contents.content_size().y),
         };
-        // Bevy's `Scrollbar` takes the visible length as `size() - scrollbar_size`; plain
-        // `size()` agrees with it because `ScrollContents` sets no `scrollbar_width` (the
-        // bars are nodes of their own beside it), so its `scrollbar_size` is zero.
+        // Plain `size()` matches the `Scrollbar`'s visible length: `scrollbar_size` is zero here.
         for bar in [refs.h_scrollbar, refs.v_scrollbar].into_iter().flatten() {
             let Ok((scrollbar, mut visibility)) = scroll_bars.get_mut(bar) else {
                 continue;
@@ -1136,14 +1032,12 @@ fn theme_bar(
     background.0 = theme.colors().background_secondary;
     node.border_radius = BorderRadius::all(theme.control_radius);
 
-    // Only the marked thumb is ours; other children of the bar are the app's.
     for thumb_entity in children.into_iter().flatten() {
         let Ok((mut thumb, mut thumb_color, mut thumb_border, hovered, pressed, drag)) =
             thumbs.get_mut(*thumb_entity)
         else {
             continue;
         };
-        // The thumb is as thick as its scroll bar: the `Scrollbar` sizes it.
         thumb_color.0 = thumb_background(
             theme.colors(),
             hovered.get(),
@@ -1157,9 +1051,7 @@ fn theme_bar(
 /// The vertical scroll bar of a popup list that scrolls itself (a [`Combo`](crate::combo::Combo)'s
 /// or [`FilterCombo`](crate::filter_combo::FilterCombo)'s list capped to the window).
 ///
-/// It is a child of the list it scrolls and shows only while that list's contents overflow it.
-/// The list scrolls, so a child placed at the top would scroll away with the rows:
-/// `place_popup_scroll_bars` keeps the bar at the visible top of the list.
+/// A child of the list it scrolls, kept at the list's visible top by `place_popup_scroll_bars`.
 #[derive(Component, Clone, Copy, Debug)]
 pub(crate) struct PopupScrollBar {
     list: Entity,
@@ -1201,8 +1093,7 @@ fn place_popup_scroll_bars(
         };
         let scale = computed.inverse_scale_factor();
         let visible = computed.size().y * scale;
-        // Layout reports the content of a padded list (the separated one) as taller than its box
-        // by the bottom padding even when every row fits (#641), so the padding is not overflow.
+        // Layout counts the bottom padding of a padded list as overflow; it is not.
         let bottom_padding = match list_node.padding.bottom {
             Val::Px(px) => px.max(0.0),
             _ => 0.0,
@@ -1292,7 +1183,6 @@ mod tests {
 
     #[test]
     fn the_release_velocity_is_the_travel_over_the_last_tenth_of_a_second() {
-        // 10 px every sixtieth of a second: 600 px a second, however long the pan was before.
         let mut recorded = VecDeque::new();
         for frame in 0..30_u8 {
             record_sample(
@@ -1303,7 +1193,6 @@ mod tests {
         }
         let velocity = release_velocity(&recorded, 29.0 / 60.0);
         assert!((velocity.y + 600.0).abs() < 1.0, "{velocity}");
-        // Old samples are forgotten but for the one the speed is measured from.
         assert!(recorded.len() <= 8, "{}", recorded.len());
     }
 
@@ -1329,7 +1218,6 @@ mod tests {
         let recorded = samples(&[(0.0, 0.0), (0.05, -40.0)]);
         assert_eq!(release_velocity(&recorded, 0.3), Vec2::ZERO);
         assert_eq!(release_velocity(&VecDeque::new(), 0.3), Vec2::ZERO);
-        // No time between the sample and the release: no speed rather than a division by zero.
         assert_eq!(release_velocity(&samples(&[(0.2, 0.0)]), 0.2), Vec2::ZERO);
     }
 
@@ -1345,7 +1233,6 @@ mod tests {
         };
         let finger = Vec2::new(30.0, -400.0);
         assert_eq!(fling_velocity(finger, &vertical), Vec2::new(0.0, 400.0));
-        // A sideways-only area takes a mostly vertical finger as horizontal.
         assert_eq!(fling_velocity(finger, &sideways), Vec2::new(400.0, 0.0));
         assert_eq!(
             fling_velocity(

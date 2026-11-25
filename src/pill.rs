@@ -14,8 +14,6 @@ use crate::theme::Theme;
 const PILL_FONT_SIZE: f32 = 11.0;
 
 /// Registers the systems and observers of [`Pill`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct PillPlugin;
 
@@ -30,8 +28,7 @@ impl Plugin for PillPlugin {
     }
 }
 
-/// What a [`Pill`] says about its subject. The application picks it; the
-/// library does not know what a status means.
+/// What a [`Pill`] says about its subject.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum PillTone {
     /// Nothing in particular.
@@ -47,13 +44,7 @@ pub enum PillTone {
 
 /// A status tag: short uppercase text on a rounded, tinted background.
 ///
-/// The text is shown in uppercase, semibold, and never wraps. Insert a new
-/// `Pill` on a live entity to change its tone or text. For a screen reader it is a status named
-/// by the text as given. Empty text keeps the empty tinted pill (its padding) and an empty label;
-/// it is not hidden.
-///
-/// The component is immutable: build or clone a value, edit it outside the world and insert it
-/// again to update a live widget. It cannot be queried mutably:
+/// Immutable: insert a new value to change it. It cannot be queried mutably:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -90,7 +81,7 @@ pub enum PillTone {
 pub struct Pill {
     /// The text, as given; it is shown in uppercase.
     pub text: String,
-    /// How the pill is coloured.
+    /// How the pill is colored.
     pub tone: PillTone,
 }
 

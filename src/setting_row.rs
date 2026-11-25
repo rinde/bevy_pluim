@@ -12,8 +12,6 @@ use crate::label::Label;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`SettingRow`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct SettingRowPlugin;
 
@@ -34,15 +32,8 @@ impl Plugin for SettingRowPlugin {
 /// A row of a preferences panel: a title (semibold) over a description (secondary) on the left,
 /// and a control on the right.
 ///
-/// The row does not make the control: spawn it as a child of
-/// [`SettingRowRefs::control_slot`]. Put the rows in a [`SettingRows`] column, which keeps the
-/// divider between consecutive rows and none after the last.
-///
-/// A live row is changed by inserting a new `SettingRow` on it: the title text, the description
-/// and the accessibility node follow, and the children, [`SettingRowRefs`] and the control stay.
-///
-/// To assistive technology it is a group ([`Role::Group`]) labelled with its title and
-/// described by its description.
+/// Spawn the control as a child of [`SettingRowRefs::control_slot`] and put the rows in a
+/// [`SettingRows`] column.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[component(on_insert=Self::on_insert)]
@@ -110,8 +101,7 @@ impl SettingRow {
             node.set_description(description.as_str());
         }
 
-        // Whether the row has its parts is decided when the command runs, so two inserts before
-        // a flush build them once and the last text wins.
+        // Test for existing parts inside the command: two inserts before a flush build them once.
         let mut commands = world.commands();
         commands
             .run_system_cached_with(build_or_update_parts, (context.entity, title, description));
@@ -119,8 +109,7 @@ impl SettingRow {
     }
 }
 
-/// Builds the parts of a row that has none, else gives the existing ones the new text: the
-/// children, the refs and whatever the app put into the control slot stay.
+/// Builds the parts of a row that has none, else gives the existing ones the new text.
 fn build_or_update_parts(
     input: In<(Entity, String, String)>,
     refs: Query<&SettingRowRefs>,
@@ -232,10 +221,6 @@ fn theme_setting_rows(
 }
 
 /// Hides the divider of the last row of each [`SettingRows`] and shows it on the others.
-///
-/// Looks only at the columns whose structure changed: their `Children` changed (or the column is
-/// new), or one of their rows got its [`SettingRowRefs`] (a row's refs arrive a frame after the
-/// row is spawned). A quiet frame visits nothing and nothing is collected.
 fn sync_dividers(
     changed_columns: Query<
         Entity,
@@ -254,7 +239,6 @@ fn sync_dividers(
     }
     for child_of in &new_rows {
         let column = child_of.parent();
-        // A column that also changed its children was done above; doing it again changes nothing.
         if !changed_columns.contains(column) {
             sync_column(column, &columns, &rows, &mut nodes);
         }

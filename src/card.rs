@@ -10,8 +10,6 @@ use itertools::Either;
 use crate::theme::Theme;
 
 /// Registers the systems and observers of [`Card`].
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug)]
 pub struct CardPlugin;
 
@@ -27,8 +25,6 @@ impl Plugin for CardPlugin {
 }
 
 /// A node with a themed background, border, corner radius and shadow.
-///
-/// To assistive technology it is a group ([`Role::Group`]) of what it holds, without a label.
 #[derive(Component, Copy, Clone, Debug, Reflect)]
 #[reflect(Component)]
 #[require(

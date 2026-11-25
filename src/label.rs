@@ -27,13 +27,7 @@ impl Plugin for LabelPlugin {
 
 /// Themed text.
 ///
-/// It is also Bevy's [`Label`](bevy::ui::widget::Label), so it has an accessibility node with
-/// the role `Label` and its text as the value, kept in step when a `Label` is inserted again.
-/// Inserting a `Label` of another role restyles it; empty text keeps the node (an empty line of
-/// the role's size) and does not hide it.
-///
-/// The component is immutable: build or clone a value, edit it outside the world and insert it
-/// again to update a live widget. It cannot be queried mutably:
+/// Immutable: insert a new value to change it. It cannot be queried mutably:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -63,11 +57,11 @@ pub enum Label {
     Title(String),
     /// Body text.
     Regular(String),
-    /// Secondary text, such as descriptions and captions of option bars: secondary text colour.
+    /// Secondary text, such as descriptions and captions of option bars: secondary text color.
     Secondary(String),
-    /// A caption, such as the faint route line of a row: small size, tertiary text colour.
+    /// A caption, such as the faint route line of a row: small size, tertiary text color.
     Caption(String),
-    /// A group heading: the overline size, semibold, secondary text colour, shown in upper case
+    /// A group heading: the overline size, semibold, secondary text color, shown in upper case
     /// with 0.5 px of letter spacing.
     Overline(String),
 }
@@ -114,7 +108,6 @@ impl Label {
             | Self::Caption(text) => text.clone(),
             Self::Overline(text) => text.to_uppercase(),
         };
-        // Inserting Bevy's `Label` again marks it changed, so its system rereads the text.
         world
             .commands()
             .entity(context.entity)
