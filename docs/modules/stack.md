@@ -2,7 +2,7 @@
 
 `Stack`: shows the one `StackItem` child that matches a selection, building children lazily.
 
-Read this before changing `src/stack.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/stack.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [lists and selection](../design/lists-and-selection.md).
 

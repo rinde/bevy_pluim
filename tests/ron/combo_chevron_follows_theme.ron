@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a combo's chevron is drawn in the primary text colour of the theme",
+    name: "a combo's chevron is drawn in the primary text color of the theme",
     setup: App(Combos),
     steps: [
         Wait(2),

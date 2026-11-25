@@ -579,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn setting_the_colours_of_a_mode_changes_that_half_of_the_pair() {
+    fn setting_the_colors_of_a_mode_changes_that_half_of_the_pair() {
         let (light, dark) = custom_pair();
         let mut theme = Theme::with_colors(light, dark);
         let mut edited = dark;
@@ -607,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    fn repeated_toggling_keeps_the_colours_in_step_with_the_mode() {
+    fn repeated_toggling_keeps_the_colors_in_step_with_the_mode() {
         let (light, dark) = custom_pair();
         let mut theme = Theme::with_colors(light, dark);
         for round in 0..5 {

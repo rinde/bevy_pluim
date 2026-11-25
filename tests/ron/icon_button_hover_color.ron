@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "an icon button shows hover and press colours and a small one brightens its icon",
+    name: "an icon button shows hover and press colors and a small one brightens its icon",
     setup: App(IconButtons),
     steps: [
         Wait(2),

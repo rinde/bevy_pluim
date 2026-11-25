@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "swatches are named after their colour and a palette combo's value is its colour",
+    name: "swatches are named after their color and a palette combo's value is its color",
     setup: App(ColorPalette),
     steps: [
         Wait(2),

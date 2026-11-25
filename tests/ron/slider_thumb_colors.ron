@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a slider's thumb shows hover and press colours and follows the theme",
+    name: "a slider's thumb shows hover and press colors and follows the theme",
     setup: App(Slider),
     steps: [
         Wait(2),

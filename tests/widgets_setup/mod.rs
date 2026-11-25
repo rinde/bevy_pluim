@@ -146,7 +146,7 @@ pub struct Clicks(pub u32);
 #[reflect(Resource)]
 pub struct TouchTaps {
     pub link: u32,
-    pub colour: u32,
+    pub color: u32,
     pub compact: u32,
     pub no_hover: u32,
     pub tooltip: u32,
@@ -1789,8 +1789,8 @@ fn button_names(world: &mut World) {
     world.entity_mut(root).with_children(|root| {
         root.spawn((Name::new("plain button"), PushButton::from_label("Add")));
         root.spawn((Name::new("icon push button"), PushButton::new("Save", "+")));
-        root.spawn((Name::new("colour button"), ColorPushButton))
-            .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.colour += 1);
+        root.spawn((Name::new("color button"), ColorPushButton))
+            .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.color += 1);
         root.spawn((Name::new("link"), Link::new("Docs")))
             .observe(|_: On<Activate>, mut taps: ResMut<TouchTaps>| taps.link += 1);
         spawn_theme_button(root);

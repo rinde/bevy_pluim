@@ -1624,7 +1624,7 @@ fn deep_trees(world: &mut World, root: Entity, chains: usize) {
 
 /// Lists sharing the source of `items-shared-adding`.
 const SHARED_LISTS: usize = 8;
-#[expect(clippy::cast_precision_loss, reason = "a bench colour")]
+#[expect(clippy::cast_precision_loss, reason = "a bench color")]
 const fn palette_color(index: usize) -> Color {
     Color::hsl((index % 360) as f32, 0.7, 0.5)
 }

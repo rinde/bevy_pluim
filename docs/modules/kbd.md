@@ -2,7 +2,7 @@
 
 `Kbd`: a display-only key cap.
 
-Read this before changing `src/kbd.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/kbd.rs`. When the module's behavior changes, update this file in the same PR.
 
 ## Details
 

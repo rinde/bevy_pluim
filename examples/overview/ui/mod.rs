@@ -10,7 +10,7 @@ mod common;
 
 mod buttons;
 mod cards;
-mod colours;
+mod colors;
 mod combos;
 mod feedback;
 mod lists;
@@ -109,8 +109,8 @@ fn tab_pages(commands: &mut Commands) -> Vec<(Item<String>, StackItem)> {
         StackItem::new(commands.register_system(combos::filter_combos)),
     );
     add(
-        "Colours",
-        StackItem::new(commands.register_system(colours::colours)),
+        "Colors",
+        StackItem::new(commands.register_system(colors::colors)),
     );
     add(
         "Segmented control",

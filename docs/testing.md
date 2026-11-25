@@ -2,13 +2,13 @@
 
 Test targets, headless tests, Rust scenarios, schedule shuffling and the GPU recorder. Scenario files and the screens they start from are in [scenario-files.md](scenario-files.md).
 
-When the behaviour described here changes, update this file in the same PR.
+When the behavior described here changes, update this file in the same PR.
 
 ## Test targets
 
 | Target | Holds |
 | --- | --- |
-| `tests/headless.rs` | widget behaviour driven by hand-written triggers in a headless `App` |
+| `tests/headless.rs` | widget behavior driven by hand-written triggers in a headless `App` |
 | `tests/reflection.rs` | the widget types and `Theme` are in the type registry |
 | `tests/scenarios.rs` | Rust scenarios played by `bevy_stagecraft`, a smoke test that every `WidgetsSetup` screen builds, the tests of `WidgetsCheck`, and generated per-file tests that play each `tests/ron/` file with the UI drawn to an image (`image_target_app`) and under shuffled schedules, see [Determinism](testing.md#determinism) |
 | `tests/ron_scenarios.rs` | Generated libtest cases for every `.ron` file and each of its default, scale 2 and text 1.5x variants, see [Scenario files](scenario-files.md) |
@@ -80,7 +80,7 @@ person would see after using the UI.
   none, because an unfulfilled `expect` is itself an error under `-D warnings`.
 - **Build the app with `common::widgets_app()`**: the tester's
   `HeadlessPlugins` (a virtual window, fixed 1/60 s frames, picking, UI, no
-  GPU) plus `WidgetsPlugin`, with `ClearColor` initialised (`HeadlessPlugins`
+  GPU) plus `WidgetsPlugin`, with `ClearColor` initialized (`HeadlessPlugins`
   does not insert it and `theme.rs`'s `update_theme` writes it), finished and
   cleaned up. Do not use `Scenario::headless_app()`: its app is already
   finished and refuses `add_plugins`. Play with
@@ -161,7 +161,7 @@ with `cargo clippy --test recorded_scenarios_gpu --features record`.
   to an `Image`, and Bevy's UI focus (`Interaction`, `RelativeCursorPosition`)
   only follows cameras that render to a window, so a widget must not read it:
   the widgets read hover from picking, which works for any target (see ["Is the
-  pointer on it?"](design/pointer-and-buttons.md#is-the-pointer-on-it-is-pickings-hovered)). Combos, palette combos and the hover colours of lists
+  pointer on it?"](design/pointer-and-buttons.md#is-the-pointer-on-it-is-pickings-hovered)). Combos, palette combos and the hover colors of lists
   and palettes used to read `RelativeCursorPosition` and misbehaved in a
   recording (#100). Generated per-file tests in `tests/scenarios.rs` play each
   file headless with the camera aimed at an image, as the recorder does but

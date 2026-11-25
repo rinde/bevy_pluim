@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "picking colours in a palette combo over many keeps the popup open",
+    name: "picking colors in a palette combo over many keeps the popup open",
     setup: App(ColorPalette),
     steps: [
         Wait(2),

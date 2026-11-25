@@ -1355,18 +1355,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_tailwind_colour_is_named_after_its_class_and_shade() {
+    fn a_tailwind_color_is_named_after_its_class_and_shade() {
         assert_eq!(color_name(Color::from(BLUE_500)), "blue-500");
         assert_eq!(color_name(Color::from(SLATE_50)), "slate-50");
     }
 
     #[test]
-    fn a_colour_outside_tailwind_is_named_by_its_hex() {
+    fn a_color_outside_tailwind_is_named_by_its_hex() {
         assert_eq!(color_name(Color::srgb_u8(0x12, 0xab, 0xef)), "#12abef");
     }
 
     #[test]
-    fn the_alpha_of_a_colour_is_appended_only_when_not_one() {
+    fn the_alpha_of_a_color_is_appended_only_when_not_one() {
         assert_eq!(
             color_name(Color::srgba_u8(0x12, 0xab, 0xef, 0x80)),
             "#12abef80"
@@ -1391,7 +1391,7 @@ mod tests {
     }
 
     #[test]
-    fn there_are_242_colours_of_22_classes_with_11_shades() {
+    fn there_are_242_colors_of_22_classes_with_11_shades() {
         assert_eq!(COLORS.len(), 242);
         assert_eq!(CLASS_NAMES.len() * SHADES.len(), COLORS.len());
     }
@@ -1411,7 +1411,7 @@ mod tests {
     }
 
     #[test]
-    fn the_sixtieth_colour_is_red_500() {
+    fn the_sixtieth_color_is_red_500() {
         // The `ColorPalette` scenarios address it as `Nth(60, ..)`.
         assert_eq!(
             COLORS
@@ -1423,7 +1423,7 @@ mod tests {
 
     /// Tailwind's `zinc-50` and `neutral-50` are the same color (#fafafa), so
     /// `color_name` gives both the name of the one that comes first.
-    fn name_of_colour_at(index: usize) -> String {
+    fn name_of_color_at(index: usize) -> String {
         if expected_name(index) == "neutral-50" {
             "zinc-50".to_owned()
         } else {
@@ -1432,25 +1432,21 @@ mod tests {
     }
 
     #[test]
-    fn every_colour_round_trips_through_its_name() {
+    fn every_color_round_trips_through_its_name() {
         for (i, tailwind) in COLORS.iter().enumerate() {
-            assert_eq!(
-                color_name(tailwind.color),
-                name_of_colour_at(i),
-                "index {i}"
-            );
+            assert_eq!(color_name(tailwind.color), name_of_color_at(i), "index {i}");
         }
     }
 
     #[test]
-    fn only_zinc_50_and_neutral_50_share_a_colour() {
+    fn only_zinc_50_and_neutral_50_share_a_color() {
         for (i, a) in COLORS.iter().enumerate() {
             for (j, b) in COLORS.iter().enumerate().skip(i + 1) {
                 assert!(
                     a.color != b.color
                         || (expected_name(i), expected_name(j))
                             == ("zinc-50".into(), "neutral-50".into()),
-                    "{} and {} are the same colour",
+                    "{} and {} are the same color",
                     expected_name(i),
                     expected_name(j)
                 );
@@ -1459,7 +1455,7 @@ mod tests {
     }
 
     #[test]
-    fn the_colours_are_in_the_documented_order() {
+    fn the_colors_are_in_the_documented_order() {
         for (i, tailwind) in COLORS.iter().enumerate() {
             let class = format!("{:?}", tailwind.class).to_lowercase();
             let shade = format!("{:?}", tailwind.variant);

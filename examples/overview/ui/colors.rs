@@ -9,7 +9,7 @@
 )]
 use super::*;
 
-pub(super) fn colours(spawner: In<StackChildSpawner>, mut commands: Commands) {
+pub(super) fn colors(spawner: In<StackChildSpawner>, mut commands: Commands) {
     let swatches = || {
         COLORS
             .iter()
@@ -23,7 +23,7 @@ pub(super) fn colours(spawner: In<StackChildSpawner>, mut commands: Commands) {
             #Page
             ~{page()}
             Children [
-                ~{Label::header("Colours")}
+                ~{Label::header("Colors")}
                 --
                 ~{groups()}
                 Children [

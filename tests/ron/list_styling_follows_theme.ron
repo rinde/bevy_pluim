@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "list item colours follow the theme",
+    name: "list item colors follow the theme",
     setup: App(Lists),
     steps: [
         Wait(2),

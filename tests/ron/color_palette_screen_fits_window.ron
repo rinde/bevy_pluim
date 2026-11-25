@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "every palette and combo of the colour palette screen is inside the window",
+    name: "every palette and combo of the color palette screen is inside the window",
     setup: App(ColorPalette),
     steps: [
         Wait(2),

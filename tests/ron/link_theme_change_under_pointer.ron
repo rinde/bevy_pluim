@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "a link under the pointer keeps its hover colour when the theme changes",
+    name: "a link under the pointer keeps its hover color when the theme changes",
     setup: App(BreadCrumbs),
     steps: [
         Wait(2),

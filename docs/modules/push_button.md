@@ -2,7 +2,7 @@
 
 `PushButton`: a label and optional icon; the reference widget to copy.
 
-Read this before changing `src/push_button.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/push_button.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [pointer, touch and buttons](../design/pointer-and-buttons.md).
 

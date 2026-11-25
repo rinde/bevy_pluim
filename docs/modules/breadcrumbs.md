@@ -2,7 +2,7 @@
 
 `BreadCrumbs`: a trail of `Link`s for a `OneOrMore` selection; a click trims the selection.
 
-Read this before changing `src/breadcrumbs.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/breadcrumbs.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [lists and selection](../design/lists-and-selection.md), [pointer, touch and buttons](../design/pointer-and-buttons.md).
 

@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn a_mouse_hovers_until_it_goes_out_or_is_cancelled() {
+    fn a_mouse_hovers_until_it_goes_out_or_is_canceled() {
         assert!(event(MouseKind::Over, false).hovered());
         assert!(event(MouseKind::Released, false).hovered());
         assert!(!event(MouseKind::Out, false).hovered());

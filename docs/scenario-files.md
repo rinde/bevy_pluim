@@ -2,7 +2,7 @@
 
 The `tests/ron/` scenario format, its checks and variants, and the `WidgetsSetup` screens.
 
-When the behaviour described here changes, update this file in the same PR.
+When the behavior described here changes, update this file in the same PR.
 
 A scenario can be data: `tests/ron/NAME.ron` is compiled into individual
 libtest cases by `build.rs`. Each file gets default, scale 2 and text 1.5x
@@ -19,7 +19,7 @@ unplayed, and `should_fail` passes only when the scenario fails as expected.
 is the tester's RON script (`format_version: 3`); see its
 README and `tests/ron/*.ron` there. The same file also plays in the tester's
 gallery and recorder. Write or record it there, then drop it in `tests/ron/`.
-A colour in a check is `Srgba((red:..,green:..,blue:..,alpha:..))`; to get
+A color in a check is `Srgba((red:..,green:..,blue:..,alpha:..))`; to get
 the numbers of a theme slot, build the scenario in Rust and print
 `to_ron()`.
 
@@ -58,7 +58,7 @@ pulls it in, like `widgets_setup`, and it stays out of `common` for the
 same `dead_code` reason). A `Selection` holds entities, which mean nothing
 in a script, so `Selected` names the selected items by what they show, in
 the order they were selected: an `Item<String>` by its text, an `Item<Tool>` or
-`Item<GalleryCard>` by its label, an `Item<Color>` by its Tailwind colour (`blue-500`) when it is one, else its hex (`color_name`). `of` is
+`Item<GalleryCard>` by its label, an `Item<Color>` by its Tailwind color (`blue-500`) when it is one, else its hex (`color_name`). `of` is
 any target that resolves to a widget: the selection is the first on it or
 above it, and a `Selection::Ref` is followed, so the `List`, `Combo`,
 `BreadCrumbs` or `ColorPalette` that shares a selection reports it. It goes
@@ -186,7 +186,7 @@ order of the first two stays: `optional toolbar` (Pan, Zoom (`Tone::Warning`), `
 `icon only toolbar` (`ToolbarLabels::Hidden`, Rail with key hint "1" and Signal with "2", `One`)
 and `underlined toolbar` (Trains, Stops, `One`, icon only, so each button has a `Tooltip`).
 `toolbar_click_picks_tool.ron` and `gallery_click_picks_card.ron` read the active look (the
-button's `BackgroundColor.0` and text colour, the card's `BorderColor.top`) against a `Capture`
+button's `BackgroundColor.0` and text color, the card's `BorderColor.top`) against a `Capture`
 of the resting one; `toolbar_keyboard_picks_tool.ron` and `gallery_keyboard_picks_card.ron` Tab
 in, pick with Enter / Space (toolbar) or the arrows (gallery) and Tab out;
 `toolbar_labels_hidden_and_key_hint.ron` checks the button sizes (66 x 60 shown, 56 x 52
@@ -206,7 +206,7 @@ Name("SliderThumb"))` (and `SliderTrack`, `SliderLabel`); a press on the track i
 `Click(Left)` after `MoveTo(Name(..))` and a drag `Drag(from: <thumb>, to: Screen(..))`.
 The label and the track let the pointer through, so a file cannot `MoveTo` the label.
 A press on the thumb alone does not make the slider `Pressed`, only one on the track or a
-drag does, so `slider_thumb_colours.ron` presses the track for the `accent` thumb.
+drag does, so `slider_thumb_colors.ron` presses the track for the `accent` thumb.
 `zero range slider` (320 px, 3 to 3 in steps of 1, spawned last) has the `ZeroRangeChanges`
 resource count its `ValueChange<f32>`s (`count`) and those not at 3 (`off_bound`);
 `slider_zero_range_pointer.ron` presses its track and drags the thumb past both ends and
@@ -248,7 +248,7 @@ Six icon buttons with the default (blank) icon image,
 each with a `Name`: `small button`, `regular button`, `large button`,
 `toggle button` (a `ToggleState` that starts off), `warning button` and
 `danger button`, then "Change theme". `Clicks` counts the `Activate`s of `regular
-button`. `icon_button_hover_colour.ron` reads the background of the regular
+button`. `icon_button_hover_color.ron` reads the background of the regular
 button and the icon tint (`Within(Name("small button"), Component("Icon"))`,
 `ImageNode.color`) of the small one; `icon_button_activates.ron` the `Clicks` and the
 `ToggleState.0` of the toggle.
@@ -266,7 +266,7 @@ Auto, Dark, Dark (the selected segment of each control) and the arrows move insi
 
 ### The `LightDarkToggle` screen
 
-`light dark toggle` (a `LightDarkToggle`, so the `ThemePreference` resource starts at `System`) and "Change theme". A file reaches an option with `Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))`, reads the preference with `Resource(path: "ThemePreference", is: Eq(Dark))`; the toggle's sliding indicator is `Name("OptionIndicator")` (`light_dark_toggle_indicator_slides.ron` reads its `UiGlobalTransform` centre, `ComputedNode` width and `Node.left.0` mid-slide and on arrival), the toggle is one Tab stop at the option of the preference, the arrows, Home and End move the focus and pick (`light_dark_toggle_roving_tab_stop.ron`), and Enter / Space pick the focused one. The scenarios have no primary window, so the window theme and `WindowThemeChanged` are covered by headless tests (`a_system_preference_follows_the_system_theme_as_it_changes`, `the_primary_window_theme_follows_the_preference`).
+`light dark toggle` (a `LightDarkToggle`, so the `ThemePreference` resource starts at `System`) and "Change theme". A file reaches an option with `Within(Name("light dark toggle"), Role(role: Button, label: "Dark"))`, reads the preference with `Resource(path: "ThemePreference", is: Eq(Dark))`; the toggle's sliding indicator is `Name("OptionIndicator")` (`light_dark_toggle_indicator_slides.ron` reads its `UiGlobalTransform` center, `ComputedNode` width and `Node.left.0` mid-slide and on arrival), the toggle is one Tab stop at the option of the preference, the arrows, Home and End move the focus and pick (`light_dark_toggle_roving_tab_stop.ron`), and Enter / Space pick the focused one. The scenarios have no primary window, so the window theme and `WindowThemeChanged` are covered by headless tests (`a_system_preference_follows_the_system_theme_as_it_changes`, `the_primary_window_theme_follows_the_preference`).
 
 ### The `FilterChips` screen
 
@@ -276,7 +276,7 @@ Problems 1; its own selection, All first), `mirror chips` (the same selection th
 wrap, with a selection of its own) and "Change theme". `App(Selected(of: Name(..),
 items: [..]))` names an `Item<Chip>` by its label. Each row is one tab stop, so Tab walks
 "All 4" of the status chips, of the mirror chips and "Alpha" of the narrow ones; the arrows
-move inside one and pick (a chip without a count is labelled with a trailing space, `"Alpha "`).
+move inside one and pick (a chip without a count is labeled with a trailing space, `"Alpha "`).
 
 ### The `Lists` screen
 
@@ -398,7 +398,7 @@ in a `Tree(..)` snapshot, `Disabled(..)` as a check) with the same role, so
 `Nth(i, Within(Name("BreadCrumbs"), Name("Link")))`. The tester will not click
 it (`Force(Click(Left))` does, to show that nothing happens), and the text
 inside is `Pickable::IGNORE`, so a `MoveTo` to the text is "covered by
-`Link`". Read its `BackgroundColor.0`; the colour of its label is
+`Link`". Read its `BackgroundColor.0`; the color of its label is
 `TextColor.0` of `Text("..")`. A `Stack` panel hidden by `Display::None` still exists
 but is left out of a `Tree(..)` snapshot, which also accepts extra
 siblings, so say that a panel is hidden with `Not(Visible(Within(Name("Stack"),
@@ -415,11 +415,11 @@ Space picks the focused one.
 
 A row of `first palette combo`,
 `second palette combo` (the two share one selection) and `own palette combo`
-(its own, over the same colours) and "Change theme"; `one palette combo`
+(its own, over the same colors) and "Change theme"; `one palette combo`
 is out of the row (absolute, 300 pixels from the left) with a `One` selection
-over the same colours, slate-50 until another is picked, so that clicking
-the selected colour changes nothing; below the row `palette` (all
-242 Tailwind colours, 22 columns so that it, 836 by 418, fits the window; the
+over the same colors, slate-50 until another is picked, so that clicking
+the selected color changes nothing; below the row `palette` (all
+242 Tailwind colors, 22 columns so that it, 836 by 418, fits the window; the
 example's 11 columns are taller than it) and `palette scroll area` (300 by
 300, 11 columns, sharing `palette`'s selection through its inner
 `Component("ColorPalette")`). Swatches have no text: they are `ItemView`s,
@@ -429,7 +429,7 @@ below `palette`, in document order, and `Nth` then counts in that list; 60
 is red-500, the order of `tailwind::COLORS`). A selected
 swatch is `Selected` (`Check(Selected(Nth(60, ..)))`) and has a `BorderColor.top`
 other than `background_primary`. A combo's
-button is its `ColorPushButton` and the colour it shows the
+button is its `ColorPushButton` and the color it shows the
 `BackgroundColor.0` of its `ColorSquare`. The popup is a `Float` child of the
 combo, so `Within(Name("first palette combo"), ..)` reaches into it as well,
 and is named after it when it is spawned (`first palette combo popup`, `second palette combo
@@ -438,18 +438,18 @@ popup`, `own palette combo popup`; a combo with only its default name has
 are `Nth(60, Within(Name("first palette combo popup"),
 Component("ItemView")))`; the combo's state is `Component(target:
 Name("first palette combo"), path: "ColorPaletteComboState", is: Eq(Open))` and the popup's
-position the `UiGlobalTransform.0.translation` (the centre) of the float.
+position the `UiGlobalTransform.0.translation` (the center) of the float.
 The open popup lies over the first row of `palette`: swatch 0 of the popup
-(centre 314, 79) is over swatch 7 of `palette`, which is not hovered, pressed
+(center 314, 79) is over swatch 7 of `palette`, which is not hovered, pressed
 or selected by a click on it
 (`color_palette_combo_popup_click_does_not_reach_palette`).
-The popup is centred under its button and pushed in to 10 pixels from the
+The popup is centerd under its button and pushed in to 10 pixels from the
 window's left and right edges; the screen has `left edge palette combo` and
 `right edge palette combo`, absolutely placed in the top corners so nothing
 else moves, which open into those margins
 (`color_palette_combo_keeps_margin_at_window_edge`). In a 1280 by 260 window (`window_size`) the popup is capped to 192 high, top 58 and bottom 250, in every variant; the pointer on rows 249 and 250 tells whether it is on the popup, and Arrow Down scrolls the `ScrollContents` inside it, not the popup (`color_palette_combo_taller_than_window_stays_inside_window`, `color_palette_combo_taller_than_window_keyboard_scrolls_the_popup`). The layout rounds the
-popup to whole pixels, so beside the 39 pixel wide button (centre on a half
-pixel) its centre is the button's plus or minus 0.5. The popup's palette refers to
+popup to whole pixels, so beside the 39 pixel wide button (center on a half
+pixel) its center is the button's plus or minus 0.5. The popup's palette refers to
 the combo's selection from the moment it is spawned, so
 `color_palette_combo_pick_as_first_action` opens `own palette combo` and picks a
 swatch as its first steps, with no wait. `scrolled palette combo` (its own
@@ -471,11 +471,11 @@ with a `Card`. `Theme.colors` is checked whole with
 `Resource(path: "Theme.colors", is: Eq((background_primary: Srgba(..), ..)))`
 (build the scenario in Rust and print `to_ron()` for the numbers),
 `ClearColor` with `Resource(path: "ClearColor.0", ..)`, a shadow with
-`Component(target: .., path: "BoxShadow.0[0].color", ..)` and the colour of
+`Component(target: .., path: "BoxShadow.0[0].color", ..)` and the color of
 a label with `TextColor.0` of `Text("..")`. Read a widget the pointer is not
 on: "Change theme" stays hovered after its click, and a hovered item has
-hover colours. The one that reads
-the hovered "Change theme" is `theme_keeps_hover_colour_under_pointer.ron`: a
+hover colors. The one that reads
+the hovered "Change theme" is `theme_keeps_hover_color_under_pointer.ron`: a
 button the pointer rests on shows the new theme's `hovered_item`. A button
 let go with the pointer still on it is `hovered_item` too, not
 `selected_item`.

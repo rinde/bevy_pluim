@@ -11,7 +11,7 @@ use bevy::ui_widgets::Activate;
 
 use crate::card::Card;
 use crate::divider::Divider;
-use crate::focus::{clear_label, sync_labelled_by};
+use crate::focus::{clear_label, sync_labeled_by};
 use crate::icon_button::{IconButton, IconButtonSize};
 use crate::label::Label;
 use crate::scroll_area::ScrollArea;
@@ -477,7 +477,7 @@ fn sync_panel(
     };
     if let Some(mut accessibility_node) = accessibility_node {
         clear_label(&mut accessibility_node);
-        sync_labelled_by(&mut accessibility_node, refs.title);
+        sync_labeled_by(&mut accessibility_node, refs.title);
     }
     let show = |shown: bool| if shown { Display::Flex } else { Display::None };
     commands

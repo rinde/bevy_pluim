@@ -2,7 +2,7 @@
 
 `WidgetsPlugin` (the one plugin an app adds), `UiRoot`, and the crate-private `MouseEvent` every widget reacts to.
 
-Read this before changing `src/lib.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/lib.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [pointer, touch and buttons](../design/pointer-and-buttons.md).
 

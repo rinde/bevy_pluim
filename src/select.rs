@@ -2018,7 +2018,7 @@ mod tests {
     }
 
     #[test]
-    fn initialised_selections_are_not_pending() {
+    fn initialized_selections_are_not_pending() {
         for value in [
             SelectionValue::One(entity(1)),
             SelectionValue::OneOrMore(smallvec![entity(1)]),
@@ -2031,11 +2031,11 @@ mod tests {
 
     #[test]
     fn a_pending_selection_cannot_be_cleared_back_to_pending_by_the_update_methods() {
-        let initialised = [
+        let initialized = [
             SelectionValue::One(entity(1)),
             SelectionValue::OneOrMore(smallvec![entity(1)]),
         ];
-        for value in initialised {
+        for value in initialized {
             assert_eq!(value.clear(), None);
             assert_eq!(value.pop(), None);
             assert_eq!(value.trim_to_length(0), None);

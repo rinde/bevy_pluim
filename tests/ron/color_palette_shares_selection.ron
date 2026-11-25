@@ -1,6 +1,6 @@
 (
     format_version: 3,
-    name: "palettes that share a selection show the same colour",
+    name: "palettes that share a selection show the same color",
     setup: App(ColorPalette),
     steps: [
         Wait(2),

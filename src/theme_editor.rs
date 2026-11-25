@@ -329,7 +329,7 @@ const SHADOW: &str = "Shadow";
 const ITEM_PADDING: [ThemeParameter; 4] = padding!(item_padding, "List item padding");
 const COMPACT_PADDING: [ThemeParameter; 4] =
     padding!(compact_button_padding, "Compact button padding");
-const COLOR_PADDING: [ThemeParameter; 4] = padding!(color_button_padding, "Colour button padding");
+const COLOR_PADDING: [ThemeParameter; 4] = padding!(color_button_padding, "Color button padding");
 
 /// All the numbers the editor changes, in row order, grouped by `section`.
 #[must_use]
@@ -467,7 +467,7 @@ fn rows_column() -> impl Bundle {
 }
 
 fn spawn_rows(column: &mut ChildSpawner, colors: Entity, theme: &Theme) {
-    column.spawn((Label::overline("Colours"), see_through()));
+    column.spawn((Label::overline("Colors"), see_through()));
     for slot in editable_color_slots() {
         column.spawn(color_row(colors, &slot, theme.colors()));
     }

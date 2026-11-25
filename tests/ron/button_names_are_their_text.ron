@@ -1,12 +1,12 @@
 (
     format_version: 3,
-    name: "push buttons, links and colour buttons are named after their text",
+    name: "push buttons, links and color buttons are named after their text",
     setup: App(ButtonNames),
     steps: [
         Wait(2),
         Check(App(Accessible(of: Name("plain button"), role: Some("Button"), label: Some("Add"), value: None, states: []))),
         Check(App(Accessible(of: Name("icon push button"), role: Some("Button"), label: Some("Save"), value: None, states: []))),
-        Check(App(Accessible(of: Name("colour button"), role: Some("Button"), label: Some("red-500"), value: None, states: []))),
+        Check(App(Accessible(of: Name("color button"), role: Some("Button"), label: Some("red-500"), value: None, states: []))),
         Check(App(Accessible(of: Name("link"), role: Some("Link"), label: Some("Docs"), value: None, states: []))),
     ],
     expect: [],

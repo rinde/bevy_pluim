@@ -2,7 +2,7 @@
 
 `Link`: clickable text, a button with `Role::Link`.
 
-Read this before changing `src/link.rs`. When the module's behaviour changes, update this file in the same PR.
+Read this before changing `src/link.rs`. When the module's behavior changes, update this file in the same PR.
 
 Cross-cutting design: [pointer, touch and buttons](../design/pointer-and-buttons.md).
 

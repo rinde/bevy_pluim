@@ -109,7 +109,7 @@ fn a_push_button_follows_the_theme_under_the_pointer_and_reports_the_click() {
 }
 
 #[test]
-fn a_scenario_expecting_the_wrong_theme_colours_fails() {
+fn a_scenario_expecting_the_wrong_theme_colors_fails() {
     let report = play(&hover_and_click(&DEFAULT_DARK_THEME_COLORS));
     assert!(!report.passed());
     assert!(
@@ -1579,7 +1579,7 @@ fn selected_reads_the_trail_of_breadcrumbs() {
 }
 
 #[test]
-fn selected_names_a_colour_by_its_tailwind_class() {
+fn selected_names_a_color_by_its_tailwind_class() {
     let (mut app, Selections { colors, .. }) = selection_app();
     let [_, red, _] = items_of(&app, colors);
     assert_eq!(selected(&app, "palette", &[]), Ok(()));
@@ -3290,7 +3290,7 @@ fn a_virtual_list_row_follows_a_theme_change_after_idle_frames() {
     app.update();
     let after = shown_row_backgrounds(&mut app);
     assert_eq!(before.len(), after.len());
-    assert_ne!(before, after, "the rows kept the old theme's colours");
+    assert_ne!(before, after, "the rows kept the old theme's colors");
 }
 
 #[test]
@@ -4165,7 +4165,7 @@ fn a_light_dark_toggle_does_not_take_the_focus_from_another_widget() {
 mod overview;
 
 #[test]
-fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() {
+fn every_page_of_the_overview_is_centerd_in_the_same_area_and_fits_the_window() {
     let mut app = App::new();
     app.add_plugins(bevy_stagecraft::HeadlessPlugins::default());
     app.init_resource::<ClearColor>();
@@ -4195,8 +4195,8 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
         .unwrap();
     let rect = |entity| {
         let size = world.get::<ComputedNode>(entity).unwrap().size();
-        let centre = world.get::<UiGlobalTransform>(entity).unwrap().translation;
-        Rect::from_center_size(centre, size)
+        let center = world.get::<UiGlobalTransform>(entity).unwrap().translation;
+        Rect::from_center_size(center, size)
     };
     let toggle_rect = rect(toggle);
     let bar_rect = rect(bar);
@@ -4238,13 +4238,13 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
             })
             .collect();
         assert_eq!(pages.len(), 1, "{tab}: one page is shown");
-        let (page, size, centre) = pages[0];
-        let (first_size_x, first_centre_x) = *area.get_or_insert((size.x, centre.x));
-        assert_eq!((size.x, centre.x), (first_size_x, first_centre_x), "{tab}");
+        let (page, size, center) = pages[0];
+        let (first_size_x, first_center_x) = *area.get_or_insert((size.x, center.x));
+        assert_eq!((size.x, center.x), (first_size_x, first_center_x), "{tab}");
         assert!(size.y <= 720.0 - 40.0, "{tab} is {} high", size.y);
-        assert!(centre.x + size.x / 2.0 <= 1280.0, "{tab}");
-        let left = centre.x - size.x / 2.0;
-        let right = centre.x + size.x / 2.0;
+        assert!(center.x + size.x / 2.0 <= 1280.0, "{tab}");
+        let left = center.x - size.x / 2.0;
+        let right = center.x + size.x / 2.0;
         let mut parts = vec![page];
         let mut checked = 0;
         for _depth in 0..2 {
@@ -4289,16 +4289,16 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
         assert_eq!(rows.len(), 1, "{tab}: one wrapping row of variants");
         let rect = |world: &World, entity: Entity| {
             let computed = world.get::<ComputedNode>(entity).unwrap();
-            let centre = world.get::<UiGlobalTransform>(entity).unwrap().translation;
+            let center = world.get::<UiGlobalTransform>(entity).unwrap().translation;
             let size = computed.size();
-            Rect::from_center_size(centre, size)
+            Rect::from_center_size(center, size)
         };
         let row = rect(world, rows[0]);
         let page_rect = rect(world, page);
         if row.width() < page_rect.width() {
             assert!(
                 (row.center().x - page_rect.center().x).abs() <= 1.0,
-                "{tab}: the row of variants is not centred in the page"
+                "{tab}: the row of variants is not centerd in the page"
             );
         }
         let variants: Vec<Rect> = world
@@ -4324,7 +4324,7 @@ fn every_page_of_the_overview_is_centred_in_the_same_area_and_fits_the_window() 
         for (_, left, right) in &lines {
             assert!(
                 ((left + right) / 2.0 - row.center().x).abs() <= 1.0,
-                "{tab}: a line of variants ({left}..{right}) is not centred in the row {}..{}",
+                "{tab}: a line of variants ({left}..{right}) is not centerd in the row {}..{}",
                 row.min.x,
                 row.max.x
             );
@@ -4404,7 +4404,7 @@ const GROUPS_WITHOUT_TOUCH: [(&str, &str); 7] = [
     ),
     ("Badge", "display only: a pill in the corner of a button"),
     ("Toast", "display only: a timed message"),
-    ("Theme", "colours and fonts, no input"),
+    ("Theme", "colors and fonts, no input"),
     ("Accessibility", "the accessibility tree, not input"),
 ];
 

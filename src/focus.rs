@@ -124,7 +124,7 @@ pub(crate) fn sync_controls(node: &mut Mut<AccessibilityNode>, controlled: Entit
 }
 
 /// Sets the node that labels `node`, writing only on a difference.
-pub(crate) fn sync_labelled_by(node: &mut Mut<AccessibilityNode>, labelling: Entity) {
+pub(crate) fn sync_labeled_by(node: &mut Mut<AccessibilityNode>, labelling: Entity) {
     let wanted = [node_id(labelling)];
     if node.labelled_by() != wanted {
         node.set_labelled_by(wanted);
