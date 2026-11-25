@@ -14,7 +14,7 @@ just bench -- --workload tooltips --size 20000          # one workload
 just bench -- --frames 1000                             # more timed frames
 ```
 
-Always an optimised build (`just bench` uses `--release`; the header says
+Always an optimized build (`just bench` uses `--release`; the header says
 `DEBUG` otherwise and the numbers then mean nothing). The suite runs each
 workload in a fresh process, so memory from one does not leak into the next,
 and prints a markdown table headed by the build, CPU, thread count, warm-up
@@ -292,7 +292,7 @@ held or now hold the focus, or whose visibility, `Display::None` or parent chang
 The gain is a few percent: the rest of the idle frame is other systems. The point is that a quiet
 frame does no per-bar work (`a_quiet_tab_bar_is_not_revisited_and_a_change_to_its_tabs_or_focus_is`).
 
-## Note synchronisation of lists (#666)
+## Note synchronization of lists (#666)
 
 `sync_item_notes` used to visit every default `ItemView` of the world when any
 `ItemNote` changed or was removed. It now looks at the views of the changed
@@ -313,7 +313,7 @@ workload is unchanged, as expected. Test:
 `a_note_change_resyncs_only_the_rows_of_its_item_and_a_theme_change_all_of_them`
 (fails on the old code: the unrelated list was resynced).
 
-## Selection synchronisation of lists (#671)
+## Selection synchronization of lists (#671)
 
 `list.rs`'s `selection_change` ran once per changed selection and scanned every
 `List` for each, so N simultaneous changes cost N x lists. It now collects the
@@ -529,7 +529,7 @@ items once and every observer (`watch_items`, `List`, `SegmentedControl`,
 `TabBar`, palettes) clones the `Arc`, instead of one copy for the event plus
 one per watcher. The snapshot is taken when the change is detected, so
 ordering and intermediate state are as before. `items-shared-adding` at 5 000
-items, mean `App::update` over 300 frames, optimised build, main against this
+items, mean `App::update` over 300 frames, optimized build, main against this
 change (two runs of main): 113.1 / 109.4 ms before, 115.0 ms after, memory
 added 1056 MiB both. The difference is within noise: with real `List`s the
 per-frame cost is the views each list reconciles (8 x 5 000), not the copy
