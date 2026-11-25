@@ -24,11 +24,6 @@ impl Plugin for BreadCrumbsPlugin {
 }
 
 /// A trail of links for the `OneOrMore` selection on this entity (or the one it refers to).
-///
-/// Clicking a crumb trims the selection back to it. The current (last) crumb is a [`Link`] with
-/// [`InteractionDisabled`], so it shows plain text and never activates; a crumb that stops being
-/// the last is built again without the marker. Adding, editing or removing the `Item<String>` of a
-/// selected item rebuilds the trail too, so labels and the positions a click trims to stay current.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 #[require(Name::new("BreadCrumbs"), Node)]
@@ -54,11 +49,7 @@ fn selection_change(
             selections.update_selection(selection_ref, |s| s.trim_to_length(new_length));
         }
     };
-    // A trail is rebuilt once a run, whether its own selection changed, the one it refers to,
-    // or both: two passes would both see the children from before the first and spawn the
-    // trail twice.
-    // Items whose text was added, edited or removed this run: a trail showing one of them is
-    // rebuilt in full, since the diff below compares entities, not labels or positions.
+    // Rebuild a trail once per run: two passes would both see the old children and spawn it twice.
     let touched_items = changed_items
         .iter()
         .chain(removed_items.read())
@@ -83,8 +74,6 @@ fn selection_change(
                 })
                 .unwrap_or(vec![]);
 
-            // Items without text get no crumb. Each crumb keeps its position in the selection,
-            // which is the length the selection is trimmed to when the crumb is clicked.
             let selected = selection
                 .iter()
                 .enumerate()
@@ -115,8 +104,6 @@ fn selection_change(
                 };
                 let link = Link::new(item.data.clone());
 
-                // The current crumb is a disabled button: it never activates.
-                // A crumb is respawned when it stops being the last, so it is enabled again.
                 let current = index + 1 == selected.len();
                 if index == 0 {
                     commands.entity(bread_crumbs_ref).with_children(|parent| {

@@ -1,10 +1,4 @@
-//! The selection model.
-//!
-//! A [`Selection`] is an immutable component that either holds a
-//! [`SelectionValue`] or refers to the selection on another entity. The items
-//! to choose from live in an [`ItemValues`] relationship target, optionally shared
-//! through [`ItemsRef`]. Widgets read and change selections through
-//! [`SelectionParam`].
+//! The selection model: [`Selection`], its items and the helpers that reconcile views with them.
 
 use std::sync::Arc;
 
@@ -24,8 +18,6 @@ use smallvec::{SmallVec, smallvec};
 use strum::EnumIs;
 
 /// Registers the systems and observers of the selection model.
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ItemsPlugin;
 
@@ -47,19 +39,16 @@ impl Plugin for ItemsPlugin {
     }
 }
 
-/// What is selected: either a [`SelectionValue`] on this entity, or a reference to the selection on another entity so that several widgets share one.
+/// What is selected: a [`SelectionValue`] on this entity, or a reference to another entity's.
 ///
-/// Immutable: change it through [`SelectionParam`], which inserts the new value.
+/// Immutable: change it through [`SelectionParam`].
 #[derive(Component, Debug, Clone, Eq, PartialEq, Reflect)]
 #[component(immutable)]
 pub enum Selection {
     /// Use the selection on that entity.
     ///
-    /// Exactly one hop is followed: the target must hold a
-    /// [`Selection::Value`]. A target that is missing, has no `Selection`,
-    /// is this very entity, or is itself a `Ref` (a chain) resolves to
-    /// nothing, and [`SelectionParam`] logs an `error!`; point a `Ref` at the
-    /// entity that holds the value instead.
+    /// One hop only: a missing target, this entity or another `Ref` resolves to nothing, and
+    /// [`SelectionParam`] logs an `error!`.
     Ref(Entity),
     /// The selection itself.
     Value(SelectionValue),
@@ -164,8 +153,6 @@ impl SelectionBuilderWithValue {
     }
 
     /// [`build_with_items`](Self::build_with_items) as a scene, for `@{..}` in `bsn!`.
-    ///
-    /// The scene can be spawned more than once, so the items are cloned each time.
     #[must_use]
     pub fn scene_with_items<I, B>(self, items: I) -> impl Scene
     where
@@ -278,9 +265,6 @@ struct PendingSelection {
 
 /// The selections waiting for their first item.
 ///
-/// Nothing polls it: [`repair_pending_selections`] runs on the [`ItemsChanged`] of an entry's
-/// items and [`forget_removed_selection`] drops an entry when its selection loses its
-/// [`Selection`] or is despawned.
 #[derive(Resource, Default)]
 struct SelectionResource {
     pending: Vec<PendingSelection>,
@@ -296,24 +280,20 @@ impl SelectionResource {
 
 /// Starts a refresh of the selection on an entity whose [`ItemsRef`] was replaced.
 ///
-/// `Discard` (before the old value goes) runs before the new value is in, so the refresh is queued to run after it; a removed
-/// [`ItemsRef`] has nothing to refresh to.
+/// Queued, because `Discard` runs before the new value is in.
 fn on_replace_items_ref(t: On<Discard<ItemsRef>>, mut commands: Commands) {
     commands.run_system_cached_with(refresh_selection_items, t.event_target());
 }
 
-/// Starts a refresh of the selection on an entity that gets an [`ItemsRef`] it did not have, as
-/// after Bevy dropped one whose target was gone: a replacement is [`on_replace_items_ref`]'s.
+/// Starts a refresh of the selection on an entity that gets an [`ItemsRef`] it did not have.
 fn on_add_items_ref(t: On<Add<ItemsRef>>, mut commands: Commands) {
     commands.run_system_cached_with(refresh_selection_items, t.event_target());
 }
 
 /// Points the selection on `entity` at the items of its (new) [`ItemsRef`].
 ///
-/// Selected items that are not items of the new source are dropped, as a selection of one item
-/// goes back to its first item (or to pending, when the source has none yet, see
-/// [`SelectionValue::is_pending`]). The selection is inserted again whatever the result, so the
-/// widgets that follow it draw the new items.
+/// Selected items not in the new source are dropped. The selection is inserted again whatever
+/// the result, so the widgets that follow it redraw.
 fn refresh_selection_items(
     In(entity): In<Entity>,
     selections: Query<(&Selection, Option<&ItemsRef>)>,
@@ -325,18 +305,13 @@ fn refresh_selection_items(
     let Ok((selection, items_ref)) = selections.get(entity) else {
         return;
     };
-    // The widgets that refer to this selection (`Selection::Ref`) took their items from the old
-    // source; inserting their selection again makes them look the source up anew, so they clear
-    // or redraw whatever the new source is, also one that is gone.
+    // Reinsert so widgets that follow this selection look up the source anew.
     for (referrer, referrer_selection) in &referrers {
         if matches!(referrer_selection, Selection::Ref(target) if *target == entity) {
             commands.entity(referrer).insert(referrer_selection.clone());
         }
     }
     let (Selection::Value(value), Some(ItemsRef(items_entity))) = (selection, items_ref) else {
-        // The `ItemsRef` is gone (removed, or its target did not exist and Bevy dropped it): the
-        // selection is inserted again unchanged, so the widgets that follow it look up their
-        // source anew and clear what they showed of the old one.
         commands.entity(entity).insert(selection.clone());
         return;
     };
@@ -400,7 +375,7 @@ fn repair_pending_selections(
     });
 }
 
-/// Drops the pending entry of a selection whose [`Selection`] is gone (also when it is despawned).
+/// Drops the pending entry of a selection whose [`Selection`] is gone.
 fn forget_removed_selection(removed: On<Remove<Selection>>, mut r: ResMut<SelectionResource>) {
     let entity = removed.event_target();
     r.pending.retain(|pending| pending.selection != entity);
@@ -412,22 +387,20 @@ type SelectionVec = SmallVec<[Entity; 4]>;
 
 /// The selected items, and how many may be selected.
 ///
-/// Methods that change it return the new value, or `None` when the change is not allowed for the variant or would not change anything.
+/// Methods that change it return the new value, or `None` when the change is refused or a no-op.
 #[derive(Debug, Clone, Educe, Eq, PartialEq, EnumIs, Reflect)]
 #[educe(Default)]
 pub enum SelectionValue {
     /// Exactly one item.
     ///
-    /// `One(Entity::PLACEHOLDER)` is the *pending* state of a selection whose item source has no
-    /// first item yet (see [`SelectionValue::is_pending`]); it selects nothing.
+    /// `One(Entity::PLACEHOLDER)` is the *pending* state; see [`SelectionValue::is_pending`].
     One(Entity),
     /// At most one item.
     #[educe(Default)]
     ZeroOrOne(Option<Entity>),
     /// At least one item.
     ///
-    /// An empty `OneOrMore` is the *pending* state of a selection whose item source has no first
-    /// item yet (see [`SelectionValue::is_pending`]); it selects nothing.
+    /// An empty `OneOrMore` is the *pending* state; see [`SelectionValue::is_pending`].
     OneOrMore(SelectionVec),
     /// Any number of items.
     ZeroOrMore(SelectionVec),
@@ -449,16 +422,10 @@ impl SelectionValue {
         }
     }
 
-    /// Whether this is a mandatory selection ([`SelectionValue::One`] or
-    /// [`SelectionValue::OneOrMore`]) still waiting for its first item: `One(Entity::PLACEHOLDER)`
-    /// or an empty `OneOrMore`.
+    /// Whether this is a mandatory selection still waiting for its first item.
     ///
-    /// Pending is not an error: it is how a selection over items that are spawned later starts.
-    /// A pending selection has no selected items (`iter` yields nothing, `len` is 0, `is_empty`
-    /// is true, `single` and `last` are `None`, nothing `is_selected`), and consumers treat it
-    /// as empty and never look up a view for the placeholder. The first `ItemsChanged` that
-    /// brings an item selects it, keeping the variant, and the normal update methods never
-    /// return to pending: `One` and `OneOrMore` refuse to clear an initialised selection.
+    /// A pending selection selects nothing and consumers never look up a view for the
+    /// placeholder. The first `ItemsChanged` that brings an item selects it.
     #[must_use]
     pub fn is_pending(&self) -> bool {
         match self {
@@ -541,10 +508,7 @@ impl SelectionValue {
     #[must_use]
     pub fn toggle_selected(&self, new_selection: Entity) -> Option<Self> {
         match self {
-            Self::One(selected) => {
-                // is a no-op if attempted to toggle the current selection
-                (*selected != new_selection).then_some(Self::One(new_selection))
-            }
+            Self::One(selected) => (*selected != new_selection).then_some(Self::One(new_selection)),
             Self::ZeroOrOne(selected) => match selected {
                 Some(selected) if selected == &new_selection => Some(Self::ZeroOrOne(None)),
                 _ => Some(Self::ZeroOrOne(Some(new_selection))),
@@ -671,8 +635,7 @@ impl SelectionValue {
 
     /// Deselects everything, where the variant allows an empty selection.
     ///
-    /// `One` and `OneOrMore` must keep an item, so they refuse (`None`), as does a
-    /// selection that is already empty.
+    /// `One` and `OneOrMore` must keep an item, so they refuse (`None`).
     #[must_use]
     pub fn clear(&self) -> Option<Self> {
         match self {
@@ -685,10 +648,7 @@ impl SelectionValue {
 
     /// Replaces the selection with `iter`, keeping its order (duplicates dropped).
     ///
-    /// Order is significant for `OneOrMore` and `ZeroOrMore`, because [`Self::iter`]
-    /// yields selection order and [`Self::trim_to_length`] keeps the first items: the
-    /// same items in another order are a change and give `Some`. `None` means no
-    /// change (the same items in the same order) or a refused change.
+    /// Order matters: the same items in another order give `Some`.
     #[must_use]
     pub fn set_selection(&self, iter: impl IntoIterator<Item = Entity>) -> Option<Self> {
         let mut iter = iter.into_iter().unique();
@@ -734,7 +694,7 @@ impl SelectionValue {
 
 /// System parameter to read and change selections, following any [`Selection::Ref`].
 ///
-/// `F` narrows down the selections that [`Self::iter`] and [`Self::single`] see.
+/// `F` narrows the selections that [`Self::iter`] and [`Self::single`] see.
 #[derive(SystemParam)]
 pub struct SelectionParam<'w, 's, F: QueryFilter + 'static = ()> {
     selection_refs: Query<'w, 's, &'static Selection>,
@@ -850,9 +810,7 @@ where
     }
 
     /// The items that the selection on `selection_ref` chooses from, with the entity they are
-    /// on. A source without [`ItemValues`] (no item added yet, or the last one removed) has
-    /// no items, so the slice is empty then where [`Self::get_item_values`] is `None`; `None`
-    /// only when the selection does not resolve.
+    /// on; empty for a source without [`ItemValues`], where [`Self::get_item_values`] is `None`.
     pub(crate) fn get_items(&self, selection_ref: Entity) -> Option<(Entity, &[Entity])> {
         let (_, items_entity) = self.sources_of(selection_ref)?;
         let items = self
@@ -862,8 +820,7 @@ where
         Some((items_entity, items))
     }
 
-    /// Whether `widget` has a [`Selection::Ref`] that no longer resolves (its target was
-    /// despawned or lost its selection), so it has no items to draw.
+    /// Whether `widget` has a [`Selection::Ref`] that no longer resolves.
     pub(crate) fn is_dangling(&self, widget: Entity) -> bool {
         self.selection_refs
             .get(widget)
@@ -871,22 +828,20 @@ where
             && self.sources_of(widget).is_none()
     }
 
-    /// The entity holding the value of the selection on `widget` and the entity its items are
-    /// on, whether or not that one has any [`ItemValues`] yet.
+    /// The entity holding the value of the selection on `widget` and the entity its items are on.
     pub(crate) fn sources_of(&self, widget: Entity) -> Option<(Entity, Entity)> {
         let root = self.get_ref(widget)?;
         let items = self
             .items_refs
             .get(root)
             .map_or(root, |(_, ItemsRef(sel))| *sel);
-        // An `ItemsRef` to an entity that is gone has no items to draw (Bevy drops it a moment
-        // later, but the widgets must not watch the dead entity in between).
+        // Bevy drops an `ItemsRef` to a gone entity later; do not watch it meanwhile.
         self.entities.contains(items).then_some((root, items))
     }
 
     /// Changes the one selection matching the filter.
     ///
-    /// `updater` returns the new value, or `None` to leave it as it is. Returns whether the selection changed.
+    /// `updater` returns the new value, or `None` to keep it. Returns whether it changed.
     pub fn update_selection_single(
         &mut self,
         updater: impl FnOnce(&SelectionValue) -> Option<SelectionValue>,
@@ -903,7 +858,7 @@ where
 
     /// Changes the selection on `selection_ref`.
     ///
-    /// `updater` returns the new value, or `None` to leave it as it is. Returns whether the selection changed.
+    /// `updater` returns the new value, or `None` to keep it. Returns whether it changed.
     pub fn update_selection(
         &mut self,
         selection_ref: Entity,
@@ -937,10 +892,7 @@ where
 
 /// Marks an entity as an item of the [`ItemValues`] on the given entity.
 ///
-/// Bevy's relationship input: insert it (again) to add the item to other items, which updates the
-/// [`ItemValues`] of both the old and the new entity through Bevy's relationship hooks. The
-/// `ItemValues` collection is derived and has no public mutable access. The entity is not
-/// checked: an `ItemOf` that points to a missing entity is Bevy's to report.
+/// Bevy's relationship input: reinsert it to move the item to other items.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[relationship(relationship_target = ItemValues)]
 pub struct ItemOf(pub Entity);
@@ -978,12 +930,8 @@ impl<T: Into<String>> From<T> for Item<String> {
 /// What changed since the system last ran that a widget `W` over items of type `T` builds its
 /// children from, resolved to the widgets it affects.
 ///
-/// [`Self::affected`] is empty in a frame where nothing changed, so a system that builds a child
-/// per item does no per-item work then. In a frame with a change it names only the widgets
-/// whose own entity, selection entity (a [`Selection::Ref`] followed) or items entity
-/// ([`ItemsRef`] followed) was touched, so a change to one source leaves independent widgets
-/// alone while every widget sharing the source is still named. A widget that changed itself is
-/// always named.
+/// [`Self::affected`] is empty in a frame where nothing changed, so a system does no per-item
+/// work then.
 #[derive(SystemParam)]
 pub(crate) struct StructureChanges<'w, 's, W: Component, T: Send + Sync + 'static> {
     widgets: Query<'w, 's, Entity, Changed<W>>,
@@ -1002,23 +950,17 @@ pub(crate) struct StructureChanges<'w, 's, W: Component, T: Send + Sync + 'stati
 impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
     /// The widgets that need to look at their items again this frame.
     pub(crate) fn affected(&mut self, selections: &SelectionParam) -> Vec<Entity> {
-        // Both readers are drained, so neither keeps the result non-empty in the next frame.
-        // A despawned or moved item changed the `ItemValues` of its owner, which is seen
-        // below; only an item that lost its `Item<T>` but kept its owner needs the lookup.
+        // Drain both readers so neither keeps the result non-empty next frame.
         let removed: Vec<Entity> = self
             .removed_items
             .read()
             .chain(self.removed_item_of.read())
             .collect();
 
-        // Entities whose items changed, matched against a widget's items entity, and entities
-        // whose selection changed, matched against its selection entity. `ItemValues` goes
-        // when its last item does, which `Changed` does not see.
+        // `ItemValues` goes when its last item does, which `Changed` does not see.
         let mut item_sources: EntityHashSet = EntityHashSet::default();
         item_sources.extend(self.values.iter());
-        // A despawned source takes its `Selection` and `ItemValues` with it, and a widget that
-        // pointed at it through a `Selection::Ref` no longer resolves: it is named below to
-        // clear its views, which no observer on the source can do any more.
+        // A despawned source takes its observers with it: name its widgets so they clear.
         let removed_sources = self.removed_selections.read().count() > 0;
         let before = item_sources.len();
         item_sources.extend(self.removed_values.read());
@@ -1030,7 +972,6 @@ impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
                 .filter_map(|item| self.item_owners.get(item).ok().map(|owner| owner.0)),
         );
         let selection_sources: EntityHashSet = self.selections.iter().collect();
-        // A widget whose own `ItemsRef` was replaced is named through its own entity.
         let replaced: EntityHashSet = self.items_refs.iter().collect();
 
         let mut affected: EntityHashSet = self.widgets.iter().collect();
@@ -1062,15 +1003,11 @@ impl<W: Component, T: Send + Sync + 'static> StructureChanges<'_, '_, W, T> {
 pub struct ItemsChanged {
     /// The [`ItemValues`] entity whose items changed.
     pub entity: Entity,
-    /// The new items, one snapshot shared by every observer of the event: cloning the
-    /// `Arc` copies no entities.
+    /// The new items, shared by every observer.
     pub items: Arc<[Entity]>,
 }
 
-/// Records the observer a widget put on its [`ItemValues`] entity to hear [`ItemsChanged`], on
-/// the widget itself, so the observer goes when the widget does (removing or replacing this
-/// component despawns it, so two watches set up before the first is applied leave one
-/// observer) and goes with the values entity when that is despawned first.
+/// The observer a widget put on its [`ItemValues`] entity to hear [`ItemsChanged`].
 #[derive(Component, Debug)]
 #[component(on_discard = despawn_items_observer)]
 pub(crate) struct ItemsObserver {
@@ -1086,10 +1023,8 @@ fn despawn_items_observer(mut world: DeferredWorld, context: HookContext) {
     world.commands().entity(observer).try_despawn();
 }
 
-/// The `children` that show `items`, in the order of `items` (the first child of an item), then
-/// every other child in its place order. `item_of` says which item a child shows, `None` for a
-/// child that is not a view. Linear: one map of the first child per item, one set of the
-/// children placed.
+/// The `children` that show `items`, in item order, then every other child in its place.
+/// `item_of` says which item a child shows, `None` for a child that is not a view.
 pub(crate) fn items_in_order(
     children: impl IntoIterator<Item = Entity> + Clone,
     items: &[Entity],
@@ -1111,19 +1046,14 @@ pub(crate) fn items_in_order(
     wanted
 }
 
-/// What to do with the views a widget owns when its wanted views change: `slots` has one entry
-/// per wanted view, the existing view to keep for it or `None` for one to spawn, and `stale` the
-/// existing views to despawn.
+/// What to do with the views of a widget when its wanted views change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ViewPlan {
     pub(crate) slots: Vec<Option<Entity>>,
     pub(crate) stale: Vec<Entity>,
 }
 
-/// Matches the `existing` views, in child order, with the `wanted` keys: a wanted key takes the
-/// first unused existing view of that key, so views of unchanged items keep their entity.
-/// An existing view with a `None` key is never kept (it is of the wrong kind), and so is a second
-/// view of one key when only one is wanted. Linear: one map of the views per key.
+/// Matches the `existing` views with the `wanted` keys, so views of unchanged items keep their entity.
 pub(crate) fn plan_views<K: Eq + std::hash::Hash>(
     existing: impl IntoIterator<Item = (Entity, Option<K>)>,
     wanted: &[K],
@@ -1148,11 +1078,8 @@ pub(crate) fn plan_views<K: Eq + std::hash::Hash>(
     ViewPlan { slots, stale }
 }
 
-/// The children a widget must be given so that its `views` (the kept ones and the entities just
-/// spawned, in the order wanted) are in that order as one run, at the place of its first current
-/// view and after the children that are not views, which keep their order. `None` when
-/// despawning the `stale` views and appending the new ones, which is what the commands do alone,
-/// already gives that order.
+/// The children a widget must be given to put its `views` in order as one run, or `None` when
+/// despawning the stale views and appending the new ones already does.
 pub(crate) fn order_views(
     children: &[Entity],
     is_view: impl Fn(Entity) -> bool,
@@ -1189,9 +1116,8 @@ pub(crate) fn order_views(
     (!ordered.iter().copied().eq(without_stale)).then_some(ordered)
 }
 
-/// Has `on_changed(commands, widget, items)` called when the items of `values` change, once
-/// per widget and values entity: returns `false`, doing nothing, when `widget` already
-/// watches `values`. Watching other values replaces the earlier observer.
+/// Has `on_changed(commands, widget, items)` called when the items of `values` change; returns
+/// `false` when `widget` already watches `values`.
 pub(crate) fn watch_items(
     commands: &mut Commands,
     watches: &Query<&ItemsObserver>,
@@ -1220,10 +1146,8 @@ pub(crate) fn watch_items(
     true
 }
 
-/// For each widget of `widgets` that watches a values entity but whose items no longer resolve
-/// (the source behind its `Selection::Ref` was despawned, which `ItemsChanged` does not report
-/// because its observers go with the source): removes its [`ItemsObserver`], so pointing it at a
-/// live source watches again, and calls `clear(commands, widget)`.
+/// Removes the [`ItemsObserver`] of each widget whose items no longer resolve and calls
+/// `clear(commands, widget)`.
 pub(crate) fn unwatch_dangling_items<F: QueryFilter>(
     widgets: &Query<(Entity, &ItemsObserver), F>,
     selections: &SelectionParam,
@@ -1239,9 +1163,7 @@ pub(crate) fn unwatch_dangling_items<F: QueryFilter>(
     }
 }
 
-/// Triggers [`ItemsChanged`] for every changed [`ItemValues`], and, with no items, for a live
-/// entity that has just lost its last item and so its `ItemValues`, so the widgets drawn from it
-/// clear their views.
+/// Triggers [`ItemsChanged`] for every changed [`ItemValues`], and for an entity that lost its last item.
 fn items_change(
     q: Query<(Entity, &ItemValues), Changed<ItemValues>>,
     mut removed: RemovedComponents<ItemValues>,
@@ -1267,12 +1189,8 @@ fn items_change(
 
 /// Lets a selection choose from the [`ItemValues`] on another entity.
 ///
-/// Application-authored input, and immutable (as every Bevy relationship): replace it by
-/// inserting a new `ItemsRef` to change the item source. The selection on the entity is then
-/// refreshed from the new source: selected items that do not belong to it are dropped, a `One`
-/// or `OneOrMore` selection takes the new source's first item (waiting for it when the source
-/// has none yet) and the widgets that follow the selection draw the new items. It cannot be
-/// queried mutably:
+/// Immutable: insert a new `ItemsRef` to change the item source, which refreshes the selection
+/// on the entity. It cannot be queried mutably:
 ///
 /// ```compile_fail
 /// # use bevy::prelude::*;
@@ -1940,7 +1858,7 @@ mod tests {
         );
     }
 
-    // Cross-variant behaviour
+    // Cross-variant behavior
 
     #[test]
     fn single_returns_the_only_selected_entity() {

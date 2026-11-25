@@ -82,25 +82,9 @@ impl Plugin for ListPlugin {
 
 /// Renders the items of a [`Selection`] as views, one per item, and keeps them in sync.
 ///
-/// It is a [`ListBox`] and its item views are [`ListItem`]s, so an item of the
-/// selection carries [`Selected`]. The [`Selection`] stays the one source of truth:
-/// [`Selected`] follows it, and [`ListBoxMultiSelect`] is on the list while the selection
-/// holds more than one item (`OneOrMore`, `ZeroOrMore`).
-///
-/// Use [`ListLayout`] and [`CornerStyle`] to change how they are laid out.
-///
-/// A list does not scroll: it is as large as its items. To scroll a list that
-/// does not fit, put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) (see
-/// [`ScrollArea::bundle`](crate::scroll_area::ScrollArea::bundle)).
-///
-/// To cap its height, give that area a `max_height` (not a `height`): the area grows with the
-/// list up to the maximum and then scrolls, as a [`Panel`](crate::panel::Panel) body does. A
-/// list has no maximum height of its own, since a `ScrollArea` already scrolls it, keeps a
-/// focused row in view and draws the scroll bar.
-///
-/// A list spawns a view (several entities and layout nodes) per item, so it suits tens to
-/// hundreds of items. For thousands, use a [`VirtualList`](crate::virtual_list::VirtualList),
-/// which renders only the rows in view.
+/// It is a [`ListBox`] of [`ListItem`]s. It does not scroll: wrap it in a
+/// [`ScrollArea`](crate::scroll_area::ScrollArea) with a `max_height`. A view costs several
+/// entities per item, so use a [`VirtualList`](crate::virtual_list::VirtualList) for thousands.
 #[derive(Component, Debug, Copy, Clone, Default, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -123,8 +107,6 @@ impl Plugin for ListPlugin {
 pub struct List;
 
 /// How the item views of a [`List`] are arranged.
-///
-/// Changing it on a live list updates the grid of its [`Node`] (flow and columns) in place.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -135,8 +117,7 @@ pub enum ListLayout {
     Horizontal,
     /// A grid that fills row by row.
     VerticalGrid {
-        /// The number of columns. `0` has no meaning: the list is laid out as one column
-        /// (`1`) and an `error!` is logged when the layout is inserted.
+        /// The number of columns; `0` is laid out as `1` and logs an `error!`.
         columns: u16,
     },
 }
@@ -166,27 +147,15 @@ pub enum CornerStyle {
     Tabs,
     /// Square corners.
     None,
-    /// Rows that stand apart on the surface they lie on: no border or background on the
-    /// list, a little padding around it and a gap between the rows, each row rounded on
-    /// all corners. A row under the pointer gets the hover background; the selected row
-    /// gets the strong hover background and a ring in the selection colour, not a fill.
+    /// Rows that stand apart, each rounded on all corners, with a ring on the selected row.
     Separated,
 }
 
-/// Makes a [`List`] build the contents of its item views with a system of the app's own,
-/// instead of the default text.
+/// Makes a [`List`] build the contents of its item views with a system of the app's own.
 ///
-/// The list still owns each [`ItemView`] node: it spawns one per item, keeps them in step
-/// with [`ItemsChanged`], and handles hover, press and selection exactly as for the default
-/// views. The creator runs once per view, right after it is spawned, and adds the
-/// contents as children of [`ItemViewSpawner::view`]. The items need not be `Item<String>`.
-///
-/// A nested [`Button`], [`List`], [`Combo`] or [`FilterCombo`] handles its own pointer: a
-/// press on it does not restyle the row and a click on it does not change the selection.
-/// Other contents pass the pointer on to the row.
-///
-/// Add it with the [`List`], before the first update; the creator is a system registered
-/// with `World::register_system`.
+/// The creator runs once per view and adds children to [`ItemViewSpawner::view`]. A nested
+/// [`Button`], [`List`], [`Combo`] or [`FilterCombo`] handles its own pointer. Add it with the
+/// [`List`], before the first update.
 #[derive(Component, Debug, Copy, Clone)]
 pub struct ItemViewCreator {
     /// The system that spawns the contents of a view, through the [`ItemViewSpawner`] it is given.
@@ -201,8 +170,7 @@ impl ItemViewCreator {
     }
 }
 
-/// Given to the creator system of an [`ItemViewCreator`]: the item to show and the (empty)
-/// view to fill with children.
+/// Given to the creator system of an [`ItemViewCreator`].
 #[derive(Debug, Copy, Clone)]
 pub struct ItemViewSpawner {
     /// The item the view shows.
@@ -211,9 +179,7 @@ pub struct ItemViewSpawner {
     pub view: Entity,
 }
 
-/// Marks an [`ItemView`] whose contents come from an [`ItemViewCreator`]. Such a view has
-/// children that take the pointer, so it reads hover from [`Hovered`] and the pointer events
-/// of its descendants instead of observing its own.
+/// Marks an [`ItemView`] whose contents come from an [`ItemViewCreator`].
 #[derive(Component, Debug, Copy, Clone)]
 struct CustomView;
 
@@ -230,10 +196,7 @@ impl List {
     }
 }
 
-/// Sets the grid fields of the [`Node`] of `entity` from its [`ListLayout`], in place: the
-/// fields a [`List`] owns (`display`, `flex_direction`, `position_type`, `grid_auto_flow` and
-/// `grid_template_columns`) and nothing else, so a width or margin of the app survives.
-/// Does nothing for an entity that is not a [`List`] or has no [`Node`] yet.
+/// Sets the fields of the [`Node`] of `entity` that its [`ListLayout`] owns, and no others.
 fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
     let Some(layout) = world.entity(entity).get::<ListLayout>().copied() else {
         return;
@@ -256,8 +219,7 @@ fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
     node.grid_auto_flow = grid_auto_flow;
     node.grid_template_columns = grid_template_columns;
     match layout {
-        // One column or one row needs no grid: a flex column or row lays out the same and is
-        // far cheaper in Taffy at thousands of rows (#729, #766).
+        // A flex row or column lays out as a grid does and is far cheaper in Taffy.
         ListLayout::Vertical => {
             node.display = Display::Flex;
             node.flex_direction = FlexDirection::Column;
@@ -271,10 +233,6 @@ fn apply_layout(world: &mut DeferredWorld, entity: Entity) {
 }
 
 /// One item of a [`List`] (or [`ColorPalette`](crate::color_palette::ColorPalette)).
-///
-/// It is a [`ListItem`]: it carries [`Selected`] while its item is selected. Its
-/// [`Hovered`] says whether the pointer is on it, so that a change of the selection
-/// keeps the hover colour of the view under the pointer.
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Hovered, ListItem)]
@@ -299,8 +257,7 @@ impl ItemView {
     }
 }
 
-/// Private relationship from a view to the item it shows: the item's [`NoteViews`] lists the
-/// views a change of its [`ItemNote`] concerns, whichever lists they belong to.
+/// Private relationship from a view to the item it shows.
 #[derive(Component, Debug, Clone, Copy)]
 #[relationship(relationship_target = NoteViews)]
 struct NoteViewOf(Entity);
@@ -312,25 +269,19 @@ struct NoteViews(Vec<Entity>);
 
 /// A note shown after the label of an item.
 ///
-/// It goes on the item entity next to its [`Item<String>`] and shows in the default view of a
-/// [`List`] (so also in a [`Combo`]'s popup), in the caption size and the
-/// colour of its [`NoteTone`].
-///
-/// A [`Combo`]'s button shows the label of the selected item only, never
-/// the note. To a screen reader the row's name is the label followed by the note
-/// (`Delft < unreachable >`). Inserting a new note, or removing it, updates the row in place; an
-/// empty note shows nothing.
+/// It goes on the item entity next to its [`Item<String>`]. A [`Combo`] button never shows it;
+/// a screen reader reads the label followed by the note.
 #[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub struct ItemNote {
     /// The text of the note.
     pub text: String,
-    /// The colour the note is shown in.
+    /// The color the note is shown in.
     pub tone: NoteTone,
 }
 
 impl ItemNote {
-    /// A note in the secondary text colour.
+    /// A note in the secondary text color.
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -338,7 +289,7 @@ impl ItemNote {
         }
     }
 
-    /// A note in the warning text colour.
+    /// A note in the warning text color.
     pub fn warning(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -347,7 +298,7 @@ impl ItemNote {
     }
 }
 
-/// The colour of an [`ItemNote`], a slot of the theme.
+/// The color of an [`ItemNote`], a slot of the theme.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum NoteTone {
     /// `text_secondary`.
@@ -361,16 +312,13 @@ pub enum NoteTone {
 #[derive(Component, Debug, Clone, Copy)]
 struct ItemNoteView(NoteTone);
 
-/// The ink of a note of `tone` on a row drawn on `background`: the tone's own colour when
-/// it reads at 4.5:1 there, else `text_primary`, which does on every row background. A
-/// transparent row sits on the surface, where the tone's colour is meant to be read.
+/// The ink of a note of `tone` on a row drawn on `background`, at least 4.5:1.
 pub(crate) fn note_ink(colors: &ThemeColors, tone: NoteTone, background: Color) -> Color {
     let own = match tone {
         NoteTone::Secondary => colors.text_secondary,
         NoteTone::Warning => colors.warning_text,
     };
-    // A transparent (alpha 0) row has no colour of its own to measure against, so a
-    // note on it always keeps its own colour.
+    // A transparent row has no color to measure against.
     if background.alpha() == 0.0 || contrast_ratio(own, background) >= 4.5 {
         own
     } else {
@@ -378,8 +326,7 @@ pub(crate) fn note_ink(colors: &ThemeColors, tone: NoteTone, background: Color) 
     }
 }
 
-/// Keeps the note of a row readable when the row's background changes (hover, selection,
-/// theme).
+/// Keeps the note of a row readable when the row's background changes.
 fn note_ink_follows_row(
     rows: Query<(&BackgroundColor, &Children), (With<ItemView>, Changed<BackgroundColor>)>,
     mut notes: Query<(&ItemNoteView, &mut TextColor)>,
@@ -416,8 +363,7 @@ fn sync_item_notes(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    // A theme change restyles every note; otherwise only the new views and the views of the
-    // items whose note changed or went are looked at, so an unrelated list costs nothing.
+    // Touch only the new views and those of changed notes, unless the theme changed.
     let affected: Vec<Entity> = if theme.is_changed() {
         views.iter().map(|(view, ..)| view).collect()
     } else {
@@ -429,7 +375,7 @@ fn sync_item_notes(
         }
         affected
     };
-    // Drain the removals when the theme branch skipped them, or they would be read again.
+    // Drain the removals the theme branch skipped, or they are read again.
     removed_notes.clear();
     for view in affected {
         let Ok((view, ItemView { item_ref, .. }, children, background)) = views.get(view) else {
@@ -487,8 +433,7 @@ fn sync_item_notes(
     }
 }
 
-/// Shows the new text of a renamed `Item<String>` in the label of each default row of it,
-/// leaving every other row and custom views alone.
+/// Shows the new text of a renamed `Item<String>` in its default rows.
 fn sync_item_label_text(
     renamed: Query<(&Item<String>, &NoteViews), Changed<Item<String>>>,
     views: Query<&Children, (With<ItemView>, Without<CustomView>)>,
@@ -510,8 +455,7 @@ fn sync_item_label_text(
     }
 }
 
-/// Names each default row to assistive technology: its label, followed by its note if it has
-/// one. Bevy names a node from one of its texts, which would be the note alone.
+/// Names each default row to assistive technology: its label, then its note.
 fn sync_item_labels(
     mut views: Query<(&ItemView, &mut AccessibilityNode), Without<CustomView>>,
     items: Query<&Item<String>>,
@@ -545,9 +489,7 @@ impl ItemLabel {
     }
 }
 
-/// Marks a default [`ItemView`] of a [`List`] (not a custom view, not a palette swatch): the
-/// one global `handle_mouse_events` observer colours these under the pointer, so a row needs no
-/// observer entity of its own.
+/// Marks a default [`ItemView`] of a [`List`], colored by the global `handle_mouse_events`.
 #[derive(Component, Debug, Copy, Clone, Default)]
 struct DefaultRow;
 
@@ -558,9 +500,7 @@ fn handle_mouse_events(
     styles: Query<&CornerStyle>,
     theme: Res<Theme>,
 ) {
-    // A click and a drag say nothing new about the pointer being on the view: the over,
-    // press, release and out events around them set the colours. A drag in particular can
-    // arrive after the pointer left the view, so it must not put it back under the pointer.
+    // A drag can arrive after the pointer left the view, so it must not recolor it.
     if matches!(t.event().kind, MouseKind::Click(_) | MouseKind::Drag) {
         return;
     }
@@ -579,18 +519,13 @@ fn handle_mouse_events(
     };
     let is_selected = selection.is_selected(*target_item_entity);
 
-    // Selecting and deselecting are the `ListBox`'s events, see `on_value_change` and
-    // `on_reselect_row`; a release only recolours.
-
-    // The pointer is on the view for every event but `Out`; a press looks selected.
     let hovered = t.event().hovered();
     let pressed = t.event().pressed();
     let style = styles.get(*list_ref).copied().unwrap_or(CornerStyle::None);
     background_color.0 = item_background(theme.colors(), style, is_selected || pressed, hovered);
 }
 
-/// The [`ItemView`] a pointer event on `target` belongs to, if `target` is a custom view or
-/// lies under one without a nested button, list, combo or filter combo in between.
+/// The [`ItemView`] a pointer event on `target` belongs to, if it is a custom view's.
 fn custom_view_of(
     target: Entity,
     parents: &Query<&ChildOf>,
@@ -610,12 +545,10 @@ fn custom_view_of(
 }
 
 /// Stops a click that began inside a button, list, combo or filter combo in a custom view from
-/// reaching the outer list, which would take it as a pick of the row.
+/// reaching the outer list.
 ///
-/// The `ListBox` searches the ancestors of a click's original target for a row, whatever
-/// the target is, so a click on a combo inside a row (its root node or its popup, which let
-/// the pointer through) selects the row. A click whose original target is the row or lies
-/// under it without such a widget in between is the row's and goes on.
+/// The `ListBox` finds a row from any ancestor of the original target, so a click on a nested
+/// combo would otherwise pick the row.
 fn keep_nested_clicks_from_row(
     mut click: On<PointerClick>,
     parents: Query<&ChildOf>,
@@ -672,11 +605,10 @@ fn handle_custom_view_mouse_events(
         background_color.0 = item_background(theme.colors(), style, true, hovered.get());
         return;
     }
-    // Deselecting is the `ListBox`'s event, see `on_reselect_row`.
     background_color.0 = item_background(theme.colors(), style, is_selected, hovered.get());
 }
 
-/// Colours a custom view when the pointer enters or leaves it or anything inside it.
+/// Colors a custom view when the pointer enters or leaves it or anything inside it.
 fn custom_view_hover(
     mut item_views: Query<
         (&ItemView, &Hovered, &mut BackgroundColor),
@@ -698,8 +630,7 @@ fn custom_view_hover(
     }
 }
 
-/// The background of an [`ItemView`] from its state: selected and hovered, selected,
-/// hovered, or at rest.
+/// The background of an [`ItemView`] from its state.
 pub(crate) const fn item_background(
     colors: &ThemeColors,
     style: CornerStyle,
@@ -707,7 +638,6 @@ pub(crate) const fn item_background(
     hovered: bool,
 ) -> Color {
     if matches!(style, CornerStyle::Separated) {
-        // The selected row is told apart by its ring; the rest sits on the surface.
         return match (selected, hovered) {
             (true, _) => colors.hovered_selected_item,
             (false, true) => colors.hovered_item,
@@ -722,9 +652,7 @@ pub(crate) const fn item_background(
     }
 }
 
-/// The border colour of an [`ItemView`]: the selection ring on a selected row of a
-/// [`CornerStyle::Separated`] list (transparent on the others), the plain and highlight
-/// borders elsewhere.
+/// The border color of an [`ItemView`].
 pub(crate) const fn item_border(colors: &ThemeColors, style: CornerStyle, selected: bool) -> Color {
     match (style, selected) {
         (CornerStyle::Separated, true) => colors.selection_ring,
@@ -737,13 +665,9 @@ pub(crate) const fn item_border(colors: &ThemeColors, style: CornerStyle, select
 /// Selects the item whose row the [`ListBox`] picked (a click, or Enter or Space on the
 /// active row), as far as the [`Selection`] allows.
 ///
-/// The `ListBox` sends a [`ValueChange`] for a row that is not [`Selected`], and
-/// does nothing more: `listbox_update_selection`, which would insert and remove
-/// [`Selected`] by itself, past the rules of the [`Selection`], is not registered.
-/// [`Selected`] is put on the rows by `selection_change` once the selection has changed.
-///
-/// The `ListBox` sends it for a click on any row but the first selected one, selected rows
-/// included, so a click on a selected row deselects it here, as far as the selection allows.
+/// `listbox_update_selection` is not registered: it would set [`Selected`] past the rules of the
+/// [`Selection`]. `selection_change` sets it. The `ListBox` also sends this for a click on a
+/// selected row, which deselects it where the selection allows.
 fn on_value_change(
     t: On<ValueChange<Entity>>,
     lists: Query<(), With<List>>,
@@ -757,8 +681,7 @@ fn on_value_change(
     let Ok(item_view) = item_views.get(value) else {
         return;
     };
-    // A nested list (a combo's popup in a custom view) can report a row of the list around
-    // it: `listbox_on_row_click` searches the ancestors of a click on the nested list itself.
+    // A nested list can report a row of the list around it.
     if item_view.list_ref != source {
         return;
     }
@@ -767,9 +690,7 @@ fn on_value_change(
     });
 }
 
-/// Toggles the already-selected row the `ListBox` reports as chosen again: Space or Enter on
-/// the active row, or a click on the first selected row. `toggle_selected` is `None` for `One`,
-/// so that selection keeps its item.
+/// Toggles the already-selected row the `ListBox` reports as chosen again; a `One` keeps it.
 fn on_reselect_row(
     t: On<ReselectListRow>,
     lists: Query<(), With<List>>,
@@ -793,12 +714,9 @@ fn on_reselect_row(
 
 /// Keeps the keys a focused [`List`] navigates with from bubbling past it.
 ///
-/// The `ListBox` stops a first press of an arrow key, Home or End itself, but lets a held
-/// key's repeats and the release go on up to the window, where an app's directional
-/// navigation would move the focus out of the list. The list owns those keys while it has
-/// the focus, so none of them goes further. Keys that bubble up from a focused descendant
-/// (a button in a custom item view) are not the list's: those go on past it, see
-/// [`pass_first_presses_from_descendants`].
+/// The `ListBox` stops a first press itself but lets repeats and the release bubble to the
+/// window, where directional navigation would move the focus out. Keys from a focused
+/// descendant go on: see [`pass_first_presses_from_descendants`].
 fn keep_navigation_keys(
     mut input: On<FocusedInput<KeyboardInput>>,
     lists: Query<(), With<List>>,
@@ -816,15 +734,8 @@ fn keep_navigation_keys(
 /// Lets a first press of an arrow key, Home or End from a focused descendant of a [`List`]
 /// (a button in a custom item view) go on past the list.
 ///
-/// Unlike the repeats and the release of that key, which bubble through the [`List`] entity
-/// on their way up, the first press skips that one hop: an observer on the list sees a held
-/// arrow's repeats and its release, but not its first press.
-///
-/// The `ListBox` takes any first press of those keys that reaches it as its own, because the
-/// `focused_entity` it checks is the entity the bubbling event has reached, not the focus.
-/// So on the child of the list that the event comes through, the press is stopped before
-/// it reaches the list and sent on from the list's parent (the window, for a list without
-/// one): the active row stays where it is and an app's directional navigation gets the key.
+/// The `ListBox` takes any first press that reaches it, so stop it on the child it comes
+/// through and send it on from the list's parent.
 fn pass_first_presses_from_descendants(
     mut input: On<FocusedInput<KeyboardInput>>,
     parents: Query<&ChildOf>,
@@ -844,8 +755,6 @@ fn pass_first_presses_from_descendants(
     };
     let Some(next) = list_parent
         .map(ChildOf::parent)
-        // The primary window Bevy's `dispatch_focused_input` sent the event with: it only
-        // dispatches while there is exactly one, so the first is that one.
         .or_else(|| windows.iter().next())
     else {
         return;
@@ -928,13 +837,11 @@ fn selection_change(
     theme: Res<Theme>,
     mut commands: Commands,
 ) {
-    // One pass over the lists however many selections changed, not one pass per change.
     let changed: EntityHashSet = q.iter().collect();
     if changed.is_empty() {
         return;
     }
     for (list_ref, children, list_selection, style, is_multi) in lists {
-        // The selection of the list that changed: its own entity, or the one it refers to.
         let changed_selection_ref = match list_selection {
             Selection::Ref(entity) if changed.contains(entity) => *entity,
             _ if changed.contains(&list_ref) => list_ref,
@@ -989,9 +896,6 @@ fn on_items_changed(
     });
 
     let mut commands_run = Vec::new();
-    // Linear reconciliation: one set of the wanted items, one of the items
-    // that already have a view. A view is kept when its item is wanted and no
-    // earlier view shows it; any other view is despawned.
     let wanted: HashSet<Entity> = items.iter().copied().collect();
     let mut shown = HashSet::with_capacity(existing.len());
     for (view_ref, ItemView { item_ref, .. }) in existing {
@@ -1010,7 +914,6 @@ fn on_items_changed(
         commands.entity(*list_ref).with_children(|spawner| {
             let mut view = spawner.spawn((
                 Name::new("ItemView"),
-                // Allow scrolling
                 Pickable {
                     should_block_lower: false,
                     ..default()
@@ -1018,9 +921,7 @@ fn on_items_changed(
                 Node {
                     display: Display::Flex,
                     justify_self: JustifySelf::Stretch,
-                    // flex_grow: 1.0,
-                    // A row keeps its content width, as in the old grid with auto columns:
-                    // a Horizontal flex row overflows a narrow list instead of squeezing rows.
+                    // A horizontal flex row overflows a narrow list instead of squeezing rows.
                     flex_shrink: 0.0,
                     justify_content: JustifyContent::Stretch,
                     align_items: AlignItems::Stretch,
@@ -1057,11 +958,7 @@ fn on_items_changed(
     commands.run_system_cached_with(theme_items, Some(*list_ref));
 }
 
-/// The `ItemsChanged` observer that keeps a list or palette in step with the
-/// items entity its selection draws from.
-///
-/// Kept on the list, so it goes with it and a list pointed at other items can
-/// drop the observer of the old ones.
+/// The `ItemsChanged` observer that keeps a list or palette in step with its items entity.
 #[derive(Component, Debug, Clone, Copy)]
 #[component(immutable)]
 pub(crate) struct ItemsWatch {
@@ -1075,14 +972,12 @@ fn on_insert_selection(t: On<Insert<Selection>>, mut commands: Commands) {
     commands.run_system_cached_with(watch_list, t.event().event_target());
 }
 
-/// A list inserted after its selection and items (a scene inserts its components in the order
-/// of the patches, not of the list's own requirements) starts watching them now.
+/// A list inserted after its selection and items starts watching them now.
 fn on_insert_list(t: On<Insert<List>>, mut commands: Commands) {
     commands.run_system_cached_with(watch_list, t.event().event_target());
 }
 
-/// Starts watching the items of `list_ref`. Run as a deferred system by both observers, so the
-/// second of two in one frame sees the `ItemsWatch` the first inserted and adds no second observer.
+/// Starts watching the items of `list_ref`; deferred so two in one frame add one observer.
 fn watch_list(
     list: In<Entity>,
     lists: Query<Option<&ItemsWatch>, (With<List>, With<Selection>, Without<NoDefaultItems>)>,
@@ -1097,9 +992,8 @@ fn watch_list(
 
 /// Clears the views of the lists whose items no longer resolve, as if their source had none.
 ///
-/// Despawning the source entity is not reported by `ItemsChanged`: the observers sit on it and
-/// go with it, so a list whose `Selection::Ref` now dangles would keep its stale views and a
-/// dead `ItemsWatch`. Looks only in a frame where a `Selection` or `ItemsRef` was removed.
+/// Despawning the source is not reported by `ItemsChanged`, so look when a `Selection` or
+/// `ItemsRef` was removed.
 fn clear_dangling_lists(
     mut removed_selections: RemovedComponents<Selection>,
     mut removed_refs: RemovedComponents<ItemsRef>,
@@ -1113,9 +1007,7 @@ fn clear_dangling_lists(
     }
 }
 
-/// For each watching list in `lists` whose items no longer resolve: despawns its observer,
-/// drops its [`ItemsWatch`] (pointing it at a live source watches again) and runs
-/// `on_items_changed` with no items. Shared by [`List`] and the colour palette.
+/// Despawns the observer and drops the [`ItemsWatch`] of each list whose items no longer resolve.
 pub(crate) fn unwatch_dangling<M: 'static, F: bevy::ecs::query::QueryFilter>(
     lists: &Query<(Entity, &ItemsWatch), F>,
     selections: &SelectionParam,
@@ -1138,12 +1030,7 @@ pub(crate) fn unwatch_dangling<M: 'static, F: bevy::ecs::query::QueryFilter>(
     }
 }
 
-/// Makes `on_items_changed` run for `list_ref` whenever the items of its
-/// selection change, and once now. Used by [`List`] and the colour palette, so
-/// their copies cannot drift.
-///
-/// Does nothing when the list already watches those items. When it was
-/// pointed at other items, the observer on the old ones is despawned.
+/// Makes `on_items_changed` run for `list_ref` whenever its items change, and once now.
 pub(crate) fn watch_items<M: 'static>(
     list_ref: Entity,
     watch: Option<&ItemsWatch>,
@@ -1155,14 +1042,12 @@ pub(crate) fn watch_items<M: 'static>(
         return;
     };
     if watch.is_some_and(|watch| watch.values == values_ref) {
-        // no change in items ref
         return;
     }
     if let Some(old) = watch {
         commands.entity(old.observer).despawn();
     }
 
-    // register observer for items change event
     let observer = commands
         .spawn(
             Observer::new(move |t: On<ItemsChanged>, mut commands: Commands| {
@@ -1182,7 +1067,6 @@ pub(crate) fn watch_items<M: 'static>(
         observer,
     });
 
-    // update all items now
     commands.run_system_cached_with(
         on_items_changed,
         ItemsChangedInput {
@@ -1384,8 +1268,7 @@ fn theme_item_border(
             node.border_radius = BorderRadius::ZERO;
         }
         CornerStyle::Separated => {
-            // The border is the ring of a selected row, transparent otherwise, so that
-            // selecting a row does not move its content.
+            // A transparent border keeps selecting a row from moving its content.
             node.border = UiRect::all(SEPARATED_RING_WIDTH);
             node.border_radius = BorderRadius::all(theme.control_radius);
             node.padding = SEPARATED_ITEM_PADDING;

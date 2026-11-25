@@ -33,7 +33,6 @@ const fn px(val: Val) -> f32 {
     }
 }
 
-/// Rows kept beyond each edge of the view, so a small scroll shows rows that are ready.
 const OVERSCAN_ROWS: usize = 2;
 
 pub(crate) struct VirtualListPlugin;
@@ -63,12 +62,10 @@ impl Plugin for VirtualListPlugin {
     }
 }
 
-/// Minimum accepted row height, in logical pixels. This keeps the row pool bounded.
+/// Minimum accepted row height, in logical pixels.
 pub const MIN_ROW_HEIGHT: f32 = 10.0;
 
 /// A validated row height for a [`VirtualList`], in logical pixels.
-///
-/// Heights must be finite and at least [`MIN_ROW_HEIGHT`].
 #[derive(Debug, Copy, Clone, PartialEq, Reflect)]
 #[reflect(opaque)]
 pub struct RowHeight(f32);
@@ -124,49 +121,11 @@ impl std::fmt::Display for RowHeightError {
 
 impl std::error::Error for RowHeightError {}
 
-/// A list of rows of one height that renders only the items in view, so that it costs the
-/// rows on screen, not the items.
+/// A list of rows of one height that renders only the items in view.
 ///
-/// It shows the items of its [`Selection`](crate::select::Selection) (its own or a
-/// [`Selection::Ref`](crate::select::Selection::Ref)) as a list does, but its node is as tall
-/// as all the rows together and holds only a pool of [`VirtualListRow`]s: those in view and
-/// a few beyond. When the view moves, the rows are handed on to the items now in view; a row
-/// is never spawned or despawned for a scroll. The pool grows when the view grows and stays at
-/// that size, whatever the number of items.
-///
-/// Put it in a [`ScrollArea`](crate::scroll_area::ScrollArea) that scrolls vertically: the
-/// view is the nearest ancestor whose [`Node::overflow`] scrolls along y, or the UI target (the window, image or camera viewport it is drawn to) when
-/// there is none. It is as wide as its parent.
-///
-/// A row shows the text of an `Item<String>`. With an [`ItemViewCreator`] (added with the
-/// list, before the first update) the app fills the rows instead: the creator runs with an
-/// [`ItemViewSpawner`] whose `view` is the row, emptied, each time the row is handed to
-/// another item. An app may also observe the insertion of [`VirtualListRow`], which happens
-/// at the same moment.
-///
-/// Selection is that of a [`List`](crate::list::List): a row of a selected item carries
-/// [`Selected`], a click on a row toggles its item as far as the selection allows, and once
-/// the list has the focus (it is one tab stop) the arrow keys move the active row (wrapping
-/// round), Page Up and Page Down by as many rows as fit in the view (stopping at the first
-/// and last item), Home and End go to the first and last item, all scrolling the active row
-/// into view, and Enter or Space selects its item. The focus ring is on the active row, which
-/// [`ActiveDescendant`] names while it is in the pool, from the frame it moves.
-///
-/// A `RowHeight` must be made with [`RowHeight::new`], which rejects non-finite heights and
-/// heights below [`MIN_ROW_HEIGHT`]. `separated` additionally requires a height above 22 px.
-///
-/// With `separated` set it has the look of a [`List`](crate::list::List) of
-/// [`CornerStyle::Separated`]: the rows stand apart, 6 px in from the list's edges with 2 px
-/// between them, each rounded on all corners at the control radius with 10 by 12 px of padding,
-/// and the selected row has a ring in the selection colour and the strong hover background. Rows
-/// and ring are styled by the functions the list uses, so they cannot drift apart. The rows stay
-/// absolutely placed: row `i` is at `6 + i * (row_height + 2)`, and the node is as tall as the
-/// rows, gaps and padding together. `row_height` is then the height of a row itself, padding
-/// and ring included, so it must exceed the 20 px of vertical padding and 2 of ring.
-///
-/// To a screen reader it is a [`Role::ListBox`] whose `size_of_set` is the number of items,
-/// and each row in view a list item whose `position_in_set` is its item's place among them,
-/// counted from 1, so a row says where it is among all items, not among the pooled rows.
+/// Put it in a vertically scrolling [`ScrollArea`](crate::scroll_area::ScrollArea). An
+/// [`ItemViewCreator`] added with the list fills each row; otherwise a row shows an
+/// `Item<String>`. Selection and keys work as in a [`List`](crate::list::List).
 #[derive(Component, Debug, Copy, Clone, Reflect)]
 #[reflect(Component)]
 #[component(on_insert = Self::on_insert)]
@@ -187,8 +146,7 @@ impl std::error::Error for RowHeightError {}
 )]
 pub struct VirtualList {
     row_height: RowHeight,
-    /// Whether the rows stand apart as in a [`CornerStyle::Separated`] list: padded, with gaps
-    /// between them, rounded, and the selected one ringed.
+    /// Whether the rows stand apart as in a [`CornerStyle::Separated`] list.
     separated: bool,
 }
 
@@ -202,8 +160,7 @@ impl VirtualList {
         }
     }
 
-    /// A list of [`CornerStyle::Separated`] look, whose rows are `row_height` logical pixels
-    /// high.
+    /// A list with the look of [`CornerStyle::Separated`] and rows `row_height` logical pixels high.
     ///
     /// # Errors
     ///
@@ -237,7 +194,7 @@ impl VirtualList {
         }
     }
 
-    /// The distance between the tops of neighbouring rows: a row and the gap after it.
+    /// The distance between the tops of neighboring rows: a row and the gap after it.
     const fn pitch(self) -> f32 {
         if self.separated {
             self.row_height.0 + px(SEPARATED_ROW_GAP)
@@ -296,11 +253,7 @@ const SEPARATED_ROW_CHROME: f32 = 2.0f32.mul_add(
     px(SEPARATED_ITEM_PADDING.top) + px(SEPARATED_ITEM_PADDING.bottom),
 );
 
-/// One row of a [`VirtualList`], showing the item at `index` of the list's items.
-///
-/// Immutable: when the row is handed to another item a new value is inserted, so an app can
-/// observe the change. A row that shows no item (the list has fewer items than rows) has
-/// `shown: None` and is not displayed.
+/// One row of a [`VirtualList`]; `shown` is `None` when it has no item.
 #[derive(Component, Debug, Copy, Clone, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 #[component(immutable)]
@@ -320,8 +273,7 @@ pub struct VirtualListRow {
     pub shown: Option<ShownItem>,
 }
 
-/// What a [`VirtualListRow`] shows: an item and its place in the list's items, which only
-/// exist together.
+/// What a [`VirtualListRow`] shows: an item and its index.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Reflect)]
 pub struct ShownItem {
     /// Where the item is in the list's items.
@@ -405,11 +357,7 @@ struct Views<'w, 's> {
 }
 
 impl Views<'_, '_> {
-    /// What of `list` is in view: the part of the nearest ancestor that scrolls along y, or of
-    /// the window.
-    ///
-    /// The list's place comes from the last layout, the scroll from [`ScrollPosition`] as it
-    /// is now, so a scroll shows its rows in the layout that follows it.
+    /// What of `list` is in view, from the last layout and the current [`ScrollPosition`].
     fn of(&self, list: Entity) -> Option<View> {
         let (computed, transform) = self.lists.get(list).ok()?;
         let scale = computed.inverse_scale_factor();
@@ -437,7 +385,6 @@ impl Views<'_, '_> {
             .translation
             .y
             .mul_add(area_scale, -0.5 * area_height);
-        // The layout placed the list shifted by the scroll it had then.
         let laid_out_scroll = area_computed.scroll_position.y * area_scale;
         Some(View {
             area: Some(area),
@@ -504,12 +451,7 @@ fn grow_pools(
     }
 }
 
-/// Hands the rows of each [`VirtualList`] to the items in view and keeps their place,
-/// [`Selected`], colours and the [`ActiveDescendant`] in step.
-///
-/// Each frame it looks at the rows only, never at all the items: a row keeps its item while
-/// that stays in view (row `i % rows` shows item `i`), so a scroll by one row hands on one
-/// row.
+/// Hands the rows of each [`VirtualList`] to the items in view, touching rows only, never all items.
 fn show_rows(
     mut lists: Query<(
         Entity,
@@ -539,8 +481,6 @@ fn show_rows(
     mut commands: Commands,
 ) {
     for (list, virtual_list, mut state, active, mut list_node, creator) in &mut lists {
-        // A source without `ItemValues`, or one that is gone (a despawned selection behind a
-        // `Selection::Ref`), has no items: the rows empty out and the height drops.
         let items = selections
             .get_items(list)
             .map_or(&[][..], |(_, items)| items);
@@ -566,8 +506,7 @@ fn show_rows(
 
         let mut active_row = None;
         for (slot, &row) in state.rows.iter().enumerate() {
-            // The range is never longer than the pool, so at most one index in it has this
-            // slot as its remainder: item `i` is shown by row `i % pool`.
+            // Item `i` is shown by row `i % pool`, so a scroll hands on only the rows that move.
             let index = Some(range.start + (slot + pool - range.start % pool) % pool)
                 .filter(|index| *index < range.end);
             let Ok((current, mut node, mut background, mut border, hovered, was_selected, label)) =
@@ -633,10 +572,9 @@ fn show_rows(
     }
 }
 
-/// Picks the item of a row clicked with the primary button (a touch counts), as far as the
-/// selection allows, and makes it the active row, like a [`List`](crate::list::List). A click
-/// inside a [`Button`] in a row is the button's; other pointer buttons are left alone and the
-/// event goes on to bubble, so an app can open a context menu.
+/// Picks the item of a row clicked with the primary button, like a [`List`](crate::list::List).
+///
+/// A click inside a [`Button`] in a row is the button's; other buttons keep bubbling.
 fn pick_on_click(
     t: On<MouseEvent>,
     parents: Query<&ChildOf>,
@@ -670,8 +608,7 @@ fn pick_on_click(
     selections.update_selection(row.list, |selection| selection.toggle_selected(item));
 }
 
-/// Moves the active row with the arrow keys, Page Up, Page Down, Home and End, scrolling it
-/// into view, and selects its item on Enter or Space, while the list has the focus.
+/// Moves the active row with the navigation keys and selects its item on Enter or Space.
 fn navigate(
     mut input: On<FocusedInput<KeyboardInput>>,
     focus: Res<InputFocus>,
@@ -704,10 +641,9 @@ fn navigate(
     if !is_move && !is_pick {
         return;
     }
-    // The list owns these keys while it has the focus: none goes on to the app's navigation.
+    // Keep these keys from the app's navigation.
     input.propagate(false);
     let key = input.event().input.clone();
-    // A held arrow or page key keeps moving; Home, End, Enter and Space act on the first press.
     let repeats = !matches!(
         key.key_code,
         KeyCode::Home | KeyCode::End | KeyCode::Enter | KeyCode::Space
@@ -731,8 +667,6 @@ fn navigate(
         let Some(item) = current.and_then(|index| items.get(index).copied()) else {
             return;
         };
-        // As for a `List`: a pick on a selected row deselects it as far as the
-        // selection allows (`toggle_selected` is `None` for a `One`).
         selections.update_selection(list, |selection| selection.toggle_selected(item));
         return;
     }
@@ -749,7 +683,6 @@ fn navigate(
             _ => 0,
         },
         KeyCode::PageUp => current.unwrap_or(0).saturating_sub(page),
-        // With no active row Page Down starts where Arrow Down does, on the first item.
         KeyCode::PageDown => current.map_or(0, |index| index.saturating_add(page).min(last_index)),
         KeyCode::Home => 0,
         _ => last_index,
@@ -772,7 +705,6 @@ fn navigate(
     } else {
         return;
     };
-    // The list may have grown since the last layout measured how far the area scrolls.
     let max_scroll = view
         .max_scroll
         .max(view.offset + virtual_list.content_height(count) + FOCUS_RING_REACH - view.height);
@@ -783,15 +715,9 @@ fn navigate(
     commands.entity(area).insert(position);
 }
 
-/// Makes the first selected item the active row when the list gets the focus, or the first
-/// item when none is selected, as a list does.
+/// Makes the first selected item (else the first item) the active row when the list gets the focus.
 ///
-/// A system that reads [`InputFocus`] rather than an observer of `FocusGained`: Bevy sends
-/// that after the layout, so the row would be named and ringed a frame late, while the focus
-/// itself (Tab, a click) is set in `PreUpdate`, before this runs ahead of the rows.
-/// `InputFocus::is_changed` is true after any write to the focus, not only when it arrives
-/// at the list, so a list focused while it had no items gets its first item made active the
-/// next time anything writes the focus.
+/// Reads [`InputFocus`], not `FocusGained`: Bevy sends that after layout, a frame late.
 fn activate_on_focus(
     focus: Res<InputFocus>,
     mut lists: Query<&mut VirtualListState>,
@@ -821,7 +747,7 @@ fn activate_on_focus(
     state.active = Some(first_selected.unwrap_or(0));
 }
 
-/// Clears the active row when the list loses the focus, and the ring goes with it.
+/// Clears the active row when the list loses the focus.
 fn deactivate_on_focus_lost(
     focus_lost: On<FocusLost>,
     focus: Res<InputFocus>,
@@ -836,8 +762,7 @@ fn deactivate_on_focus_lost(
     }
 }
 
-/// Tells a screen reader how many items each [`VirtualList`] has and where the item of each
-/// of its rows is among them, so a row in the pool reads as item 9,000 of 10,000.
+/// Sets each row's position in the set among all items, not among the pooled rows.
 fn sync_accessibility(
     mut lists: Query<(Entity, &VirtualListState, &mut AccessibilityNode), With<VirtualList>>,
     mut rows: Query<(&VirtualListRow, &mut AccessibilityNode), Without<VirtualList>>,
