@@ -1,6 +1,4 @@
-//! The theme editor page of the overview: the library's [`ThemeEditor`] with "Export", which
-//! writes the edited theme as Rust text ([`theme_source`]) to the log and shows a toast. The
-//! export is the overview's own: the library only edits.
+//! The theme editor page of the overview, with an "Export" that logs the theme as Rust text.
 
 #![expect(
     unreachable_pub,
@@ -44,8 +42,7 @@ pub(super) fn theme_editor(spawner: In<StackChildSpawner>, mut commands: Command
     );
 }
 
-/// `colors` as a Rust expression `const NAME: ThemeColors = ThemeColors { .. };`, one
-/// `field: Color::srgba(..)` line for each slot, ready to paste into an app.
+/// `colors` as a `const NAME: ThemeColors` expression.
 #[must_use]
 pub fn colors_source(name: &str, colors: &ThemeColors) -> String {
     use bevy::reflect::structs::Struct as _;
@@ -68,7 +65,6 @@ pub fn colors_source(name: &str, colors: &ThemeColors) -> String {
     source
 }
 
-/// Both halves of `theme` as Rust text, for `Theme::with_colors(LIGHT, DARK)`.
 #[must_use]
 pub fn pair_source(theme: &Theme) -> String {
     format!(
@@ -78,13 +74,11 @@ pub fn pair_source(theme: &Theme) -> String {
     )
 }
 
-/// The numbers of `theme` as a function building a `Theme` from the colour pair: the public
-/// fields as struct fields (a padding as a `UiRect`), the private shadow geometry as comments.
+/// The numbers of `theme` as a function building a `Theme` from the color pair.
 #[must_use]
 pub fn numbers_source(theme: &Theme) -> String {
     let mut fields = String::new();
     let mut comments = String::new();
-    // The padding group (`UiRect`) whose fields are being written, if any.
     let mut open_group: Option<&str> = None;
     for parameter in theme_parameters() {
         let value = parameter.value(theme);
@@ -121,13 +115,11 @@ pub fn numbers_source(theme: &Theme) -> String {
     )
 }
 
-/// The edited theme as Rust text: the colour pair and the function that builds the theme.
 #[must_use]
 pub fn theme_source(theme: &Theme) -> String {
     format!("{}\n{}", pair_source(theme), numbers_source(theme))
 }
 
-/// Writes the edited theme as Rust text to the log and says so in a toast.
 fn export(
     _: On<Activate>,
     theme: Res<Theme>,

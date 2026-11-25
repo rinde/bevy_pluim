@@ -1,4 +1,4 @@
-//! The colours page(s) of the overview.
+//! The colors page(s) of the overview.
 
 #[cfg_attr(
     not(test),
@@ -77,7 +77,6 @@ pub(super) fn colours(spawner: In<StackChildSpawner>, mut commands: Commands) {
     );
 }
 
-/// Holds the palette combos the "+" button adds.
 #[derive(Component, Default, Clone)]
 pub(super) struct ExtraComponentsArea;
 
@@ -111,7 +110,7 @@ fn remove_combo(
     }
 }
 
-/// A scroll area over a palette combo and a card, to see the popup is not clipped.
+/// Checks that the popup is not clipped by the scroll area.
 fn combo_scroll_area(swatches: Vec<Item<Color>>) -> impl Scene {
     ScrollArea::scene(
         move || {
@@ -129,7 +128,6 @@ fn combo_scroll_area(swatches: Vec<Item<Color>>) -> impl Scene {
     )
 }
 
-/// A scroll area over a palette of `swatches`.
 pub(super) fn palette_scroll_area(swatches: Vec<Item<Color>>) -> impl Scene {
     ScrollArea::scene(
         move || {

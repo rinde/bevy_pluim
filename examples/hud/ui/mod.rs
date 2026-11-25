@@ -1,9 +1,4 @@
-//! The HUD of the redesign, built from this crate's widgets over sample data.
-//!
-//! Shared by the `hud` example and the headless smoke test in `tests/headless.rs`: add
-//! [`HudPlugin`] to an app with `WidgetsPlugin` and an `Assets<Image>`. Nothing here knows a
-//! game; the trains, stops and warnings are constants and the wiring between the widgets is
-//! plain systems and observers.
+//! A HUD built from this crate's widgets over sample data, shared by the `hud` example and `tests/headless.rs`.
 
 #![expect(
     unreachable_pub,
@@ -139,7 +134,6 @@ const WARNINGS: [(&str, &str); 3] = [
     ("Marsh End is empty", "No train serves this stop"),
 ];
 
-/// What a panel of the panel toolbar shows.
 #[derive(Component, Clone, Copy)]
 enum PanelKind {
     Trains,
@@ -149,7 +143,6 @@ enum PanelKind {
     Warnings,
 }
 
-/// A setting of the Preferences panel.
 #[derive(Component, Clone, Copy)]
 enum Pref {
     Appearance,
@@ -174,19 +167,15 @@ struct WarningsPanel;
 #[derive(Component, Default, Clone)]
 struct Dock;
 
-/// The chips that filter a list of trains.
 #[derive(Component)]
 struct TrainFilter(Entity);
 
-/// The creator of the rows of the trains list.
 #[derive(Resource)]
 struct TrainRows(SystemId<In<ItemViewSpawner>>);
 
-/// The selection of the panel toolbar.
 #[derive(Resource)]
 struct PanelBar(Entity);
 
-/// The selection and the tools of the tool dock.
 #[derive(Resource)]
 struct DockTools {
     selection: Entity,
@@ -222,7 +211,6 @@ fn spawn_hud(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut them
     commands.insert_resource(icons);
 }
 
-/// Top left: the pause button, what the game is doing and the key that toggles it.
 fn run_state(icons: &Icons) -> impl Scene {
     let pause = icons.pause.clone();
     bsn! {
@@ -254,32 +242,25 @@ fn run_state(icons: &Icons) -> impl Scene {
     }
 }
 
-/// The slowest speed, in octaves (powers of two) from normal: 0.25x.
 const SPEED_MIN_OCTAVE: f32 = -2.0;
 
-/// The fastest speed, in octaves from normal: 8x.
 const SPEED_MAX_OCTAVE: f32 = 3.0;
 
-/// The simulation speed the example's slider sets, as a multiple of normal.
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 struct SimulationSpeed(f32);
 
-/// The speed a slider position in octaves stands for.
 fn speed_of(octaves: f32) -> f32 {
     octaves.exp2()
 }
 
-/// The slider's text: "0.25x", "1x", "8x".
 fn speed_label(octaves: f32) -> String {
     format!("{}x", speed_of(octaves))
 }
 
-/// Keeps the speed the slider was moved to.
 fn on_speed_changed(change: On<SliderChange<f32>>, mut speed: ResMut<SimulationSpeed>) {
     speed.0 = speed_of(change.value);
 }
 
-/// The items of the panel toolbar, each with the creator of its panel, and their selection.
 fn spawn_panel_bar(commands: &mut Commands, icons: &Icons) -> Entity {
     let bar = commands.spawn_empty().id();
     let panels = [
@@ -324,7 +305,6 @@ fn spawn_panel_bar(commands: &mut Commands, icons: &Icons) -> Entity {
     bar
 }
 
-/// Top right: the warnings button, the panel toolbar over `bar` and the panel it opens.
 fn panels(bar: Entity, icons: &Icons) -> impl Scene {
     let bell = icons.bell.clone();
     let close = icons.close.clone();
@@ -371,7 +351,6 @@ fn panels(bar: Entity, icons: &Icons) -> impl Scene {
     }
 }
 
-/// The tools of the tool dock, each with the creator of its option bar, and their selection.
 fn spawn_dock_tools(commands: &mut Commands, icons: &Icons) -> Entity {
     let selection = commands.spawn_empty().id();
     let hint = commands.register_system(
@@ -431,7 +410,6 @@ fn spawn_dock_tools(commands: &mut Commands, icons: &Icons) -> Entity {
     selection
 }
 
-/// Bottom: the tool dock over `selection`, with the bar of the active tool above it.
 fn dock(selection: Entity) -> impl Scene {
     bsn! {
         Node {
@@ -459,7 +437,6 @@ fn dock(selection: Entity) -> impl Scene {
     }
 }
 
-/// A bar of options above the tool dock, holding `contents`.
 fn option_bar(contents: impl SceneList) -> impl Scene {
     bsn! {
         ~{Card}
@@ -472,7 +449,6 @@ fn option_bar(contents: impl SceneList) -> impl Scene {
     }
 }
 
-/// The bar for the tools that have no options: how to get back to the Select tool.
 fn hint_bar() -> impl Scene {
     option_bar(bsn_list! {
         ~{Kbd::new("Esc")}
@@ -481,7 +457,6 @@ fn hint_bar() -> impl Scene {
     })
 }
 
-/// The Rail tool's options.
 #[expect(clippy::expect_used, reason = "the constant range is valid")]
 fn rail_bar() -> impl Scene {
     option_bar(bsn_list! {
@@ -512,7 +487,6 @@ fn rail_bar() -> impl Scene {
     })
 }
 
-/// "Ground" at 0 and "+7", "+14", ... above it.
 fn level(value: &Value) -> String {
     match value.as_u8() {
         Some(0) | None => "Ground".to_string(),
@@ -520,7 +494,6 @@ fn level(value: &Value) -> String {
     }
 }
 
-/// The Train tool's vehicles.
 fn vehicle_bar(icons: &Icons) -> impl Scene {
     let cards = [
         ("Steam", &icons.locomotive, "Locomotives"),
@@ -560,7 +533,6 @@ fn panel_for(kind: PanelKind, close: Handle<Image>) -> Panel {
     .with_close_icon(close)
 }
 
-/// A creator for the lazily made panel of `kind` in the stack.
 fn register_panel(
     commands: &mut Commands,
     kind: PanelKind,
@@ -573,7 +545,6 @@ fn register_panel(
     )
 }
 
-/// The row of a train: its name and route, and a pill with what it is doing.
 fn train_row(spawner: In<ItemViewSpawner>, trains: Query<&Item<Train>>, mut commands: Commands) {
     let ItemViewSpawner { item, view } = *spawner;
     let Ok(train) = trains.get(item) else {
@@ -605,7 +576,6 @@ fn train_row(spawner: In<ItemViewSpawner>, trains: Query<&Item<Train>>, mut comm
         });
 }
 
-/// Fills the strip, body and footer of a panel that was just made.
 fn fill_panels(
     panels: Query<(&PanelRefs, &PanelKind), Added<PanelRefs>>,
     train_rows: Res<TrainRows>,
@@ -687,7 +657,6 @@ fn fill_panels(
     }
 }
 
-/// Rows with a title, a caption and a "Show" button, which would centre the map on it.
 fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static str, &'static str)]) {
     for &(title, caption) in rows {
         let name = title.to_string();
@@ -724,7 +693,6 @@ fn spawn_show_rows(commands: &mut Commands, parent: Entity, rows: &[(&'static st
     }
 }
 
-/// Puts the control of a setting into the slot of its row.
 fn fill_setting_rows(
     rows: Query<(&SettingRowRefs, &Pref), Added<SettingRowRefs>>,
     mut commands: Commands,
@@ -773,19 +741,16 @@ fn fill_setting_rows(
     Ok(())
 }
 
-/// "100%" for a value of 100.
 fn as_percent(value: &Value) -> String {
     format!("{}%", value.as_u16().unwrap_or(100))
 }
 
-/// Scales all text, the widgets' included, by setting the root font size.
 fn set_text_size(change: On<ValueChange>, mut rem_size: ResMut<RemSize>) {
     if let Some(percent) = change.value.as_u16() {
         rem_size.0 = DEFAULT_REM_SIZE_PX * f32::from(percent) / 100.0;
     }
 }
 
-/// Applies a setting when its control changes.
 fn apply_preferences(
     controls: Query<(Entity, &Pref), Changed<Selection>>,
     selections: SelectionParam,
@@ -835,7 +800,6 @@ fn apply_preferences(
     }
 }
 
-/// Says "Running" or "Paused" next to the pause button.
 fn sync_run_state(
     buttons: Query<&ToggleState, (With<PauseButton>, Changed<ToggleState>)>,
     labels: Query<Entity, With<RunLabel>>,
@@ -852,7 +816,6 @@ fn sync_run_state(
     }
 }
 
-/// Shows the warnings panel while the warnings button is on.
 fn sync_warnings_panel(
     buttons: Query<&ToggleState, (With<WarningsButton>, Changed<ToggleState>)>,
     mut panels: Query<&mut Node, With<WarningsPanel>>,
@@ -864,7 +827,6 @@ fn sync_warnings_panel(
     }
 }
 
-/// Closing a panel clears the panel toolbar, or turns the warnings button off.
 fn on_panel_closed(
     closed: On<PanelClosed>,
     warnings_panels: Query<(), With<WarningsPanel>>,
@@ -882,7 +844,6 @@ fn on_panel_closed(
     }
 }
 
-/// Shows only the trains that match the active chip.
 fn filter_train_rows(
     mut views: Query<(&ItemView, &mut Node)>,
     trains: Query<&Item<Train>>,
@@ -909,10 +870,8 @@ fn filter_train_rows(
     }
 }
 
-/// The keys the tool hints and the pause key show: the library draws them, the app binds them.
-///
-/// They are off while a text field has the keys, and on the frame it hands them back, since
-/// the `Enter` or `Escape` that did so is still a pressed key then.
+// Off while a text field has the keys and on the frame it hands them back: the `Enter` or
+// `Escape` that did so is still pressed.
 fn hotkeys(
     keys: Res<ButtonInput<KeyCode>>,
     focus: Res<InputFocus>,
@@ -959,7 +918,6 @@ fn hotkeys(
     }
 }
 
-/// A slider with a valid range and step, or an abort: these are fixed values.
 fn valid_slider(value: f32, min: f32, max: f32, step: Option<f32>) -> Slider {
     Slider::new(value, min, max)
         .and_then(|slider| match step {

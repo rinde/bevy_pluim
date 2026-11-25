@@ -4,21 +4,15 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.100"
 repository = "https://github.com/rinde/bevy_pluim"
-# Private software: never publish to a registry.
 publish = false
 
 [features]
-# Records the scenarios in tests/ron offscreen for review (`just record`). Only
-# the `recorded_scenarios_gpu` test target uses it, and it needs a GPU.
+# Needs a GPU; used only by `recorded_scenarios_gpu`.
 record = ["bevy_stagecraft/record"]
 
 [dependencies]
 accesskit = "0.24"
-# Bevy's default features (audio, 3D / PBR, glTF, the windowing backends, ..) are
-# left to the application: the library needs only the UI, picking, scene and
-# render types (`bevy_render` for the `Image` formats of the icons it draws).
-# The application picks its own platform and renderer features (the `ui`
-# profile, or `default`, is what the examples use); see AGENTS.md.
+# No default features: the application picks the platform and renderer.
 bevy = { version = "0.20.1", default-features = false, features = ["ui_api", "scene", "picking", "bevy_ui_widgets", "bevy_render"] }
 derive_more = { version = "2.0.1", features = ["deref"] }
 educe = { version = "0.6.0", default-features = false, features = ["Default"] }
@@ -27,25 +21,15 @@ smallvec = "1.15.1"
 strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
-# The examples and tests run a full app (`DefaultPlugins`, the renderer, a
-# window), so they take Bevy's default features, which the library itself does
-# not force on downstream apps (see `[dependencies]`).
-# The examples toggle `UiDebugOptions`, which only exists with `bevy_ui_debug`.
-# `debug` is Bevy's switch for `ScheduleBuildSettings::shuffle_seed`, which
-# `tests/scenarios.rs` shuffles the schedules with.
+# `bevy_ui_debug` for `UiDebugOptions`; `debug` for `ScheduleBuildSettings::shuffle_seed`.
 bevy = { version = "0.20.1", default-features = true, features = ["bevy_ui_debug", "debug"] }
-# Private test driver for scenario tests. Pinned to a revision so the build is
-# reproducible; bump it deliberately, and see AGENTS.md for how it is fetched.
-# `gallery` is for `examples/gallery.rs`: real windows and the renderer.
+# Pin `rev`; bump it together with Cargo.lock.
 bevy_stagecraft = { git = "https://github.com/rinde/bevy_stagecraft", rev = "54d21fe7ef3f60f8d41c1e2f1c4ffb1f0590ac40", features = ["gallery"] }
 
-# Plays every `.ron` file and variant in tests/ron as an individual libtest
-# case. `build.rs` generates the cases so libtest can schedule them in parallel.
+# `build.rs` generates the test cases.
 [[test]]
 name = "ron_scenarios"
 
-# Renders every scenario of tests/ron offscreen. Needs a (software) GPU, so it
-# is only built with the `record` feature, and its test is `#[ignore]`d.
 [[test]]
 name = "recorded_scenarios_gpu"
 required-features = ["record"]
@@ -60,7 +44,7 @@ single_use_lifetimes = "warn"
 unreachable_pub = "warn"
 unsafe_code = "forbid"
 unstable_features = "forbid"
-unused_crate_dependencies = "allow"    # per-target: every example/test "misses" the others' deps; `cargo machete` in `just ci` covers it
+unused_crate_dependencies = "allow"    # misfires per target; `cargo machete` checks instead
 unused_extern_crates = "warn"
 unused_import_braces = "warn"
 unused_lifetimes = "warn"
@@ -79,16 +63,14 @@ all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 
-# Bevy-shaped allows: these lints fight how Bevy systems are written.
-too_many_arguments = "allow"     # every system param is an argument
-needless_pass_by_value = "allow" # `In<_>`, `Res<_>` and `Trigger<_>` are taken by value
-type_complexity = "allow"        # nested `Query<(..), (With<_>, Without<_>)>` types
+too_many_arguments = "allow"     # systems take many params
+needless_pass_by_value = "allow" # systems take `In<_>`, `Res<_>`, `Trigger<_>` by value
+type_complexity = "allow"        # nested `Query` types
 
-# Pedantic lints that cost more than they give here.
 too_many_lines = "allow"
 cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
-assert_is_empty = "allow"        # `assert!(x.is_empty())` reads better than `assert_eq!(x, [] as [T; 0])`, which needs a type annotation
+assert_is_empty = "allow"        # `assert!(x.is_empty())` reads better in tests
 
 ### Individual lints
 missing_const_for_fn = "deny"
@@ -109,12 +91,8 @@ print_stdout = "deny"
 print_stderr = "deny"
 indexing_slicing = "deny"
 
-# Bevy is unusably slow in an unoptimised build, so optimise dependencies but
-# not our own code, which keeps the edit-run loop short. Dependencies also get
-# no debuginfo: with it every test or example binary is about 2 GB, and a
-# slot's `target/debug` outgrew a cloud container's disk. Our own crate keeps
-# its debuginfo. To step through a dependency, bring it back for one
-# invocation: `cargo --config 'profile.dev.package."*".debug=true' test ...`.
+# Bevy is unusably slow unoptimized. No debuginfo: it made binaries ~2 GB and
+# filled cloud disks.
 [profile.dev.package."*"]
 opt-level = 3
 debug = false

@@ -4,7 +4,6 @@ use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
-/// A point of an icon in the unit square, with the width over the height of the image.
 #[derive(Clone, Copy)]
 struct Point {
     u: f32,
@@ -26,7 +25,6 @@ fn ring(p: Point, center_u: f32, center_v: f32, outer: f32, inner: f32) -> bool 
     disc(p, center_u, center_v, outer) && !disc(p, center_u, center_v, inner)
 }
 
-/// Which side of the line `from`-`to` the point is on.
 fn side(p: Point, from: (f32, f32), to: (f32, f32)) -> f32 {
     let (dx, dy) = (p.u - to.0, p.v - to.1);
     let (ex, ey) = (from.0 - to.0, from.1 - to.1);
@@ -108,7 +106,6 @@ fn flatcar(p: Point) -> bool {
     rect(p, 0.1, 0.9, 0.5, 0.64) || disc(p, 0.28, 0.77, 0.11) || disc(p, 0.72, 0.77, 0.11)
 }
 
-/// The handles of the icons the HUD uses.
 #[derive(Resource, Clone)]
 pub(super) struct Icons {
     pub(super) pause: Handle<Image>,
@@ -163,7 +160,6 @@ fn draw(
 }
 
 impl Icons {
-    /// Draws every icon into `images`.
     pub(super) fn draw(images: &mut Assets<Image>) -> Self {
         let mut square = |shape| draw(images, 48, 48, shape);
         let pause = square(pause);

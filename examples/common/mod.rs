@@ -1,5 +1,4 @@
-//! A small icon drawn at startup, shared by the examples that need an image for an icon button,
-//! and the `bsn!` entry that inserts a widget holding it.
+//! An icon image and a `bsn!` entry that inserts a widget holding it, shared by the examples.
 
 #![expect(
     unreachable_pub,
@@ -10,7 +9,6 @@ use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
-/// A white cross on a transparent 48 by 48 image, for the icon of a button.
 pub fn cross_icon(images: &mut Assets<Image>) -> Handle<Image> {
     const SIZE: u32 = 48;
     let size = SIZE as f32;

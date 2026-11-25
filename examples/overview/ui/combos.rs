@@ -58,7 +58,6 @@ pub(super) fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
                         @{Selection::builder().zero_or_more().scene_with_items(countries())}
                     })
                     --
-                    // The buttons add to their parent, this box.
                     @variant("A list and combos sharing one selection; the buttons add more", bsn! {
                         Node {
                             width: px(300.0),

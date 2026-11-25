@@ -1,22 +1,7 @@
 //! The widget scenarios of `tests/ron/`, played in a real window.
 //!
-//! The widgets are in the primary window; the tester's **Scenarios** window
-//! beside it lists every scenario file, one group per widget. Pick one to watch
-//! it play, pause, step, loop or take over with the real mouse, or **Record** a
-//! session by hand. The app starts on the buttons screen, which like every
-//! screen has a "Change theme" button.
-//!
-//! ```text
-//! cargo run --example gallery
-//! ```
-//!
-//! With `--run-all` every scenario plays once, unattended, and the app closes
-//! itself; the exit code is non-zero if one failed (`just gallery-test`). Words
-//! that are not flags keep only the files whose name contains one of them, as
-//! with `cargo test`: `just example gallery -- --run-all stack`.
-//!
-//! The screens and checks the files use are the ones of the tests, shared
-//! through `#[path]`, so the library stays free of the tester.
+//! `--run-all` plays every scenario unattended and exits non-zero if one failed
+//! (`just gallery-test`); other words filter files by name, as in `cargo test`.
 
 #[path = "../tests/common/mod.rs"]
 #[expect(
@@ -44,15 +29,12 @@ use bevy_stagecraft::{
 };
 use widgets_setup::{Clicks, CurrentScreen, WidgetsSetup};
 
-/// Where the scenario files are.
 const SCENARIOS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
 
-/// Where recordings are written. Not in `tests/ron`: a recording is a draft
-/// until someone moves it there.
+/// Where recordings are written.
 const RECORDINGS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/recordings");
 
-/// The group of a scenario file, by the start of its name. The first prefix
-/// that matches wins, so a longer one comes before the shorter it starts with.
+/// Scenario file groups by name prefix. Put a longer prefix before the shorter one it starts with.
 const GROUPS: [(&str, &str); 32] = [
     ("push_button", "PushButton"),
     ("link", "Link"),
@@ -88,18 +70,16 @@ const GROUPS: [(&str, &str); 32] = [
     ("accessible", "Accessibility"),
 ];
 
-/// The group for files that match no prefix of [`GROUPS`] (`selected.ron`).
+/// The group for files that match no prefix of [`GROUPS`].
 const OTHER_GROUP: &str = "Selection";
 
-/// Builds the screen the app starts on.
 fn start_screen(world: &mut World) {
     if let Err(error) = WidgetsSetup::Buttons.build(world) {
         error!("cannot build the first screen: {error}");
     }
 }
 
-/// Puts the app back for a scenario: removes its UI, cameras and selections,
-/// but not the gallery's, and resets the theme. The scenario's setup builds the screen.
+/// Removes the scenario's UI, cameras and selections, but not the gallery's, and resets the theme.
 fn reset_app(world: &mut World) {
     let mut doomed: Vec<Entity> = world
         .query_filtered::<Entity, (With<UiRoot>, Without<NotUnderTest>)>()
@@ -110,7 +90,6 @@ fn reset_app(world: &mut World) {
             .query_filtered::<Entity, (With<Camera2d>, Without<NotUnderTest>)>()
             .iter(world),
     );
-    // Selections and their items are spawned beside the UI, not under it.
     doomed.extend(
         world
             .query_filtered::<Entity, With<Selection>>()
@@ -128,7 +107,6 @@ fn reset_app(world: &mut World) {
     world.remove_resource::<Clicks>();
 }
 
-/// The text of the `//` comment at the top of a scenario file, as one line.
 fn description(text: &str) -> String {
     text.lines()
         .map_while(|line| line.strip_prefix("//"))
@@ -137,9 +115,7 @@ fn description(text: &str) -> String {
         .join(" ")
 }
 
-/// The catalogue: every file in `dir`, in name order, grouped by widget.
-/// Only files whose name contains one of `filters` are in it, if there are any. A file that does not
-/// load is skipped with a warning.
+/// Every file in `dir` whose name contains one of `filters` (all if none), grouped by widget.
 fn catalogue(dir: &Path, registry: &Registry, filters: &[String]) -> Gallery {
     let mut paths: Vec<_> = fs::read_dir(dir)
         .into_iter()
@@ -191,7 +167,6 @@ fn catalogue(dir: &Path, registry: &Registry, filters: &[String]) -> Gallery {
 
 fn main() -> AppExit {
     let registry = Registry::default();
-    // As with `cargo test`: a word that is not a flag filters by file name.
     let filters: Vec<String> = std::env::args()
         .skip(1)
         .filter(|argument| !argument.starts_with('-'))

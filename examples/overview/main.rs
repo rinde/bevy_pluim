@@ -1,10 +1,4 @@
-//! A widget overview: a vertical `TabBar` on the left with one tab per widget, and for the tab
-//! picked a page with that widget's variants over example data. Every example of the library is a
-//! tab here, the theme editor included; only the `hud` and the tester's `gallery` are their own.
-//!
-//! Every page has the same layout: a header, then the variants in a centred, wrapping row, each a
-//! group with a secondary label naming what is different about it. The theme is switched with the
-//! `LightDarkToggle` above the tabs, which is one of the widgets of the library, too.
+//! Every widget and its variants, one tab per widget.
 
 mod ui;
 

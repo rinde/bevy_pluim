@@ -58,12 +58,10 @@ pub(super) fn scroll_areas(spawner: In<StackChildSpawner>, mut commands: Command
     );
 }
 
-/// A scroll area over a grid of `num` coloured squares.
 fn squares_area(num: usize, grid_auto_flow: GridAutoFlow, v: bool, h: bool) -> impl Scene {
     ScrollArea::scene(move || bsn_list! { @squares(num, grid_auto_flow) }, v, h)
 }
 
-/// A grid of `num` coloured squares, laid out along `grid_auto_flow`.
 fn squares(num: usize, grid_auto_flow: GridAutoFlow) -> impl Scene {
     const COLORS: [Srgba; 6] = [
         YELLOW_600, SKY_600, ROSE_600, PURPLE_600, LIME_600, AMBER_600,
@@ -103,7 +101,6 @@ fn squares(num: usize, grid_auto_flow: GridAutoFlow) -> impl Scene {
     }
 }
 
-/// A scroll area over a list of many countries.
 pub(super) fn list_scroll_area(vertical: bool, horizontal: bool) -> impl Scene {
     ScrollArea::scene(
         || {

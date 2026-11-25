@@ -107,12 +107,9 @@ pub(super) fn tags(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands
     );
 }
 
-/// Marks the button whose badge "Add one" raises.
 #[derive(Component, Default, Clone)]
 pub(super) struct Counted;
 
-/// Raises the count of the badge on the `Counted` button: a new count is a new `Badge`, and the
-/// pill follows it.
 fn add_one(
     _: On<Activate>,
     mut commands: Commands,

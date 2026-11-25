@@ -38,7 +38,6 @@ pub(super) fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
                         @{Selection::builder().zero_or_one().scene_with_items(countries())}
                     })
                     --
-                    // Ten thousand rows, of which only those in view are spawned.
                     @variant("Virtual list, 10,000 rows", bsn! {
                         Node { width: px(220.0), height: px(260.0) }
                         @virtual_list_scroll_area(VirtualList::new(row_height(28.0)))
@@ -56,7 +55,6 @@ pub(super) fn lists(spawner: In<StackChildSpawner>, mut commands: Commands) {
     );
 }
 
-/// A scroll area over a `VirtualList` of ten thousand rows.
 pub(super) fn virtual_list_scroll_area(list: VirtualList) -> impl Scene {
     ScrollArea::scene(
         move || {

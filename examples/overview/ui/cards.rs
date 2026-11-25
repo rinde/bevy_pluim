@@ -9,11 +9,9 @@
 )]
 use super::*;
 
-/// How many lines of text the body of a panel gets.
 #[derive(Component, Default, Clone)]
 pub(super) struct Lines(usize);
 
-/// Marks a panel or setting row whose contents have been spawned.
 #[derive(Component)]
 pub(super) struct Filled;
 
@@ -54,7 +52,6 @@ pub(super) fn cards(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut command
                         Lines(3)
                     })
                     --
-                    // A body past 150 pixels scrolls.
                     @variant("Panel: the body scrolls past 150 px", bsn! {
                         Panel { title: "Stops", close_icon: {HandleTemplate::Handle(close_scrolling.clone())}, max_body_height: 150.0 }
                         Lines(12)
@@ -70,7 +67,6 @@ pub(super) fn cards(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut command
     );
 }
 
-/// Fills the bodies of the panels once they are spawned.
 pub(super) fn fill_panels(
     mut commands: Commands,
     panels: Query<(Entity, &PanelRefs, &Lines), Without<Filled>>,
@@ -144,7 +140,6 @@ pub(super) fn fill_control_panels(
     }
 }
 
-/// The control a setting row gets in its slot.
 #[derive(Component, Default, Clone, Copy)]
 pub(super) enum Control {
     #[default]
@@ -181,7 +176,6 @@ pub(super) fn setting_rows(spawner: In<StackChildSpawner>, mut commands: Command
     );
 }
 
-/// Spawns the control of each setting row into its slot once the row is spawned.
 pub(super) fn fill_setting_rows(
     mut commands: Commands,
     rows: Query<(Entity, &SettingRowRefs, &Control), Without<Filled>>,
