@@ -1,5 +1,3 @@
-// A tap activates a colour button once; a finger that slides off activates
-// nothing.
 (
     format_version: 3,
     name: "a touch tap activates a colour button and a slide-off does not",

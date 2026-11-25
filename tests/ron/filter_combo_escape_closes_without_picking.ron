@@ -1,5 +1,3 @@
-// Escape closes the popup without applying the active option, the focus goes back to the button
-// and reopening starts with an empty query and every option.
 (
     format_version: 3,
     name: "Escape closes a filter combo without picking and it reopens unfiltered",

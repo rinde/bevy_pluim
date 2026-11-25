@@ -1,5 +1,3 @@
-// A finger down on a row shows the pressed (selected) look; after the finger lifts, slides
-// off or is cancelled no hover look stays: the row is selected or at rest, never hovered.
 (
     format_version: 3,
     name: "a finger leaves no hover look on a list row",
@@ -12,7 +10,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
         )),
-        // Slide off: nothing is picked and the row is at rest, not hovered.
         TouchMove(to: Screen((1100.0, 700.0)), finger: 0),
         TouchUp(finger: 0),
         Wait(2),
@@ -22,7 +19,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
-        // A tap that picks: selected, with no hover colour after the lift.
         TouchTap(Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada"))),
         Wait(2),
         Check(Component(
@@ -30,7 +26,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.23137255,green:0.50980395,blue:0.9647059,alpha:1.0))),
         )),
-        // A tap that deselects: back to rest, not hovered.
         TouchTap(Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada"))),
         Wait(2),
         Check(Component(
@@ -38,7 +33,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
-        // A cancelled touch picks nothing and leaves the row at rest.
         TouchDown(at: Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada")), finger: 0),
         TouchCancel(finger: 0),
         Wait(2),
@@ -48,7 +42,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
-        // The separated list: a tap picks and leaves the selected look, the others stay clear.
         TouchTap(Within(Name("separated list"), Role(role: ListItem, label: "CA"))),
         Wait(2),
         Check(Component(

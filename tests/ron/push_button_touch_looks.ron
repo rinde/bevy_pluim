@@ -1,7 +1,3 @@
-// A finger on a push button shows the pressed look while it is down, a tap
-// activates once, and no hover look stays after the finger lifts (a finger
-// never hovers). Colours are DEFAULT_LIGHT_THEME_COLORS: background_primary
-// at rest and selected_hovered_item while pressed.
 (
     format_version: 3,
     name: "a finger shows the pressed look while down and no hover look after",

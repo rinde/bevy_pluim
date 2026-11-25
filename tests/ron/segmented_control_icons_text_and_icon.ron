@@ -1,5 +1,3 @@
-// A segment of an item with an `ItemIcon` shows a 16 px icon before its text: both are there,
-// and picking the segment selects its item. Text-only segments of other controls have no icon.
 (
     format_version: 3,
     name: "a segment with an icon and text shows both and picks its item",

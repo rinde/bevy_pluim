@@ -1,6 +1,3 @@
-// A finger drags the thumb of the vertical scroll area like the mouse does:
-// partway down, to the end (which stops at the last of the contents however
-// far the finger goes) and back to the top.
 (
     format_version: 3,
     name: "a finger dragging the thumb scrolls the contents",

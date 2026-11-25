@@ -1,6 +1,3 @@
-// A finger down on a slider shows the pressed thumb (a finger never hovers), the
-// thumb is at rest again once the finger lifts or the touch is cancelled, and a
-// finger that drags off the slider and lifts leaves it at rest too.
 (
     format_version: 3,
     name: "a finger shows the pressed thumb only while down",

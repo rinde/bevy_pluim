@@ -1,5 +1,3 @@
-// The crumbs of a trail are labelled with their text, the current, disabled
-// one included.
 (
     format_version: 3,
     name: "crumbs carry their text as accessible label",

@@ -1,5 +1,3 @@
-// A slow drag ends where the finger lifted: twelve moves of 1 px (60 px a second) are under the
-// speed that flings.
 (
     format_version: 3,
     name: "a slow finger pan does not fling",

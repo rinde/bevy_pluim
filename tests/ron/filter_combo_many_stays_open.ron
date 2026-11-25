@@ -1,5 +1,3 @@
-// A selection of many stays open after Enter and keeps the query, so more matches can be
-// picked; Escape then closes it and the picks stay.
 (
     format_version: 3,
     name: "a filter combo over many items stays open with its query after Enter",

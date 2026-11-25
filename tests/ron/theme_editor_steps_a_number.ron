@@ -1,6 +1,3 @@
-// Every number of the theme has a stepper: scrolled to the end of the editor, the last one is
-// the shadow's blur, and stepping it up sets it in the theme (the shadow geometry is private to
-// the theme, reached by reflection).
 (
     format_version: 3,
     name: "stepping a number in the theme editor sets it in the theme",

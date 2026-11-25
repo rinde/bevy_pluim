@@ -1,5 +1,3 @@
-// A touch tap on a card picks it as a click does; a finger that slides off before lifting
-// picks nothing, and no hover background stays on a card after the finger lifts.
 (
     format_version: 3,
     name: "a touch tap on a gallery card picks it and leaves no hover look",

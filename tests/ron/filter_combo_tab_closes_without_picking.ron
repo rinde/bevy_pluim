@@ -1,5 +1,3 @@
-// Tab and Shift+Tab leave the popup: it closes without picking the active option and the focus
-// goes where the key sent it, not back into the hidden search box.
 (
     format_version: 3,
     name: "Tab and Shift+Tab close a filter combo without picking",

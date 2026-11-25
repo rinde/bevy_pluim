@@ -1,5 +1,3 @@
-// A finger that lands on a flinging area stops it where it is, and so does a turn of the wheel
-// (which also moves it, from there).
 (
     format_version: 3,
     name: "a new touch or a wheel turn stops a fling",

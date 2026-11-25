@@ -1,6 +1,3 @@
-// The list of the 80 option `long combo` is capped to the window and scrolls itself. Arrowing
-// down moves the active row past the bottom of the view, so the list scrolls to keep it in view
-// (`scroll_into_view` scrolls a scrolling `FixedNode` popup); Home returns to the top.
 (
     format_version: 3,
     name: "arrow keys scroll a combo list taller than the window to the active row",

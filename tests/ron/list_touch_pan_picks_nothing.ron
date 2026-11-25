@@ -1,5 +1,3 @@
-// A finger that goes down on a row of a list in a scroll area and pans picks nothing and
-// leaves no pressed look; a tap on a row afterwards picks as before.
 (
     format_version: 3,
     name: "a touch pan over a list scrolls its area and picks nothing",
@@ -12,7 +10,7 @@
         Wait(2),
         Check(Component(target: Within(Name("list scroll area"), Component("ScrollContents")), path: "ScrollPosition.0.y", is: Gt(0.0))),
         Check(App(Selected(of: Name("scrolling list"), items: ["Row 1"]))),
-        // The pan ran on after the lift (#801); the wheel stops it and scrolls back to the top.
+        // A fling outlives the lift; the wheel stops it.
         MoveTo(Name("list scroll area")),
         Wheel(x: 0.0, y: 100000.0),
         Wheel(x: 0.0, y: -60.0),

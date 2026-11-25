@@ -1,6 +1,3 @@
-// A light / system / dark toggle starts on System. A click on "Dark" fixes the
-// preference to dark and the theme follows, and a click on "Light" fixes light.
-// The toggle is a radio group whose toggle follows the preference.
 (
     format_version: 3,
     name: "a light dark toggle starts on system and a click fixes light or dark",

@@ -1,6 +1,3 @@
-// A touch tap reaches a push button the way a click does: the touch pointer
-// presses and releases "Add", which triggers `Activate` once (the Buttons
-// screen counts the activations of "Add" in `Clicks`).
 (
     format_version: 3,
     name: "a touch tap on a push button activates it once",

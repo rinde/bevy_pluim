@@ -1,7 +1,3 @@
-// Picking an item of an open combo selects it, closes the list and shows the
-// item's label on the button. "first combo" and "third combo" share the
-// selection, and so does the "country list"; "own combo" has one of its own.
-// Picking another item replaces the first.
 (
     format_version: 3,
     name: "picking an item selects it, closes the list and labels the button",
@@ -12,7 +8,6 @@
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
         Check(Visible(Within(Name("first combo"), Component("ComboList")))),
-        // Over the "Underneath" button.
         MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
         Click(Left),
         Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
@@ -20,13 +15,11 @@
         Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
         Check(Not(Visible(Nth(0, Within(Name("first combo"), Component("ItemView")))))),
         Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Canada"))),
-        // The widgets that share the selection show it; the one with its own do not.
         Check(App(Selected(of: Name("third combo"), items: ["Canada"]))),
         Check(TextOf(Within(Name("third combo"), Component("ComboButton")), StartsWith("Canada"))),
         Check(App(Selected(of: Name("country list"), items: ["Canada"]))),
         Check(App(Selected(of: Name("own combo"), items: []))),
         Check(TextOf(Within(Name("own combo"), Component("ComboButton")), StartsWith("Select.."))),
-        // Open it again and pick another item.
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
         Check(Visible(Within(Name("first combo"), Component("ComboList")))),

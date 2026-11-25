@@ -1,6 +1,3 @@
-// A finger on an icon button shows the pressed look while it is down and no
-// hover look stays after it lifts; a forced tap on a disabled toggle button
-// changes nothing.
 (
     format_version: 3,
     name: "a finger shows the pressed look on an icon button and a disabled one ignores it",

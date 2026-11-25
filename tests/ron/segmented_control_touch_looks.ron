@@ -1,5 +1,3 @@
-// A finger on a resting segment shows no hover look after it lifts, and one that slides off
-// before lifting picks nothing. The icon of a segment follows its text.
 (
     format_version: 3,
     name: "a finger leaves no hover look on a segment and sliding off picks nothing",

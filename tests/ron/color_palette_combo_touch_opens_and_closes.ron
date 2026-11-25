@@ -1,4 +1,3 @@
-// A tap on a palette combo's colour button opens its popup and a second tap on it closes it.
 (
     format_version: 3,
     name: "a tap on a palette combo's button opens the popup and a second tap closes it",

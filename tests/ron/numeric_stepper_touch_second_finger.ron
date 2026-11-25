@@ -1,8 +1,3 @@
-// A second finger down during a scrub neither starts a second scrub nor ends the
-// first early. Finger 0 scrubs the default stepper from its "+" button towards
-// the right; finger 1 lands on "-" and moves left, which changes nothing; once
-// finger 1 lifts, finger 0 still scrubs on (right to the maximum) and its lift
-// over "+" steps nothing more.
 (
     format_version: 3,
     name: "a second finger during a numeric stepper scrub is ignored",

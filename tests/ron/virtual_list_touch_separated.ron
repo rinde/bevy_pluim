@@ -1,4 +1,3 @@
-// A touch tap picks a row of a separated virtual list, which then shows the selection ring.
 (
     format_version: 3,
     name: "a touch tap picks a row of a separated virtual list",

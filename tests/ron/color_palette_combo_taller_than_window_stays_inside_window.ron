@@ -1,8 +1,3 @@
-// The popup of a palette combo is 242 pixels high, and the window of this scenario only 260:
-// under the button there are fewer than 242 pixels to the 10 pixel bottom margin, and above
-// it fewer than the 100 pixel minimum, so the popup goes under the button and is capped to
-// the room there (`fit_vertically`, 192 high), and scrolls the rest. Its bottom edge is at 250
-// exactly (260 less the margin): the pointer is on it at row 249, off it at row 250.
 (
     format_version: 3,
     name: "a palette combo popup taller than the window is capped and stays inside it",

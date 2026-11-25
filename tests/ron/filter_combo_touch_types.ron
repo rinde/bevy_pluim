@@ -1,5 +1,3 @@
-// A tap opens a filter combo with the focus in the search box; typing filters the options
-// and a tap on the remaining option picks it and closes the popup.
 (
     format_version: 3,
     name: "a tap opens a filter combo, typing filters and a tap on an option picks it",

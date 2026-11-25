@@ -1,7 +1,3 @@
-// The light dark toggle is one tab stop: Tab enters at the option of the current preference
-// (System), the next Tab leaves for "Change theme" and Shift+Tab comes back to the preference's
-// option. The arrows move the focus (with the ring) and set the preference, wrap round, and Home
-// and End go to the ends.
 (
     format_version: 3,
     name: "a light dark toggle is one tab stop with arrow keys between its options",

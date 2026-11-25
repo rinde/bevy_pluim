@@ -1,6 +1,3 @@
-// A tap outside an open combo closes it without changing the selection, and a tap on another
-// combo's button closes the first while it opens the second. The close reads the pointer that
-// lifted (picking's hover map), not the mouse, so a finger counts.
 (
     format_version: 3,
     name: "a tap outside an open combo closes it without changing the selection",
@@ -13,9 +10,7 @@
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Closed))),
         Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
         Check(App(Selected(of: Name("first combo"), items: []))),
-        // The button is at rest, not stuck in a highlight.
         Check(Not(Hovered(Within(Name("first combo"), Component("ComboButton"))))),
-        // A second combo's button is outside the first.
         TouchTap(Within(Name("first combo"), Component("ComboButton"))),
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
         TouchTap(Within(Name("own combo"), Component("ComboButton"))),

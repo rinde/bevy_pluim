@@ -1,5 +1,3 @@
-// A touch tap on an option fixes the theme preference as a click does and the indicator
-// slides to it; a finger that slides off before lifting changes nothing.
 (
     format_version: 3,
     name: "a touch tap on a light dark toggle option sets the preference",

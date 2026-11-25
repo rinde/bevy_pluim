@@ -1,7 +1,3 @@
-// A gallery label is `Theme::font_size_small` text, so it follows Bevy's `RemSize`.
-// `ron_scenarios` also plays this file with the rem size at 1.5 times the
-// default (`[text 1.5x]`): the sizes stay in px, so the label must still fit
-// inside its box, and the screen still fits the window.
 (
     format_version: 3,
     name: "a gallery label is sized in rem and fits its box at any text size",

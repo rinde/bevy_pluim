@@ -1,5 +1,3 @@
-// A fling into the start of the area stops at the start without overshoot. A quick pan scrolls
-// the area down into its end at 220, then a quick pan the other way flings back past what is left to the top.
 (
     format_version: 3,
     name: "a fling stops at the start of the vertical scroll area",

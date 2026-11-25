@@ -1,6 +1,3 @@
-// A column of setting rows keeps the divider under every row but the last, and
-// the control in a row's slot works: picking "Dark" in the first row's
-// segmented control selects it.
 (
     format_version: 3,
     name: "setting rows show a divider between rows and their controls work",

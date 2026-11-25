@@ -1,4 +1,3 @@
-// Escape closes an open combo and puts the focus back on its button; nothing is selected.
 (
     format_version: 3,
     name: "Escape closes an open combo and the focus goes back to its button",
@@ -16,7 +15,6 @@
         Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
         Check(App(Focused(of: Within(Name("first combo"), Component("ComboButton"))))),
         Check(App(Selected(of: Name("first combo"), items: []))),
-        // Enter on the button opens it again.
         Tap(key: Enter),
         Wait(1),
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),

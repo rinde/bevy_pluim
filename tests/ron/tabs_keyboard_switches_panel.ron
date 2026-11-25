@@ -1,6 +1,3 @@
-// The tab bar is one tab stop, its selected tab, and the first on the `Tabs` screen: Tab
-// focuses that tab, the arrow keys move the focus (and the ring) over the tabs without
-// switching, and Enter or Space switches the shown `Stack` panel to the focused tab.
 (
     format_version: 3,
     name: "arrow keys move over the tabs and Enter shows the panel",
@@ -10,14 +7,12 @@
         Tap(key: Tab),
         Wait(1),
         Check(App(Focused(of: Role(role: Tab, label: "Panel A")))),
-        // The ring is on the tab, not on the bar.
         Check(Count(with: ["Outline"], is: Eq(1))),
         Check(Count(with: ["Outline", "TabBarTab"], is: Eq(1))),
         Tap(key: ArrowRight),
         Wait(1),
         Check(App(Focused(of: Role(role: Tab, label: "Panel B")))),
         Check(Count(with: ["Outline"], is: Eq(1))),
-        // Moving shows nothing yet.
         Check(App(Selected(of: Component("TabBar"), items: ["Panel A"]))),
         Check(Selected(Role(role: Tab, label: "Panel A"))),
         Check(Visible(Within(Name("Stack"), Text("Panel A")))),
@@ -34,13 +29,11 @@
         Check(App(Selected(of: Component("TabBar"), items: ["Card demo"]))),
         Check(Visible(Within(Name("Stack"), Text("Card demo")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Panel B"))))),
-        // Past the last tab it wraps round to the first.
         Tap(key: ArrowRight),
         Tap(key: Enter),
         Wait(2),
         Check(Visible(Within(Name("Stack"), Text("Panel A")))),
         Check(Not(Visible(Within(Name("Stack"), Text("Card demo"))))),
-        // Home and End go to the first and last tab.
         Tap(key: End),
         Wait(1),
         Check(App(Focused(of: Role(role: Tab, label: "Card demo")))),

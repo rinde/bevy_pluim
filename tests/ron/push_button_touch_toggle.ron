@@ -1,4 +1,3 @@
-// A tap flips a toggle push button; a finger that slides off does not.
 (
     format_version: 3,
     name: "a touch tap flips a toggle push button and a slide-off does not",

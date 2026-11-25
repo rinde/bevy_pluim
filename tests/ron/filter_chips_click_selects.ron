@@ -1,5 +1,3 @@
-// All starts active. A click on "Running" selects it, in `mirror chips` as well (one shared
-// selection); `narrow chips` keeps its own.
 (
     format_version: 3,
     name: "clicking a chip selects it",

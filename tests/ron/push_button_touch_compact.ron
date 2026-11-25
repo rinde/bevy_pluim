@@ -1,5 +1,3 @@
-// A compact push button takes a tap and shows the pressed look while the
-// finger is down, resting again after it lifts.
 (
     format_version: 3,
     name: "a finger on a compact push button taps and shows the pressed look",

@@ -1,5 +1,3 @@
-// A touch tap on a chip selects it as a click does, in the shared selection as well; a finger
-// that slides off before lifting selects nothing, and a lifted finger leaves no hover text.
 (
     format_version: 3,
     name: "a touch tap on a chip selects it and leaves no hover look",
@@ -18,13 +16,11 @@
         Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
         Check(App(Selected(of: Name("mirror chips"), items: ["Running"]))),
         Check(App(Selected(of: Name("narrow chips"), items: ["Alpha"]))),
-        // The chip that was active goes back to the resting ink, not the hover one.
         Check(Component(target: Within(Name("status chips"), Text("All")), path: "TextColor.0", is: Eq(Captured("resting ink")))),
         TouchTap(Within(Name("narrow chips"), Role(role: Button, label: "Gamma "))),
         Wait(2),
         Check(App(Selected(of: Name("narrow chips"), items: ["Gamma"]))),
         Check(App(Selected(of: Name("status chips"), items: ["Running"]))),
-        // The focus, and so the roving stop, follows the tapped chip.
         Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Gamma "))))),
         Tap(key: ArrowRight),
         Check(App(Focused(of: Within(Name("narrow chips"), Role(role: Button, label: "Delta "))))),

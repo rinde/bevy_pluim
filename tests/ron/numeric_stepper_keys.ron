@@ -1,6 +1,3 @@
-// Tab reaches the "-" of the default stepper (the stepper is no tab stop, its buttons are);
-// the arrow keys bubble up from the focused button and step the value, Enter and Space
-// still activate it, and a step past a bound changes nothing.
 (
     format_version: 3,
     name: "the arrow keys step a numeric stepper from a focused button",

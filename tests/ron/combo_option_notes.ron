@@ -1,6 +1,3 @@
-// A combo option can carry a note shown after its label: the row is named with both
-// ("Delft < unreachable >"), the note is in the warning colour, and the closed button shows
-// the label alone.
 (
     format_version: 3,
     name: "a combo option with a note shows it in the list but not on the button",
@@ -23,8 +20,7 @@
         Click(Left),
         Check(App(Selected(of: Name("noted combo"), items: ["Delft"]))),
         Check(App(Accessible(of: Within(Name("noted combo"), Component("ComboButton")), role: Some("ComboBox"), label: None, value: Some("Delft"), states: []))),
-        // The picked row is selected, where the warning colour would not reach 4.5:1, so its
-        // note is read in `text_primary` instead.
+        // On the selected row the warning color misses 4.5:1, so the note uses `text_primary`.
         Check(Not(Component(
             target: Text("< unreachable >"),
             path: "TextColor.0",

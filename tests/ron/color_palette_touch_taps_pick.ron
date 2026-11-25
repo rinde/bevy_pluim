@@ -1,6 +1,3 @@
-// A touch tap on a swatch picks its colour, another swatch replaces it and a tap on the
-// selected one clears it (`ZeroOrOne`). A finger that slides off a swatch picks nothing, and
-// no hover look stays after the lift. Index 60 is red-500 and 5 is slate-500.
 (
     format_version: 3,
     name: "a touch tap on a swatch picks it and a tap on the selected one deselects",
@@ -14,7 +11,6 @@
         TouchTap(Nth(5, Within(Name("palette"), Component("ItemView")))),
         Check(App(Selected(of: Name("palette"), items: ["slate-500"]))),
         Check(Not(Selected(Nth(60, Within(Name("palette"), Component("ItemView")))))),
-        // Slide off a swatch: nothing is picked.
         TouchDown(at: Nth(60, Within(Name("palette"), Component("ItemView"))), finger: 0),
         TouchMove(to: Screen((1100.0, 700.0)), finger: 0),
         TouchUp(finger: 0),
@@ -25,7 +21,6 @@
             path: "BorderColor.top",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
-        // Tap the selected one: cleared, and its border is the unselected one.
         TouchTap(Nth(5, Within(Name("palette"), Component("ItemView")))),
         Wait(2),
         Check(App(Selected(of: Name("palette"), items: []))),

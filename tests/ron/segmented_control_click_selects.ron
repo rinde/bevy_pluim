@@ -1,6 +1,3 @@
-// The first segment of `own segmented control` starts selected; a click on the other selects
-// it instead, and a click on the selected segment changes nothing. The two shared controls
-// are not touched.
 (
     format_version: 3,
     name: "clicking a segment selects it",

@@ -1,11 +1,3 @@
-// The palette and the palette in the scroll area share one selection
-// (`Selection::reference`), so a swatch clicked in either selects the colour
-// in both and marks it in both (a dark colour such as red-500 or slate-800 gets
-// a border other than the theme's `background_primary`, gray-50). The combos
-// choose from the same colours but keep selections of their own, so they do
-// not change. Index 60 is red-500 and 8 is slate-800 of `COLORS`; the scroll
-// area is 300 wide, which shows the first seven columns of swatches. `Selected`
-// follows the shared selection in both.
 (
     format_version: 3,
     name: "palettes that share a selection show the same colour",
@@ -33,7 +25,6 @@
         )),
         Check(App(Selected(of: Name("first palette combo"), items: []))),
         Check(App(Selected(of: Name("own palette combo"), items: []))),
-        // And the other way round: a swatch of the big palette replaces it.
         MoveTo(Nth(8, Within(Name("palette"), Component("ItemView")))),
         Click(Left),
         MoveTo(Screen((1100.0, 600.0))),

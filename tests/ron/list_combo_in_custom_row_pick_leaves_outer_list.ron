@@ -1,7 +1,3 @@
-// A combo inside a custom-view row of a list is the row's content, not the row: picking
-// an option in it neither selects the outer row nor writes the row's item into the
-// combo's own selection, which keeps showing the pick. Two rows, so that a second pick
-// is checked against a row that is already selected by nobody.
 (
     format_version: 3,
     name: "picking in a combo inside a list row leaves the list unselected",
@@ -17,14 +13,10 @@
         Click(Left),
         Check(App(Selected(of: Name("combo in row a"), items: ["Beta"]))),
         Check(TextOf(Within(Name("combo in row a"), Component("ComboButton")), StartsWith("Beta"))),
-        // The closed state is read from `ComboState` and `InheritedVisibility` because
-        // `Not(Visible(..))` wrongly fails here: it reads the enclosing row's visibility
-        // (rinde/bevy_stagecraft#156).
-        // Switch back to `Not(Visible(..))` once the tester fix is in.
+        // `Not(Visible(..))` misreads the enclosing row's visibility; read `ComboState` and `InheritedVisibility`.
         Check(Component(target: Name("combo in row a"), path: "ComboState", is: Eq(Closed))),
         Check(Component(target: Within(Name("combo in row a"), Component("ComboList")), path: "InheritedVisibility.0", is: Eq(false))),
         Check(App(Selected(of: Name("row list"), items: []))),
-        // Another row's combo, picked the same way.
         MoveTo(Within(Name("combo in row b"), Component("ComboButton"))),
         Click(Left),
         MoveTo(Within(Name("combo in row b"), Role(role: ListItem, label: "Gamma"))),

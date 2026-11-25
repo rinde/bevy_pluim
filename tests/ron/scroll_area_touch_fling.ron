@@ -1,7 +1,3 @@
-// A quick pan that the finger lets go of runs on and slows down: the vertical area (x 240..440,
-// y 20..220, scrolling 0..220) is at 25 where the finger lifts after five moves of 5 px
-// (300 px a second) and comes to rest well beyond that, short of its end. Nothing moves once it
-// has stopped.
 (
     format_version: 3,
     name: "a quick finger pan on the vertical scroll area keeps scrolling after the lift",

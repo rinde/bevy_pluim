@@ -1,8 +1,3 @@
-// Contents that fit in their scroll area do not scroll: the wheel over the
-// fitting scroll area, three squares in a 200 by 200 area, leaves it where it
-// was, and both of its scroll bars stay hidden. The scroll position that counts
-// is the value that was set (ScrollPosition.0, logical pixels), clamped to
-// what overflows (the ScrollPosition component is kept in that range too).
 (
     format_version: 3,
     name: "contents that fit do not scroll",

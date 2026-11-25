@@ -1,5 +1,3 @@
-// A palette combo is usable from the keyboard: Tab focuses its button, Enter opens the popup and
-// puts the focus on its palette, Escape closes it and the focus goes back to the button.
 (
     format_version: 3,
     name: "Enter opens a palette combo onto its palette and Escape closes it",

@@ -1,6 +1,3 @@
-// A finger dragging the contents of the vertical scroll area scrolls it by the finger's
-// movement: up scrolls down, back past the top stops at the top, and a drag along the axis it
-// does not scroll along moves nothing. The area spans x 240..440, y 20..220.
 (
     format_version: 3,
     name: "a finger pan scrolls the vertical scroll area by the finger's movement",
@@ -14,12 +11,10 @@
         TouchMove(to: Screen((340.0, 70.0)), finger: 0),
         Wait(1),
         Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 80.0)))),
-        // Back past the start of the content: the position stops at the top.
         TouchMove(to: Screen((340.0, 200.0)), finger: 0),
         Wait(1),
         Check(Component(target: Within(Name("vertical scroll area"), Component("ScrollContents")), path: "ScrollPosition.0", is: Eq((0.0, 0.0)))),
         TouchUp(finger: 0),
-        // Sideways does not scroll a vertical area.
         TouchDown(at: Screen((340.0, 150.0)), finger: 0),
         TouchMove(to: Screen((290.0, 150.0)), finger: 0),
         TouchUp(finger: 0),

@@ -1,14 +1,9 @@
-// A click outside an open palette combo closes its popup and leaves the
-// selection (and the colour on the button) as it is. `color_palette_combo.rs`
-// reads ButtonInput<MouseButton> for this. A click on a swatch of another
-// palette is outside as well, although the popup floats over it.
 (
     format_version: 3,
     name: "a click outside an open palette combo closes it without changing the selection",
     setup: App(ColorPalette),
     steps: [
         Wait(2),
-        // Nothing selected: an outside click closes and selects nothing.
         MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
         Click(Left),
         Wait(1),
@@ -24,7 +19,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.0,green:0.0,blue:0.0,alpha:0.0))),
         )),
-        // With red-500 selected.
         MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
         Click(Left),
         Wait(1),
@@ -45,9 +39,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.9372549,green:0.26666668,blue:0.26666668,alpha:1.0))),
         )),
-        // A click on a swatch of the palette (the last one, which the popup
-        // does not cover) is outside the combo as well: it selects the colour
-        // in the palette, closes the popup and leaves the combo's selection.
         MoveTo(Within(Name("first palette combo"), Component("ColorPushButton"))),
         Click(Left),
         Wait(1),

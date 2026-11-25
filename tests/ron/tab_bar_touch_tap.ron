@@ -1,6 +1,3 @@
-// A touch tap on a tab picks it as a click does, and the stack shows its panel (created on
-// the first tap). A finger that slides off a tab before lifting picks nothing, and the
-// indicator slides to the tapped tab.
 (
     format_version: 3,
     name: "a touch tap on a tab shows its panel and a finger sliding off picks nothing",

@@ -1,7 +1,3 @@
-// A slider is one tab stop (the disabled one is skipped) with the focus ring
-// while it has the focus; the left and right arrows step it, Home and End go
-// to its ends, each a final `ValueChange<f32>`. A continuous slider steps by a
-// hundredth of its range.
 (
     format_version: 3,
     name: "the arrow keys, Home and End move a focused slider",

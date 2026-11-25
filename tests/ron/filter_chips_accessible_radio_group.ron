@@ -1,8 +1,3 @@
-// To a screen reader a row of filter chips is a radio group and each chip a
-// radio button named after its label and count ("Running 2"; "Gamma" without
-// one), toggled while it is the active chip. The chips stay `Button`s, so
-// `Role(role: Button, ..)` (which reads their text) still finds them. A click
-// on "Running 2" moves the toggle from "All 4".
 (
     format_version: 3,
     name: "filter chips are a radio group whose toggle follows the active chip",

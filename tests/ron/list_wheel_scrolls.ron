@@ -1,18 +1,7 @@
-// The wheel over a list scrolls what the pointer is over: list.rs reads the
-// HoverMap and moves the ScrollPosition of every hovered node, so the
-// "scrolling list", twelve rows in a "list scroll area" 100 pixels high,
-// moves with the area around it. The list and its item views let the pointer
-// through (Pickable should_block_lower is false), which is what lets the area
-// below them be hovered. The scroll position that counts is the value that was set
-// (ScrollPosition.0, logical pixels), clamped to what overflows (the
-// ScrollPosition component is kept in that range too, but the layout shows it
-// a pass later). A positive wheel y scrolls up.
 (
     format_version: 3,
     name: "the wheel over a list scrolls it",
-    // The scroll positions it checks are those of rows sized for the default
-    // text size; with larger text the rows are taller and the area scrolls
-    // further, so it does not run in the `text 1.5x` variant.
+    // Scroll positions assume default-size rows; larger text scrolls further.
     variants: ["default", "scale 2"],
     setup: App(Lists),
     steps: [
@@ -23,7 +12,6 @@
             is: Eq(0.0),
         )),
         MoveTo(Within(Name("scrolling list"), Role(role: ListItem, label: "Row 1"))),
-        // Down: negative y moves the contents up.
         Wheel(x: 0.0, y: -40.0),
         Wait(2),
         Check(Component(
@@ -31,8 +19,6 @@
             path: "ScrollPosition.0.y",
             is: Eq(40.0),
         )),
-        // Further down, to the end of the rows, however far the wheel turns: the
-        // ScrollPosition component and the layout both stop at the overflow, 304.
         Wheel(x: 0.0, y: -2000.0),
         Wait(2),
         Check(Component(
@@ -45,7 +31,6 @@
             path: "ScrollPosition.0.y",
             is: Eq(304.0),
         )),
-        // Back up, to the first row.
         Wheel(x: 0.0, y: 5000.0),
         Wait(2),
         Check(Component(
@@ -53,7 +38,6 @@
             path: "ScrollPosition.0.y",
             is: Eq(0.0),
         )),
-        // The wheel elsewhere leaves the list where it is.
         MoveTo(Role(role: Button, label: "Change theme")),
         Wheel(x: 0.0, y: -40.0),
         Wait(2),

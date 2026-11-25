@@ -1,6 +1,3 @@
-// A badge is a pill with a count on the corner of its button. The counted
-// button starts at 3, the warning button says 12, and the button with no badge
-// has none. "Add badge" inserts a new count and the pill follows.
 (
     format_version: 3,
     name: "a badge shows its count on the button and follows a new count",

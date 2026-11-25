@@ -1,9 +1,3 @@
-// A palette is a list, so it is one tab stop whose arrow keys move the active swatch, the
-// one with the focus ring (a palette has 22 columns: Right is the next swatch, in the
-// order of `tailwind::COLORS`), and Enter selects it. Tab reaches the palette on the 8th
-// press: the six palette combos and "Change theme" (the palettes of the closed popups are
-// skipped).
-// Swatches have no label, so they are reached by position.
 (
     format_version: 3,
     name: "arrow keys move a palette's active swatch and Enter selects it",
@@ -14,7 +8,6 @@
         Tap(key: Tab), Tap(key: Tab), Tap(key: Tab),
         Wait(1),
         Check(App(Focused(of: Name("palette")))),
-        // A palette that was not clicked starts on its first swatch.
         Check(App(Active(of: Name("palette"), is: Nth(0, Within(Name("palette"), Component("ItemView")))))),
         Check(Component(
             target: Nth(0, Within(Name("palette"), Component("ItemView"))),
@@ -31,7 +24,6 @@
         Wait(1),
         Check(App(Selected(of: Name("palette"), items: ["slate-200"]))),
         Check(Selected(Nth(2, Within(Name("palette"), Component("ItemView"))))),
-        // The scroll area's palette shares the selection and shows it too.
         Check(App(Selected(of: Within(Name("palette scroll area"), Component("ColorPalette")), items: ["slate-200"]))),
         Tap(key: End),
         Tap(key: Enter),

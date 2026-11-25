@@ -1,7 +1,3 @@
-// A finger scrubs a numeric stepper like the mouse: a drag that starts on the
-// "+" button reaches the maximum instead of stepping, one that starts on "-"
-// walks back to the minimum, and neither leaves the stepper stuck: a tap on "+"
-// steps right after.
 (
     format_version: 3,
     name: "a finger drag scrubs a numeric stepper",

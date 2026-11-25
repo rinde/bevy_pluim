@@ -1,5 +1,3 @@
-// With nothing matching, the popup says "No matching items" (a polite status for a screen
-// reader), no option is active and Enter changes nothing and keeps the popup open.
 (
     format_version: 3,
     name: "a filter combo with no match shows a status line and Enter does nothing",

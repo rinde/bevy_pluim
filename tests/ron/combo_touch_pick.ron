@@ -1,5 +1,3 @@
-// A tap on an option of an open combo picks it, closes the popup and labels the button, as a
-// click does. The popup floats over the "Underneath" button, which the tap does not reach.
 (
     format_version: 3,
     name: "a tap on a combo's option picks it and closes the popup",
@@ -15,7 +13,6 @@
         Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Canada"))),
         Check(App(Selected(of: Name("third combo"), items: ["Canada"]))),
         Check(App(Selected(of: Name("own combo"), items: []))),
-        // Another pick replaces the first.
         TouchTap(Within(Name("first combo"), Component("ComboButton"))),
         TouchTap(Within(Name("first combo"), Role(role: ListItem, label: "Belgium"))),
         Check(App(Selected(of: Name("first combo"), items: ["Belgium"]))),

@@ -1,7 +1,3 @@
-// Pins the nesting behaviour: the area under the pointer takes the wheel turn alone. The
-// inner area's contents block the pointer, so the outer area is not hovered over the
-// inner one and does not scroll with it, and the inner area does not pass anything on.
-// Over the outer area beside the inner one, only the outer area scrolls.
 (
     format_version: 3,
     name: "a wheel turn over a horizontal scroll area in a vertical one scrolls only the inner",

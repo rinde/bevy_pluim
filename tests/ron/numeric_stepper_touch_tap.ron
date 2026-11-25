@@ -1,5 +1,3 @@
-// A tap with a finger steps with "+" and "-" and opens the number editor on the
-// value; typing a number sets it.
 (
     format_version: 3,
     name: "a finger taps a numeric stepper's buttons and value",

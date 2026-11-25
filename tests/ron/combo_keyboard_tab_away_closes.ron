@@ -1,5 +1,3 @@
-// The focus leaving the open list closes the combo: Tab goes on to the next widget, which keeps
-// the focus.
 (
     format_version: 3,
     name: "Tabbing out of an open combo's list closes it",

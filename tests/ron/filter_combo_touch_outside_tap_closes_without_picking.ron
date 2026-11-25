@@ -1,5 +1,3 @@
-// A tap elsewhere closes the popup without picking, and a tap inside the popup, on the search
-// box, does not.
 (
     format_version: 3,
     name: "a tap outside a filter combo closes it without picking, a tap on its search box does not",

@@ -1,7 +1,3 @@
-// A filter combo opens with every option and the focus in its search box; typing filters the
-// options live, the arrow keys move through the matches only, and Enter picks the active one: a
-// selection of one closes the popup and the focus goes back to the button. The `ordinary combo`
-// and the `city list` share the selection and the items and are never filtered.
 (
     format_version: 3,
     name: "typing filters a filter combo, the arrows move through the matches and Enter picks one",

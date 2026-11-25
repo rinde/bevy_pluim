@@ -1,4 +1,3 @@
-// A tap on another segment slides the indicator to it, as a click does.
 (
     format_version: 3,
     name: "a touch tap slides the segmented control indicator to the segment",

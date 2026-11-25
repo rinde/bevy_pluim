@@ -1,8 +1,3 @@
-// A list over a `OneOrMore` selection (the shared one of the "one-or-more
-// list") starts with its first item selected and always keeps at least one:
-// clicking the only selected item changes nothing, while clicking an unselected
-// one adds it, and clicking a selected one when there are several removes it.
-// Items are reported in the order they were selected.
 (
     format_version: 3,
     name: "a list over OneOrMore never ends up with nothing selected",
@@ -10,19 +5,16 @@
     steps: [
         Wait(2),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
-        // The last selected item stays.
         MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands"]))),
         MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Portugal"]))),
         MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Netherlands", "Portugal", "Canada"]))),
-        // With several selected, deselecting one is allowed.
         MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Netherlands"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Portugal", "Canada"]))),
         MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Portugal"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Canada"]))),
-        // Down to one again: that one stays.
         MoveTo(Within(Name("one-or-more list"), Role(role: ListItem, label: "Canada"))), Click(Left),
         Check(App(Selected(of: Name("one-or-more list"), items: ["Canada"]))),
     ],

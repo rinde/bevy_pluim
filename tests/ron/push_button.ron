@@ -1,8 +1,3 @@
-// The first scenario of tests/scenarios.rs as data: a push button follows the
-// light theme under the pointer, and the click is counted. The colours are the
-// slots of DEFAULT_LIGHT_THEME_COLORS: background_primary, hovered_item,
-// selected_hovered_item and hovered_item again (the pointer is still on the
-// button after the release), in the order the steps reach them.
 (
     format_version: 3,
     name: "a push button follows the theme under the pointer",

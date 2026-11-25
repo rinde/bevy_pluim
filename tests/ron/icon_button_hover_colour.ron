@@ -1,8 +1,3 @@
-// An icon button rests at `background_primary` (gray-50), is `hovered_item`
-// (blue-200) under the pointer, `selected_hovered_item` (blue-600) while held
-// and `hovered_item` again once let go with the pointer still on it. A small
-// button's icon is `text_secondary` until the pointer is on it, then
-// `text_primary`.
 (
     format_version: 3,
     name: "an icon button shows hover and press colours and a small one brightens its icon",
@@ -38,7 +33,6 @@
             path: "BackgroundColor.0",
             is: Eq(Srgba((red:0.9764706,green:0.98039216,blue:0.9843137,alpha:1.0))),
         )),
-        // The small button's icon.
         Check(Component(
             target: Within(Name("small button"), Component("Icon")),
             path: "ImageNode.color",

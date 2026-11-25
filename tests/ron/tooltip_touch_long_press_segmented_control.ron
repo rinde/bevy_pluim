@@ -1,5 +1,3 @@
-// An icon-only segment's text is its tooltip: a finger held on a segment shows it and the lift
-// picks nothing; a tap picks the segment and shows no popup.
 (
     format_version: 3,
     name: "a long touch press on an icon-only segment shows its text and picks nothing",

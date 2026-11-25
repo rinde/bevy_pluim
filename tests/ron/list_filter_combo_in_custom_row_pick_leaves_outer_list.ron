@@ -1,4 +1,3 @@
-// Opening and picking in a filter combo must leave the surrounding list alone.
 (
     format_version: 3,
     name: "picking in a filter combo inside a list row leaves the list unselected",

@@ -1,5 +1,3 @@
-// A tap on the value opens the number editor with the focus in it; a tap elsewhere commits
-// the typed number and closes the editor.
 (
     format_version: 3,
     name: "a tap opens a numeric stepper's editor and a tap elsewhere commits it",

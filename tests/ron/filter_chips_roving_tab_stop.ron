@@ -1,6 +1,3 @@
-// Filter chips are one tab stop each: Tab enters at the active chip, the next Tab leaves for the
-// next row, and Shift+Tab comes back. The arrows move the focus and pick, wrap round, and Home
-// and End go to the ends.
 (
     format_version: 3,
     name: "a chip row is one tab stop with arrow keys between its chips",

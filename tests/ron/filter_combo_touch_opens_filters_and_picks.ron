@@ -1,6 +1,3 @@
-// A tap on a filter combo's button opens it with the focus in the search box, a tap on its
-// search box leaves it open, a tap on an option picks it and closes the popup for a selection
-// of one, and a second tap on the button closes an open popup.
 (
     format_version: 3,
     name: "taps open a filter combo, keep it open on the search box and pick an option",

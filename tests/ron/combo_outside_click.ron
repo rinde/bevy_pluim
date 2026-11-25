@@ -1,13 +1,9 @@
-// A click outside an open combo closes it and leaves the selection as it is.
-// `combo.rs` reads ButtonInput<MouseButton> for this, not a pointer event on
-// the list. A click on the combo's own button closes it as well.
 (
     format_version: 3,
     name: "a click outside an open combo closes it without changing the selection",
     setup: App(Combos),
     steps: [
         Wait(2),
-        // Nothing selected: an outside click closes and selects nothing.
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),
@@ -18,7 +14,6 @@
         Check(Not(Visible(Within(Name("first combo"), Component("ComboList"))))),
         Check(App(Selected(of: Name("first combo"), items: []))),
         Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Select.."))),
-        // With "Canada" selected.
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
         MoveTo(Within(Name("first combo"), Role(role: ListItem, label: "Canada"))),
@@ -35,7 +30,6 @@
         Check(App(Selected(of: Name("first combo"), items: ["Canada"]))),
         Check(App(Selected(of: Name("country list"), items: ["Canada"]))),
         Check(TextOf(Within(Name("first combo"), Component("ComboButton")), StartsWith("Canada"))),
-        // The button toggles: open, then closed again.
         MoveTo(Within(Name("first combo"), Component("ComboButton"))),
         Click(Left),
         Check(Component(target: Name("first combo"), path: "ComboState", is: Eq(Open))),

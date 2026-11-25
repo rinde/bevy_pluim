@@ -1,5 +1,3 @@
-// A finger pans the capped popup of `long combo` (it scrolls itself): the list scrolls, the
-// popup stays open and what the finger went down on is not picked.
 (
     format_version: 3,
     name: "a touch pan scrolls a capped combo popup and keeps it open",

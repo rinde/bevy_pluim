@@ -1,5 +1,3 @@
-// A cancelled touch ends the press like a release away from the button:
-// nothing is activated and the button is back at rest.
 (
     format_version: 3,
     name: "a cancelled touch on a push button activates nothing and rests",

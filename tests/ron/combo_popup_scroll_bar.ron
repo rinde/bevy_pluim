@@ -1,6 +1,3 @@
-// A combo list that is capped and scrolls (the `long combo`, 80 options) shows a scroll bar;
-// one whose rows fit (`first combo`) hides it. A press on the bar is inside the popup, so it
-// stays open.
 (
     format_version: 3,
     name: "a combo popup shows a scroll bar only while its list scrolls",
