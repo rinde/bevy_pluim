@@ -1,13 +1,6 @@
-//! Keyboard focus: which widgets Tab reaches, and the ring that shows where the focus is.
-//!
-//! `TabStop` is required by the widgets a person can focus. `sync_tab_index` keeps their
-//! [`TabIndex`] and `draw_focus_ring` draws the [`ThemeColors::focus_ring`](crate::theme::ThemeColors)
-//! around the focused one while the focus is visible.
+//! Keyboard focus: tab stops, roving groups and the focus ring.
 
-#![expect(
-    clippy::redundant_pub_crate,
-    reason = "the module is crate-private so FocusPlugin stays out of the public API, while its items keep pub(crate) to say how far they reach (pub would trip unreachable_pub)"
-)]
+#![expect(clippy::redundant_pub_crate, reason = "pub would trip unreachable_pub")]
 
 use accesskit::Role;
 use bevy::a11y::{AccessibilityNode, AccessibilitySystems};
@@ -30,13 +23,10 @@ pub(crate) const FOCUS_RING_WIDTH: f32 = 2.0;
 /// Gap between a node and its focus ring, in logical pixels.
 pub(crate) const FOCUS_RING_OFFSET: f32 = 1.0;
 
-/// How far a focus ring reaches beyond its node, in logical pixels: its offset and width. A
-/// scroll area pads its contents by this much so the ring is not clipped.
+/// How far a focus ring reaches beyond its node, in logical pixels.
 pub(crate) const FOCUS_RING_REACH: f32 = FOCUS_RING_OFFSET + FOCUS_RING_WIDTH;
 
 /// Registers the systems of the keyboard focus.
-///
-/// Added by [`WidgetsPlugin`](crate::WidgetsPlugin).
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct FocusPlugin;
 
@@ -68,29 +58,24 @@ impl Plugin for FocusPlugin {
     }
 }
 
-/// The system that draws the focus ring, in `PostUpdate` before the layout.
-///
-/// A widget that names its active row in `PostUpdate` (a `VirtualList`) runs before it, so
-/// the ring is on the row the frame the row is named.
+/// The system that draws the focus ring, before the layout.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct DrawFocusRing;
 
 /// The systems that set the role and states of the widgets' [`AccessibilityNode`]s.
 ///
-/// They run after Bevy's own, which set [`Role::Button`] on a node whose `Button` changed and
-/// clear the label of a button without text, and before the tree goes to the platform.
+/// They run after Bevy's own, which reset [`Role::Button`] and clear labels.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct AccessibilitySync;
 
-/// Sets the role of `node` to `role`, writing it only when it differs.
+/// Sets the role of `node`, writing only on a difference.
 pub(crate) fn sync_role(node: &mut Mut<AccessibilityNode>, role: Role) {
     if node.role() != role {
         node.set_role(role);
     }
 }
 
-/// Sets the toggled state of `node` to `toggled`, or clears it for `None`, writing it only
-/// when it differs.
+/// Sets the toggled state of `node`, or clears it for `None`, writing only on a difference.
 pub(crate) fn sync_toggled(node: &mut Mut<AccessibilityNode>, toggled: Option<bool>) {
     let wanted = toggled.map(accesskit::Toggled::from);
     if node.toggled() == wanted {
@@ -102,36 +87,35 @@ pub(crate) fn sync_toggled(node: &mut Mut<AccessibilityNode>, toggled: Option<bo
     }
 }
 
-/// Sets the label of `node` to `label`, writing it only when it differs.
+/// Sets the label of `node`, writing only on a difference.
 pub(crate) fn sync_label(node: &mut Mut<AccessibilityNode>, label: &str) {
     if node.label() != Some(label) {
         node.set_label(label);
     }
 }
 
-/// Sets the value of `node` to `value`, writing it only when it differs.
+/// Sets the value of `node`, writing only on a difference.
 pub(crate) fn sync_value(node: &mut Mut<AccessibilityNode>, value: &str) {
     if node.value() != Some(value) {
         node.set_value(value);
     }
 }
 
-/// Clears the value of `node`, writing it only when it has one.
+/// Clears the value of `node`, writing only if it has one.
 pub(crate) fn clear_value(node: &mut Mut<AccessibilityNode>) {
     if node.value().is_some() {
         node.clear_value();
     }
 }
 
-/// Clears the label of `node`, writing it only when it has one.
+/// Clears the label of `node`, writing only if it has one.
 pub(crate) fn clear_label(node: &mut Mut<AccessibilityNode>) {
     if node.label().is_some() {
         node.clear_label();
     }
 }
 
-/// Says that `node` controls `controlled`, the widget it opens or acts on, writing it only
-/// when it differs.
+/// Sets the node `node` controls, writing only on a difference.
 pub(crate) fn sync_controls(node: &mut Mut<AccessibilityNode>, controlled: Entity) {
     let wanted = [node_id(controlled)];
     if node.controls() != wanted {
@@ -139,7 +123,7 @@ pub(crate) fn sync_controls(node: &mut Mut<AccessibilityNode>, controlled: Entit
     }
 }
 
-/// Says that `node` is named by the text of `labelling`, writing it only when it differs.
+/// Sets the node that labels `node`, writing only on a difference.
 pub(crate) fn sync_labelled_by(node: &mut Mut<AccessibilityNode>, labelling: Entity) {
     let wanted = [node_id(labelling)];
     if node.labelled_by() != wanted {
@@ -147,24 +131,18 @@ pub(crate) fn sync_labelled_by(node: &mut Mut<AccessibilityNode>, labelling: Ent
     }
 }
 
-/// The id of the accessibility node of `entity`, as Bevy builds it for the platform.
+/// The accessibility node id of `entity`.
 pub(crate) const fn node_id(entity: Entity) -> accesskit::NodeId {
     accesskit::NodeId(entity.to_bits())
 }
 
-/// Marks a widget that Tab reaches.
-///
-/// Its [`TabIndex`] is kept by `sync_tab_index`: 0 while the widget is usable, -1 while it
-/// is [`InteractionDisabled`] (a disabled `Link` included), [`Unreachable`] (the list of a
-/// closed combo) or hidden (its [`InheritedVisibility`] is hidden, or it is under a
-/// `Display::None` node, such as a hidden `Stack` panel), so Tab skips it.
+/// Marks a widget that Tab reaches; `sync_tab_index` sets its [`TabIndex`] to -1 while it is
+/// disabled, [`Unreachable`] or hidden.
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[require(TabIndex(0))]
 pub(crate) struct TabStop;
 
-/// Marks an item button of a composite widget (a segment, chip, card or tool) whose container
-/// is one tab stop as a whole: [`sync_roving_groups`] owns its [`TabIndex`] (0 for the one
-/// button Tab reaches, -1 for the rest) instead of `sync_tab_index`.
+/// Marks an item button of a [`RovingGroup`]; [`sync_roving_groups`] owns its [`TabIndex`].
 #[derive(Component, Clone, Copy, Debug)]
 #[component(immutable)]
 pub(crate) struct RovingItem {
@@ -182,53 +160,44 @@ impl RovingItem {
 /// Which item a [`RovingGroup`] offers to Tab when the focus is not in it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RovingEntry {
-    /// The eligible item of the group's `Selection`, else the first eligible one (a radio group).
+    /// The selected item, else the first.
     Selected,
-    /// The eligible item that has Bevy's `Selected` marker, else the first eligible one (a radio
-    /// group whose state is not a `Selection`, the `LightDarkToggle`).
+    /// The item with Bevy's `Selected` marker, else the first.
     Marked,
-    /// The item that had the focus last while it is eligible, else the first one (a toolbar).
+    /// The item that had the focus last, else the first.
     Last,
 }
 
 /// Which keys move the focus inside a [`RovingGroup`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RovingKeys {
-    /// Left and up go back, right and down forward, Home and End to the ends.
     Radio,
-    /// Left goes back, right forward, Home and End to the ends. Up and down are left to the app.
+    /// Left and right only; up and down are left to the app.
     Horizontal,
 }
 
 /// What moving the focus inside a [`RovingGroup`] does to the item it lands on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RovingPick {
-    /// Nothing: the focus only moves.
     Nothing,
-    /// Selects it in the group's `Selection`, for a selection of at most one.
     Selection,
-    /// Triggers `Activate` on it, as a click would.
     Activate,
 }
 
-/// A composite widget with one tab stop and arrow keys between its [`RovingItem`]s, like a
-/// `TabBar`'s tabs: a `SegmentedControl`, `FilterChips`, `Gallery` or `Toolbar`.
+/// A composite widget with one tab stop and arrow keys between its [`RovingItem`]s.
 #[derive(Component, Clone, Debug)]
 pub(crate) struct RovingGroup {
     entry: RovingEntry,
     keys: RovingKeys,
-    /// What moving the focus does to the item it lands on.
     pick: RovingPick,
-    /// The last item of this group that had the focus.
     last: Option<Entity>,
-    /// Whether the focus was on one of the items when this was last looked at.
     holds_focus: bool,
-    /// The items in the order they are shown, with whether Tab and the arrows may land on each.
+    /// The items in shown order, with whether the focus may land on each.
     order: Vec<(Entity, bool)>,
 }
 
 impl RovingGroup {
-    /// A radio group: the arrows move the focus and select, for a selection of at most one.
+    /// A radio group over a `Selection` of at most one.
     pub(crate) const fn radio() -> Self {
         Self::new(
             RovingEntry::Selected,
@@ -237,13 +206,12 @@ impl RovingGroup {
         )
     }
 
-    /// A radio group whose state is the `Selected` marker of its items, not a `Selection`: the
-    /// arrows move the focus and activate the item they land on.
+    /// A radio group whose state is the `Selected` marker of its items.
     pub(crate) const fn marked_radio() -> Self {
         Self::new(RovingEntry::Marked, RovingKeys::Radio, RovingPick::Activate)
     }
 
-    /// A toolbar: left and right move the focus only.
+    /// A toolbar: the arrows only move the focus.
     pub(crate) const fn toolbar() -> Self {
         Self::new(
             RovingEntry::Last,
@@ -263,7 +231,6 @@ impl RovingGroup {
         }
     }
 
-    /// The item `step` places from `from` among the eligible ones, wrapping.
     fn step(&self, from: Entity, step: isize) -> Option<Entity> {
         let eligible: Vec<Entity> = self
             .order
@@ -293,15 +260,11 @@ impl RovingGroup {
     }
 }
 
-/// Marks a [`TabStop`] that Tab skips although it is usable: the list of a closed combo.
-///
-/// Whoever hides the widget inserts it, and removes it again when the widget shows.
+/// Marks a [`TabStop`] that Tab skips although it is usable.
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Unreachable;
 
-/// Whether `entity` is not shown: its [`InheritedVisibility`] is hidden, or it or an
-/// ancestor has `Display::None`, which takes a node out of the layout without touching its
-/// visibility.
+/// Whether `entity` is hidden by its [`InheritedVisibility`] or a `Display::None` ancestor.
 pub(crate) fn is_hidden(
     entity: Entity,
     shown: &Query<(Option<&Node>, Option<&InheritedVisibility>)>,
@@ -326,31 +289,21 @@ pub(crate) fn is_hidden(
     }
 }
 
-/// The entities whose hidden state may have changed this frame, worked out once by
-/// [`collect_hidden_changes`] and read by `sync_tab_index`, `sync_accessibility_hidden`,
-/// `sync_roving_groups` and the tab bar's `sync_tab_index`, so none of them scans the changed
-/// nodes or walks a subtree of its own.
-///
-/// Hidden is a function of an entity's [`InheritedVisibility`] and of `Display::None` on it or
-/// an ancestor. [`InheritedVisibility`] propagates by itself (a change reaches the
-/// descendants as changes of their own), but `Display::None` does not touch it, so when the
-/// display of a node flips or a node is reparented the whole subtree is dirty too.
+/// The entities whose hidden state may have changed this frame, collected by
+/// [`collect_hidden_changes`].
 #[derive(Resource, Debug, Default)]
 pub(crate) struct HiddenDirty(EntityHashSet);
 
 impl HiddenDirty {
-    /// The entities whose hidden state may have changed since the last frame.
     pub(crate) fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
         self.0.iter().copied()
     }
 
-    /// Whether `entity` is among them.
     pub(crate) fn contains(&self, entity: Entity) -> bool {
         self.0.contains(&entity)
     }
 
-    /// The entities of `extra` that are not already in the set, for a consumer that adds
-    /// candidates of its own.
+    /// The set chained with the entities of `extra` not in it.
     pub(crate) fn iter_with<'a>(
         &'a self,
         extra: &'a EntityHashSet,
@@ -373,21 +326,13 @@ pub(crate) struct HiddenChanges<'w, 's> {
     children: Query<'w, 's, &'static Children>,
     removed_nodes: RemovedComponents<'w, 's, Node>,
     removed_parents: RemovedComponents<'w, 's, ChildOf>,
-    /// The entities known to have `Display::None`, to tell a flip from another edit.
     display_none: Local<'s, EntityHashSet>,
-    /// The roots whose subtrees are dirty, kept between frames for the allocation.
     roots: Local<'s, Vec<Entity>>,
-    /// The entities already walked this frame, so overlapping roots visit nothing twice.
     walked: Local<'s, EntityHashSet>,
-    /// The depth-first stack of the walk.
     stack: Local<'s, Vec<Entity>>,
 }
 
-/// Collects into [`HiddenDirty`] the entities whose hidden state may have changed, once per
-/// frame for all consumers. It runs after visibility propagation and before them.
-///
-/// A subtree is walked once however many changed roots overlap in it: an entity that was
-/// reached already has had its children queued, so the walk stops there.
+/// Collects into [`HiddenDirty`] the entities whose hidden state may have changed.
 pub(crate) fn collect_hidden_changes(mut changes: HiddenChanges, mut dirty: ResMut<HiddenDirty>) {
     let dirty = &mut dirty.0;
     dirty.clear();
@@ -435,12 +380,8 @@ pub(crate) fn collect_hidden_changes(mut changes: HiddenChanges, mut dirty: ResM
     }
 }
 
-/// Keeps the [`TabIndex`] of every [`TabStop`] in step with whether it is disabled,
+/// Sets the [`TabIndex`] of every changed [`TabStop`] from whether it is disabled,
 /// [`Unreachable`] or hidden.
-///
-/// It looks only at what changed: a new stop, a change of its [`InteractionDisabled`] or
-/// [`Unreachable`] marker, and the stops whose visibility, `Display::None` (on them or an
-/// ancestor) or parent changed.
 fn sync_tab_index(
     hidden_changes: Res<HiddenDirty>,
     mut stops: Query<
@@ -477,11 +418,7 @@ fn sync_tab_index(
     }
 }
 
-/// Marks the [`AccessibilityNode`] of everything that is hidden (by the same rule as a
-/// [`TabStop`]'s) as hidden, and clears it when it shows again, so the platform's
-/// accessibility tree leaves it out. A node is written only when its flag changes, and only
-/// those whose node was added or changed, or whose visibility, `Display::None` (on them or
-/// an ancestor) or parent changed, are looked at.
+/// Marks the [`AccessibilityNode`] of hidden entities as hidden, and clears it when they show.
 fn sync_accessibility_hidden(
     hidden_changes: Res<HiddenDirty>,
     mut nodes: ParamSet<(
@@ -508,9 +445,7 @@ fn sync_accessibility_hidden(
     }
 }
 
-/// Puts the focus ring of the entity on another one, a [`RingTarget`], and shows it
-/// whenever the entity has the focus, also after a click: a text field's input rings the
-/// field's box, so a person sees where the keys go.
+/// Puts the focus ring of the entity on a [`RingTarget`], whenever the entity has the focus.
 #[derive(Component, Clone, Copy, Debug)]
 pub(crate) struct RingOn(pub(crate) Entity);
 
@@ -518,26 +453,16 @@ pub(crate) struct RingOn(pub(crate) Entity);
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub(crate) struct RingTarget;
 
-/// Marks an [`Outline`] that `draw_focus_ring` put there, so it takes off only its own.
+/// Marks an [`Outline`] that `draw_focus_ring` put there.
 #[derive(Component, Debug, Copy, Clone)]
 struct FocusRingOutline;
 
-/// The [`Outline`] an entity had before the focus ring replaced it, put back when the ring
-/// leaves.
+/// The [`Outline`] an entity had before the focus ring replaced it.
 #[derive(Component, Debug, Copy, Clone)]
 struct OutlineUnderRing(Outline);
 
-/// Draws the focus ring as an [`Outline`] while the focus is visible, and takes it off
-/// everything else.
-///
-/// The ring goes on the focused [`TabStop`] or [`Tab`] (a tab bar's tabs keep their own
-/// roving [`TabIndex`], so they are no tab stops), except for a list: a `ListBox` has one tab stop
-/// and moves an [`ActiveDescendant`] over its rows, so the ring is on that row and the box
-/// itself shows none. A list that is not focused has no active descendant, so no ring. A
-/// focused [`RingOn`] entity has its ring on its [`RingTarget`], visible focus or not.
-///
-/// The ring owns only the outline it drew: an [`Outline`] the app or a widget set is kept
-/// aside while the ring shows and put back when it leaves.
+/// Draws the focus ring as an [`Outline`] on the focused entity, or on its [`ActiveDescendant`]
+/// row for a list. An existing [`Outline`] is kept aside while the ring shows.
 fn draw_focus_ring(
     focus: Res<InputFocus>,
     visible: Res<InputFocusVisible>,
@@ -568,8 +493,7 @@ fn draw_focus_ring(
             Err(_) => Some(entity),
         }
     });
-    // Only the entity that had the ring and the one that has it now are touched, so the work
-    // does not grow with the number of candidates (every row of every list).
+    // Touch only the previous and the current entity: candidates include every list row.
     if let Some(previous) = *ringed_before
         && ringed != Some(previous)
     {
@@ -607,12 +531,8 @@ fn draw_focus_ring(
     }
 }
 
-/// Whether a key pressed with the focus on an open combo's popup closes it.
-///
-/// Escape closes it. So do Enter and Space when the selection holds one item at most: the
-/// popup's list picks the active row (or leaves the selection as it is when that row is
-/// selected already, as a click does), and the popup has done its job. A selection of many
-/// keeps the popup open for the next pick.
+/// Whether a key pressed in an open combo popup closes it: Escape, or Enter and Space unless
+/// the selection allows many.
 pub(crate) fn popup_key_closes(input: &KeyboardInput, selection: Option<&SelectionValue>) -> bool {
     if !input.state.is_pressed() {
         return false;
@@ -626,14 +546,10 @@ pub(crate) fn popup_key_closes(input: &KeyboardInput, selection: Option<&Selecti
     }
 }
 
-/// What a popup's list losing the focus means for its combo.
+/// Moves the focus after a popup's list lost it and says whether the combo closes.
 ///
-/// Moves the focus where it belongs and says whether the combo closes. The focus going to the
-/// combo's own button is not leaving, and nor is a click in the popup, which takes the focus
-/// off the list (nothing in it can have it): the popup stays, and the list gets the focus
-/// back. Elsewhere the focus goes back to the button when nothing took it, so a click on empty
-/// space does not leave the keyboard nowhere; when it went to another widget it stays there.
-/// `open` says whether the combo is open, `popup_hovered` whether the pointer is on the popup.
+/// A click inside the popup keeps it open and returns the focus to the list; focus nobody
+/// took goes back to the button.
 pub(crate) fn popup_focus_lost(
     focus: &mut InputFocus,
     open: bool,
@@ -642,8 +558,6 @@ pub(crate) fn popup_focus_lost(
     popup_hovered: bool,
 ) -> bool {
     if open {
-        // The focus going to the combo's own button (a click on it, Shift+Tab) is not
-        // leaving.
         if focus.get() == Some(button) {
             return false;
         }
@@ -654,14 +568,12 @@ pub(crate) fn popup_focus_lost(
             return false;
         }
     }
-    // An outside click may have closed the popup already: the focus still goes back.
     if focus.get().is_none() {
         focus.set(button, FocusCause::Navigated);
     }
     open
 }
 
-/// What changed this frame that can change which item of a [`RovingGroup`] Tab reaches.
 #[derive(SystemParam)]
 struct RovingChanges<'w, 's> {
     new_items: Query<'w, 's, &'static RovingItem, Added<RovingItem>>,
@@ -676,18 +588,8 @@ struct RovingChanges<'w, 's> {
     marked_removed: RemovedComponents<'w, 's, Selected>,
 }
 
-/// Keeps the one reachable item of every [`RovingGroup`] valid, and the focus too.
-///
-/// Tab reaches exactly one eligible item per group (its `TabIndex` is 0, the others' -1): the
-/// focused one, else the group's entry item. An item is eligible unless it is
-/// [`InteractionDisabled`], [`Unreachable`] or hidden; a group without an eligible item has no
-/// stop. When the item that had the focus goes (despawned, hidden, disabled) the focus moves to
-/// the next eligible item, or the previous one at the end, and is cleared when none is left;
-/// focus that went elsewhere is never taken.
-///
-/// A group is looked at only when one of its items changed, its own children changed, the
-/// selection it reads changed (for a group that enters at the selected item) or the focus moved
-/// into or out of it.
+/// Gives one eligible item per [`RovingGroup`] a `TabIndex` of 0, and moves the focus off an
+/// item that became ineligible. Only groups that changed are visited.
 fn sync_roving_groups(
     hidden_changes: Res<HiddenDirty>,
     mut roving: RovingChanges,
@@ -721,9 +623,6 @@ fn sync_roving_groups(
             dirty_groups.insert(item.owner);
         }
     }
-    // Focus and selection changes concern only the groups that read them: the group that held
-    // the focus (it may have lost it), the one that owns the newly focused item, and the groups
-    // that enter at the selected item of a selection that changed (own or referenced).
     let focus_moved = focus.is_changed();
     let focused_owner = focus
         .get()
@@ -775,7 +674,6 @@ fn sync_roving_groups(
                 group.holds_focus = true;
                 chosen = Some(item);
             } else {
-                // The focused item stopped being eligible: hand the focus on.
                 let replacement = replacement_for(&group.order, item, &order);
                 match replacement {
                     Some(next) => focus.set(next, FocusCause::Navigated),
@@ -788,15 +686,11 @@ fn sync_roving_groups(
         } else if group.holds_focus {
             let last = group.last;
             let last_eligible = last.is_some_and(|last| eligible_of(last) == Some(true));
-            // A despawned item keeps the `InputFocus` until the next key, so a focus that is
-            // still on it is stale; one that was cleared (`None`) or moved was taken by
-            // somebody, and is not ours to put back.
+            // A despawned item keeps `InputFocus` until the next key; focus that moved elsewhere is not ours.
             let focus_is_stale = focused.is_some() && focused == last;
             if last_eligible || !focus_is_stale {
-                // The focus left (a click elsewhere, another widget took it).
                 group.holds_focus = false;
             } else if let Some(last) = last {
-                // The item that had the focus is gone.
                 let replacement = replacement_for(&group.order, last, &order);
                 match replacement {
                     Some(next) => focus.set(next, FocusCause::Navigated),
@@ -848,8 +742,7 @@ fn sync_roving_groups(
     }
 }
 
-/// The item that takes the focus when `lost`, an item of `before`, can no longer have it: the
-/// next one in `before` that is eligible in `now`, else the previous one.
+/// The next item after `lost` that is eligible in `now`, else the previous one.
 fn replacement_for(
     before: &[(Entity, bool)],
     lost: Entity,
@@ -874,9 +767,7 @@ fn replacement_for(
         })
 }
 
-/// Moves the focus between the items of a [`RovingGroup`] with its keys, and keeps those keys
-/// from bubbling on (pressed, repeated and released), only while the focus is on one of its
-/// own items.
+/// Moves the focus between the items of a [`RovingGroup`] with its keys and stops those keys bubbling.
 fn navigate_roving_group(
     mut input: On<FocusedInput<KeyboardInput>>,
     items: Query<&RovingItem>,
@@ -886,7 +777,7 @@ fn navigate_roving_group(
     mut selections: SelectionParam,
     mut commands: Commands,
 ) {
-    // `focused_entity` follows the event up the tree, so the focus itself is read.
+    // `focused_entity` follows the event up the tree; read the focus itself.
     let target = input.event_target();
     if focus.get() != Some(target) {
         return;

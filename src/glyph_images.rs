@@ -1,10 +1,6 @@
-//! The images the widgets draw themselves (the combo chevron, the stepper's minus and plus, the
-//! light / dark toggle's icons), generated once per app and shared by every instance.
+//! The images the widgets draw themselves, generated once per app.
 
-#![expect(
-    clippy::redundant_pub_crate,
-    reason = "the module is crate-private, while its items keep pub(crate) to say how far they reach (pub would trip unreachable_pub), as in focus.rs"
-)]
+#![expect(clippy::redundant_pub_crate, reason = "pub would trip unreachable_pub")]
 
 use bevy::ecs::world::DeferredWorld;
 use bevy::platform::collections::HashMap;
@@ -27,18 +23,13 @@ pub(crate) enum GlyphKey {
     Moon,
 }
 
-/// The handles of the generated images made so far in this app, kept alive here so the images
-/// outlive the widgets that show them. A key is added only once the app has an
-/// `Assets<Image>`, so an app that adds it late gets its images then.
+/// The handles of the generated images, kept alive so they outlive the widgets.
 #[derive(Resource, Debug, Default)]
 pub(crate) struct GlyphImages {
     handles: HashMap<GlyphKey, Handle<Image>>,
 }
 
-/// The shared image for `key`, made with `generate` the first time it is asked for (or again
-/// when the app removed it from `Assets<Image>`). With no `Assets<Image>` the default handle is
-/// returned and nothing is remembered; without the `GlyphImages` resource (the app did not add
-/// `WidgetsPlugin`) the image is made per call, as before sharing.
+/// The shared image for `key`, made with `generate` on first use or after it left `Assets<Image>`.
 pub(crate) fn shared(
     world: &mut DeferredWorld,
     key: GlyphKey,

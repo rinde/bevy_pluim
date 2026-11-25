@@ -1,11 +1,6 @@
-//! A reusable Bevy UI widget library built on Bevy's native `Node` UI: buttons, lists,
-//! combos, scroll areas, tabs, breadcrumbs, colour palettes, a numeric stepper and a
-//! slider, all themed from one [`Theme`] resource.
+//! A Bevy UI widget library on native `Node` UI, themed from one [`Theme`] resource.
 //!
 //! Add [`WidgetsPlugin`] to an app and spawn exactly one root [`Node`] for the app's UI.
-//!
-//! The crate takes Bevy types only: anything that knows what a picked item
-//! *means* belongs in the application that uses the widgets.
 
 pub mod badge;
 pub mod breadcrumbs;
@@ -102,12 +97,8 @@ use crate::virtual_list::VirtualListPlugin;
 
 /// Adds every widget of this crate, and the [`Theme`] resource, to an app.
 ///
-/// The `ButtonPlugin`, `ListBoxPlugin`, `ScrollbarPlugin`, `SliderPlugin` and `TabPlugin` of
-/// `bevy_ui_widgets` are added in [`Plugin::finish`] when the app does not have them by
-/// then, so it does not matter whether `UiWidgetsPlugins` (or `DefaultPlugins`) is added
-/// before or after this plugin. An app that is driven by hand with `App::update` instead
-/// of `App::run` must call `App::finish` first, or its buttons, lists, scroll bars,
-/// sliders and tab bars get no observers.
+/// An app driven by hand with `App::update` must call `App::finish` first, or the
+/// `bevy_ui_widgets` plugins that [`Plugin::finish`] adds are missing.
 #[derive(Debug, Copy, Clone)]
 pub struct WidgetsPlugin;
 
@@ -166,10 +157,6 @@ impl Plugin for WidgetsPlugin {
             .add_observer(observer_transformer::<PointerCancel>);
     }
 
-    /// `DefaultPlugins` and the tester's `HeadlessPlugins` bring Bevy's
-    /// `UiWidgetsPlugins` along; a bare `App` does not. Adding the same plugin
-    /// twice panics, so the missing ones are added here, once every plugin of the
-    /// app has been built and it is known which ones the app has.
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<ButtonPlugin>() {
             app.add_plugins(ButtonPlugin);
@@ -186,8 +173,6 @@ impl Plugin for WidgetsPlugin {
         if !app.is_plugin_added::<TabPlugin>() {
             app.add_plugins(TabPlugin);
         }
-        // The same for keyboard focus: the tester's `HeadlessPlugins` has the first two but
-        // not tab navigation.
         if !app.is_plugin_added::<InputFocusPlugin>() {
             app.add_plugins(InputFocusPlugin);
         }
@@ -197,8 +182,6 @@ impl Plugin for WidgetsPlugin {
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
-        // Widgets name the cursor they want with `EntityCursor`; this plugin copies it to the
-        // window.
         if !app.is_plugin_added::<CursorIconPlugin>() {
             app.add_plugins(CursorIconPlugin);
         }
@@ -232,15 +215,9 @@ fn setup(roots: Query<(), With<UiRoot>>) {
 
 /// Marks the one node without a parent that all other UI hangs off.
 ///
-/// Inserted automatically on a [`Node`] that has no parent and no
-/// [`UiTargetCamera`], when the node is added. Root nodes aimed at another camera
-/// (a second window's UI, an overlay) belong to someone else and are left alone.
-/// A [`UiTargetCamera`] inserted after the [`Node`] is not seen, so insert it in
-/// the same bundle. A node that gets its parent after its [`Node`] (a scene
-/// writes `ChildOf` last) loses the marker again when the [`ChildOf`] is
-/// inserted. It is the one non-modal [`TabGroup`],
-/// so Tab moves through the widgets below it. If the app does not end up with exactly one such root at
-/// startup, an error is logged.
+/// Added to a parentless [`Node`] without a [`UiTargetCamera`]; insert the camera in the same
+/// bundle. Removed when the node gets a [`ChildOf`]. An error is logged at startup unless
+/// exactly one root exists.
 #[derive(Component, Debug, Copy, Clone)]
 #[require(Name::new("UiRoot"), TabGroup::new(0))]
 pub struct UiRoot;
@@ -256,46 +233,35 @@ enum MouseKind {
     /// The pointer moved while a button was held down on the widget.
     Drag,
     Out,
-    /// The system took the pointer away (a touch interrupted): a press ends as if released
-    /// away from the widget, and nothing is hovered afterwards.
+    /// The system took the pointer away, as when a touch is interrupted.
     Cancel,
 }
 
 impl MouseKind {
-    /// Whether a widget shows its pressed look after this event: only while the button or
-    /// finger is down on it.
     const fn pressed(self) -> bool {
         matches!(self, Self::Pressed)
     }
 }
 
-/// A pointer interaction with `entity`, re-triggered from Bevy's pointer events
-/// ([`PointerEvent`]s such as `PointerPress`).
+/// A pointer interaction with `entity`, re-triggered from Bevy's [`PointerEvent`]s.
 #[derive(EntityEvent, Copy, Clone, Debug)]
 struct MouseEvent {
     entity: Entity,
     kind: MouseKind,
-    /// For [`MouseKind::Drag`], how far the pointer has moved since the press, in logical
-    /// pixels; zero for every other kind.
+    /// For [`MouseKind::Drag`], the distance moved since the press in logical pixels.
     distance: Vec2,
-    /// The button of a press, release, click or drag; `None` for a pointer moving over or out.
-    /// A touch counts as [`PointerButton::Primary`].
+    /// The button of a press, release, click or drag. A touch counts as [`PointerButton::Primary`].
     button: Option<PointerButton>,
-    /// Whether the pointer is a finger ([`PointerId::Touch`]). A finger does not hover.
     touch: bool,
-    /// The pointer that produced the event: the mouse, or one finger.
     pointer: PointerId,
 }
 
 impl MouseEvent {
-    /// Whether a widget shows its hover look after this event. This is the one place that
-    /// tells a touch from a mouse: a mouse is hovering until it goes `Out` (or is cancelled),
-    /// a finger never hovers, so a touch `Over` or a lift leaves no hover look behind.
+    /// Whether the hover look shows. The one place that tells touch from mouse: a finger never hovers.
     const fn hovered(&self) -> bool {
         !self.touch && !matches!(self.kind, MouseKind::Out | MouseKind::Cancel)
     }
 
-    /// Whether a widget shows its pressed look after this event.
     const fn pressed(&self) -> bool {
         self.kind.pressed()
     }
@@ -304,12 +270,10 @@ impl MouseEvent {
 trait ToMouseEvent {
     fn to_mouse_kind(&self) -> MouseKind;
 
-    /// How far the pointer has been dragged since the press; zero unless this is a drag.
     fn distance(&self) -> Vec2 {
         Vec2::ZERO
     }
 
-    /// The button that caused the event, if it has one.
     fn button(&self) -> Option<PointerButton> {
         None
     }
@@ -377,18 +341,14 @@ impl ToMouseEvent for PointerCancel {
     }
 }
 
-/// How far a pointer has to move, in logical pixels, before a press is a drag: the
-/// `NumericStepper` scrubs from it and a long press on a `Tooltip` node stops counting past it.
+/// How far a pointer must move, in logical pixels, before a press is a drag.
 pub(crate) const DRAG_THRESHOLD: f32 = 3.0;
 
-/// Whether a drag holds the pointer: while set, `MouseKind::Over` is not sent, so no control
-/// highlights as the pointer passes over it.
+/// While set, `MouseKind::Over` is not sent.
 #[derive(Resource, Debug, Default)]
 struct HoverLock(bool);
 
-/// Re-triggers a pointer event `E` as a [`MouseEvent`]. The `Trigger` bound says that
-/// `E` bubbles through [`PointerTraversal`], as every pointer event does, which is what
-/// gives `On<E>` its `original_event_target`.
+/// Re-triggers a pointer event `E` as a [`MouseEvent`].
 fn observer_transformer<E>(
     trigger: On<E>,
     hover_lock: Res<HoverLock>,
@@ -399,21 +359,12 @@ fn observer_transformer<E>(
         + ToMouseEvent
         + for<'t> EntityEvent<Trigger<'t> = PropagateEntityTrigger<true, E, PointerTraversal>>,
 {
-    // The event bubbles up through the hierarchy, rewriting its own target at
-    // every hop; the widget that was actually hit is the original target, and
-    // only the first hop re-triggers, so one event is one `MouseEvent`.
-    //
-    // This is a global observer rather than one on `UiRoot` because Bevy's
-    // `Button` stops `PointerPress`, `PointerRelease`, `PointerClick`,
-    // `PointerDragEnd` and `PointerCancel` from bubbling, which would keep
-    // them from ever reaching the root.
+    // Global, not on `UiRoot`: Bevy's `Button` stops most pointer events from bubbling to the root.
     let original = trigger.original_event_target();
     let kind = trigger.event().to_mouse_kind();
-    // During a drag (a stepper being scrubbed) nothing else reacts to the pointer arriving.
     if hover_lock.0 && matches!(kind, MouseKind::Over) {
         return;
     }
-    // A finger that panned a scroll area did not tap what it went down on: no click of it.
     let pointer = trigger.event().pointer().id;
     if matches!(kind, MouseKind::Click(_)) && pans.panned(pointer) {
         return;
