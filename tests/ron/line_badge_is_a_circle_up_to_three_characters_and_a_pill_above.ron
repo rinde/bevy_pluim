@@ -1,0 +1,16 @@
+(
+    format_version: 3,
+    name: "a line badge is a circle up to three characters and a pill above, and its text fits",
+    setup: App(LineBadges),
+    steps: [
+        Wait(2),
+        Check(Visible(Name("line badge L3"))),
+        Check(Visible(Name("line badge ABC12"))),
+        Capture(name: "circle width", value: Component(target: Name("line badge IC1"), path: "ComputedNode.size.x", unit: Logical)),
+        Capture(name: "circle height", value: Component(target: Name("line badge IC1"), path: "ComputedNode.size.y", unit: Logical)),
+        Check(Component(target: Name("line badge IC1"), path: "ComputedNode.size.x", unit: Logical, is: Eq(Captured("circle height")))),
+        Check(Component(target: Name("line badge IC12"), path: "ComputedNode.size.y", unit: Logical, is: Eq(Captured("circle height")))),
+        Check(Component(target: Name("line badge IC12"), path: "ComputedNode.size.x", unit: Logical, is: Gt(Captured("circle width")))),
+    ],
+    expect: [],
+)

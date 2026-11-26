@@ -472,6 +472,16 @@ pub(crate) fn contrast_ratio(a: Color, b: Color) -> f32 {
     (light + 0.05) / (dark + 0.05)
 }
 
+/// White or near-black text, whichever has the higher contrast ratio with `fill`.
+pub(crate) fn readable_ink(fill: Color) -> Color {
+    let dark = Color::Srgba(GRAY_950);
+    if contrast_ratio(Color::WHITE, fill) >= contrast_ratio(dark, fill) {
+        Color::WHITE
+    } else {
+        dark
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

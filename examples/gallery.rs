@@ -35,7 +35,7 @@ const SCENARIOS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/ron");
 const RECORDINGS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/recordings");
 
 /// Scenario file groups by name prefix. Put a longer prefix before the shorter one it starts with.
-const GROUPS: [(&str, &str); 32] = [
+const GROUPS: [(&str, &str); 33] = [
     ("push_button", "PushButton"),
     ("link", "Link"),
     ("list", "List"),
@@ -61,6 +61,7 @@ const GROUPS: [(&str, &str); 32] = [
     ("panel", "Panel"),
     ("setting_row", "SettingRow"),
     ("badge", "Badge"),
+    ("line_badge", "LineBadge"),
     ("icon_button", "IconButton"),
     ("tooltip", "Tooltip"),
     ("toast", "Toast"),

@@ -28,7 +28,7 @@ use bevy::picking::hover::Hovered;
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::reflect::structs::Struct;
-use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing};
+use bevy::text::{DEFAULT_REM_SIZE_PX, LetterSpacing, LineBreak, TextLayout};
 use bevy::ui::{
     ComputedNode, ComputedUiRenderTargetInfo, FixedNode, InteractionDisabled, Pressed, Selected,
     UiGlobalTransform,
@@ -63,6 +63,7 @@ use bevy_pluim::label::Label;
 use bevy_pluim::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
+use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
 use bevy_pluim::list::{
     CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
@@ -19082,4 +19083,105 @@ fn a_finger_that_moves_past_the_threshold_pans_and_activates_nothing_and_one_tha
         2,
         "a pan"
     );
+}
+
+#[test]
+fn a_line_badge_is_a_circle_up_to_three_characters_and_a_pill_of_the_same_height_above() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let badge = |app: &mut App, text: &str| {
+        app.world_mut()
+            .spawn((
+                LineBadge::new(text, Color::srgb(0.8, 0.1, 0.1)),
+                ChildOf(root),
+            ))
+            .id()
+    };
+    let circle = badge(&mut app, "IC1");
+    let pill = badge(&mut app, "IC12");
+    settle(&mut app);
+
+    let node = |app: &App, e: Entity| app.world().get::<Node>(e).unwrap().clone();
+    let (c, p) = (node(&app, circle), node(&app, pill));
+    assert_eq!(c.width, c.height);
+    assert_eq!(p.height, c.height);
+    assert_eq!(p.width, Val::Auto);
+    assert_eq!(p.min_width, c.height);
+    assert_eq!(c.border_radius, p.border_radius);
+    let layout = app.world().get::<TextLayout>(circle).unwrap();
+    assert_eq!(layout.linebreak, LineBreak::NoWrap);
+    assert_eq!(app.world().get::<Text>(pill).unwrap().0, "IC12");
+    assert_eq!(
+        app.world().get::<TextFont>(pill).unwrap().weight,
+        FontWeight::BOLD
+    );
+
+    // Replacing the text switches the shape, and the small size is lower.
+    app.world_mut()
+        .entity_mut(circle)
+        .insert(LineBadge::new("IC12", Color::BLACK).with_size(LineBadgeSize::Small));
+    app.world_mut()
+        .entity_mut(pill)
+        .insert(LineBadge::new("7", Color::BLACK));
+    settle(&mut app);
+    let (c, p) = (node(&app, circle), node(&app, pill));
+    assert_eq!(c.width, Val::Auto);
+    assert_eq!(p.width, p.height);
+    assert_ne!(c.height, p.height);
+}
+
+#[test]
+fn a_line_badge_text_is_white_or_near_black_by_contrast_with_the_fill_in_both_themes() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let yellow = Color::srgb(1.0, 0.9, 0.2);
+    let navy = Color::srgb(0.05, 0.1, 0.4);
+    let light = app
+        .world_mut()
+        .spawn((LineBadge::new("1", yellow), ChildOf(root)))
+        .id();
+    let dark = app
+        .world_mut()
+        .spawn((LineBadge::new("2", navy), ChildOf(root)))
+        .id();
+    let check = |app: &App| {
+        let ink = |e: Entity| app.world().get::<TextColor>(e).unwrap().0;
+        let fill = |e: Entity| app.world().get::<BackgroundColor>(e).unwrap().0;
+        assert_ne!(ink(light), Color::WHITE);
+        assert_eq!(ink(dark), Color::WHITE);
+        assert_eq!(fill(light), yellow);
+        assert_eq!(fill(dark), navy);
+    };
+    settle(&mut app);
+    check(&app);
+    app.world_mut()
+        .get_resource_mut::<Theme>()
+        .unwrap()
+        .light_dark_toggle();
+    settle(&mut app);
+    check(&app);
+}
+
+#[test]
+fn a_line_badge_is_an_image_labeled_with_its_text_or_the_label_the_application_gives() {
+    let mut app = headless_app();
+    let root = app.world_mut().spawn(Node::default()).id();
+    let badge = app
+        .world_mut()
+        .spawn((LineBadge::new("L3", Color::BLACK), ChildOf(root)))
+        .id();
+    settle(&mut app);
+    let role = |app: &App| app.world().get::<AccessibilityNode>(badge).unwrap().role();
+    assert_eq!(role(&app), accesskit::Role::Image);
+    assert_eq!(access_of(&app, badge).1.as_deref(), Some("L3"));
+
+    app.world_mut()
+        .entity_mut(badge)
+        .insert(LineBadge::new("L3", Color::BLACK).with_label("Line 3, Coal run"));
+    settle(&mut app);
+    assert_eq!(
+        access_of(&app, badge).1.as_deref(),
+        Some("Line 3, Coal run")
+    );
+    assert_eq!(app.world().get::<Text>(badge).unwrap().0, "L3");
 }

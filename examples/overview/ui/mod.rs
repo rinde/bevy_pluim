@@ -41,6 +41,7 @@ use bevy_pluim::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use bevy_pluim::kbd::Kbd;
 use bevy_pluim::label::Label;
 use bevy_pluim::light_dark_toggle::LightDarkToggle;
+use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
 use bevy_pluim::list::{CornerStyle, ItemNote, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value};

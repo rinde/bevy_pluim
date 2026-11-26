@@ -22,6 +22,7 @@ pub(crate) mod indicator;
 pub mod kbd;
 pub mod label;
 pub mod light_dark_toggle;
+pub mod line_badge;
 pub mod link;
 pub mod list;
 pub mod numeric_stepper;
@@ -74,6 +75,7 @@ use crate::icon_button::IconButtonPlugin;
 use crate::kbd::KbdPlugin;
 use crate::label::LabelPlugin;
 use crate::light_dark_toggle::LightDarkTogglePlugin;
+use crate::line_badge::LineBadgePlugin;
 use crate::link::LinkPlugin;
 use crate::list::ListPlugin;
 use crate::numeric_stepper::NumericStepperPlugin;
@@ -132,6 +134,7 @@ impl Plugin for WidgetsPlugin {
             .add_plugins(IconButtonPlugin)
             .add_plugins(KbdPlugin)
             .add_plugins(PillPlugin)
+            .add_plugins(LineBadgePlugin)
             .add_plugins(BadgePlugin)
             .add_plugins(FilterChipsPlugin)
             .add_plugins(ToolbarPlugin)
