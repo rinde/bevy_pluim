@@ -34,6 +34,7 @@ use bevy_pluim::label::Label;
 use bevy_pluim::light_dark_toggle::{
     LightDarkOption, LightDarkToggle, SystemTheme, ThemePreference,
 };
+use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
 use bevy_pluim::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef, ValueReferrers};
@@ -154,6 +155,8 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<BadgeRef>(registry);
         assert_registered::<BadgeTone>(registry);
         assert_registered::<PillTone>(registry);
+        assert_component::<LineBadge>(registry);
+        assert_registered::<LineBadgeSize>(registry);
         assert_component::<FilterChips>(registry);
         assert_component::<ChipView>(registry);
         assert_component::<ChipRefs>(registry);

@@ -30,6 +30,7 @@ use bevy_pluim::gallery::{Gallery, GalleryCard};
 use bevy_pluim::icon_button::{IconButton, IconButtonSize, ToggleState, Tone};
 use bevy_pluim::label::Label;
 use bevy_pluim::light_dark_toggle::LightDarkToggle;
+use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
 use bevy_pluim::list::{CornerStyle, ItemNote, ItemViewCreator, ItemViewSpawner, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueError, ValueRef};
@@ -76,6 +77,7 @@ pub enum WidgetsSetup {
     ControlPanel,
     SettingRows,
     Badge,
+    LineBadges,
     IconButtons,
     Gallery,
     Toolbar,
@@ -112,6 +114,7 @@ impl AppSetup for WidgetsSetup {
             Self::ControlPanel => control_panel(world),
             Self::SettingRows => setting_rows(world),
             Self::Badge => badge(world),
+            Self::LineBadges => line_badges(world),
             Self::IconButtons => icon_buttons(world),
             Self::Gallery => gallery(world),
             Self::Toolbar => toolbar(world),
@@ -1648,6 +1651,35 @@ fn badge(world: &mut World) {
                 }
             },
         );
+        spawn_theme_button(root);
+    });
+}
+
+fn line_badges(world: &mut World) {
+    let root = row_root(world);
+    world.entity_mut(root).with_children(|root| {
+        let regular = [
+            ("7", Color::srgb(0.86, 0.15, 0.15)),
+            ("L3", Color::srgb(0.15, 0.39, 0.92)),
+            ("IC1", Color::srgb(0.98, 0.80, 0.08)),
+            ("IC12", Color::srgb(0.09, 0.64, 0.29)),
+            ("ABC12", Color::srgb(0.58, 0.20, 0.92)),
+            ("M4", Color::srgb(0.12, 0.12, 0.14)),
+            ("E9", Color::srgb(0.97, 0.45, 0.09)),
+            ("S5", Color::srgb(0.95, 0.95, 0.95)),
+        ];
+        for (text, color) in regular {
+            root.spawn((
+                LineBadge::new(text, color).with_label(format!("Line {text}")),
+                Name::new(format!("line badge {text}")),
+            ));
+        }
+        for (text, color) in regular {
+            root.spawn((
+                LineBadge::new(text, color).with_size(LineBadgeSize::Small),
+                Name::new(format!("small line badge {text}")),
+            ));
+        }
         spawn_theme_button(root);
     });
 }

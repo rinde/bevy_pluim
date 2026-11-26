@@ -28,7 +28,7 @@ the numbers of a theme slot, build the scenario in Rust and print
 is `setup: App(Buttons)`: a variant of `WidgetsSetup`, the one
 `#[reflect(AppSetup)]` enum of the tests (`Buttons`, `Combos`, `Lists`,
 `ScrollAreas`, `BreadCrumbs`, `Tabs`, `ColorPalette`, `NumericStepper`, `Slider`, `SegmentedControls`, `LightDarkToggle`, `FilterChips`,
-`Panel`, `SettingRows`, `Badge`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`, `ComboRows`, `FilterComboRows`, `FilterCombos`, `ThemeEditor`), which spawns a `Camera2d`, the one root `Node` and a screen, each
+`Panel`, `SettingRows`, `Badge`, `LineBadges`, `Gallery`, `Toolbar`, `Tooltip`, `Themed`, `IconButtons`, `TextFields`, `VirtualList`, `SeparatedVirtualList`, `ComboRows`, `FilterComboRows`, `FilterCombos`, `ThemeEditor`), which spawns a `Camera2d`, the one root `Node` and a screen, each
 with a "Change theme" button.
 - **A screen is a fixture of its own.** It starts from the example of the
   widget it is named after, then adds names, widgets and sizes for testing
@@ -153,7 +153,7 @@ value with `TextOf(Name("u16 stepper"), Exact("11"))`. Move the pointer to the b
 value moves the buttons. A button at its limit is `InteractionDisabled`, so
 the tester's click on it does nothing (`numeric_stepper_bounds.ron`).
 
-### The `Panel`, `SettingRows`, `Badge` and `Tooltip` screens
+### The `Panel`, `SettingRows`, `Badge`, `LineBadges` and `Tooltip` screens
 
 `Panel`
 has `closable panel` (title "Trains", subtitle "3 open", three lines; its
@@ -166,7 +166,7 @@ column of `appearance row` (a `SegmentedControl`), `text size row` (a
 stepper) and `last row` (a button), whose dividers are `Nth(i, Within(Name
 ("setting rows"), Name("Divider")))` and read `Node.display`. `Badge` has
 `counted button` (3), `warning button` (12), `plain button` and "Add badge";
-the pill is a `Name("Badge")` child with the count as its text. `Tooltip` has
+the pill is a `Name("Badge")` child with the count as its text. `LineBadges` has a `line badge TEXT` and a `small line badge TEXT` for each of `7`, `L3`, `IC1`, `IC12`, `ABC12`, `M4`, `E9` and `S5` (the badge node itself holds the text, so read it with `Name(..)`, not `Within`). `Tooltip` has
 `tooltip anchor` (tip "Anchor tip") and `help button` (an icon button, tip
 "Help"); the popup's text exists only while it shows, so `Exists(Text(..))`
 says whether it does, after `Wait(40)` frames (0.5 s at 60 per second). The screen ends with

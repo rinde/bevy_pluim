@@ -63,7 +63,7 @@ Selection: `List`, `VirtualList` (thousands of rows), `Combo`, `ColorPalette`,
 `Toolbar`, `BreadCrumbs`, `Stack`.
 Inputs: `Slider`, `NumericStepper`, `TextField`, `LightDarkToggle`.
 Layout: `Card`, `Panel`, `ScrollArea`, `SettingRow`, `Divider`.
-Display: `Label`, `Icon`, `Kbd`, `Badge`, `Pill`, `Tooltip`, `Toast`.
+Display: `Label`, `Icon`, `Kbd`, `Badge`, `LineBadge`, `Pill`, `Tooltip`, `Toast`.
 
 Colors, fonts and radii come from the `Theme` resource; switch modes with
 `Theme::set_mode` or a `LightDarkToggle`.

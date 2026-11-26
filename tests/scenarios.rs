@@ -1317,6 +1317,7 @@ fn every_widgets_setup_screen_builds_and_shows_its_theme_button() {
         WidgetsSetup::Panel,
         WidgetsSetup::SettingRows,
         WidgetsSetup::Badge,
+        WidgetsSetup::LineBadges,
         WidgetsSetup::IconButtons,
         WidgetsSetup::Gallery,
         WidgetsSetup::Toolbar,
@@ -4389,7 +4390,7 @@ fn the_overview_scroll_area_page_has_rows_and_visible_scroll_bars() {
 
 /// Gallery groups with no touch scenario because they are not interactive, or
 /// are built only from widgets whose own groups have one.
-const GROUPS_WITHOUT_TOUCH: [(&str, &str); 7] = [
+const GROUPS_WITHOUT_TOUCH: [(&str, &str); 8] = [
     (
         "ThemeEditor",
         "a card of steppers, sliders, combos and fields, each covered by its own group",
@@ -4403,6 +4404,10 @@ const GROUPS_WITHOUT_TOUCH: [(&str, &str); 7] = [
         "display only: a title, description and control slot",
     ),
     ("Badge", "display only: a pill in the corner of a button"),
+    (
+        "LineBadge",
+        "display only: text on a colored circle or pill",
+    ),
     ("Toast", "display only: a timed message"),
     ("Theme", "colors and fonts, no input"),
     ("Accessibility", "the accessibility tree, not input"),

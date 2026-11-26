@@ -122,6 +122,7 @@ which doc to open, and each doc links on to the design notes it relies on.
 - [`label.rs`](docs/modules/label.md): `Label`: themed text in the styles of the type scale.
 - [`kbd.rs`](docs/modules/kbd.md): `Kbd`: a display-only key cap.
 - [`pill.rs`](docs/modules/pill.md): `Pill`: a small uppercase status tag.
+- [`line_badge.rs`](docs/modules/line_badge.md): `LineBadge`: short text on a circle (up to 3 characters) or pill in an app-given color, white or near-black text by contrast.
 - [`badge.rs`](docs/modules/badge.md): `Badge`: a count or warning pill in the corner of a button.
 - [`icon.rs`](docs/modules/icon.md): `Icon`: an app-provided image tinted with a theme role.
 - [`divider.rs`](docs/modules/divider.md): `Divider`: a 1 px horizontal or vertical rule.

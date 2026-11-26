@@ -82,6 +82,18 @@ pub(super) fn tags(spawner: In<StackChildSpawner>, icon: Res<Icon>, mut commands
                         ~{Pill::new("No path").with_tone(PillTone::Problem)}
                     })
                     --
+                    @variant("Line badge: circle", bsn! {
+                        ~{LineBadge::new("L3", Srgba::rgb(0.15, 0.39, 0.92)).with_label("Line 3")}
+                    })
+                    --
+                    @variant("Line badge: pill", bsn! {
+                        ~{LineBadge::new("IC12", Srgba::rgb(0.98, 0.80, 0.08))}
+                    })
+                    --
+                    @variant("Line badge: small", bsn! {
+                        ~{LineBadge::new("7", Srgba::rgb(0.86, 0.15, 0.15)).with_size(LineBadgeSize::Small)}
+                    })
+                    --
                     @variant("Badge: neutral count", bsn! {
                         IconButton { icon: {neutral}, name: "Trains", size: IconButtonSize::Large }
                         ~{Badge::count(3)}
