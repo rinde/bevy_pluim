@@ -26,7 +26,7 @@ use crate::focus::{
 };
 use crate::glyph_images::{GlyphKey, shared};
 use crate::icon::Icon;
-use crate::list::{CornerStyle, ItemView, List};
+use crate::list::{CornerStyle, HeaderRow, ItemView, List};
 use crate::popup::{self, ButtonLook, PopupPointers};
 use crate::push_button::{NoDefaultHover, PushButton, PushButtonLabel, PushButtonRefs};
 use crate::scroll_area::popup_scroll_bar;
@@ -473,7 +473,7 @@ fn apply_filters(
     dirty: Query<Entity, With<FilterDirty>>,
     mut combos: Query<(&FilterComboRefs, &ComboState, &mut FilterState)>,
     children: Query<&Children>,
-    mut rows: Query<(&ItemView, &mut Node), Without<FilterEmpty>>,
+    mut rows: Query<(&ItemView, &mut Node, Has<HeaderRow>), Without<FilterEmpty>>,
     items: Query<&Item<String>>,
     mut empties: Query<&mut Node, (With<FilterEmpty>, Without<ItemView>)>,
     selections: SelectionParam,
@@ -494,17 +494,23 @@ fn apply_filters(
             .into_iter()
             .flat_map(RelationshipTarget::iter)
         {
-            let Ok((view, mut node)) = rows.get_mut(row) else {
+            let Ok((view, mut node, is_header)) = rows.get_mut(row) else {
                 continue;
             };
-            let found = items
-                .get(view.item_ref)
-                .is_ok_and(|item| matches(&item.data, &query));
+            // A header shows while the query is empty and hides while one is typed.
+            let found = if is_header {
+                query.is_empty()
+            } else {
+                items
+                    .get(view.item_ref)
+                    .is_ok_and(|item| matches(&item.data, &query))
+            };
             let display = if found { Display::Flex } else { Display::None };
             if node.display != display {
                 node.display = display;
             }
-            if found {
+            // A header is never active, so arrows and Enter cannot reach it.
+            if found && !is_header {
                 shown.push(Active {
                     item: view.item_ref,
                     view: row,
@@ -595,15 +601,15 @@ fn on_field_change(
 fn shown_rows(
     list: Entity,
     children: &Query<&Children>,
-    rows: &Query<(&ItemView, &Node), Without<FilterEmpty>>,
+    rows: &Query<(&ItemView, &Node, Has<HeaderRow>), Without<FilterEmpty>>,
 ) -> Vec<Active> {
     children
         .get(list)
         .into_iter()
         .flat_map(RelationshipTarget::iter)
         .filter_map(|row| {
-            let (view, node) = rows.get(row).ok()?;
-            (node.display != Display::None).then_some(Active {
+            let (view, node, is_header) = rows.get(row).ok()?;
+            (node.display != Display::None && !is_header).then_some(Active {
                 item: view.item_ref,
                 view: row,
             })
@@ -617,7 +623,7 @@ fn on_key(
     mut combos: Query<(&FilterComboRefs, &ComboState, &mut FilterState)>,
     mut editables: Query<&mut EditableText>,
     children: Query<&Children>,
-    rows: Query<(&ItemView, &Node), Without<FilterEmpty>>,
+    rows: Query<(&ItemView, &Node, Has<HeaderRow>), Without<FilterEmpty>>,
     mut selections: SelectionParam,
     mut commands: Commands,
 ) {

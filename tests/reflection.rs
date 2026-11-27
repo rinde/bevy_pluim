@@ -36,7 +36,7 @@ use bevy_pluim::light_dark_toggle::{
 };
 use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
-use bevy_pluim::list::{CornerStyle, ItemNote, ItemView, List, ListLayout};
+use bevy_pluim::list::{CornerStyle, ItemHeader, ItemNote, ItemView, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, UIntValue, Value, ValueRef, ValueReferrers};
 use bevy_pluim::panel::Panel;
 use bevy_pluim::pill::{Pill, PillTone};
@@ -109,6 +109,7 @@ fn the_widget_components_are_in_the_type_registry() {
         assert_component::<CornerStyle>(registry);
         assert_component::<ItemView>(registry);
         assert_component::<ItemNote>(registry);
+        assert_component::<ItemHeader>(registry);
         assert_component::<Link>(registry);
         assert_component::<BreadCrumbs>(registry);
         assert_component::<BreadCrumb>(registry);

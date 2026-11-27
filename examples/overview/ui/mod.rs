@@ -43,7 +43,7 @@ use bevy_pluim::label::Label;
 use bevy_pluim::light_dark_toggle::LightDarkToggle;
 use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
-use bevy_pluim::list::{CornerStyle, ItemNote, List, ListLayout};
+use bevy_pluim::list::{CornerStyle, ItemHeader, ItemNote, List, ListLayout};
 use bevy_pluim::numeric_stepper::{NumericStepper, Value};
 use bevy_pluim::panel::{Panel, PanelRefs};
 use bevy_pluim::pill::{Pill, PillTone};
@@ -284,6 +284,18 @@ fn stations() -> [(Item<String>, ItemNote); 3] {
         (Item::new("Amsterdam"), ItemNote::new("")),
         (Item::new("Delft"), ItemNote::warning("< unreachable >")),
         (Item::new("Utrecht"), ItemNote::new("4 km")),
+    ]
+}
+
+fn grouped_countries() -> [(Item<String>, ItemHeader); 7] {
+    [
+        (Item::new("Europe"), ItemHeader(true)),
+        (Item::new("Netherlands"), ItemHeader(false)),
+        (Item::new("Belgium"), ItemHeader(false)),
+        (Item::new("Portugal"), ItemHeader(false)),
+        (Item::new("Asia"), ItemHeader(true)),
+        (Item::new("Indonesia"), ItemHeader(false)),
+        (Item::new("Japan"), ItemHeader(false)),
     ]
 }
 

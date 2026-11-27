@@ -47,6 +47,10 @@ pub(super) fn combos(spawner: In<StackChildSpawner>, mut commands: Commands) {
                         ~{Combo}
                         @{Selection::builder().zero_or_one().scene_with_items(stations())}
                     })
+                    @variant("Options under headers", bsn! {
+                        ~{Combo}
+                        @{Selection::builder().zero_or_one().scene_with_items(grouped_countries())}
+                    })
                     --
                     @variant("One or more", bsn! {
                         ~{Combo}
