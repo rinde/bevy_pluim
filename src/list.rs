@@ -310,21 +310,25 @@ pub enum NoteTone {
     Warning,
 }
 
-/// Makes an item a header: a heading row in the list that no one can pick.
+/// Makes an item a header (`ItemHeader(true)`): a heading row in the list that no one can pick.
 ///
 /// It goes on the item entity next to its [`Item<String>`] when the item is created, so a
 /// [`List`] (a [`Combo`] popup too) shows the label as a heading between the runs of items
 /// around it. The row is no `ListItem`: arrow keys, Home and End skip it, a click or Enter never
-/// picks it, and it never shows as selected or hovered. A list with an [`ItemViewCreator`]
-/// shows it the same way and does not run the creator for it. Adding or removing the marker on
-/// an item that already has a row does not change that row.
-#[derive(Component, Debug, Copy, Clone, Default, Reflect)]
+/// picks it, and it never shows as selected or hovered. A [`FilterCombo`] hides it while a query
+/// is typed. A list with an [`ItemViewCreator`] shows it the same way and does not run the
+/// creator for it. The flag is a field so that one array of items, which has one bundle type,
+/// can hold headers and options: `(Item::new("Ordinary"), ItemHeader(false))` next to
+/// `(Item::new("Switches"), ItemHeader(true))`. Changing it on an item that already has a row
+/// does not change that row. Nothing stops an app from selecting a header in code: the widgets
+/// only never pick it.
+#[derive(Component, Debug, Copy, Clone, Default, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
-pub struct ItemHeader;
+pub struct ItemHeader(pub bool);
 
 /// Marks the [`ItemView`] of an [`ItemHeader`] item.
 #[derive(Component, Debug, Copy, Clone, Default)]
-struct HeaderRow;
+pub(crate) struct HeaderRow;
 
 /// Marks the text of an [`ItemNote`] inside a default [`ItemView`].
 #[derive(Component, Debug, Clone, Copy)]
@@ -904,7 +908,7 @@ pub(crate) struct ItemsChangedInput {
 fn on_items_changed(
     input: In<ItemsChangedInput>,
     items_query: Query<&Item<String>>,
-    headers: Query<(), With<ItemHeader>>,
+    headers: Query<&ItemHeader>,
     mut commands: Commands,
     lists: Query<
         (Option<&Children>, Option<&ItemViewCreator>),
@@ -963,7 +967,7 @@ fn on_items_changed(
                     list_ref: *list_ref,
                 },
             ));
-            if headers.contains(item_ref)
+            if headers.get(item_ref).is_ok_and(|header| header.0)
                 && let Some(item) = item
             {
                 // No `ListItem`: the `ListBox` neither walks to the row nor picks it.

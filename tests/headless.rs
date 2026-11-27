@@ -14000,6 +14000,15 @@ fn filter_app_with(
     names: &[&str],
     selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
 ) -> FilterApp {
+    filter_app_with_header(names, None, selection)
+}
+
+/// A filter combo over `names`, the item named `header` of which is an [`ItemHeader`].
+fn filter_app_with_header(
+    names: &[&str],
+    header: Option<&str>,
+    selection: impl FnOnce(SelectionBuilder) -> SelectionBuilderWithValue,
+) -> FilterApp {
     let mut app = headless_app_with(|app| {
         app.add_plugins((bevy::text::TextPlugin, bevy::ui_widgets::TextInputPlugin));
     });
@@ -14028,6 +14037,16 @@ fn filter_app_with(
             ChildOf(root),
         ))
         .id();
+    if let Some(header) = header {
+        let world = app.world_mut();
+        let item = world
+            .query::<(Entity, &Item<String>)>()
+            .iter(world)
+            .find(|(_, item)| item.data == header)
+            .map(|(item, _)| item)
+            .unwrap();
+        world.entity_mut(item).insert(ItemHeader(true));
+    }
     for _ in 0..4 {
         app.update();
     }
@@ -19209,7 +19228,7 @@ fn a_header_item_is_a_heading_row_that_keys_and_clicks_skip_and_that_follows_the
         .find(|(_, item)| item.data == "Symmetrical")
         .map(|(item, _)| item)
         .unwrap();
-    world.entity_mut(header_item).insert(ItemHeader);
+    world.entity_mut(header_item).insert(ItemHeader(true));
     settle_frames(&mut app);
     let view_of = |app: &mut App, label: &str| -> Entity {
         let world = app.world_mut();
@@ -19279,4 +19298,152 @@ fn a_header_item_is_a_heading_row_that_keys_and_clicks_skip_and_that_follows_the
             colors.text_secondary
         );
     }
+}
+
+#[test]
+fn a_filter_combo_never_activates_or_picks_a_header_and_hides_it_while_typing() {
+    let mut fa = filter_app_with_header(
+        &["Group", "Amsterdam", "Delft"],
+        Some("Group"),
+        SelectionBuilder::zero_or_one,
+    );
+    fa.open();
+    assert_eq!(fa.shown(), ["Group", "Amsterdam", "Delft"]);
+    assert_eq!(
+        fa.active().as_deref(),
+        Some("Amsterdam"),
+        "the header is not the first active row"
+    );
+    for expected in ["Delft", "Amsterdam", "Delft"] {
+        fa.key(KeyCode::ArrowDown);
+        assert_eq!(fa.active().as_deref(), Some(expected));
+    }
+    fa.key(KeyCode::ArrowUp);
+    fa.key(KeyCode::ArrowUp);
+    assert_eq!(
+        fa.active().as_deref(),
+        Some("Delft"),
+        "up wraps past the header"
+    );
+    fa.key(KeyCode::Enter);
+    assert_eq!(fa.selected(), ["Delft"]);
+
+    fa.open();
+    fa.type_text("a");
+    assert_eq!(fa.shown(), ["Amsterdam"], "the header hides while typing");
+}
+
+#[test]
+fn a_combo_popup_skips_a_header_for_keys_and_clicks_and_follows_the_theme() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let combo = app
+        .world_mut()
+        .spawn((
+            Combo,
+            Selection::builder().zero_or_one().build_with_items([
+                (Item::new("Switches"), ItemNote::new("")),
+                (Item::new("Ordinary"), ItemNote::new("")),
+                (Item::new("Symmetrical"), ItemNote::new("")),
+            ]),
+        ))
+        .id();
+    let world = app.world_mut();
+    let header_item = world
+        .query::<(Entity, &Item<String>)>()
+        .iter(world)
+        .find(|(_, item)| item.data == "Switches")
+        .map(|(item, _)| item)
+        .unwrap();
+    world.entity_mut(header_item).insert(ItemHeader(true));
+    settle_frames(&mut app);
+    app.world_mut().entity_mut(combo).insert(ComboState::Open);
+    settle_frames(&mut app);
+    let list = app.world().get::<ComboRefs>(combo).unwrap().list();
+    let rows: Vec<(Entity, Entity)> = {
+        let world = app.world_mut();
+        let mut views = world.query::<(Entity, &ItemView)>();
+        views
+            .iter(world)
+            .filter(|(_, view)| view.list_ref == list)
+            .map(|(row, view)| (row, view.item_ref))
+            .collect()
+    };
+    let row_of = |app: &App, label: &str| {
+        rows.iter()
+            .find(|(_, item)| {
+                app.world()
+                    .get::<Item<String>>(*item)
+                    .is_some_and(|i| i.data == label)
+            })
+            .map(|(row, _)| *row)
+            .unwrap()
+    };
+    let (title, ordinary, symmetrical) = (
+        row_of(&app, "Switches"),
+        row_of(&app, "Ordinary"),
+        row_of(&app, "Symmetrical"),
+    );
+    assert!(!app.world().entity(title).contains::<ListItem>());
+
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, bevy::input_focus::FocusCause::Navigated);
+    settle_frames(&mut app);
+    let active = |app: &App| app.world().get::<ActiveDescendant>(list).unwrap().0;
+    assert_eq!(active(&app), Some(ordinary));
+    press_key_on(&mut app, KeyCode::ArrowDown);
+    assert_eq!(active(&app), Some(symmetrical));
+    press_key_on(&mut app, KeyCode::ArrowDown);
+    assert_eq!(active(&app), Some(ordinary), "down wraps past the header");
+    press_key_on(&mut app, KeyCode::ArrowUp);
+    assert_eq!(active(&app), Some(symmetrical), "up wraps past the header");
+
+    click_and_release(&mut app, title);
+    assert!(selected_items(&app, combo).is_empty());
+    assert_eq!(
+        app.world().get::<ComboState>(combo),
+        Some(&ComboState::Open),
+        "a click on the header leaves the popup open"
+    );
+    click_and_release(&mut app, ordinary);
+    let ordinary_item = app.world().get::<ItemView>(ordinary).unwrap().item_ref;
+    assert_eq!(selected_items(&app, combo), vec![ordinary_item]);
+
+    let label = app.world().get::<Children>(title).unwrap()[0];
+    for (mode, colors) in [
+        (ThemeMode::Light, DEFAULT_LIGHT_THEME_COLORS),
+        (ThemeMode::Dark, DEFAULT_DARK_THEME_COLORS),
+    ] {
+        app.world_mut()
+            .get_resource_mut::<Theme>()
+            .unwrap()
+            .set_mode(mode);
+        settle_frames(&mut app);
+        assert_eq!(background(&app, title), colors.background_primary);
+        assert_eq!(
+            app.world().get::<TextColor>(label).unwrap().0,
+            colors.text_secondary
+        );
+    }
+}
+
+#[test]
+fn an_item_header_can_be_attached_through_build_with_items() {
+    let mut app = headless_app();
+    app.world_mut().spawn((
+        List,
+        Selection::builder().zero_or_one().build_with_items([
+            (Item::new("Ordinary"), ItemHeader(false)),
+            (Item::new("Switches"), ItemHeader(true)),
+        ]),
+    ));
+    settle_frames(&mut app);
+    let world = app.world_mut();
+    let rows = world
+        .query_filtered::<(), (With<ItemView>, Without<ListItem>)>()
+        .iter(world)
+        .count();
+    assert_eq!(rows, 1, "only `ItemHeader(true)` makes a heading row");
 }
