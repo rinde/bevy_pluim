@@ -66,7 +66,7 @@ use bevy_pluim::light_dark_toggle::{
 use bevy_pluim::line_badge::{LineBadge, LineBadgeSize};
 use bevy_pluim::link::Link;
 use bevy_pluim::list::{
-    CornerStyle, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
+    CornerStyle, ItemHeader, ItemNote, ItemView, ItemViewCreator, ItemViewSpawner, List, ListLayout,
 };
 use bevy_pluim::numeric_stepper::{NumericStepper, Value, ValueRef};
 use bevy_pluim::panel::{Panel, PanelClosed, PanelRefs};
@@ -19184,4 +19184,99 @@ fn a_line_badge_is_an_image_labeled_with_its_text_or_the_label_the_application_g
         Some("Line 3, Coal run")
     );
     assert_eq!(app.world().get::<Text>(badge).unwrap().0, "L3");
+}
+
+#[test]
+fn a_header_item_is_a_heading_row_that_keys_and_clicks_skip_and_that_follows_the_theme() {
+    let mut app = headless_app();
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
+    let list = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            List,
+            Selection::builder().one().build_with_items([
+                (Item::new("Ordinary"), ItemNote::new("")),
+                (Item::new("Symmetrical"), ItemNote::new("")),
+                (Item::new("Switch"), ItemNote::new("")),
+            ]),
+        ))
+        .id();
+    let world = app.world_mut();
+    let header_item = world
+        .query::<(Entity, &Item<String>)>()
+        .iter(world)
+        .find(|(_, item)| item.data == "Symmetrical")
+        .map(|(item, _)| item)
+        .unwrap();
+    world.entity_mut(header_item).insert(ItemHeader);
+    settle_frames(&mut app);
+    let view_of = |app: &mut App, label: &str| -> Entity {
+        let world = app.world_mut();
+        let mut views = world.query::<(Entity, &ItemView)>();
+        let found: Vec<(Entity, Entity)> =
+            views.iter(world).map(|(v, i)| (v, i.item_ref)).collect();
+        found
+            .into_iter()
+            .find(|(_, item)| {
+                world
+                    .get::<Item<String>>(*item)
+                    .is_some_and(|i| i.data == label)
+            })
+            .map(|(view, _)| view)
+            .unwrap()
+    };
+    let (first, title_row, bottom) = (
+        view_of(&mut app, "Ordinary"),
+        view_of(&mut app, "Symmetrical"),
+        view_of(&mut app, "Switch"),
+    );
+    assert!(!app.world().entity(title_row).contains::<ListItem>());
+    assert!(app.world().entity(first).contains::<ListItem>());
+    assert_eq!(
+        app.world()
+            .get::<AccessibilityNode>(title_row)
+            .unwrap()
+            .label(),
+        Some("Symmetrical")
+    );
+
+    // The arrow keys walk over the header.
+    app.world_mut()
+        .get_resource_mut::<InputFocus>()
+        .unwrap()
+        .set(list, bevy::input_focus::FocusCause::Navigated);
+    settle_frames(&mut app);
+    let active = |app: &App| app.world().get::<ActiveDescendant>(list).unwrap().0;
+    assert_eq!(active(&app), Some(first));
+    press_key_on(&mut app, KeyCode::ArrowDown);
+    assert_eq!(active(&app), Some(bottom), "the header is skipped");
+    press_key_on(&mut app, KeyCode::ArrowUp);
+    assert_eq!(active(&app), Some(first));
+
+    // A click on the header picks nothing.
+    let before = selected_items(&app, list);
+    click_and_release(&mut app, title_row);
+    assert_eq!(selected_items(&app, list), before);
+    click_and_release(&mut app, bottom);
+    let last_item = app.world().get::<ItemView>(bottom).unwrap().item_ref;
+    assert_eq!(selected_items(&app, list), vec![last_item]);
+
+    // The header is no hover or selection colour, and its text follows the theme.
+    let label = app.world().get::<Children>(title_row).unwrap()[0];
+    for (mode, colors) in [
+        (ThemeMode::Light, DEFAULT_LIGHT_THEME_COLORS),
+        (ThemeMode::Dark, DEFAULT_DARK_THEME_COLORS),
+    ] {
+        app.world_mut()
+            .get_resource_mut::<Theme>()
+            .unwrap()
+            .set_mode(mode);
+        settle_frames(&mut app);
+        assert_eq!(background(&app, title_row), colors.background_primary);
+        assert_eq!(
+            app.world().get::<TextColor>(label).unwrap().0,
+            colors.text_secondary
+        );
+    }
 }

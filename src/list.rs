@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::lifecycle::HookContext;
@@ -14,7 +15,7 @@ use bevy::picking::events::PointerClick;
 use bevy::picking::hover::Hovered;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
-use bevy::ui::Selected;
+use bevy::ui::{Selectable, Selected};
 use bevy::ui_widgets::{
     ActiveDescendant, Button, ListBox, ListBoxMultiSelect, ListItem, ReselectListRow, ValueChange,
 };
@@ -23,7 +24,7 @@ use itertools::Either;
 
 use crate::combo::Combo;
 use crate::filter_combo::FilterCombo;
-use crate::focus::{AccessibilitySync, TabStop, sync_label};
+use crate::focus::{AccessibilitySync, TabStop, sync_label, sync_role};
 use crate::select::{Item, ItemsChanged, ItemsRef, Selection, SelectionParam, SelectionValue};
 use crate::theme::{Theme, ThemeColors, contrast_ratio};
 use crate::{MouseEvent, MouseKind};
@@ -74,6 +75,7 @@ impl Plugin for ListPlugin {
             .add_observer(handle_mouse_events)
             .register_type::<ItemView>()
             .register_type::<ItemNote>()
+            .register_type::<ItemHeader>()
             .register_type::<NoteTone>()
             .register_type::<ListLayout>()
             .register_type::<CornerStyle>();
@@ -308,6 +310,22 @@ pub enum NoteTone {
     Warning,
 }
 
+/// Makes an item a header: a heading row in the list that no one can pick.
+///
+/// It goes on the item entity next to its [`Item<String>`] when the item is created, so a
+/// [`List`] (a [`Combo`] popup too) shows the label as a heading between the runs of items
+/// around it. The row is no `ListItem`: arrow keys, Home and End skip it, a click or Enter never
+/// picks it, and it never shows as selected or hovered. A list with an [`ItemViewCreator`]
+/// shows it the same way and does not run the creator for it. Adding or removing the marker on
+/// an item that already has a row does not change that row.
+#[derive(Component, Debug, Copy, Clone, Default, Reflect)]
+#[reflect(Component)]
+pub struct ItemHeader;
+
+/// Marks the [`ItemView`] of an [`ItemHeader`] item.
+#[derive(Component, Debug, Copy, Clone, Default)]
+struct HeaderRow;
+
 /// Marks the text of an [`ItemNote`] inside a default [`ItemView`].
 #[derive(Component, Debug, Clone, Copy)]
 struct ItemNoteView(NoteTone);
@@ -457,11 +475,14 @@ fn sync_item_label_text(
 
 /// Names each default row to assistive technology: its label, then its note.
 fn sync_item_labels(
-    mut views: Query<(&ItemView, &mut AccessibilityNode), Without<CustomView>>,
+    mut views: Query<(&ItemView, &mut AccessibilityNode, Has<HeaderRow>), Without<CustomView>>,
     items: Query<&Item<String>>,
     notes: Query<&ItemNote>,
 ) {
-    for (ItemView { item_ref, .. }, mut node) in &mut views {
+    for (ItemView { item_ref, .. }, mut node, is_header) in &mut views {
+        if is_header {
+            sync_role(&mut node, Role::Heading);
+        }
         let Ok(item) = items.get(*item_ref) else {
             continue;
         };
@@ -480,6 +501,10 @@ fn sync_item_labels(
 #[derive(Component, Debug, Clone, Copy)]
 #[component(on_insert=Self::on_insert)]
 pub(crate) struct ItemLabel;
+
+/// Marks the [`ItemLabel`] of a header row, which is themed as a caption.
+#[derive(Component, Debug, Clone, Copy)]
+struct HeaderLabel;
 
 impl ItemLabel {
     fn on_insert(mut world: DeferredWorld, context: HookContext) {
@@ -833,6 +858,7 @@ fn selection_change(
         &mut BackgroundColor,
         &mut BorderColor,
         Has<Selected>,
+        Has<HeaderRow>,
     )>,
     theme: Res<Theme>,
     mut commands: Commands,
@@ -853,11 +879,14 @@ fn selection_change(
         sync_multi_select(&mut commands, list_ref, is_multi, selection);
 
         for item_view_id in children.map_or_default(RelationshipTarget::iter) {
-            let Ok((item_view, hovered, mut bg, mut border_color, was_selected)) =
+            let Ok((item_view, hovered, mut bg, mut border_color, was_selected, is_header)) =
                 item_views.get_mut(item_view_id)
             else {
                 continue;
             };
+            if is_header {
+                continue;
+            }
 
             let is_selected = selection.is_selected(item_view.item_ref);
             sync_selected(&mut commands, item_view_id, was_selected, is_selected);
@@ -875,6 +904,7 @@ pub(crate) struct ItemsChangedInput {
 fn on_items_changed(
     input: In<ItemsChangedInput>,
     items_query: Query<&Item<String>>,
+    headers: Query<(), With<ItemHeader>>,
     mut commands: Commands,
     lists: Query<
         (Option<&Children>, Option<&ItemViewCreator>),
@@ -933,6 +963,22 @@ fn on_items_changed(
                     list_ref: *list_ref,
                 },
             ));
+            if headers.contains(item_ref)
+                && let Some(item) = item
+            {
+                // No `ListItem`: the `ListBox` neither walks to the row nor picks it.
+                view.remove::<(ListItem, Selectable)>()
+                    .insert(HeaderRow)
+                    .with_children(|parent| {
+                        parent.spawn((
+                            Text(item.data.clone()),
+                            ItemLabel,
+                            HeaderLabel,
+                            Pickable::IGNORE,
+                        ));
+                    });
+                return;
+            }
             if is_selected {
                 view.insert(Selected);
             }
@@ -1089,6 +1135,7 @@ fn theme_items(
         &mut Node,
         &mut BackgroundColor,
         &mut BorderColor,
+        Has<HeaderRow>,
     )>,
     selections: SelectionParam,
 ) {
@@ -1114,15 +1161,23 @@ fn theme_items(
         let selection = selections.get(list_ref).unwrap_or(&no_selection);
 
         for (i, item_view_id) in views.into_iter().enumerate() {
-            let Ok((ItemView { item_ref, .. }, hovered, mut node, mut bg, mut border_color)) =
-                item_views.get_mut(item_view_id)
+            let Ok((
+                ItemView { item_ref, .. },
+                hovered,
+                mut node,
+                mut bg,
+                mut border_color,
+                is_header,
+            )) = item_views.get_mut(item_view_id)
             else {
                 continue;
             };
 
-            let is_selected = selection.is_selected(*item_ref);
+            // A header is never selected or hovered.
+            let is_selected = !is_header && selection.is_selected(*item_ref);
+            let hovered = !is_header && hovered.get();
 
-            bg.0 = item_background(theme.colors(), *corner_style, is_selected, hovered.get());
+            bg.0 = item_background(theme.colors(), *corner_style, is_selected, hovered);
             border_color.set_all(item_border(theme.colors(), *corner_style, is_selected));
 
             node.padding = theme.item_padding;
@@ -1133,7 +1188,7 @@ fn theme_items(
 
 fn theme_item_labels(
     item_label: In<Option<Entity>>,
-    mut item_labels: Query<(&mut TextColor, &mut TextFont), With<ItemLabel>>,
+    mut item_labels: Query<(&mut TextColor, &mut TextFont, Has<HeaderLabel>), With<ItemLabel>>,
     theme: Res<Theme>,
 ) {
     let it = if let Some(item_label_ref) = item_label.as_ref() {
@@ -1142,13 +1197,23 @@ fn theme_item_labels(
         Either::Right(item_labels.iter_mut())
     };
 
-    for (mut text_color, mut text_font) in it {
-        text_color.set_if_neq(TextColor(theme.colors().text_primary));
+    for (mut text_color, mut text_font, is_header) in it {
+        let (ink, size) = if is_header {
+            (
+                theme.colors().text_secondary,
+                Theme::font_size(theme.font_size_caption),
+            )
+        } else {
+            (
+                theme.colors().text_primary,
+                Theme::font_size(theme.font_size_secondary),
+            )
+        };
+        text_color.set_if_neq(TextColor(ink));
         let font = theme.body_font.clone().into();
         if text_font.font != font {
             text_font.font = font;
         }
-        let size = Theme::font_size(theme.font_size_secondary);
         if text_font.font_size != size {
             text_font.font_size = size;
         }
